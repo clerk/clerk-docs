@@ -37,107 +37,145 @@ To blend a sign-up and sign-in flow into a single flow, you must **treat it as a
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>
 
-```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
-'use client'
+<If notSdk="expo">
+  ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+  'use client'
 
-import { useSignIn, useSignUp } from '@clerk/nextjs'
-import { EmailCodeFactor } from '@clerk/nextjs/types'
-import { useRouter } from 'next/navigation'
-import React from 'react'
+  import { useSignIn, useSignUp } from '@clerk/nextjs'
+  import { EmailCodeFactor } from '@clerk/nextjs/types'
+  import { useRouter } from 'next/navigation'
+  import React from 'react'
 
-export default function Page() {
-  const { signIn, errors, fetchStatus } = useSignIn()
-  const { signUp } = useSignUp()
-  const router = useRouter()
+  export default function Page() {
+    const { signIn, errors, fetchStatus } = useSignIn()
+    const { signUp } = useSignUp()
+    const router = useRouter()
 
-  const [emailAddress, setEmailAddress] = React.useState('')
-  const [password, setPassword] = React.useState('')
-  const [code, setCode] = React.useState('')
-  const [showEmailCode, setShowEmailCode] = React.useState(false)
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [password, setPassword] = React.useState('')
+    const [code, setCode] = React.useState('')
+    const [showEmailCode, setShowEmailCode] = React.useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
 
-    const { error } = await signIn.password({
-      emailAddress,
-      password,
-    })
-    if (error) {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      console.error(JSON.stringify(error, null, 2))
+      const { error } = await signIn.password({
+        emailAddress,
+        password,
+      })
+      if (error) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(error, null, 2))
 
-      // If the identifier is not found, the user is not signed up yet
-      // So swap to the sign-up flow
-      if (error.errors[0].code === 'form_identifier_not_found') {
-        try {
-          const { error } = await signUp.password({
-            emailAddress,
-            password,
-          })
+        // If the identifier is not found, the user is not signed up yet
+        // So swap to the sign-up flow
+        if (error.errors[0].code === 'form_identifier_not_found') {
+          try {
+            const { error } = await signUp.password({
+              emailAddress,
+              password,
+            })
 
-          // Send the user an email with the verification code
-          if (!error) await signUp.verifications.sendEmailCode()
+            // Send the user an email with the verification code
+            if (!error) await signUp.verifications.sendEmailCode()
 
-          // Display second form to capture the verification code
-          if (
-            signUp.status === 'missing_requirements' &&
-            signUp.unverifiedFields.includes('email_address') &&
-            signUp.missingFields.length === 0
-          ) {
-            setShowEmailCode(true)
-            return
+            // Display second form to capture the verification code
+            if (
+              signUp.status === 'missing_requirements' &&
+              signUp.unverifiedFields.includes('email_address') &&
+              signUp.missingFields.length === 0
+            ) {
+              setShowEmailCode(true)
+              return
+            }
+          } catch (err: any) {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
           }
-        } catch (err: any) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
         }
       }
-    }
 
-    if (signIn.status === 'complete') {
-      await signIn.finalize({
-        navigate: ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            //  Handle pending session tasks
-            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-            console.log(session?.currentTask)
-            return
-          }
+      if (signIn.status === 'complete') {
+        await signIn.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              //  Handle pending session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
 
-          const url = decorateUrl('/')
-          if (url.startsWith('http')) {
-            window.location.href = url
-          } else {
-            router.push(url)
-          }
-        },
-      })
-    } else if (signIn.status === 'needs_second_factor') {
-      // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
-    } else if (signIn.status === 'needs_client_trust') {
-      // For other second factor strategies,
-      // see https://clerk.com/docs/guides/development/custom-flows/authentication/client-trust
-      const emailCodeFactor = signIn.supportedSecondFactors.find(
-        (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
-      )
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url)
+            }
+          },
+        })
+      } else if (signIn.status === 'needs_second_factor') {
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+      } else if (signIn.status === 'needs_client_trust') {
+        // For other second factor strategies,
+        // see https://clerk.com/docs/guides/development/custom-flows/authentication/client-trust
+        const emailCodeFactor = signIn.supportedSecondFactors.find(
+          (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+        )
 
-      if (emailCodeFactor) {
-        await signIn.mfa.sendEmailCode()
+        if (emailCodeFactor) {
+          await signIn.mfa.sendEmailCode()
+        }
+      } else {
+        // Check why the sign-in is not complete
+        console.error('Sign-in attempt not complete:', signIn)
       }
-    } else {
-      // Check why the status is not complete
-      console.error('Sign-in attempt not complete. Status:', signIn.status)
     }
-  }
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Flow for signing up a new user
-    if (showEmailCode) {
-      // Use the code the user provided to attempt verification
-      const { error } = await signUp.verifications.verifyEmailCode({
+    const handleVerify = async (e: React.FormEvent) => {
+      e.preventDefault()
+      // Flow for signing up a new user
+      if (showEmailCode) {
+        // Use the code the user provided to attempt verification
+        const { error } = await signUp.verifications.verifyEmailCode({
+          code,
+        })
+        if (error) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(error, null, 2))
+          return
+        }
+
+        // If verification was completed, set the session to active
+        // and redirect the user
+        if (signUp.status === 'complete') {
+          await signUp.finalize({
+            navigate: async ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else {
+          // Check why the status is not complete
+          console.error('Sign-up attempt not complete. Status:', signUp.status)
+        }
+      }
+
+      // Flow for signing in an existing user
+      const { error } = await signIn.mfa.verifyEmailCode({
         code,
       })
       if (error) {
@@ -147,14 +185,10 @@ export default function Page() {
         return
       }
 
-      // If verification was completed, set the session to active
-      // and redirect the user
-      if (signUp.status === 'complete') {
-        await signUp.finalize({
+      if (signIn.status === 'complete') {
+        await signIn.finalize({
           navigate: async ({ session, decorateUrl }) => {
             if (session?.currentTask) {
-              // Handle session tasks
-              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
               console.log(session?.currentTask)
               return
             }
@@ -169,105 +203,77 @@ export default function Page() {
         })
       } else {
         // Check why the status is not complete
-        console.error('Sign-up attempt not complete. Status:', signUp.status)
+        console.error('Sign-in attempt not complete. Status:', signIn.status)
       }
     }
 
-    // Flow for signing in an existing user
-    const { error } = await signIn.mfa.verifyEmailCode({
-      code,
-    })
-    if (error) {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      console.error(JSON.stringify(error, null, 2))
-      return
+    if (showEmailCode || signIn.status === 'needs_client_trust') {
+      return (
+        <>
+          <h1>Verify your account</h1>
+          <form onSubmit={handleVerify}>
+            <div>
+              <label htmlFor="code">Code</label>
+              <input
+                id="code"
+                name="code"
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              {errors.fields.code && <p>{errors.fields.code.message}</p>}
+            </div>
+            <button type="submit" disabled={fetchStatus === 'fetching'}>
+              Verify
+            </button>
+          </form>
+          <button onClick={() => signIn.mfa.sendEmailCode()}>I need a new code</button>
+          <button onClick={() => signIn.reset()}>Start over</button>
+        </>
+      )
     }
 
-    if (signIn.status === 'complete') {
-      await signIn.finalize({
-        navigate: async ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            console.log(session?.currentTask)
-            return
-          }
-
-          const url = decorateUrl('/')
-          if (url.startsWith('http')) {
-            window.location.href = url
-          } else {
-            router.push(url)
-          }
-        },
-      })
-    } else {
-      // Check why the status is not complete
-      console.error('Sign-in attempt not complete. Status:', signIn.status)
-    }
-  }
-
-  if (showEmailCode || signIn.status === 'needs_client_trust') {
     return (
       <>
-        <h1>Verify your account</h1>
-        <form onSubmit={handleVerify}>
+        <h1>Sign up/sign in</h1>
+        <form onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="code">Code</label>
+            <label htmlFor="email">Enter email address</label>
             <input
-              id="code"
-              name="code"
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
+              id="email"
+              name="email"
+              type="email"
+              value={emailAddress}
+              onChange={(e) => setEmailAddress(e.target.value)}
             />
-            {errors.fields.code && <p>{errors.fields.code.message}</p>}
+            {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+          </div>
+          <div>
+            <label htmlFor="password">Enter password</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {errors.fields.password && <p>{errors.fields.password.message}</p>}
           </div>
           <button type="submit" disabled={fetchStatus === 'fetching'}>
-            Verify
+            Continue
           </button>
         </form>
-        <button onClick={() => signIn.mfa.sendEmailCode()}>I need a new code</button>
-        <button onClick={() => signIn.reset()}>Start over</button>
+        {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+        {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+
+        {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+        <div id="clerk-captcha" />
       </>
     )
   }
+  ```
+</If>
 
-  return (
-    <>
-      <h1>Sign up/sign in</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="email">Enter email address</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            value={emailAddress}
-            onChange={(e) => setEmailAddress(e.target.value)}
-          />
-          {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
-        </div>
-        <div>
-          <label htmlFor="password">Enter password</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {errors.fields.password && <p>{errors.fields.password.message}</p>}
-        </div>
-        <button type="submit" disabled={fetchStatus === 'fetching'}>
-          Continue
-        </button>
-      </form>
-      {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
-      {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
-
-      {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
-      <div id="clerk-captcha" />
-    </>
-  )
-}
-```
+<If sdk="expo">
+  {/* TODO */}
+</If>

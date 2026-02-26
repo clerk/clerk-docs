@@ -25,7 +25,7 @@ npm run dev
 2. Install the Clerk React SDK
 
 ```bash
-npm install @clerk/clerk-react@latest
+npm install @clerk/react@latest
 ```
 
 3. In .env.local (or .env):

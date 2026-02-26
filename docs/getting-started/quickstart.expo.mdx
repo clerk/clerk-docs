@@ -28,19 +28,21 @@ sdk: expo
   ]}
 />
 
-Clerk offers three approaches for adding authentication to your Expo app. Choose the one that best fits your needs:
+There are three approaches for adding authentication to your Expo app:
 
 | Approach | Auth UI | OAuth | Requires dev build | Best for |
 | - | - | - | - | - |
 | **JavaScript** | [Custom forms you build](!custom-flow) | Browser-based | No (works in Expo Go) | Full control over UI |
-| **JS + Native Sign-in** | [Custom forms](!custom-flow) + native OAuth buttons | Native (no browser) | Yes | Custom UI with native Sign in withGoogle/Apple |
-| **Native Components** | Pre-built native screens | Native (no browser) | Yes | Fastest integration |
+| **JS + Native sign-in** | [Custom forms](!custom-flow) + native OAuth buttons | Native (no browser) | Yes | Custom UI with native Sign in withGoogle/Apple |
+| **Native components** | Pre-built native screens | Native (no browser) | Yes | Fastest integration |
 
-<Tabs items={["JavaScript", "JS + Native Sign-In", "Native Components"]}>
+Select the tab for the approach you want to use:
+
+<Tabs items={["JavaScript (Native sign-in optional)", "Native components"]}>
   <Tab>
     {/* JavaScript Tab */}
 
-    This approach uses [custom forms](!custom-flow) built with React Native components and works in Expo Go — no dev build required.
+    This approach uses [custom forms](!custom-flow) built with React Native components and **works in Expo Go — no dev build required.**
 
     <Steps>
       ## Enable Native API
@@ -225,589 +227,14 @@ Clerk offers three approaches for adding authentication to your Expo app. Choose
       npx expo start
       ```
 
-      Visit your app's homepage. Select **Sign up** to create your first user.
+      ## Create your first user
 
-      > [!TIP]
-      > This approach works in Expo Go. No dev build is required.
-    </Steps>
-  </Tab>
+      1. Visit your app's homepage at [http://localhost:8081](http://localhost:8081).
+      1. Select "Sign up" on the page and authenticate to create your first user.
 
-  <Tab>
-    {/* JS + Native Sign-In Tab */}
+      ## Native sign-in with Google and Apple (optional)
 
-    This approach combines [custom forms](!custom-flow) with native Sign in with Google and Sign in with Apple buttons that authenticate without opening a browser. This requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/).
-
-    <Steps>
-      ## Enable Native API
-
-      <Include src="_partials/native-api-callout" />
-
-      ## Create a new Expo app
-
-      If you don't already have an Expo app, run the following commands to [create a new one](https://docs.expo.dev/tutorial/create-your-first-app/).
-
-      ```npm
-      npx create-expo-app@latest clerk-expo
-      cd clerk-expo
-      npm install
-      ```
-
-      ## Install dependencies
-
-      Install the required packages.
-
-      - The [Clerk Expo SDK](/docs/reference/expo/overview) gives you access to prebuilt components (web only), hooks, and helpers to make user authentication easier.
-      - Clerk stores the active user's session token in memory by default. In Expo apps, the recommended way to store sensitive data, such as tokens, is by using `expo-secure-store` which encrypts the data before storing it.
-      - `expo-dev-client` is used to build and run your app in development mode.
-
-      ```npm
-      npm install @clerk/expo expo-secure-store expo-dev-client
-      ```
-
-      ## Set your environment variables
-
-      <Include src="_partials/quickstarts/set-clerk-publishable-key" />
-
-      To use native Google Sign-In, you'll also need Google OAuth client IDs. See the [Google Sign-In guide](/docs/guides/configure/auth-strategies/sign-in-with-google) for instructions on creating these credentials.
-
-      ```env {{ filename: '.env' }}
-      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-
-      # Google Sign-In (optional — only needed for native Google auth)
-      EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID=your-ios-client-id
-      EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME=com.googleusercontent.apps.your-ios-client-id
-      EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID=your-android-client-id
-      EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID=your-web-client-id
-      ```
-
-      ## Configure `app.json` plugins
-
-      Add `expo-apple-authentication` and `@clerk/expo` to your plugins. The `@clerk/expo` plugin configures the native modules required for native sign-in.
-
-      ```json {{ filename: 'app.json' }}
-      {
-        "expo": {
-          "plugins": ["expo-router", "expo-secure-store", "expo-apple-authentication", "@clerk/expo"]
-        }
-      }
-      ```
-
-      ## Add `<ClerkProvider>` to your root layout
-
-      ```tsx {{ filename: 'app/_layout.tsx' }}
-      import { ClerkProvider } from '@clerk/expo'
-      import { tokenCache } from '@clerk/expo/token-cache'
-      import { Stack } from 'expo-router'
-
-      const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
-
-      if (!publishableKey) {
-        throw new Error('Add your Clerk Publishable Key to the .env file')
-      }
-
-      export default function RootLayout() {
-        return (
-          <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-            <Stack>
-              <Stack.Screen name="(home)" options={{ headerShown: false }} />
-              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            </Stack>
-          </ClerkProvider>
-        )
-      }
-      ```
-
-      ## Create OAuth sign-in components
-
-      ### Sign in with Google button
-
-      <Include src="_partials/expo/use-sign-in-with-google-example" />
-
-      ### Sign in with Apple button (iOS only)
-
-      <Include src="_partials/expo/use-sign-in-with-apple-example" />
-
-      ## Add sign-in and sign-up pages
-
-      ### Layout page
-
-      Create an `(auth)` [route group](https://docs.expo.dev/router/advanced/shared-routes/) with a layout that redirects signed-in users.
-
-      ```tsx {{ filename: 'app/(auth)/_layout.tsx' }}
-      import { Redirect, Stack } from 'expo-router'
-      import { useAuth } from '@clerk/expo'
-
-      export default function AuthRoutesLayout() {
-        const { isSignedIn } = useAuth()
-
-        if (isSignedIn) {
-          return <Redirect href={'/'} />
-        }
-
-        return <Stack />
-      }
-      ```
-
-      ### Sign-in page
-
-      This page combines the native OAuth buttons with an email/password form.
-
-      ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
-      import { useSignIn, useAuth } from '@clerk/expo'
-      import { Link, useRouter } from 'expo-router'
-      import React from 'react'
-      import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-      import { GoogleSignInButton } from '../components/GoogleSignInButton'
-      import { AppleSignInButton } from '../components/AppleSignInButton'
-
-      export default function SignInPage() {
-        const { signIn } = useSignIn()
-        const { isSignedIn } = useAuth()
-        const router = useRouter()
-
-        const [emailAddress, setEmailAddress] = React.useState('')
-        const [password, setPassword] = React.useState('')
-
-        const onSignInPress = React.useCallback(async () => {
-          await signIn.password({
-            emailAddress,
-            password,
-          })
-
-          if (signIn.status === 'complete') {
-            await signIn.finalize({
-              navigate: ({ decorateUrl }) => {
-                router.push(decorateUrl('/'))
-              },
-            })
-          }
-        }, [signIn, emailAddress, password, router])
-
-        if (signIn.status === 'complete' || isSignedIn) {
-          return null
-        }
-
-        return (
-          <View style={styles.container}>
-            <Text style={styles.title}>Sign in</Text>
-
-            <GoogleSignInButton />
-            <AppleSignInButton />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Text style={styles.label}>Email address</Text>
-            <TextInput
-              style={styles.input}
-              autoCapitalize="none"
-              value={emailAddress}
-              placeholder="Enter email"
-              placeholderTextColor="#666666"
-              onChangeText={setEmailAddress}
-              keyboardType="email-address"
-            />
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              placeholder="Enter password"
-              placeholderTextColor="#666666"
-              secureTextEntry={true}
-              onChangeText={setPassword}
-            />
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                (!emailAddress || !password) && styles.buttonDisabled,
-                pressed && styles.buttonPressed,
-              ]}
-              onPress={onSignInPress}
-              disabled={!emailAddress || !password}
-            >
-              <Text style={styles.buttonText}>Sign in</Text>
-            </Pressable>
-            <View style={styles.linkContainer}>
-              <Text>Don't have an account? </Text>
-              <Link href="/sign-up">
-                <Text style={styles.link}>Sign up</Text>
-              </Link>
-            </View>
-          </View>
-        )
-      }
-
-      const styles = StyleSheet.create({
-        container: {
-          flex: 1,
-          padding: 20,
-          gap: 12,
-        },
-        title: {
-          fontSize: 24,
-          fontWeight: 'bold',
-          marginBottom: 8,
-        },
-        divider: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginVertical: 8,
-        },
-        dividerLine: {
-          flex: 1,
-          height: 1,
-          backgroundColor: '#ccc',
-        },
-        dividerText: {
-          marginHorizontal: 16,
-          color: '#666',
-        },
-        label: {
-          fontWeight: '600',
-          fontSize: 14,
-        },
-        input: {
-          borderWidth: 1,
-          borderColor: '#ccc',
-          borderRadius: 8,
-          padding: 12,
-          fontSize: 16,
-          backgroundColor: '#fff',
-        },
-        button: {
-          backgroundColor: '#0a7ea4',
-          paddingVertical: 12,
-          paddingHorizontal: 24,
-          borderRadius: 8,
-          alignItems: 'center',
-          marginTop: 8,
-        },
-        buttonPressed: {
-          opacity: 0.7,
-        },
-        buttonDisabled: {
-          opacity: 0.5,
-        },
-        buttonText: {
-          color: '#fff',
-          fontWeight: '600',
-        },
-        linkContainer: {
-          flexDirection: 'row',
-          gap: 4,
-          marginTop: 12,
-          alignItems: 'center',
-        },
-        link: {
-          color: '#0a7ea4',
-          fontWeight: '600',
-        },
-      })
-      ```
-
-      ### Sign-up page
-
-      This page uses the same OAuth buttons above an email/password sign-up form with email verification.
-
-      ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
-      import { useSignUp, useAuth } from '@clerk/expo'
-      import { Link, useRouter } from 'expo-router'
-      import React from 'react'
-      import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-      import { GoogleSignInButton } from '../components/GoogleSignInButton'
-      import { AppleSignInButton } from '../components/AppleSignInButton'
-
-      export default function SignUpPage() {
-        const { signUp } = useSignUp()
-        const { isSignedIn } = useAuth()
-        const router = useRouter()
-
-        const [emailAddress, setEmailAddress] = React.useState('')
-        const [password, setPassword] = React.useState('')
-        const [code, setCode] = React.useState('')
-
-        const onSignUpPress = React.useCallback(async () => {
-          await signUp.password({
-            emailAddress,
-            password,
-          })
-
-          await signUp.verifications.sendEmailCode()
-        }, [signUp, emailAddress, password])
-
-        const onVerifyPress = React.useCallback(async () => {
-          await signUp.verifications.verifyEmailCode({ code })
-
-          if (signUp.status === 'complete') {
-            await signUp.finalize({
-              navigate: ({ decorateUrl }) => {
-                router.push(decorateUrl('/'))
-              },
-            })
-          }
-        }, [signUp, code, router])
-
-        if (signUp.status === 'complete' || isSignedIn) {
-          return null
-        }
-
-        // Display email code verification form
-        if (
-          signUp.status === 'missing_requirements' &&
-          signUp.unverifiedFields.includes('email_address')
-        ) {
-          return (
-            <View style={styles.container}>
-              <Text style={styles.title}>Verify your email</Text>
-              <Text style={styles.description}>A verification code has been sent to your email.</Text>
-              <TextInput
-                style={styles.input}
-                value={code}
-                placeholder="Enter verification code"
-                placeholderTextColor="#666666"
-                onChangeText={setCode}
-                keyboardType="numeric"
-              />
-              <Pressable
-                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-                onPress={onVerifyPress}
-              >
-                <Text style={styles.buttonText}>Verify</Text>
-              </Pressable>
-            </View>
-          )
-        }
-
-        return (
-          <View style={styles.container}>
-            <Text style={styles.title}>Sign up</Text>
-
-            <GoogleSignInButton />
-            <AppleSignInButton />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Text style={styles.label}>Email address</Text>
-            <TextInput
-              style={styles.input}
-              autoCapitalize="none"
-              value={emailAddress}
-              placeholder="Enter email"
-              placeholderTextColor="#666666"
-              onChangeText={setEmailAddress}
-              keyboardType="email-address"
-            />
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              placeholder="Enter password"
-              placeholderTextColor="#666666"
-              secureTextEntry={true}
-              onChangeText={setPassword}
-            />
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                (!emailAddress || !password) && styles.buttonDisabled,
-                pressed && styles.buttonPressed,
-              ]}
-              onPress={onSignUpPress}
-              disabled={!emailAddress || !password}
-            >
-              <Text style={styles.buttonText}>Sign up</Text>
-            </Pressable>
-            <View style={styles.linkContainer}>
-              <Text>Already have an account? </Text>
-              <Link href="/sign-in">
-                <Text style={styles.link}>Sign in</Text>
-              </Link>
-            </View>
-          </View>
-        )
-      }
-
-      const styles = StyleSheet.create({
-        container: {
-          flex: 1,
-          padding: 20,
-          gap: 12,
-        },
-        title: {
-          fontSize: 24,
-          fontWeight: 'bold',
-          marginBottom: 8,
-        },
-        description: {
-          fontSize: 14,
-          marginBottom: 16,
-          opacity: 0.8,
-        },
-        divider: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginVertical: 8,
-        },
-        dividerLine: {
-          flex: 1,
-          height: 1,
-          backgroundColor: '#ccc',
-        },
-        dividerText: {
-          marginHorizontal: 16,
-          color: '#666',
-        },
-        label: {
-          fontWeight: '600',
-          fontSize: 14,
-        },
-        input: {
-          borderWidth: 1,
-          borderColor: '#ccc',
-          borderRadius: 8,
-          padding: 12,
-          fontSize: 16,
-          backgroundColor: '#fff',
-        },
-        button: {
-          backgroundColor: '#0a7ea4',
-          paddingVertical: 12,
-          paddingHorizontal: 24,
-          borderRadius: 8,
-          alignItems: 'center',
-          marginTop: 8,
-        },
-        buttonPressed: {
-          opacity: 0.7,
-        },
-        buttonDisabled: {
-          opacity: 0.5,
-        },
-        buttonText: {
-          color: '#fff',
-          fontWeight: '600',
-        },
-        linkContainer: {
-          flexDirection: 'row',
-          gap: 4,
-          marginTop: 12,
-          alignItems: 'center',
-        },
-        link: {
-          color: '#0a7ea4',
-          fontWeight: '600',
-        },
-      })
-      ```
-
-      ## Add a home screen
-
-      Create a `(home)` route group with a layout that protects authenticated routes and a home page.
-
-      ```tsx {{ filename: 'app/(home)/_layout.tsx' }}
-      import { Redirect, Stack } from 'expo-router'
-      import { useAuth } from '@clerk/expo'
-
-      export default function HomeRoutesLayout() {
-        const { isSignedIn } = useAuth()
-
-        if (!isSignedIn) {
-          return <Redirect href="/(auth)/sign-in" />
-        }
-
-        return <Stack />
-      }
-      ```
-
-      ```tsx {{ filename: 'app/(home)/index.tsx' }}
-      import { useUser, useClerk } from '@clerk/expo'
-      import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
-
-      export default function Page() {
-        const { user } = useUser()
-        const { signOut } = useClerk()
-
-        return (
-          <View style={styles.container}>
-            <Text style={styles.title}>Welcome!</Text>
-            <View style={styles.profileCard}>
-              {user?.imageUrl && <Image source={{ uri: user.imageUrl }} style={styles.avatar} />}
-              <View>
-                <Text style={styles.name}>
-                  {user?.firstName} {user?.lastName}
-                </Text>
-                <Text style={styles.email}>{user?.emailAddresses[0]?.emailAddress}</Text>
-              </View>
-            </View>
-            <Pressable style={styles.button} onPress={() => signOut()}>
-              <Text style={styles.buttonText}>Sign out</Text>
-            </Pressable>
-          </View>
-        )
-      }
-
-      const styles = StyleSheet.create({
-        container: {
-          flex: 1,
-          padding: 20,
-          paddingTop: 60,
-          gap: 16,
-        },
-        title: {
-          fontSize: 24,
-          fontWeight: 'bold',
-        },
-        profileCard: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: 16,
-          backgroundColor: '#f5f5f5',
-          borderRadius: 12,
-          gap: 12,
-        },
-        avatar: {
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-        },
-        name: {
-          fontSize: 18,
-          fontWeight: '600',
-        },
-        email: {
-          fontSize: 14,
-          color: '#666',
-        },
-        button: {
-          backgroundColor: '#0a7ea4',
-          paddingVertical: 12,
-          paddingHorizontal: 24,
-          borderRadius: 8,
-          alignItems: 'center',
-        },
-        buttonText: {
-          color: '#fff',
-          fontWeight: '600',
-        },
-      })
-      ```
-
-      ## Build and run
-
-      This approach requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/) because it uses native modules. It **cannot** run in Expo Go.
-
-      ```npm
-      npx expo run:ios
-      # or
-      npx expo run:android
-      ```
+      If you want to add native Sign in with Google and Sign in with Apple buttons that authenticate without opening a browser, see the [Sign in with Google](/docs/guides/configure/auth-strategies/sign-in-with-google) and [Sign in with Apple](/docs/guides/configure/auth-strategies/sign-in-with-apple) guides. **However, this approach requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/) because it uses native modules. It cannot run in Expo Go.**
     </Steps>
   </Tab>
 
@@ -901,6 +328,7 @@ Clerk offers three approaches for adding authentication to your Expo app. Choose
         const { isSignedIn, isLoaded } = useAuth()
         const { user } = useUser()
         const { signOut } = useClerk()
+
         const [showAuth, setShowAuth] = useState(false)
         const [showProfile, setShowProfile] = useState(false)
 
@@ -1049,10 +477,18 @@ Clerk offers three approaches for adding authentication to your Expo app. Choose
 
       This approach requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/) because it uses native modules. It **cannot** run in Expo Go.
 
-      ```npm
+      ```bash {{ filename: 'terminal' }}
+      # Using Expo CLI
       npx expo run:ios
-      # or
       npx expo run:android
+
+      # Using EAS Build
+      eas build --platform ios
+      eas build --platform android
+
+      # Or using local prebuild
+      npx expo prebuild && npx expo run:ios --device
+      npx expo prebuild && npx expo run:android --device
       ```
     </Steps>
   </Tab>
@@ -1067,23 +503,23 @@ See the [`expo-updates`](https://docs.expo.dev/versions/latest/sdk/updates) libr
 ## Next steps
 
 <Cards>
+  - [Create a custom sign-up and sign-in flow](/docs/guides/development/custom-flows/authentication/email-password)
+  - Learn how to build a custom sign-up and sign-in authentication flow.
+
+  ---
+
   - [Native components reference](/docs/reference/expo/native-components-overview)
   - Learn about `<AuthView />`, `<UserButton />`, and `<UserProfileView />` — pre-built native UI for iOS and Android.
 
   ---
 
-  - [Custom sign-up and sign-in flows](/docs/guides/development/custom-flows/authentication/email-password)
-  - Build custom authentication forms with full control over the UI.
+  - [Protect content and read user data](/docs/expo/guides/users/reading)
+  - Learn how to use Clerk's hooks and helpers to protect content and read user data in your Expo app.
 
   ---
 
-  - [Native Google Sign-In](/docs/guides/configure/auth-strategies/sign-in-with-google)
-  - Add native Google Sign-In without browser redirects.
-
-  ---
-
-  - [Native Apple Sign-In](/docs/guides/configure/auth-strategies/sign-in-with-apple)
-  - Add native Apple Sign-In on iOS.
+  - [Custom flows](/docs/guides/development/custom-flows/overview)
+  - Expo native apps require custom flows in place of prebuilt components.
 
   ---
 

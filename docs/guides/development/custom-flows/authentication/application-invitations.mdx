@@ -128,7 +128,162 @@ For example, if the redirect URL was `https://www.example.com/accept-invitation`
 </If>
 
 <If sdk="expo">
-  {/* TODO  */}
+  ```tsx {{ filename: 'app/(auth)/accept-invitation.tsx', collapsible: true }}
+  import { ThemedText } from '@/components/themed-text'
+  import { ThemedView } from '@/components/themed-view'
+  import { Colors } from '@/constants/theme'
+  import { useColorScheme } from '@/hooks/use-color-scheme'
+  import { useAuth, useSignUp } from '@clerk/expo'
+  import { type Href, useRouter } from 'expo-router'
+  import React from 'react'
+  import { Pressable, StyleSheet, TextInput, View } from 'react-native'
+
+  export default function Page() {
+    const { isSignedIn } = useAuth()
+    const { signUp, errors, fetchStatus } = useSignUp()
+    const router = useRouter()
+    const colorScheme = useColorScheme() ?? 'light'
+    const themeColors = Colors[colorScheme]
+
+    const [firstName, setFirstName] = React.useState('')
+    const [lastName, setLastName] = React.useState('')
+
+    const handleSubmit = async () => {
+      const { error } = await signUp.ticket({
+        firstName,
+        lastName,
+      })
+      if (error) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        console.error(JSON.stringify(error, null, 2))
+        return
+      }
+
+      if (signUp.status === 'complete') {
+        await signUp.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              // Handle pending session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url as Href)
+            }
+          },
+        })
+      } else {
+        // Check why the sign-up is not complete
+        console.error('Sign-up attempt not complete:', signUp)
+      }
+    }
+
+    if (signUp.status === 'complete' || isSignedIn) {
+      return null
+    }
+
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText type="title" style={styles.title}>
+          Sign up
+        </ThemedText>
+        <ThemedText style={styles.label}>Enter first name</ThemedText>
+        <TextInput
+          style={[
+            styles.input,
+            { backgroundColor: themeColors.background, borderColor: themeColors.icon },
+          ]}
+          value={firstName}
+          placeholder="Enter first name"
+          placeholderTextColor={themeColors.icon}
+          onChangeText={(firstName) => setFirstName(firstName)}
+        />
+        {errors.fields.firstName && (
+          <ThemedText style={styles.error}>{errors.fields.firstName.message}</ThemedText>
+        )}
+        <ThemedText style={styles.label}>Enter last name</ThemedText>
+        <TextInput
+          style={[
+            styles.input,
+            { backgroundColor: themeColors.background, borderColor: themeColors.icon },
+          ]}
+          value={lastName}
+          placeholder="Enter last name"
+          placeholderTextColor={themeColors.icon}
+          onChangeText={(lastName) => setLastName(lastName)}
+        />
+        {errors.fields.lastName && (
+          <ThemedText style={styles.error}>{errors.fields.lastName.message}</ThemedText>
+        )}
+
+        {errors.fields.password && (
+          <ThemedText style={styles.error}>{errors.fields.password.message}</ThemedText>
+        )}
+        <View nativeID="clerk-captcha" />
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            fetchStatus === 'fetching' && styles.buttonDisabled,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={handleSubmit}
+          disabled={fetchStatus === 'fetching'}
+        >
+          <ThemedText style={styles.buttonText}>Next</ThemedText>
+        </Pressable>
+      </ThemedView>
+    )
+  }
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 20,
+      gap: 12,
+    },
+    title: {
+      marginBottom: 8,
+    },
+    label: {
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    input: {
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+    },
+    button: {
+      backgroundColor: '#0a7ea4',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    buttonPressed: {
+      opacity: 0.7,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    buttonText: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+    error: {
+      color: '#d32f2f',
+      fontSize: 12,
+      marginTop: -8,
+    },
+  })
+  ```
 </If>
 
 <If sdk="ios">

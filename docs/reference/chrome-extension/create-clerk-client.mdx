@@ -1,18 +1,57 @@
 ---
 title: '`createClerkClient()`'
-description: "createClerkClient() allows Chrome Extension developers to access a user's session information or get a token in a service worker."
+description: "createClerkClient() allows Chrome Extension developers to initialize Clerk in popups, side panels, and background service workers without React."
 sdk: chrome-extension
 ---
 
-The `createClerkClient()` helper initializes a new Clerk instance on demand and refreshes the session token if there is a valid, signed-in user. It can be used in a [background service worker](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/basics) to access a user's information or session token.
+The `createClerkClient()` helper initializes a new Clerk instance on demand without React. It can be used in popups, side panels, and [background service workers](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/basics).
 
-When a side panel or a popup is closed, the Clerk process that normally refreshes the user's session token every 60 seconds is no longer running, and the stored session will become stale. If a request were made 60 seconds after the side panel or popup was closed, it would fail because the session token is no longer valid. By configuring `createClerkClient()` to run in a background service worker, you can ensure that the user's session is always fresh.
+## Popups and Side Panels
 
-## Usage
+Use `createClerkClient()` to add authentication to a popup or side panel with plain JaveScript or TypeScript. Call `clerk.load()` to initialize the client, and use `clerk.addListener()` to re-render the UI whenever the authentication state changes.
+
+> [!NOTE]
+> If your extension uses React, use [Clerk's React hooks](/docs/chrome-extension/reference/hooks/overview) instead. `createClerkClient()` is intended for extensions that don't use React.
+
+The following example creates a popup that displays the signed-in user's email address.
+
+```ts {{ filename: 'src/popup.ts' }}
+import { createClerkClient } from '@clerk/chrome-extension/client'
+
+const publishableKey = process.env.CLERK_PUBLISHABLE_KEY
+
+const EXTENSION_URL = chrome.runtime.getURL('.')
+const POPUP_URL = `${EXTENSION_URL}popup.html`
+
+const clerk = createClerkClient({ publishableKey })
+
+const contentEl = document.getElementById('content') as HTMLDivElement
+
+function render() {
+  const email = clerk.user?.primaryEmailAddress?.emailAddress
+  contentEl.textContent = email ?? 'Not signed in'
+}
+
+clerk
+  .load({
+    afterSignOutUrl: POPUP_URL,
+    signInForceRedirectUrl: POPUP_URL,
+    signUpForceRedirectUrl: POPUP_URL,
+    allowedRedirectProtocols: ['chrome-extension:'],
+  })
+  .then(() => {
+    clerk.addListener(render)
+    render()
+  })
+```
+
+## Background Service Workers
+
+When a side panel or a popup is closed, the Clerk process that normally refreshes the user's session token every 60 seconds is no longer running, and the stored session will become stale. If a request were made 60 seconds after the side panel or popup was closed, it would fail because the session token is no longer valid. By configuring `createClerkClient()` to run in a background service worker with `background: true`, you can ensure that the user's session is always fresh.
 
 The following example:
 
-- Creates a background service worker that sets up an event listener to handle requests from a [content script](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts). If the request wants to interact with Clerk, the listener calls `createClerkClient()` to create a Clerk instance and refresh the session token, and then calls [`getToken()`](/docs/reference/javascript/session#get-token) to get the token.
+- Creates a background service worker that sets up an event listener to handle requests from a [content script](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts). If the request wants to interact with Clerk, the listener calls `createClerkClient()` with `background: true` to create a Clerk instance and refresh the session token, and then calls [`getToken()`](/docs/reference/javascript/session#get-token) to get the token.
 - Adds a link to the home page of the extension that when visited, opens the page as a new tab.
 - The new tab has a button on it that, when clicked, triggers the background service worker.
 
@@ -27,7 +66,7 @@ The following example:
   1. In the `index.ts` file, paste the following code to create an event listener that listens for messages from content scripts and calls a function that uses `createClerkClient()` to get a new token for the user.
 
   ```typescript {{ filename: 'src/background/index.ts' }}
-  import { createClerkClient } from '@clerk/chrome-extension/background'
+  import { createClerkClient } from '@clerk/chrome-extension/client'
 
   const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
 
@@ -35,11 +74,12 @@ The following example:
     throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file')
   }
 
-  // Use `createClerkClient()` to create a new Clerk instance
-  // and use `getToken()` to get a fresh token for the user
+  // Use `createClerkClient()` with `background: true` to create a new Clerk instance
+  // optimized for background service workers, and use `getToken()` to get a fresh token for the user
   async function getToken() {
     const clerk = await createClerkClient({
       publishableKey,
+      background: true,
     })
 
     // If there is no valid session, then return null. Otherwise proceed.
@@ -165,6 +205,13 @@ The `createClerkClient()` function accepts an optional object. The following opt
   - `string`
 
   Your Clerk [Publishable Key](!publishable-key).
+
+  ---
+
+  - `background?`
+  - `boolean`
+
+  Set to `true` when using `createClerkClient()` in a [background service worker](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/basics). This optimizes the client for background contexts where there is no DOM. Defaults to `false`.
 
   ---
 

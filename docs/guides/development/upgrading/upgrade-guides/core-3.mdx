@@ -16,8 +16,10 @@ Here's a summary of what changed:
 - **Package renaming:** `@clerk/clerk-react` becomes `@clerk/react`, `@clerk/clerk-expo` becomes `@clerk/expo`, `createTheme` moves to `@clerk/ui/themes/experimental`, and types consolidate under `@clerk/shared/types`.
 - **Appearance updates:** `appearance.layout` is now `appearance.options`, `showOptionalFields` defaults to `false`, and color variables apply at full opacity.
 - **Behavior alignment:** Legacy redirect props and billing flags are removed in favor of the newer patterns.
-- **Platform requirements:** Node.js 20.9.0+ is required across the updated packages.
+- **Token handling:** `getToken()` now throws `ClerkOfflineError` when offline and uses proactive background refresh for better performance.
+- **Platform requirements:** Node.js 20.9.0+ is required across all packages, and Next.js 15.2.3+ is required for `@clerk/nextjs`.
 - **Satellite apps:** Satellite apps no longer perform automatic redirects on first visit.
+- **SDK additions:** Express and React Router SDKs have breaking changes — see the [SDK-specific changes](#sdk-specific-changes) section.
 
 ## Preparing to upgrade
 
@@ -56,6 +58,12 @@ The following breaking changes apply to all Clerk SDKs.
     "Experimental methods prefix standardized to <code>__experimental_</code>",
     "<code>createTheme</code> moved to <code>@clerk/ui/themes/experimental</code>",
     "<code>__unstable_*</code> methods renamed to <code>__internal_*</code>",
+    "<code>getToken()</code> throws <code>ClerkOfflineError</code> when offline",
+    "<code>useAuth().getToken</code> no longer <code>undefined</code> during SSR",
+    "New <code>needs_client_trust</code> sign-in status",
+    "<code>simple</code> theme export removed from <code>@clerk/ui</code>",
+    "<code>clerkJSUrl</code>, <code>clerkJSVersion</code>, <code>clerkUIUrl</code>, and <code>clerkUIVersion</code> props removed",
+    "<code>clerkJSVariant</code> prop removed",
   ]}
 >
   <AccordionPanel>
@@ -218,6 +226,120 @@ The following breaking changes apply to all Clerk SDKs.
 
     - `__unstable__createClerkClient` → `createClerkClient` (exported from `@clerk/chrome-extension/background`)
   </AccordionPanel>
+
+  <AccordionPanel>
+    `getToken()` now throws a `ClerkOfflineError` instead of returning `null` when the browser is offline. This makes it explicit that the request failed due to network conditions, not because the user is signed out.
+
+    ```diff
+    + import { ClerkOfflineError } from '@clerk/react/errors';
+
+    - const token = await session.getToken();
+    - if (token === null) {
+    -   // Ambiguous: could mean signed out OR offline
+    - }
+    + try {
+    +   const token = await session.getToken();
+    + } catch (error) {
+    +   if (ClerkOfflineError.is(error)) {
+    +     showOfflineScreen();
+    +   } else {
+    +     throw error;
+    +   }
+    + }
+    ```
+
+    `ClerkOfflineError` is available from `@clerk/react/errors`, `@clerk/nextjs/errors`, `@clerk/vue/errors`, and other SDK error entry points. The error is thrown after a short retry period (~15 seconds) to handle temporary network issues. `getToken()` still returns `null` when the user is not signed in.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    `useAuth().getToken` is no longer `undefined` during server-side rendering. It is now a function that throws a `clerk_runtime_not_browser` error when called on the server.
+
+    If you were checking `getToken === undefined` to avoid calling it during SSR, update your code:
+
+    ```diff
+    - if (getToken) {
+    -   const token = await getToken();
+    - }
+    + try {
+    +   const token = await getToken();
+    + } catch (error) {
+    +   if (isClerkRuntimeError(error) && error.code === 'clerk_runtime_not_browser') {
+    +     // Handle server-side scenario
+    +   }
+    + }
+    ```
+
+    If you only use `getToken` in `useEffect`, event handlers, or with non-suspenseful data fetching libraries, no change is necessary as these only run on the client.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    A new sign-in status of `needs_client_trust` has been added. If your application has passwords and [Client Trust](/docs/guides/secure/client-trust) enabled, you'll need to handle this new status in your sign-in flow:
+
+    ```diff
+    const { signIn } = useSignIn()
+    // ...
+    - if (signIn.status === 'complete') { /* ... */ }
+    + if (signIn.status === 'needs_client_trust') { /* ... */ }
+    + else if (signIn.status === 'complete') { /* ... */ }
+    ```
+
+    This status is returned when passwords and Client Trust are enabled, the `needs_client_trust` update is opted-in, and email/phone identifiers are enabled without email/SMS sign-in verification.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `simple` theme is no longer exported directly from `@clerk/ui`. Use the `appearance` prop to apply it instead:
+
+    ```diff
+    - import { __experimental_simple } from '@clerk/ui';
+    -
+    - <ClerkProvider appearance={{ baseTheme: __experimental_simple }}>
+    + <ClerkProvider appearance={{ theme: 'simple' }}>
+        {/* Your app */}
+      </ClerkProvider>
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `clerkJSUrl`, `clerkJSVersion`, `clerkUIUrl`, and `clerkUIVersion` props have been removed from `ClerkProvider` and related configuration options. These props were intended for internal use and are no longer part of the public API.
+
+    ```diff
+    <ClerkProvider
+    - clerkJSUrl="https://js.example.com/clerk.js"
+    - clerkJSVersion="5.0.0"
+    - clerkUIUrl="https://ui.example.com/ui.js"
+    - clerkUIVersion="1.0.0"
+    + __internal_clerkJSUrl="https://js.example.com/clerk.js"
+    + __internal_clerkJSVersion="5.0.0"
+    + __internal_clerkUIUrl="https://ui.example.com/ui.js"
+    + __internal_clerkUIVersion="1.0.0"
+    >
+    ```
+
+    If you need to pin a specific version of the UI, import `ui` from `@clerk/ui` and pass it to `ClerkProvider`:
+
+    ```tsx
+    import { ui } from '@clerk/ui';
+
+    <ClerkProvider ui={ui}>
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `clerkJSVariant` prop has been removed. Use `prefetchUI={false}` instead to disable prefetching the UI bundle:
+
+    ```diff
+    <ClerkProvider
+    - clerkJSVariant="headless"
+    + prefetchUI={false}
+      publishableKey={...}
+    >
+    ```
+
+    You can also disable UI prefetching via environment variable:
+    - Next.js: `NEXT_PUBLIC_CLERK_PREFETCH_UI=false`
+    - Astro: `PUBLIC_CLERK_PREFETCH_UI=false`
+    - React Router / TanStack Start: `CLERK_PREFETCH_UI=false`
+  </AccordionPanel>
 </Accordion>
 
 ## Deprecation removals
@@ -236,6 +358,7 @@ The following deprecated APIs have been removed from all Clerk SDKs.
     "<code>UserSettings.saml</code> renamed to <code>enterpriseSSO</code>",
     "Legacy redirect props removed",
     "Unstable billing props removed",
+    "Deprecated verify methods removed from <code>@clerk/backend</code>",
   ]}
 >
   <AccordionPanel>
@@ -377,6 +500,21 @@ The following deprecated APIs have been removed from all Clerk SDKs.
     - `__unstable_manageBillingLabel`
     - `__unstable_manageBillingMembersLimit`
   </AccordionPanel>
+
+  <AccordionPanel>
+    The deprecated `verifySecret()`, `verifyAccessToken()`, and `verifyToken()` methods have been removed from `@clerk/backend`. Use `verify()` instead:
+
+    ```diff
+    - await clerkClient.apiKeys.verifySecret(secret);
+    + await clerkClient.apiKeys.verify(secret);
+
+    - await clerkClient.idpOAuthAccessToken.verifyAccessToken(accessToken);
+    + await clerkClient.idpOAuthAccessToken.verify(accessToken);
+
+    - await clerkClient.m2m.verifyToken(params);
+    + await clerkClient.m2m.verify(params);
+    ```
+  </AccordionPanel>
 </Accordion>
 
 ## Deprecations
@@ -428,6 +566,7 @@ The following deprecated APIs have been removed from all Clerk SDKs.
     "<code>showOptionalFields</code> now defaults to <code>false</code>",
     "<code>ClerkAPIError.kind</code> value updated",
     "Satellite apps no longer perform automatic redirects on first visit",
+    "<code>getToken()</code> uses proactive background refresh",
   ]}
 >
   <AccordionPanel>
@@ -534,13 +673,28 @@ The following deprecated APIs have been removed from all Clerk SDKs.
 
     If you have any questions about satellite domains, or you're having any trouble setting this up, see the [guide on satellite domains](/docs/guides/dashboard/dns-domains/satellite-domains) or contact [support@clerk.com](mailto:support@clerk.com)
   </AccordionPanel>
+
+  <AccordionPanel>
+    `session.getToken()` now implements a stale-while-revalidate pattern that improves performance by returning cached tokens immediately while refreshing them in the background when they're close to expiration.
+
+    When a token is within 15 seconds of expiration, `getToken()` returns the valid cached token immediately and triggers a background refresh. Subsequent calls receive the new token once the background refresh completes. Token updates are automatically synchronized across browser tabs using `BroadcastChannel`.
+
+    ```js
+    // Token is cached and valid but expiring in 10 seconds
+    // Core 2: Would block and fetch new token
+    // Core 3: Returns cached token immediately, refreshes in background
+    const token = await session.getToken();
+    ```
+
+    This is a transparent improvement — no code changes are required. Your existing `getToken()` calls benefit automatically.
+  </AccordionPanel>
 </Accordion>
 
 ## SDK-specific changes
 
 The following changes only apply to specific SDKs. Select your SDK below for additional upgrade steps.
 
-<Tabs items={['React', 'Next.js', 'Astro', 'TanStack React Start', 'Expo', 'Nuxt']}>
+<Tabs items={['React', 'Next.js', 'Astro', 'TanStack React Start', 'Expo', 'Nuxt', 'Express', 'React Router']}>
   <Tab>
     {/* React */}
 
@@ -598,6 +752,38 @@ The following changes only apply to specific SDKs. Select your SDK below for add
     ```
 
     If you're using Next.js 16 with `cacheComponents: true`, you may also need to wrap `ClerkProvider` in a `<Suspense>` boundary.
+
+    ### Minimum Next.js version increased to 15.2.3 {{ toc: false }}
+
+    Support for Next.js 13 and 14 has been dropped. `@clerk/nextjs` now requires `next@>=15.2.3`.
+
+    ```diff
+    {
+      "dependencies": {
+    -   "next": "^14.0.0",
+    +   "next": "^15.2.3",
+      }
+    }
+    ```
+
+    See the [Next.js upgrade guide](https://nextjs.org/docs/app/building-your-application/upgrading) for help migrating your application.
+
+    ### `auth.protect()` returns 401 instead of 404 for unauthenticated server actions {{ toc: false }}
+
+    `auth.protect()` in `clerkMiddleware()` now returns a `401 Unauthorized` response instead of a `404 Not Found` when an unauthenticated request is made from a server action. If you have client-side error handling that checks for `404` responses from server actions when the user is signed out, update it to handle `401` instead:
+
+    ```diff
+    try {
+      await myServerAction();
+    } catch (error) {
+    -  if (error.status === 404) {
+    +  if (error.status === 401) {
+        // Handle unauthenticated user
+      }
+    }
+    ```
+
+    No changes are required if you are not explicitly checking the HTTP status code in your error handling.
   </Tab>
 
   <Tab>
@@ -631,6 +817,31 @@ The following changes only apply to specific SDKs. Select your SDK below for add
     - </Protect>
     + </Show>
     ```
+
+    ### `as` prop removed from button components {{ toc: false }}
+
+    The deprecated `as` prop has been removed from unstyled button components (`SignInButton`, `SignUpButton`, `SignOutButton`, `CheckoutButton`, `PlanDetailsButton`, `SubscriptionDetailsButton`). Use the `asChild` prop with a custom element in the default slot instead:
+
+    ```diff
+    - <SignInButton as="a" href="/sign-in">
+    -   Sign in
+    - </SignInButton>
+    + <SignInButton asChild>
+    +   <a href="/sign-in">Sign in</a>
+    + </SignInButton>
+    ```
+
+    ### Runtime environment variables now take precedence over build-time values {{ toc: false }}
+
+    Environment variable resolution in `@clerk/astro` now prefers `process.env` over `import.meta.env`. This means runtime environment variables (e.g., set in the Node.js adapter or container) take precedence over values statically replaced by Vite at build time.
+
+    The new resolution order is:
+
+    1. `locals.runtime.env` (Cloudflare Workers)
+    1. `process.env` (Node.js runtime)
+    1. `import.meta.env` (Vite build-time static replacement)
+
+    If you rely on build-time `PUBLIC_*` values that differ from your runtime `process.env`, update your configuration to ensure the correct values are set in `process.env` at runtime.
   </Tab>
 
   <Tab>
@@ -693,6 +904,31 @@ The following changes only apply to specific SDKs. Select your SDK below for add
     ### Minimum Expo version increased to 53 {{ toc: false }}
 
     `@clerk/expo` v3 requires Expo SDK 53 or later. Update your Expo version if needed.
+
+    ### `useSignInWithApple` and `useSignInWithGoogle` moved to separate entry points {{ toc: false }}
+
+    The `useSignInWithApple` and `useSignInWithGoogle` hooks have been moved to dedicated entry points to avoid bundling optional dependencies:
+
+    ```diff
+    - import { useSignInWithApple } from '@clerk/expo';
+    + import { useSignInWithApple } from '@clerk/expo/apple';
+
+    - import { useSignInWithGoogle } from '@clerk/expo';
+    + import { useSignInWithGoogle } from '@clerk/expo/google';
+    ```
+
+    ### `publishableKey` prop required in `ClerkProvider` {{ toc: false }}
+
+    The `publishableKey` prop is now required in `ClerkProvider` for Expo apps. Previously, it would fall back to `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, but environment variables inside `node_modules` are not inlined during production builds in React Native/Expo, which could cause apps to crash in production.
+
+    ```diff
+    + const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+
+    - <ClerkProvider>
+    + <ClerkProvider publishableKey={publishableKey}>
+        {/* Your app */}
+      </ClerkProvider>
+    ```
   </Tab>
 
   <Tab>
@@ -721,6 +957,65 @@ The following changes only apply to specific SDKs. Select your SDK below for add
         routingStrategy: 'hash', // Restore Core 2 behavior
       },
     })
+    ```
+  </Tab>
+
+  <Tab>
+    {/* Express */}
+
+    ### `enableHandshake` option removed {{ toc: false }}
+
+    The `enableHandshake` option had no effect and has been removed from `clerkMiddleware`:
+
+    ```diff
+    - app.use(clerkMiddleware({ enableHandshake: false }));
+    + app.use(clerkMiddleware());
+    ```
+
+    ### `req.auth` object-access removed — use `getAuth()` {{ toc: false }}
+
+    Accessing `req.auth` as a plain object (legacy `clerk-sdk-node` style) is no longer supported. Use `getAuth()` instead:
+
+    ```diff
+    - const { userId } = req.auth;
+    + const { userId } = getAuth(req);
+    ```
+  </Tab>
+
+  <Tab>
+    {/* React Router */}
+
+    ### `@clerk/react-router/api.server` export removed {{ toc: false }}
+
+    The `@clerk/react-router/api.server` export has been removed. Use `@clerk/react-router/server` instead:
+
+    ```diff
+    - import { getAuth } from '@clerk/react-router/api.server';
+    + import { getAuth } from '@clerk/react-router/server';
+    ```
+
+    ### `rootAuthLoader` requires `clerkMiddleware()` {{ toc: false }}
+
+    `rootAuthLoader` now requires `clerkMiddleware()` to be installed. Using `rootAuthLoader` without middleware will throw a runtime error.
+
+    1. Enable the `v8_middleware` future flag:
+
+    ```ts {{ filename: 'react-router.config.ts' }}
+    export default {
+      future: {
+        v8_middleware: true,
+      },
+    } satisfies Config;
+    ```
+
+    2. Use `clerkMiddleware()` alongside `rootAuthLoader`:
+
+    ```tsx
+    import { clerkMiddleware, rootAuthLoader } from '@clerk/react-router/server';
+
+    export const middleware: Route.MiddlewareFunction[] = [clerkMiddleware()];
+
+    export const loader = (args: Route.LoaderArgs) => rootAuthLoader(args);
     ```
   </Tab>
 </Tabs>

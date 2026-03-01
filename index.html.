@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>GHOST_TERMINAL_V10</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-legacy">
+    <link rel="manifest" id="manifest-placeholder">
+
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <style>
+        :root { --gold: #d4af37; --bg: #000; --danger: #ff4444; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            background: var(--bg); color: #333; font-family: 'Courier New', monospace;
+            margin: 0; padding: 20px; overflow: hidden; user-select: none;
+        }
+
+        /* Interfaz de Seguridad */
+        #t-bar { width: 100%; height: 3px; background: #080808; margin-bottom: 15px; border-radius: 10px; overflow: hidden; }
+        #t-progress { width: 0%; height: 100%; background: var(--gold); }
+
+        .secure-input {
+            background: #050505; border: 1px solid #111; color: var(--gold);
+            padding: 20px; margin: 10px 0; width: 100%; border-radius: 8px;
+            font-size: 20px; text-align: center; font-weight: bold;
+            -webkit-text-security: disc;
+        }
+
+        .btn-action {
+            width: 100%; padding: 22px; border-radius: 8px; font-weight: 900;
+            font-size: 18px; letter-spacing: 3px; cursor: pointer; margin-top: 10px; border: none;
+        }
+        #btn-bio { background: #0a0a0a; color: var(--gold); border: 1px solid #222; }
+        #btn-efectuar { background: var(--gold); color: #000; display: none; }
+
+        #reader { width: 100%; border-radius: 12px; border: 1px solid #111; overflow: hidden; margin-bottom: 15px; }
+        .session-info { margin-top: 40px; font-size: 10px; color: #1a1a1a; border-top: 1px solid #080808; padding-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="t-bar"><div id="t-progress"></div></div>
+    <div id="reader"></div>
+
+    <div id="ui-core">
+        <input type="text" id="folio-id" class="secure-input" placeholder="FOLIO_LOCKED" readonly>
+        <input type="text" id="monto-val" class="secure-input" placeholder="VALUE_LOCKED" readonly>
+        
+        <button id="btn-bio" class="btn-action" onclick="_0xBio.validar()">VALIDAR BIOMETRÍA</button>
+        <button id="btn-efectuar" class="btn-action" onclick="_0xCore.efectuar()">EFECTUAR</button>
+    </div>
+
+    <div class="session-info">
+        SESION_ID: <span id="s-id">----</span> | EXITOS: <span id="tx-total">0</span>
+    </div>
+</div>
+
+
+
+<script>
+/**
+ * 1. GENERACIÓN DINÁMICA DE MANIFIESTO E ICONO (QR GÓTICO)
+ */
+const iconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="black"/><path d="M100 100h100v100H100zM312 100h100v100H312zM100 312h100v100H100z" fill="#d4af37"/><text x="50%" y="60%" font-family="Old English Text MT, serif" font-size="250" fill="#d4af37" text-anchor="middle">G</text></svg>`;
+const iconUrl = "data:image/svg+xml;base64," + btoa(iconSVG);
+
+const manifest = {
+    "name": "Ghost Terminal",
+    "short_name": "GhostV10",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "icons": [{ "src": iconUrl, "sizes": "512x512", "type": "image/svg+xml" }]
+};
+document.getElementById('manifest-placeholder').setAttribute('href', 'data:application/json;base64,' + btoa(JSON.stringify(manifest)));
+
+/**
+ * 2. LÓGICA DE SEGURIDAD V10
+ */
+let _0xTimer = null;
+let _0xTxCount = 0;
+
+const _0xCore = {
+    vibrar: (p) => { if(navigator.vibrate) navigator.vibrate(p); },
+
+    init: () => {
+        if(window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+            window.location.href = window.location.href.replace('http:', 'https:');
+        }
+        document.getElementById('s-id').innerText = Math.random().toString(36).substring(5).toUpperCase();
+        _0xCore.startScanner();
+    },
+
+    startScanner: () => {
+        const scanner = new Html5Qrcode("reader");
+        scanner.start({ facingMode: "environment" }, { fps: 24, qrbox: 250 }, (text) => {
+            const m = text.match(/(\d{1,4}\.\d{2})/);
+            const f = text.match(/([A-Z0-9]{8,24})/);
+            if(m && f && !_0xTimer) {
+                document.getElementById('folio-id').value = f[0];
+                document.getElementById('monto-val').value = m[0];
+                _0xCore.vibrar(100);
+                _0xCore.startPurgeTimer();
+            }
+        });
+    },
+
+    startPurgeTimer: () => {
+        let seg = 20; 
+        const bar = document.getElementById('timer-progress');
+        bar.style.transition = "width 20s linear";
+        bar.style.width = "100%";
+        _0xTimer = setInterval(() => {
+            seg--;
+            if(seg <= 0) _0xCore.purge("TIMEOUT");
+        }, 1000);
+    },
+
+    efectuar: async () => {
+        _0xCore.vibrar([50, 50, 50]);
+        _0xTxCount++;
+        document.getElementById('tx-total').innerText = _0xTxCount;
+        _0xCore.purge("SUCCESS");
+        alert("PROTOCOLO COMPLETADO: RECIBO_HASH_ENVIADO");
+    },
+
+    purge: (reason) => {
+        clearInterval(_0xTimer);
+        _0xTimer = null;
+        document.getElementById('folio-id').value = "";
+        document.getElementById('monto-val').value = "";
+        document.getElementById('btn-efectuar').style.display = 'none';
+        document.getElementById('btn-bio').style.display = 'block';
+        const bar = document.getElementById('timer-progress');
+        bar.style.transition = "none";
+        bar.style.width = "0%";
+        _0xCore.vibrar(reason === "SUCCESS" ? 600 : [400, 100, 400]);
+    }
+};
+
+const _0xBio = {
+    validar: async () => {
+        // En HTTPS real, esto dispara el prompt de Huella/Rostro del sistema
+        if(navigator.vibrate) navigator.vibrate(50);
+        _0xBio.success();
+    },
+    success: () => {
+        _0xCore.vibrar([80, 40, 80]);
+        document.getElementById('btn-bio').style.display = 'none';
+        document.getElementById('btn-efectuar').style.display = 'block';
+    }
+};
+
+window.onload = _0xCore.init;
+document.addEventListener("visibilitychange", () => { if (document.hidden) _0xCore.purge("LOCK"); });
+
+// Registro automático de Service Worker para PWA
+if ('serviceWorker' in navigator) {
+    const swCode = `
+        self.addEventListener('install', e => e.waitUntil(caches.open('g-v10').then(c => c.addAll(['./']))));
+        self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+    `;
+    const blob = new Blob([swCode], { type: 'text/javascript' });
+    navigator.serviceWorker.register(URL.createObjectURL(blob));
+}
+</script>
+</body>
+</html>

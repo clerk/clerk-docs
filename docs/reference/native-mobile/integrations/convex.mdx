@@ -97,15 +97,19 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
     }
     ```
 
-    Initialize Clerk first with your Clerk [Publishable Key](!publishable-key), then create `ClerkConvexClient` using your Convex deployment URL. Refer to the [Convex deployment docs](https://docs.convex.dev/dashboard/deployments/deployment-settings) for more info.
+    Initialize Clerk first with your Clerk [Publishable Key](!publishable-key), then create a `ConvexClientWithAuth` using the extension function `ClerkConvexAuthProvider().createConvexClientWithAuth(...)`. Refer to the [Convex deployment docs](https://docs.convex.dev/dashboard/deployments/deployment-settings) for more info.
 
     ```kotlin {{ filename: 'MyApplication.kt' }}
     import android.app.Application
     import com.clerk.api.Clerk
-    import com.clerk.convex.ClerkConvexClient
+    import com.clerk.convex.ClerkConvexAuthProvider
+    import com.clerk.convex.createConvexClientWithAuth
+    import dev.convex.android.ConvexClientWithAuth
 
     class MyApplication : Application() {
-      lateinit var clerkConvex: ClerkConvexClient
+      private val authProvider = ClerkConvexAuthProvider()
+
+      lateinit var convex: ConvexClientWithAuth<String>
         private set
 
       override fun onCreate() {
@@ -115,7 +119,7 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
           publishableKey = "{{pub_key}}",
         )
 
-        clerkConvex = ClerkConvexClient(
+        convex = authProvider.createConvexClientWithAuth(
           deploymentUrl = "YOUR_CONVEX_DEPLOYMENT_URL",
           context = applicationContext,
         )
@@ -123,7 +127,7 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
     }
     ```
 
-    After users authenticate with Clerk, auth state is automatically synced to Convex. Use `clerkConvex.convex` for queries, mutations, actions, and auth state.
+    After users authenticate with Clerk, auth state is automatically synced to Convex. Use `convex` for queries, mutations, actions, and auth state. If you don't need to keep an auth provider instance, `createClerkConvexClient(...)` is available as a shorthand helper.
   </If>
 
   <If sdk="ios">
@@ -184,17 +188,17 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
     ```kotlin {{ filename: 'AuthViewModel.kt' }}
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
-    import com.clerk.convex.ClerkConvexClient
     import dev.convex.android.AuthState
+    import dev.convex.android.ConvexClientWithAuth
     import kotlinx.coroutines.launch
 
     class AuthViewModel(
-      private val clerk: ClerkConvexClient,
-      ) : ViewModel() {
-        init {
-          viewModelScope.launch {
-          clerk.convex.authState.collect { authState ->
-          when (authState) {
+      private val convex: ConvexClientWithAuth<String>,
+    ) : ViewModel() {
+      init {
+        viewModelScope.launch {
+          convex.authState.collect { authState ->
+            when (authState) {
               is AuthState.AuthLoading -> showLoading()
               is AuthState.Unauthenticated -> showSignIn()
               is AuthState.Authenticated -> showAuthenticatedContent()
@@ -205,7 +209,7 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
     }
     ```
 
-    Collect `clerk.convex.authState` in your `ViewModel` and map each state to the appropriate screen.
+    Collect `convex.authState` in your `ViewModel` and map each state to the appropriate screen.
   </If>
 
   <If sdk="ios">
@@ -245,18 +249,18 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
     ```kotlin {{ filename: 'MessagesViewModel.kt' }}
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
-    import com.clerk.convex.ClerkConvexClient
+    import dev.convex.android.ConvexClientWithAuth
     import kotlinx.coroutines.flow.SharingStarted
     import kotlinx.coroutines.flow.StateFlow
     import kotlinx.coroutines.flow.catch
     import kotlinx.coroutines.flow.stateIn
 
     class MessagesViewModel(
-      clerk: ClerkConvexClient,
+      convex: ConvexClientWithAuth<String>,
     ) : ViewModel() {
 
       val messages: StateFlow<List<Message>> =
-        clerk.convex
+        convex
           .subscribe<List<Message>>("messages:list")
           .catch { emit(emptyList()) } // keep old behavior: fail -> show nothing
           .stateIn(

@@ -7,7 +7,7 @@ description: Learn how to use the Clerk API to build a custom flow for creating 
 
 This guide demonstrates how to use Clerk's API to build a custom flow for creating Organizations.
 
-<If notSdk={["js-frontend"]}>
+<If notSdk={["js-frontend", "ios", "android"]}>
   The following example uses these hooks:
 
   - The [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access the `createOrganization()` method. This method is used to create a new Organization with the provided name.
@@ -92,9 +92,128 @@ This guide demonstrates how to use Clerk's API to build a custom flow for creati
 </If>
 
 <If sdk="ios">
-  {/* TODO */}
+  ```swift {{ filename: 'OrganizationView.swift', collapsible: true }}
+  import ClerkKit
+  import SwiftUI
+
+  struct OrganizationView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var organizationName = ""
+    @State private var createdOrganization: Organization?
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 16) {
+        HStack(spacing: 10) {
+          TextField("Organization name", text: $organizationName)
+            .textFieldStyle(.roundedBorder)
+
+          Button("Submit") {
+            Task { await createOrganization() }
+          }
+        }
+
+        if let createdOrganization = createdOrganization {
+          Text("Successfully Created: \(createdOrganization.name)")
+        }
+      }
+      .padding()
+    }
+
+    @MainActor
+    private func createOrganization() async {
+      guard let user = clerk.user else { return }
+
+      do {
+        createdOrganization = try await user.createOrganization(name: organizationName)
+        organizationName = ""
+      } catch {
+        dump(error)
+      }
+    }
+  }
+  ```
 </If>
 
 <If sdk="android">
-  {/* TODO */}
+  ```kotlin {{ filename: 'OrganizationView.kt', collapsible: true }}
+  import androidx.compose.foundation.layout.Arrangement
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.foundation.layout.Row
+  import androidx.compose.foundation.layout.fillMaxWidth
+  import androidx.compose.foundation.layout.padding
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.OutlinedTextField
+  import androidx.compose.material3.Text
+  import androidx.compose.runtime.Composable
+  import androidx.compose.runtime.getValue
+  import androidx.compose.runtime.mutableStateOf
+  import androidx.compose.runtime.remember
+  import androidx.compose.runtime.rememberCoroutineScope
+  import androidx.compose.runtime.setValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.compose.ui.unit.dp
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.organizations.Organization
+  import kotlinx.coroutines.launch
+
+  @Composable
+  fun OrganizationView() {
+    var organizationName by remember { mutableStateOf("") }
+    var createdOrganization by remember { mutableStateOf<Organization?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        OutlinedTextField(
+          modifier = Modifier.weight(1f),
+          value = organizationName,
+          onValueChange = { organizationName = it },
+          label = { Text("Organization name") },
+        )
+
+        Button(
+          onClick = {
+            coroutineScope.launch {
+              val organization = createOrganization(organizationName) ?: return@launch
+              createdOrganization = organization
+              organizationName = ""
+            }
+          },
+        ) {
+          Text("Submit")
+        }
+      }
+
+      createdOrganization?.let { organization ->
+        Text("Successfully Created: ${organization.name}")
+      }
+    }
+  }
+
+  private suspend fun createOrganization(organizationName: String): Organization? {
+    if (Clerk.user == null) return null
+
+    var createdOrganization: Organization? = null
+    Organization.create(name = organizationName)
+      .onSuccess { organization ->
+        createdOrganization = organization
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+
+    return createdOrganization
+  }
+  ```
 </If>

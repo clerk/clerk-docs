@@ -22,7 +22,7 @@ To remove the ability to determine whether an account exists:
 
 **Bulk user enumeration protection** enforces rate limits to prevent determining which email addresses and phone numbers are registered in bulk, but targeted attacks are still feasible.
 
-Clerk's existing PII protections on our API endpoints are also applied. For example, when signing in, although bulk enumeration protection does reveal if a user exists, Clerk does not reveal their first and last name and redacts most of their phone number ("Send SMS code to +\*\*\*\*\*\*\*\*41").
+Clerk's existing PII protections on our API endpoints are also applied. For example, when signing in, although bulk enumeration protection does reveal if a user exists, Clerk does not reveal their first and last name and redacts identifiers, but leave enough information so they are visible (e.g. "Send SMS code to +\*\*\*\*\*\*\*\*00").
 
 ### Strict user enumeration protection
 
@@ -32,11 +32,8 @@ Strict enumeration covers:
 
 - Sign up: If you try to sign up with an email or phone number that already exists, Clerk will not send a verification code. Instead, Clerk will send a notification by email or SMS that someone tried to sign up with an account that exists and they should sign in instead.
 - Sign in: If you try to sign in with an email or phone number that already exists, Clerk will respond differently depending on the strategy you use:
-  - All password attempts are rejected. Clerk adds artificial latency to defend against hash timing attacks.
+  - All password attempts are rejected.
   - If you use an email code or email link with an email that does not exist, Clerk will send a notification telling that email that someone tried to sign in but needs to sign up instead.
-  - If you use a phone code with a phone that does not exist, Clerk will proceed to the verification screen as if you were sent a message, but will not send anything. (We understand this is a bad user experience for legitimate users, since this looks like bad SMS delivery. But we want to wait to send SMS notification on sign-in until we have CAPTCHA checks and other protections in place.)
+  - If you use a phone code with a phone that does not exist, Clerk will proceed to the verification screen as if you were sent a message, but will not send anything.
+    - Due to the potential high cost to our customers from sending SMS messages when under a user enumeration attack, Clerk currently does not send any SMS messages on phone code sign in attempts to non-existent accounts. We are investigating ways to add SMS notifications on sign in as we continue to develop our anti-fraud protections.
 - User profile: If you try to add an email or phone number to your user profile that already exists, Clerk will proceed to the verification screen as if you were sent a message, but will not send anything. In this case, Clerk currently does not issue any "good faith" notifications, based on the assumption that the majority of such attempts are likely to be attacks.
-
-### Tradeoffs
-
-With bulk protections enabled, if you try to sign in with an email, but realize you want to switch to a phone code instead, Clerk can give you a helpful reminder of which phone you have on your account. With strict protections enabled, Clerk does not even list phone as an option in our API responses, and the SDK doesn't expose it. (However, if you know your phone number, you could still manually make a request.)

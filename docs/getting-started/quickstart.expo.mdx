@@ -274,27 +274,18 @@ Select the tab for the approach you want to use:
 
       ## Add authentication and home screen
 
-      With native components, you can build a complete app in a single file. The [`<AuthView />`](/docs/reference/expo/native-components/auth-view) component handles all sign-in and sign-up flows, and [`<UserButton />`](/docs/reference/expo/native-components/user-button) provides a profile avatar that opens the [`<UserProfileView />`](/docs/reference/expo/native-components/user-profile-view).
+      With native components, you can build a complete app in a single file. The [`<AuthView />`](/docs/reference/expo/native-components/auth-view) component handles all sign-in and sign-up flows, [`<UserButton />`](/docs/reference/expo/native-components/user-button) provides a profile avatar that opens the native profile modal, and the [`useUserProfileModal()`](/docs/reference/expo/native-components/user-profile-view) hook lets you open the profile modal from any button.
 
       ```tsx {{ filename: 'app/index.tsx' }}
-      import { useState, useEffect } from 'react'
-      import { useAuth, useUser, useClerk } from '@clerk/expo'
-      import { AuthView, UserButton, UserProfileView } from '@clerk/expo/native'
+      import { useAuth, useUser, useClerk, useUserProfileModal } from '@clerk/expo'
+      import { AuthView, UserButton } from '@clerk/expo/native'
       import { Text, View, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native'
 
       export default function MainScreen() {
         const { isSignedIn, isLoaded } = useAuth()
         const { user } = useUser()
         const { signOut } = useClerk()
-
-        const [showAuth, setShowAuth] = useState(false)
-        const [showProfile, setShowProfile] = useState(false)
-
-        // Reset modal state when auth state changes
-        useEffect(() => {
-          setShowAuth(false)
-          setShowProfile(false)
-        }, [isSignedIn])
+        const { presentUserProfile } = useUserProfileModal()
 
         if (!isLoaded) {
           return (
@@ -305,31 +296,16 @@ Select the tab for the approach you want to use:
         }
 
         if (!isSignedIn) {
-          if (showAuth) {
-            return (
-              <View style={styles.centered}>
-                <ActivityIndicator size="large" />
-                <AuthView mode="signInOrUp" onDismiss={() => setShowAuth(false)} />
-              </View>
-            )
-          }
-
-          return (
-            <View style={styles.centered}>
-              <Text style={styles.title}>Clerk + Expo</Text>
-              <Text style={styles.subtitle}>Native Components</Text>
-              <TouchableOpacity style={styles.signInButton} onPress={() => setShowAuth(true)}>
-                <Text style={styles.signInButtonText}>Sign In / Sign Up</Text>
-              </TouchableOpacity>
-            </View>
-          )
+          return <AuthView mode="signInOrUp" />
         }
 
         return (
           <View style={styles.container}>
             <View style={styles.header}>
               <Text style={styles.title}>Welcome</Text>
-              <UserButton style={{ width: 44, height: 44 }} />
+              <View style={{ width: 44, height: 44, borderRadius: 22, overflow: 'hidden' }}>
+                <UserButton />
+              </View>
             </View>
             <View style={styles.profileCard}>
               {user?.imageUrl && <Image source={{ uri: user.imageUrl }} style={styles.avatar} />}
@@ -340,7 +316,7 @@ Select the tab for the approach you want to use:
                 <Text style={styles.email}>{user?.emailAddresses[0]?.emailAddress}</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.linkButton} onPress={() => setShowProfile(true)}>
+            <TouchableOpacity style={styles.linkButton} onPress={presentUserProfile}>
               <Text style={styles.linkButtonText}>Manage Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -349,9 +325,6 @@ Select the tab for the approach you want to use:
             >
               <Text style={styles.linkButtonText}>Sign Out</Text>
             </TouchableOpacity>
-            {showProfile && (
-              <UserProfileView onDismiss={() => setShowProfile(false)} onSignOut={() => signOut()} />
-            )}
           </View>
         )
       }
@@ -379,22 +352,6 @@ Select the tab for the approach you want to use:
         title: {
           fontSize: 28,
           fontWeight: 'bold',
-        },
-        subtitle: {
-          fontSize: 16,
-          color: '#666',
-          marginBottom: 32,
-        },
-        signInButton: {
-          backgroundColor: '#007AFF',
-          paddingHorizontal: 48,
-          paddingVertical: 16,
-          borderRadius: 12,
-        },
-        signInButtonText: {
-          color: '#fff',
-          fontSize: 18,
-          fontWeight: '600',
         },
         profileCard: {
           flexDirection: 'row',

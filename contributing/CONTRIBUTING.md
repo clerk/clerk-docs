@@ -1306,10 +1306,10 @@ Fallback markup to render while Clerk is loading. Default: `null`
 Use standard markdown pipe tables. All tables are automatically styled with a bordered container, gray header row, sticky header on desktop, and a scroll fade indicator on mobile.
 
 ```mdx
-| Name | Type | Description |
-| - | - | - |
+| Name     | Type     | Description                  |
+| -------- | -------- | ---------------------------- |
 | `userId` | `string` | The user's unique identifier |
-| `email` | `string` | The user's primary email |
+| `email`  | `string` | The user's primary email     |
 ```
 
 #### Column alignment
@@ -1321,29 +1321,29 @@ Use [GFM alignment syntax](https://github.github.com/gfm/#tables-extension-) in 
 - `---:` — right-aligned
 
 ```mdx
-| Feature | Basic | Pro |
-| - | :-: | :-: |
-| Email/Password | Yes | Yes |
-| Social Login | No | Yes |
+| Feature        | Basic | Pro |
+| -------------- | :---: | :-: |
+| Email/Password |  Yes  | Yes |
+| Social Login   |  No   | Yes |
 ```
 
 #### Comparison markers
 
 Use these components inside table cells to display styled comparison icons.
 
-| Component                | Description                                                          |
-| ------------------------ | -------------------------------------------------------------------- |
-| `<CompareYes />`         | Displays a green checkmark (✓) |
-| `<CompareNo />`          | Displays a red X (✗) |
-| `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children       |
-| `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children         |
+| Component                | Description                                                    |
+| ------------------------ | -------------------------------------------------------------- |
+| `<CompareYes />`         | Displays a green checkmark (✓)                                 |
+| `<CompareNo />`          | Displays a red X (✗)                                           |
+| `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children |
+| `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children   |
 
 ```mdx
-| Feature | Basic | Pro |
-| - | :-: | :-: |
-| Email/Password | <CompareYes /> | <CompareYes /> |
-| Social Login | <CompareNo /> | <CompareYes /> |
-| MFA | <ComparePartial>Limited</ComparePartial> | <CompareYes /> |
+| Feature        |                  Basic                   |      Pro       |
+| -------------- | :--------------------------------------: | :------------: |
+| Email/Password |              <CompareYes />              | <CompareYes /> |
+| Social Login   |              <CompareNo />               | <CompareYes /> |
+| MFA            | <ComparePartial>Limited</ComparePartial> | <CompareYes /> |
 ```
 
 ### `<Include />`

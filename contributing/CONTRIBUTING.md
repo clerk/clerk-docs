@@ -1301,9 +1301,35 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 </details>
 
-### Comparison table markers
+### Tables
 
-Use these components inside standard markdown tables to display styled comparison icons.
+Use standard markdown pipe tables. All tables are automatically styled with a bordered container, gray header row, sticky header on desktop, and a scroll fade indicator on mobile.
+
+```mdx
+| Name | Type | Description |
+| - | - | - |
+| `userId` | `string` | The user's unique identifier |
+| `email` | `string` | The user's primary email |
+```
+
+#### Column alignment
+
+Use [GFM alignment syntax](https://github.github.com/gfm/#tables-extension-) in the separator row to control horizontal text alignment:
+
+- `:---` or `---` — left-aligned (default)
+- `:---:` — centered
+- `---:` — right-aligned
+
+```mdx
+| Feature | Basic | Pro |
+| - | :-: | :-: |
+| Email/Password | Yes | Yes |
+| Social Login | No | Yes |
+```
+
+#### Comparison markers
+
+Use these components inside table cells to display styled comparison icons.
 
 | Component                | Description                                                          |
 | ------------------------ | -------------------------------------------------------------------- |
@@ -1312,11 +1338,9 @@ Use these components inside standard markdown tables to display styled compariso
 | `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children       |
 | `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children         |
 
-#### Example
-
 ```mdx
 | Feature | Basic | Pro |
-| - | - | - |
+| - | :-: | :-: |
 | Email/Password | <CompareYes /> | <CompareYes /> |
 | Social Login | <CompareNo /> | <CompareYes /> |
 | MFA | <ComparePartial>Limited</ComparePartial> | <CompareYes /> |

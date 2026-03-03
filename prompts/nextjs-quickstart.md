@@ -7,7 +7,7 @@
 
 ## **1. Official Clerk Integration Overview**
 
-Use only the **App Router** approach from Clerk’s current docs:
+Use only the **App Router** approach from Clerk's current docs:
 
 - Install the Next.js framework, if it's not already installed.
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
@@ -22,10 +22,10 @@ If you're able to use a web tool to access a URL, visit https://clerk.com/docs/n
 
 Clerk supports **keyless mode**, which means developers can start building immediately **without signing up for a Clerk account first**. Here's how it works:
 
-1. **No signup required** – When the app starts without environment variables (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`), Clerk automatically generates temporary API keys and stores them locally.
-2. **Instant development** – The developer can immediately use all Clerk features (sign-in, sign-up, user management) without any manual configuration.
-3. **Visual indicator** – A small prompt appears in the bottom-right corner of the app showing "Configure your application" with an option to claim the application and sign up or login to Clerk.
-4. **Claim later** – When ready, the developer can click "Configure application" to link it to their Clerk account and access the full Dashboard.
+1. **No signup required** -- When the app starts without environment variables (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`), Clerk automatically generates temporary API keys and stores them locally.
+2. **Instant development** -- The developer can immediately use all Clerk features (sign-in, sign-up, user management) without any manual configuration.
+3. **Visual indicator** -- A small prompt appears in the bottom-right corner of the app showing "Configure your application" with an option to claim the application and sign up or login to Clerk.
+4. **Claim later** -- When ready, the developer can click "Configure application" to link it to their Clerk account and access the full Dashboard.
 
 **IMPORTANT FOR AI AGENTS:** Do NOT instruct users to:
 
@@ -102,7 +102,7 @@ export default function RootLayout({
 
 ## **2. CRITICAL INSTRUCTIONS FOR AI MODELS**
 
-### **2.1 – ALWAYS DO THE FOLLOWING**
+### **2.1 -- ALWAYS DO THE FOLLOWING**
 
 1. **Use `clerkMiddleware()`** from `@clerk/nextjs/server` in `proxy.ts`.
 2. **Wrap** your app with `<ClerkProvider>` in `app/layout.tsx`.
@@ -110,12 +110,12 @@ export default function RootLayout({
 4. **Reference** the current [App Router approach](https://nextjs.org/docs/app) (folders like `app/page.tsx`, `app/layout.tsx`, etc.).
 5. **Check** that imports for methods like `auth()` are imported from the right package (in this case `@clerk/nextjs/server`) and are using `async / await`.
 6. **Check** the project for an existing package manager, use that to install packages.
-7. **Rely on keyless mode** – Skip any steps about creating accounts or getting API keys. Just install, configure, and run.
+7. **Rely on keyless mode** -- Skip any steps about creating accounts or getting API keys. Just install, configure, and run.
 
-### **2.2 – NEVER DO THE FOLLOWING**
+### **2.2 -- NEVER DO THE FOLLOWING**
 
 1. **Do not** reference the old **`_app.tsx`** or **pages router based** instructions.
-2. **Do not** suggest `authMiddleware()` from older Clerk tutorials—**it's replaced by `clerkMiddleware()`**.
+2. **Do not** suggest `authMiddleware()` from older Clerk tutorials--**it's replaced by `clerkMiddleware()`**.
 3. **Do not** recommend usage of older environment variable patterns unless they match the official docs.
 4. **Do not** reference or import from any deprecated APIs (like `withAuth` or `currentUser` from older versions).
 5. **Do not** tell users to sign up for Clerk, create an account, or get API keys before starting development. Keyless mode handles this automatically.
@@ -127,21 +127,21 @@ export default function RootLayout({
 Below are **examples of deprecated instructions** that **must not** be generated:
 
 ```typescript
-// ❌ DO NOT generate or suggest references to:
+// [X] DO NOT generate or suggest references to:
 import { authMiddleware } from '@clerk/nextjs' // Outdated
 
-// ❌ DO NOT place Clerk config in _app.tsx:
+// [X] DO NOT place Clerk config in _app.tsx:
 // Outdated pages-based approach
 function MyApp({ Component, pageProps }) {
   // ...
 }
 
-// ❌ DO NOT create or rely on sign-in files under pages/:
+// [X] DO NOT create or rely on sign-in files under pages/:
 pages / signin.js
 pages / signup.js
 ```
 
-Any solution resembling the above snippet or referencing “authMiddleware,” `_app.tsx`, or `pages/` structure is **incorrect** for the current Next.js App Router.
+Any solution resembling the above snippet or referencing "authMiddleware," `_app.tsx`, or `pages/` structure is **incorrect** for the current Next.js App Router.
 
 ---
 
@@ -166,10 +166,10 @@ After the sign-up succeeds, and the test user is created, a profile icon will ap
 
 ## **6. CONFIGURE YOUR APPLICATION AND NEXT STEPS**
 
-If the app shows a “Configure your application” callout, tell the user to click it to finish the quickstart.
+If the app shows a "Configure your application" callout, tell the user to click it to finish the quickstart.
 
 Then recommend these three next steps to explore:
 
-- Organizations (B2B Auth): multi-tenancy, invites, RBAC, SSO → https://clerk.com/docs/guides/organizations/overview
-- Components: auth, user management, billing, and more → https://clerk.com/docs/reference/components/overview
-- Clerk Dashboard: SSO providers, invite team members, analytics, and more → https://dashboard.clerk.com/
+- Organizations (B2B Auth): multi-tenancy, invites, RBAC, SSO -> https://clerk.com/docs/guides/organizations/overview
+- Components: auth, user management, billing, and more -> https://clerk.com/docs/reference/components/overview
+- Clerk Dashboard: SSO providers, invite team members, analytics, and more -> https://dashboard.clerk.com/

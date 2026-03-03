@@ -7,7 +7,11 @@ description: Learn how to use the Clerk API to build a custom flow for switching
 
 This guide will demonstrate how to use the Clerk API to build a custom flow for switching between Organizations.
 
-<If notSdk={["js-frontend",  "ios", "android", "nuxt"]}>
+<If notSdk={["js-frontend", "ios", "android"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
+
   Two examples are provided: one for a paginated list and one for an infinite list.
 
   The following examples:
@@ -22,7 +26,9 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   - The "Infinite list" example sets the `infinite` option to `true` to enable infinite results.
 
   <If notSdk="expo">
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+    <If notSdk="nextjs">
+      <Include src="_partials/sdk-examples-not-available-callout" />
+    </If>
 
     <CodeBlockTabs options={["Paginated list", "Infinite list"]}>
       ```jsx {{ filename: 'app/components/CustomOrganizationSwitcher.tsx', collapsible: true }}
@@ -182,9 +188,10 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
     <CodeBlockTabs options={["Paginated list", "Infinite list"]}>
       ```tsx {{ filename: 'app/components/organization-switcher.tsx', collapsible: true }}
       import { CreateOrganization } from '@/components/create-organization' // See https://clerk.com/docs/guides/development/custom-flows/organizations/create-organizations for this component
+
       import { ThemedText } from '@/components/themed-text'
       import { ThemedView } from '@/components/themed-view'
-      import { useAuth, useOrganizationList } from '@clerk/clerk-expo'
+      import { useAuth, useOrganizationList } from '@clerk/expo'
       import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
       // List user's organization memberships
@@ -368,7 +375,7 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
       ```tsx {{ filename: 'app/components/organization-switcher.tsx', collapsible: true }}
       import { ThemedText } from '@/components/themed-text'
       import { ThemedView } from '@/components/themed-view'
-      import { useAuth, useOrganizationList } from '@clerk/clerk-expo'
+      import { useAuth, useOrganizationList } from '@clerk/expo'
       import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
       // List user's organization memberships
@@ -641,6 +648,83 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
+<If sdk="ios">
+  ```swift {{ filename: 'OrganizationSwitcherView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct OrganizationSwitcherView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var memberships: [OrganizationMembership] = []
+
+    var body: some View {
+      VStack {
+        ForEach(memberships) { membership in
+          HStack {
+            Text(membership.organization.name)
+            Button("Set active") {
+              Task { await setActiveOrganization(organizationId: membership.organization.id) }
+            }
+          }
+        }
+      }
+      .task { await fetchOrganizationMemberships() }
+    }
+  }
+
+  extension OrganizationSwitcherView {
+
+    func fetchOrganizationMemberships() async {
+      do {
+        memberships = try await clerk.user?.getOrganizationMemberships().data ?? []
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        memberships = []
+      }
+    }
+
+    func setActiveOrganization(organizationId: String) async {
+      guard let sessionId = clerk.session?.id else { return }
+
+      do {
+        try await clerk.auth.setActive(sessionId: sessionId, organizationId: organizationId)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.organizations.OrganizationMembership
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun fetchOrganizationMemberships(): List<OrganizationMembership> {
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return emptyList()
+    return when (membershipsResult) {
+      is ClerkResult.Success -> membershipsResult.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun setActiveOrganization(organizationId: String) {
+    val sessionId = Clerk.session?.id ?: return
+
+    Clerk.auth
+      .setActive(sessionId = sessionId, organizationId = organizationId)
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+  ```
 </If>

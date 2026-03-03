@@ -42,7 +42,49 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   #### Example configuration
 
-  <Tabs items={["Nginx", "Cloudflare Workers", "Next.js"]}>
+  <Tabs items={["Next.js", "Express", "Nginx", "Cloudflare Workers"]}>
+    <Tab>
+      If you're using **Next.js**, you can configure a frontend API proxy in one of two ways:
+
+      - Use the built-in `frontendApiProxy` option in [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware#frontend-api-proxy).
+      - Use [`createFrontendApiProxyHandlers()`](/docs/reference/nextjs/clerk-middleware#create-frontend-api-proxy-handlers) in a Next.js App Router route handler. **This is useful if you prefer to keep proxy logic separate from your middleware.**
+
+      <Tabs items={["Using clerkMiddleware()", "Using createFrontendApiProxyHandlers()"]}>
+        <Tab>
+          The `frontendApiProxy` option in `clerkMiddleware()` handles all proxy requirements automatically, including header forwarding, body streaming, and redirect rewriting. The `proxyUrl` for authentication handshake is also auto-derived.
+
+          <Include src="_partials/frontend-api-proxy/basic-usage-nextjs" />
+
+          <Include src="_partials/frontend-api-proxy/multi-domain-usage-nextjs" />
+        </Tab>
+
+        <Tab>
+          As an alternative to the middleware approach, you can use `createFrontendApiProxyHandlers()` in a Next.js App Router route handler.
+
+          <Include src="_partials/frontend-api-proxy/create-frontend-api-proxy-handlers" />
+        </Tab>
+      </Tabs>
+    </Tab>
+
+    <Tab>
+      If you're using **Express**, you can use the built-in `frontendApiProxy` option in [`clerkMiddleware()`](/docs/reference/express/clerk-middleware#frontend-api-proxy) instead of manually configuring a proxy server. This option handles all proxy requirements automatically, including header forwarding, body streaming, and redirect rewriting. The `proxyUrl` for authentication handshake is also auto-derived.
+
+      ```ts {{ filename: 'index.ts' }}
+      import express from 'express'
+      import { clerkMiddleware } from '@clerk/express'
+
+      const app = express()
+
+      app.use(
+        clerkMiddleware({
+          frontendApiProxy: {
+            enabled: true,
+          },
+        }),
+      )
+      ```
+    </Tab>
+
     <Tab>
       ```nginx {{ filename: 'nginx.conf' }}
       http {
@@ -105,64 +147,6 @@ When using a proxy, all requests to the Frontend API will be made through your d
         ```
       </CodeBlockTabs>
     </Tab>
-
-    <Tab>
-      <Include src="_partials/nextjs/nextjs-15-callout" />
-
-      ```ts {{ filename: 'proxy.ts' }}
-      import { NextResponse } from 'next/server'
-      import { clerkMiddleware } from '@clerk/nextjs/server'
-
-      function proxyMiddleware(req) {
-        if (req.nextUrl.pathname.match('__clerk')) {
-          const proxyHeaders = new Headers(req.headers)
-          proxyHeaders.set('Clerk-Proxy-Url', process.env.NEXT_PUBLIC_CLERK_PROXY_URL || '')
-          proxyHeaders.set('Clerk-Secret-Key', process.env.CLERK_SECRET_KEY || '')
-          if (req.ip) {
-            proxyHeaders.set('X-Forwarded-For', req.ip)
-          } else {
-            proxyHeaders.set('X-Forwarded-For', req.headers.get('X-Forwarded-For') || '')
-          }
-
-          const proxyUrl = new URL(req.url)
-          proxyUrl.host = 'frontend-api.clerk.dev'
-          proxyUrl.port = '443'
-          proxyUrl.protocol = 'https'
-          proxyUrl.pathname = proxyUrl.pathname.replace('/__clerk', '')
-
-          return NextResponse.rewrite(proxyUrl, {
-            request: {
-              headers: proxyHeaders,
-            },
-          })
-        }
-
-        return null
-      }
-
-      const clerkHandler = clerkMiddleware()
-
-      export default function middleware(req) {
-        // First check if it's a proxy request
-        const proxyResponse = proxyMiddleware(req)
-        if (proxyResponse) {
-          return proxyResponse
-        }
-
-        // Otherwise, use Clerk's middleware
-        return clerkHandler(req)
-      }
-
-      export const config = {
-        matcher: [
-          // Skip Next.js internals and all static files, unless found in search params
-          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-          // Always run for API routes AND anything passed through the proxy
-          '/(api|trpc|__clerk)(.*)',
-        ],
-      }
-      ```
-    </Tab>
   </Tabs>
 
   > [!NOTE]
@@ -197,6 +181,9 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   ### Configure your proxy setup
 
+  > [!IMPORTANT]
+  > If you used the `frontendApiProxy` option in `clerkMiddleware()` (Next.js or Express), the server-side `proxyUrl` is auto-derived from the proxy configuration. You only need to set the client-side environment variable (e.g., `NEXT_PUBLIC_CLERK_PROXY_URL`) so that ClerkJS in the browser routes requests through the proxy.
+
   You can configure your proxy setup by either:
 
   - Setting environment variables
@@ -206,13 +193,22 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   To configure your proxy setup using environment variables, your `.env` file should look like this:
 
-  <Tabs items={["Next.js", "Remix", "JavaScript"]}>
+  <Tabs items={["Next.js", "Express", "Remix", "JavaScript"]}>
     <Tab>
       ```env {{ filename: '.env' }}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
       CLERK_SECRET_KEY={{secret}}
 
       NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk/
+      ```
+    </Tab>
+
+    <Tab>
+      ```env {{ filename: '.env' }}
+      CLERK_PUBLISHABLE_KEY={{pub_key}}
+      CLERK_SECRET_KEY={{secret}}
+
+      CLERK_PROXY_URL=https://app.dev/__clerk
       ```
     </Tab>
 
@@ -239,29 +235,46 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   #### Properties in your application
 
-  <Tabs items={["Next.js", "Remix", "JavaScript"]}>
+  <Tabs items={["Next.js", "Express", "Remix", "JavaScript"]}>
     <Tab>
       To configure your proxy setup using properties in your Next.js application, set the `proxyUrl` property on the [`<ClerkProvider>`](/docs/reference/components/clerk-provider) component.
 
-      ```tsx {{ filename: 'app/layout.tsx', mark: [5] }}
+      ```tsx {{ filename: 'app/layout.tsx', mark: [7] }}
       import { ClerkProvider } from '@clerk/nextjs'
 
       export default function RootLayout({ children }: { children: React.ReactNode }) {
         return (
-          <ClerkProvider proxyUrl="https://app.dev/__clerk/">
-            <html lang="en">
-              <body>{children}</body>
-            </html>
-          </ClerkProvider>
+          <html lang="en">
+            <body>
+              <ClerkProvider proxyUrl="https://app.dev/__clerk/">{children}</ClerkProvider>
+            </body>
+          </html>
         )
       }
       ```
     </Tab>
 
     <Tab>
+      To configure your proxy setup using properties in your Express application, set the `proxyUrl` option on [`clerkMiddleware()`](/docs/reference/express/clerk-middleware).
+
+      ```ts {{ filename: 'index.ts', mark: [8] }}
+      import { clerkMiddleware } from '@clerk/express'
+      import express from 'express'
+
+      const app = express()
+
+      app.use(
+        clerkMiddleware({
+          proxyUrl: 'https://app.dev/__clerk',
+        }),
+      )
+      ```
+    </Tab>
+
+    <Tab>
       To configure your proxy setup using properties in your Remix application, set the `proxyUrl` property on the [`ClerkApp`](/docs/reference/remix/clerk-app) wrapper.
 
-      ```tsx {{ filename: 'root.tsx' }}
+      ```tsx {{ filename: 'root.tsx', mark: [19] }}
       export const loader = (args) => {
         return rootAuthLoader(
           args,
@@ -288,7 +301,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
     <Tab>
       To configure your proxy setup using properties in your JavaScript application, pass the `proxyUrl` option to the [`load()`](/docs/reference/javascript/clerk#load) method.
 
-      ```js {{ filename: 'main.js' }}
+      ```js {{ filename: 'main.js', mark: [7] }}
       import { Clerk } from '@clerk/clerk-js'
 
       // Initialize Clerk with your Clerk Publishable Key

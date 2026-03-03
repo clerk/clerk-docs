@@ -9,11 +9,11 @@
 
 Use only the **App Router** approach from Clerk’s current docs:
 
-- Install the Next.js framework, if it's not already installed.
+- **Install** the Next.js framework, if it's not already installed.
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
 - **Create** a `proxy.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.
-- **Wrap** your application with `<ClerkProvider>` in your `app/layout.tsx`
-- **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<SignedIn>`, `<SignedOut>` in your layout or pages
+- **Add** `<ClerkProvider>` inside `<body>` in your `app/layout.tsx`
+- **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<Show>` in your layout or pages
 - **Start** developing, sign in or sign up, and confirm user creation
 
 If you're able to use a web tool to access a URL, visit https://clerk.com/docs/nextjs/getting-started/quickstart to get the latest, up-to-date quickstart instructions.
@@ -38,6 +38,14 @@ Instead, guide them to install the SDK, add the middleware and provider, then ru
 
 ### **Correct, Up-to-Date Quickstart Sample**
 
+First, install the Clerk Next.js SDK (if not already installed):
+
+```bash
+npm install @clerk/nextjs
+```
+
+Create and/or configure your `proxy.ts` file:
+
 ```typescript
 // proxy.ts
 import { clerkMiddleware } from '@clerk/nextjs/server'
@@ -61,8 +69,7 @@ import {
   ClerkProvider,
   SignInButton,
   SignUpButton,
-  SignedIn,
-  SignedOut,
+  Show,
   UserButton,
 } from "@clerk/nextjs";
 import "./globals.css";
@@ -78,22 +85,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body>
+    <html lang="en">
+      <body>
+        <ClerkProvider>
           <header>
-            <SignedOut>
+            <Show when="signed-out">
               <SignInButton />
               <SignUpButton />
-            </SignedOut>
-            <SignedIn>
+            </Show>
+            <Show when="signed-in">
               <UserButton />
-            </SignedIn>
+            </Show>
           </header>
           {children}
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }
 ```
@@ -118,7 +125,8 @@ export default function RootLayout({
 2. **Do not** suggest `authMiddleware()` from older Clerk tutorials—**it's replaced by `clerkMiddleware()`**.
 3. **Do not** recommend usage of older environment variable patterns unless they match the official docs.
 4. **Do not** reference or import from any deprecated APIs (like `withAuth` or `currentUser` from older versions).
-5. **Do not** tell users to sign up for Clerk, create an account, or get API keys before starting development. Keyless mode handles this automatically.
+5. **Do not** use outdated hooks or components `<SignedIn />`, `<SignedOut />`, (e.g., referencing older docs).
+6. **Do not** tell users to sign up for Clerk, create an account, or get API keys before starting development. Keyless mode handles this automatically.
 
 ---
 
@@ -163,6 +171,8 @@ If any check **fails**, **stop** and revise until compliance is achieved.
 After completing the steps above, tell the developer to use the app (now running) to **sign up as their first test user** in the top nav to experience the Clerk `<SignUp />` component and end-to-end auth flow.
 
 After the sign-up succeeds, and the test user is created, a profile icon will appear in the nav. Congratulate them on creating their first test user.
+
+---
 
 ## **6. CONFIGURE YOUR APPLICATION AND NEXT STEPS**
 

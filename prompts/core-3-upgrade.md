@@ -59,11 +59,11 @@ Update both imports and `package.json` dependencies.
 
 ## Removed Props
 
-| Before | After |
-| --- | --- |
+| Before                                                         | After                                                    |
+| -------------------------------------------------------------- | -------------------------------------------------------- |
 | `clerkJSUrl`, `clerkJSVersion`, `clerkUIUrl`, `clerkUIVersion` | prefix with `__internal_` (e.g. `__internal_clerkJSUrl`) |
-| `clerkJSVariant` | `prefetchUI={false}` |
-| `simple` theme export from `@clerk/ui` | `appearance={{ theme: 'simple' }}` |
+| `clerkJSVariant`                                               | `prefetchUI={false}`                                     |
+| `simple` theme export from `@clerk/ui`                         | `appearance={{ theme: 'simple' }}`                       |
 
 ## Removed Redirect Props
 
@@ -77,18 +77,18 @@ For forced redirects (ignoring `redirect_url` query param), use `forceRedirectUr
 
 ## Other Deprecation Removals
 
-| Before                                                    | After                            |
-| --------------------------------------------------------- | -------------------------------- |
-| `<OrganizationSwitcher afterSwitchOrganizationUrl="...">` | `afterSelectOrganizationUrl`     |
-| `client.activeSessions`                                   | `client.sessions`                |
-| `strategy: 'saml'`                                        | `strategy: 'enterprise_sso'`     |
-| `user.samlAccounts`                                       | `user.enterpriseAccounts`        |
-| `verification.samlAccount`                                | `verification.enterpriseAccount` |
-| `userSettings.saml`                                       | `userSettings.enterpriseSSO`     |
-| `hideSlug` prop                                           | removed — manage via Dashboard   |
-| `UserButton` `afterSignOutUrl` / `signOutUrl`             | `ClerkProvider afterSignOutUrl` or `SignOutButton redirectUrl` |
-| `__unstable_manageBilling*` props                         | removed                          |
-| `verifySecret()` / `verifyAccessToken()` / `verifyToken()` (`@clerk/backend`) | `verify()`    |
+| Before                                                                        | After                                                          |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `<OrganizationSwitcher afterSwitchOrganizationUrl="...">`                     | `afterSelectOrganizationUrl`                                   |
+| `client.activeSessions`                                                       | `client.sessions`                                              |
+| `strategy: 'saml'`                                                            | `strategy: 'enterprise_sso'`                                   |
+| `user.samlAccounts`                                                           | `user.enterpriseAccounts`                                      |
+| `verification.samlAccount`                                                    | `verification.enterpriseAccount`                               |
+| `userSettings.saml`                                                           | `userSettings.enterpriseSSO`                                   |
+| `hideSlug` prop                                                               | removed — manage via Dashboard                                 |
+| `UserButton` `afterSignOutUrl` / `signOutUrl`                                 | `ClerkProvider afterSignOutUrl` or `SignOutButton redirectUrl` |
+| `__unstable_manageBilling*` props                                             | removed                                                        |
+| `verifySecret()` / `verifyAccessToken()` / `verifyToken()` (`@clerk/backend`) | `verify()`                                                     |
 
 ### setActive Callback
 

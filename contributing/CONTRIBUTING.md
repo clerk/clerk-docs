@@ -43,7 +43,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<TutorialHero />`](#tutorialhero-)
     - [`<Cards>`](#cards)
     - [`<Properties>`](#properties-1)
-    - [`<ComparisonTable>`](#comparisontable)
+    - [Comparison table markers](#comparison-table-markers)
     - [`<Include />`](#include-)
     - [`<Typedoc />`](#typedoc-)
     - [`<If />`](#if-)
@@ -1301,71 +1301,25 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 </details>
 
-### `<ComparisonTable>`
+### Comparison table markers
 
-The `<ComparisonTable>` component is used to create feature comparison tables with styled checkmarks, X marks, and section headers. The table header stays sticky when scrolling the page.
-
-#### Related Components
+Use these components inside standard markdown tables to display styled comparison icons.
 
 | Component                | Description                                                          |
 | ------------------------ | -------------------------------------------------------------------- |
-| `<ComparisonTable>`      | Wrapper component for the comparison table with sticky header        |
-| `<CompareSection>`       | Creates a section header row that spans all columns                  |
-| `<CompareYes />`         | Displays a green checkmark (✓). Use `inline` prop for inline display |
-| `<CompareNo />`          | Displays a red X (✗). Use `inline` prop for inline display           |
+| `<CompareYes />`         | Displays a green checkmark (✓) |
+| `<CompareNo />`          | Displays a red X (✗) |
 | `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children       |
 | `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children         |
 
 #### Example
 
 ```mdx
-<ComparisonTable>
-  <thead>
-    <tr>
-      <th>Feature</th>
-      <th>Basic</th>
-      <th>Pro</th>
-    </tr>
-  </thead>
-  <tbody>
-    <CompareSection>Authentication</CompareSection>
-    <tr>
-      <td>Email/Password</td>
-      <td>
-        <CompareYes />
-      </td>
-      <td>
-        <CompareYes />
-      </td>
-    </tr>
-    <tr>
-      <td>Social Login</td>
-      <td>
-        <CompareNo />
-      </td>
-      <td>
-        <CompareYes />
-      </td>
-    </tr>
-    <tr>
-      <td>MFA</td>
-      <td>
-        <ComparePartial>Limited</ComparePartial>
-      </td>
-      <td>
-        <CompareYes />
-      </td>
-    </tr>
-  </tbody>
-</ComparisonTable>
-```
-
-#### Inline Usage
-
-Use the `inline` prop on `<CompareYes />` and `<CompareNo />` when you need them inline with text:
-
-```mdx
-The feature was removed (was <CompareYes inline />, now <CompareNo inline />).
+| Feature | Basic | Pro |
+| - | - | - |
+| Email/Password | <CompareYes /> | <CompareYes /> |
+| Social Login | <CompareNo /> | <CompareYes /> |
+| MFA | <ComparePartial>Limited</ComparePartial> | <CompareYes /> |
 ```
 
 ### `<Include />`

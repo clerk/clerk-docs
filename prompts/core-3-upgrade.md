@@ -55,6 +55,15 @@ Update both imports and `package.json` dependencies.
 - `appearance.layout` → `appearance.options`
 - `showOptionalFields` now defaults to `false`
 - `colorRing` and `colorModalBackdrop` now render at **full opacity**. If you relied on the old 15% opacity behavior, use an explicit `rgba()` value (e.g. `rgba(99, 102, 241, 0.15)`).
+- `experimental_` / `experimental__` prefixes → `__experimental_` (standardized across all experimental APIs)
+
+## Removed Props
+
+| Before | After |
+| --- | --- |
+| `clerkJSUrl`, `clerkJSVersion`, `clerkUIUrl`, `clerkUIVersion` | prefix with `__internal_` (e.g. `__internal_clerkJSUrl`) |
+| `clerkJSVariant` | `prefetchUI={false}` |
+| `simple` theme export from `@clerk/ui` | `appearance={{ theme: 'simple' }}` |
 
 ## Removed Redirect Props
 
@@ -76,6 +85,10 @@ For forced redirects (ignoring `redirect_url` query param), use `forceRedirectUr
 | `user.samlAccounts`                                       | `user.enterpriseAccounts`        |
 | `verification.samlAccount`                                | `verification.enterpriseAccount` |
 | `userSettings.saml`                                       | `userSettings.enterpriseSSO`     |
+| `hideSlug` prop                                           | removed — manage via Dashboard   |
+| `UserButton` `afterSignOutUrl` / `signOutUrl`             | `ClerkProvider afterSignOutUrl` or `SignOutButton redirectUrl` |
+| `__unstable_manageBilling*` props                         | removed                          |
+| `verifySecret()` / `verifyAccessToken()` / `verifyToken()` (`@clerk/backend`) | `verify()`    |
 
 ### setActive Callback
 
@@ -109,6 +122,25 @@ const { checkout, errors, fetchStatus } = useCheckout({ planId, planPeriod })
 // Access: checkout.plan, checkout.status, checkout.start(), checkout.confirm()
 ```
 
+## Version Requirements
+
+- Node.js 20.9.0+
+- Next.js 15.2.3+ (for `@clerk/nextjs`)
+- Expo SDK 53+
+- TanStack React Start 1.157.0+ (with matching `@tanstack/react-router` and `@tanstack/react-router-devtools`)
+
+## Behavior Changes
+
+- `ClerkAPIError.kind` changed from `'ClerkApiError'` → `'ClerkAPIError'`. Update any direct string comparisons.
+- Satellite apps no longer auto-redirect on first visit. Set `satelliteAutoSync: true` in middleware and `ClerkProvider` to restore Core 2 behavior.
+
+## Token & Auth Changes
+
+- `getToken()` throws `ClerkOfflineError` when offline (previously returned `null`). Use try/catch with `ClerkOfflineError.is(error)`. Import from `@clerk/react/errors` (or SDK-specific `/errors` entry point). Still returns `null` when not signed in.
+- `useAuth().getToken` no longer `undefined` during SSR — now a function that throws `clerk_runtime_not_browser`. Use try/catch instead of `if (getToken)`. No change needed if only called in `useEffect` or event handlers.
+- `getToken()` uses proactive background refresh (stale-while-revalidate). Returns cached token immediately when within 15s of expiry, refreshes in background. No code changes required.
+- New `needs_client_trust` sign-in status — handle in sign-in flow if passwords + Client Trust enabled. Check `signIn.status === 'needs_client_trust'` before `'complete'`.
+
 ---
 
 ## SDK-Specific Changes
@@ -127,23 +159,39 @@ const { checkout, errors, fetchStatus } = useCheckout({ planId, planPeriod })
 ```
 
 - Passing `secretKey` to `clerkMiddleware()` now also requires a `CLERK_ENCRYPTION_KEY` env var.
+- Minimum Next.js version: 15.2.3 (Next.js 13 and 14 are no longer supported)
+- `auth.protect()` returns 401 (not 404) for unauthenticated server actions
 
 ### Expo
 
 - Package: `@clerk/clerk-expo` → `@clerk/expo`
 - `Clerk` export removed — use `useClerk()` hook
 - Minimum Expo SDK: 53
+- `useSignInWithApple` → `@clerk/expo/apple`, `useSignInWithGoogle` → `@clerk/expo/google`
+- `publishableKey` prop now required in `ClerkProvider` (env vars inside `node_modules` not inlined in RN production builds)
 
 ### Astro
 
 - `@clerk/astro` v2 → v3
 - Components imported from `@clerk/astro/components`
 - CLI does **not** auto-fix `.astro` files — apply `Show` replacements manually
+- `as` prop removed from button components — use `asChild` with slotted element
+- Runtime env vars (`process.env`) now take precedence over build-time (`import.meta.env`)
 
 ### Nuxt
 
 - `getAuth()` removed — use `auth()`
 - Default routing strategy: `hash` → `path`
+
+### Express
+
+- `enableHandshake` option removed from `clerkMiddleware` (had no effect)
+- `req.auth` object-access removed — use `getAuth(req)`
+
+### React Router
+
+- `@clerk/react-router/api.server` → `@clerk/react-router/server`
+- `rootAuthLoader` now requires `clerkMiddleware()` with `v8_middleware` future flag
 
 ## Internal API Renames
 
@@ -178,5 +226,10 @@ After the CLI has run, verify any remaining issues it could not auto-fix:
 6. **Redirect props:** Are legacy redirect props (`afterSignInUrl`, `afterSignUpUrl`, `redirectUrl`) replaced with `fallbackRedirectUrl` or `forceRedirectUrl`?
 7. **Next.js `ClerkProvider`:** Is `ClerkProvider` positioned inside `<body>` (not wrapping `<html>`)?
 8. **Astro files:** `.astro` template files are not handled by the CLI — check these manually.
+9. **Removed props:** Are `clerkJSUrl`, `clerkJSVersion`, `clerkUIUrl`, `clerkUIVersion`, `clerkJSVariant` removed or prefixed?
+10. **Token handling:** Is `getToken()` wrapped in try/catch for `ClerkOfflineError`? Is `useAuth().getToken` no longer checked for `undefined`?
+11. **Version requirements:** Next.js 15.2.3+? Expo SDK 53+? TanStack React Start 1.157.0+?
+12. **Express:** Is `req.auth` replaced with `getAuth(req)`?
+13. **React Router:** Is `api.server` import path updated to `/server`?
 
 If issues remain after running the CLI, use the reference sections above to manually fix them.

@@ -1,49 +1,96 @@
 /**
- * Validates that prompt files in prompts/ have URL-encoded lengths
- * within Cursor's 8,000 character deeplink limit.
+ * Validates that prompt files in prompts/ produce Cursor deeplink URLs
+ * within the 8,000 character limit.
  *
- * Quickstart prompts (used with the "Open in Cursor" button) fail CI if over limit.
- * Other prompts (e.g. upgrade guides) warn but don't fail.
+ * The deeplink URL is generated using URLSearchParams (which encodes
+ * spaces as `+` instead of `%20`), so we measure the full URL length
+ * to match what's actually sent to Cursor.
+ *
+ * All prompts must stay under the limit — the "Open in Cursor" button
+ * will not show for prompts that exceed it.
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ENCODED_LIMIT = 8000
+const URL_LIMIT = 8000
+const DEEPLINK_BASE = 'https://cursor.com/link/prompt'
+
+/**
+ * Prompts explicitly excluded from the URL length check.
+ * Add filenames here only when a prompt intentionally exceeds
+ * the limit (e.g., it's delivered via a different mechanism).
+ */
+const EXCLUDED_PROMPTS: string[] = ['core-3-upgrade.md']
+
+function generateDeeplinkUrl(promptText: string): string {
+  const url = new URL(DEEPLINK_BASE)
+  url.searchParams.set('text', promptText)
+  return url.toString()
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROMPTS_DIR = path.resolve(__dirname, '..', 'prompts')
 
-// Prompts that power the Cursor deeplink button — must stay under the limit
-const ENFORCED_PROMPTS = ['nextjs-quickstart.md', 'react-vite-quickstart.md']
+type Color = 'red' | 'green' | 'yellow' | 'gray'
 
-let hasFailure = false
+const colorCodes: Record<Color, string> = {
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  gray: '\x1b[90m',
+}
+
+function log(color: Color, message: string, indent = 0): void {
+  const padding = '  '.repeat(indent)
+  console.log(`${colorCodes[color]}${padding}${message}\x1b[0m`)
+}
 
 const files = fs.readdirSync(PROMPTS_DIR).filter((f) => f.endsWith('.md'))
 
 if (files.length === 0) {
-  console.log('No .md files found in prompts/')
+  log('gray', 'No .md files found in prompts/')
   process.exit(0)
 }
+
+let hasFailure = false
+const failures: string[] = []
+let excludedCount = 0
 
 for (const file of files) {
   const content = fs.readFileSync(path.join(PROMPTS_DIR, file), 'utf8')
   const rawLength = content.length
-  const encodedLength = encodeURIComponent(content).length
-  const enforced = ENFORCED_PROMPTS.includes(file)
+  const urlLength = generateDeeplinkUrl(content).length
 
-  if (encodedLength > ENCODED_LIMIT) {
-    if (enforced) {
-      console.error(`FAIL: ${file} — encoded ${encodedLength} chars (raw ${rawLength}), limit is ${ENCODED_LIMIT}`)
-      hasFailure = true
-    } else {
-      console.warn(`WARN: ${file} — encoded ${encodedLength} chars (raw ${rawLength}), exceeds ${ENCODED_LIMIT} limit`)
-    }
+  if (EXCLUDED_PROMPTS.includes(file)) {
+    log('yellow', `⊘ ${file} — URL ${urlLength} chars (raw ${rawLength}), excluded from check`)
+    excludedCount++
+  } else if (urlLength > URL_LIMIT) {
+    log('red', `✗ ${file} — URL ${urlLength} chars (raw ${rawLength}), limit is ${URL_LIMIT}`)
+    failures.push(file)
+    hasFailure = true
   } else {
-    console.log(`OK:   ${file} — encoded ${encodedLength} chars (raw ${rawLength})`)
+    log('green', `✓ ${file} — URL ${urlLength} chars (raw ${rawLength})`)
   }
 }
 
+const checkedCount = files.length - excludedCount
+const excludedSuffix = excludedCount > 0 ? ` (${excludedCount} excluded)` : ''
+
+console.log()
+
 if (hasFailure) {
+  log(
+    'red',
+    `✗ ${failures.length} of ${checkedCount} prompt(s) exceed the ${URL_LIMIT} char deeplink URL limit${excludedSuffix}`,
+  )
+  log('gray', 'The "Open in Cursor" button will not show for prompts over the limit', 1)
+  log('gray', 'Compress the prompt or add the filename to `EXCLUDED_PROMPTS` in this script to bypass', 1)
   process.exit(1)
+} else {
+  log(
+    'green',
+    `✓ All ${checkedCount} checked prompt(s) are within the ${URL_LIMIT} char deeplink URL limit${excludedSuffix}`,
+  )
 }

@@ -64,6 +64,7 @@ interface ProtectedRoute {
 const PROTECTED_ROUTES = [
   '/docs/api/instance_keys',
   '/docs/core-1/[[...slug]]',
+  '/docs/core-2/[precomputeCode]/[[...slug]]',
   '/docs/experiment-create_account_from_docs_quickstart/[experiment]',
   '/docs/experiment-nextjs_quickstart_template/[experiment]',
   '/docs/images/[[...slug]]',

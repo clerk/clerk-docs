@@ -11,7 +11,7 @@ Once you [open a PR in `clerk/javascript`](https://github.com/clerk/javascript/b
 The contents of this folder can embedded in `clerk-docs` files with the `<Typedoc />` component. For example, if you updated Typedoc comments for the `useAuth()` hook in `clerk/javascript`, you'll need to make sure that in `clerk-docs`, in the `/hooks/use-auth.mdx` file, there's a `<Typedoc />` component linked to the `./clerk-typedoc/clerk-react/use-auth.mdx` file, like:
 
 ```mdx
-<Typedoc src="clerk-react/use-auth" />
+<Typedoc src="react/use-auth" />
 ```
 
 Read more about this in the [`clerk-docs` CONTRIBUTING.md](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#typedoc-).

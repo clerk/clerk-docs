@@ -28,7 +28,7 @@ Before getting started, it's important to note that M2M tokens will be a paid fe
 
 There will be usage stats and monitoring available in the Clerk Dashboard before the beta period comes to an end to make it easy to understand your usage and what you're being charged.
 
-There will also be a feature that allows the use of [JSON Web Tokens (JWTs)](https://en.wikipedia.org/wiki/JSON_Web_Token) instead of [opaque tokens](!opaque-token) before the beta period comes to an end. While JWTs can't be instantly revoked, they don't require a network request for verification and incur charges only for creation, not verification.
+M2M tokens can be created as either [opaque tokens](!opaque-token) (the default) or [JSON Web Tokens (JWTs)](!jwt-token). JWTs don't require a network request for verification and incur charges only for creation, not verification. For a detailed comparison of the two formats, see [Token formats](/docs/guides/development/machine-auth/token-formats).
 
 ## Creating machines
 
@@ -98,20 +98,34 @@ await fetch('<machine-b-url>', {
 })
 ```
 
-There are two additional optional arguments that can be passed to the `createToken()` method:
+There are additional optional arguments that can be passed to the `createToken()` method:
 
+- `tokenFormat` - The format of the token. Can be `'opaque'` (default) or `'jwt'`. See [Token formats](/docs/guides/development/machine-auth/token-formats) for more details.
 - `secondsUntilExpiration` - The number of seconds until the token will expire. By default, the token will not expire.
 - `claims` - A JavaScript object that can be used to store additional information about the token.
 
+## Listing M2M tokens for a given machine
+
+To retrieve a list of M2M tokens for a given machine, call the [`list()`](/docs/reference/backend/m2m-tokens/list) method:
+
+```ts
+const machineId = 'mt_123'
+
+// The subject parameter can be used to filter M2M tokens by machine ID. In this example, only tokens associated with the machine with the ID of 'mt_123' will be returned.
+const m2mTokens = await clerkClient.m2m.list({
+  subject: machineId,
+})
+```
+
 ## Verifying M2M tokens
 
-Imagine a request was made from **Machine A** to **Machine B**, and Machine B received it successfully. The next step is to verify that the token is valid and that the request is coming from a valid machine. To do so, you can use the [`verifyToken()`](/docs/reference/backend/m2m-tokens/verify-token) method:
+Imagine a request was made from **Machine A** to **Machine B**, and Machine B received it successfully. The next step is to verify that the token is valid and that the request is coming from a valid machine. To do so, you can use the [`verify()`](/docs/reference/backend/m2m-tokens/verify) method:
 
 ```ts
 // code for receiving the request and extracting the token from the
 // Authorization header...
 
-const m2mToken = await clerkClient.m2m.verifyToken({ token })
+const m2mToken = await clerkClient.m2m.verify({ token })
 ```
 
 Keep in mind that this code would be running on Machine B. On Machine B, set `process.env.CLERK_MACHINE_SECRET_KEY` to the machine secret key for Machine B (or pass it directly with the `machineSecretKey` argument). The `token` parameter would be the token that was received from the request sent from Machine A.
@@ -136,6 +150,8 @@ If the token is valid, the method will return an object with the following prope
 
 You can then fulfill the request, or reject it if the token is invalid.
 
+<Include src="_partials/machine-auth/jwt-token-limitation" />
+
 ## Revoking M2M tokens
 
 To revoke an M2M token, call the [`revokeToken()`](/docs/reference/backend/m2m-tokens/revoke-token) method:
@@ -148,3 +164,6 @@ await clerkClient.m2m.revokeToken({
 ```
 
 This will revoke the token and prevent it from being used to authenticate any future requests.
+
+> [!IMPORTANT]
+> Only [opaque tokens](!opaque-token) can be revoked. [JWT tokens](!jwt-token) are not stored by Clerk and therefore cannot be revoked. If you need revocation capability, use the default opaque token format when creating tokens.

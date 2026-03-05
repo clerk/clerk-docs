@@ -674,41 +674,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   abortSignal?.throwIfAborted()
 
   const validatedTypedocsRaw = await Promise.all(
-    typedocs.map(async (typedoc): Promise<typeof typedoc & { vfile: unknown; node: Node; links: Set<string> } | null> => {
-      const filePath = path.join(config.typedocRelativePath, typedoc.path)
+    typedocs.map(
+      async (typedoc): Promise<(typeof typedoc & { vfile: unknown; node: Node; links: Set<string> }) | null> => {
+        const filePath = path.join(config.typedocRelativePath, typedoc.path)
 
-      try {
-        let node: Node | null = null
-        const links: Set<string> = new Set()
-
-        const vfile = await remark()
-          .use(remarkMdx)
-          .use(
-            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-              links.add(linkInTypedoc)
-            }),
-          )
-          .use(() => (tree, vfile) => {
-            node = tree
-          })
-          .process(typedoc.vfile)
-
-        if (node === null) {
-          throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
-        }
-
-        return {
-          ...typedoc,
-          vfile,
-          node: node as Node,
-          links,
-        }
-      } catch (error) {
         try {
           let node: Node | null = null
           const links: Set<string> = new Set()
 
           const vfile = await remark()
+            .use(remarkMdx)
             .use(
               validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
@@ -729,17 +704,42 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             node: node as Node,
             links,
           }
-        } catch (err) {
-          if (config.flags.silenceTypedocErrors) return null
-          console.error(err)
-          throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+        } catch (error) {
+          try {
+            let node: Node | null = null
+            const links: Set<string> = new Set()
+
+            const vfile = await remark()
+              .use(
+                validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+                  links.add(linkInTypedoc)
+                }),
+              )
+              .use(() => (tree, vfile) => {
+                node = tree
+              })
+              .process(typedoc.vfile)
+
+            if (node === null) {
+              throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+            }
+
+            return {
+              ...typedoc,
+              vfile,
+              node: node as Node,
+              links,
+            }
+          } catch (err) {
+            if (config.flags.silenceTypedocErrors) return null
+            console.error(err)
+            throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+          }
         }
-      }
-    }),
+      },
+    ),
   )
-  const validatedTypedocs = validatedTypedocsRaw.filter(
-    (t): t is NonNullable<typeof t> => t !== null,
-  )
+  const validatedTypedocs = validatedTypedocsRaw.filter((t): t is NonNullable<typeof t> => t !== null)
   console.info(`✓ Validated all typedocs`)
 
   abortSignal?.throwIfAborted()

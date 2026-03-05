@@ -127,7 +127,7 @@ export const readTypedocsMarkdown = (config: BuildConfig, store: Store) => async
 
   if (silenceErrors) {
     const results = await Promise.all(paths.map((filePath) => read(filePath)))
-    return results.filter((r): r is NonNullable<typeof results[number]> => r !== null)
+    return results.filter((r): r is NonNullable<(typeof results)[number]> => r !== null)
   }
 
   const typedocsCache = getTypedocsCache(store)

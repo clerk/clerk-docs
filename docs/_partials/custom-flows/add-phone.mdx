@@ -1,35 +1,35 @@
-<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
-  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
-  1. Every user has a [`User`](/docs/reference/javascript/user) object that represents their account. The `User` object has a `phoneNumbers` property that contains all the phone numbers associated with the user. The [`useUser()`](/docs/reference/hooks/use-user) hook is used to get the `User` object.
-  1. The [`User.createPhoneNumber()`](/docs/reference/javascript/user#create-phone-number) method is passed to the [`useReverification()`](/docs/reference/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add a phone number to their account.
-  1. If the `createPhoneNumber()` function is successful, a new [`PhoneNumber`](/docs/reference/javascript/types/phone-number) object is created and stored in `User.phoneNumbers`.
-  1. Uses the `prepareVerification()` method on the newly created `PhoneNumber` object to send a verification code to the user.
-  1. Uses the `attemptVerification()` method on the same `PhoneNumber` object with the verification code provided by the user to verify the phone number.
+<If notSdk={["expo", "ios", "android"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
 
   ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
   'use client'
 
   import * as React from 'react'
-  import { useUser, useReverification } from '@clerk/nextjs'
-  import { PhoneNumberResource } from '@clerk/types'
+  import { useSession, useUser, useReverification } from '@clerk/nextjs'
+  import { PhoneNumberResource } from '@clerk/shared/types'
 
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
+    const { session } = useSession()
+    const createPhoneNumber = useReverification((phone: string) =>
+      user?.createPhoneNumber({ phoneNumber: phone }),
+    )
+
     const [phone, setPhone] = React.useState('')
     const [code, setCode] = React.useState('')
     const [isVerifying, setIsVerifying] = React.useState(false)
     const [successful, setSuccessful] = React.useState(false)
     const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
-    const createPhoneNumber = useReverification((phone: string) =>
-      user?.createPhoneNumber({ phoneNumber: phone }),
-    )
 
     // Handle loading state
-    if (!isLoaded) <p>Loading...</p>
+    if (!isLoaded) return <p>Loading...</p>
 
     // Handle signed-out state
-    if (!isSignedIn) <p>You must be signed in to access this page</p>
+    // If the user is trying to set up MFA, they should be able to access this page
+    if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa')
+      return <p>You must be signed in to access this page</p>
 
     // Handle addition of the phone number
     const handleSubmit = async (e: React.FormEvent) => {
@@ -78,9 +78,7 @@
     }
 
     // Display a success message if the phone number was added successfully
-    if (successful) {
-      return <h1>Phone added</h1>
-    }
+    if (successful) return <h1>Phone added</h1>
 
     // Display the verification form to capture the code
     if (isVerifying) {
@@ -136,17 +134,18 @@
 </If>
 
 <If sdk="expo">
-  ```tsx {{ filename: 'app/(account)/add-phone/page.tsx', collapsible: true }}
+  ```tsx {{ filename: 'app/(account)/add-phone.tsx', collapsible: true }}
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
-  import { useUser } from '@clerk/clerk-expo'
-  import { PhoneNumberResource } from '@clerk/types'
+  import { useSession, useUser } from '@clerk/expo'
+  import { PhoneNumberResource } from '@clerk/shared/types'
   import { Redirect } from 'expo-router'
   import * as React from 'react'
   import { Pressable, StyleSheet, TextInput } from 'react-native'
 
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
+    const { session } = useSession()
 
     const [phone, setPhone] = React.useState('')
     const [code, setCode] = React.useState('')
@@ -164,7 +163,8 @@
     }
 
     // Handle signed-out state
-    if (!isSignedIn) {
+    // If the user is trying to set up MFA, they should be able to access this page
+    if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa') {
       return <Redirect href="/sign-in" />
     }
 
@@ -395,16 +395,16 @@
 </If>
 
 <If sdk="android">
-  {/* TODO(Sam): Update for new Android API's */}
-
   <CodeBlockTabs options={["AddPhoneViewModel.kt", "AddPhoneActivity.kt"]}>
     ```kotlin {{ filename: 'AddPhoneViewModel.kt', collapsible: true }}
+    package com.clerk.customflows.addphone
+
     import android.util.Log
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
     import com.clerk.api.Clerk
-    import com.clerk.api.network.serialization.flatMap
     import com.clerk.api.network.serialization.errorMessage
+    import com.clerk.api.network.serialization.flatMap
     import com.clerk.api.network.serialization.onFailure
     import com.clerk.api.network.serialization.onSuccess
     import com.clerk.api.phonenumber.PhoneNumber
@@ -418,69 +418,75 @@
     import kotlinx.coroutines.launch
 
     class AddPhoneViewModel : ViewModel() {
-      private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
-      val uiState = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
+    val uiState = _uiState.asStateFlow()
 
-      init {
-        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-            _uiState.value =
-              when {
-                !isInitialized -> UiState.Loading
-                user == null -> UiState.SignedOut
-                else -> UiState.NeedsVerification
-              }
+    init {
+      combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user == null -> UiState.SignedOut
+              else -> UiState.NeedsVerification
+            }
+        }
+        .launchIn(viewModelScope)
+    }
+
+    fun createPhoneNumber(phoneNumber: String) {
+      val user = requireNotNull(Clerk.userFlow.value)
+
+      // Add an unverified phone number to the user,
+      // then send the user an SMS with the verification code
+      viewModelScope.launch {
+        user
+          .createPhoneNumber(phoneNumber)
+          .flatMap { it.prepareVerification() }
+          .onSuccess {
+            // Update the state to show that the phone number has been created
+            // and that the user needs to verify the phone number
+            _uiState.value = UiState.Verifying(it)
           }
-          .launchIn(viewModelScope)
+          .onFailure {
+            Log.e(
+              "AddPhoneViewModel",
+              "Failed to create phone number and prepare verification: ${it.errorMessage}",
+            )
+          }
       }
+    }
 
-      fun createPhoneNumber(phoneNumber: String) {
-        val user = requireNotNull(Clerk.userFlow.value)
-
-        // Add an unverified phone number to the user,
-        // then send the user an SMS with the verification code
-        viewModelScope.launch {
-          user
-            .createPhoneNumber(phoneNumber)
-            .flatMap { it.prepareVerification() }
-            .onSuccess {
-              // Update the state to show that the phone number has been created
-              // and that the user needs to verify the phone number
-              _uiState.value = UiState.Verifying(it)
-            }
-            .onFailure {
-              Log.e(
-                "AddPhoneViewModel",
-                "Failed to create phone number and prepare verification: ${it.errorMessage}",
-              )
-            }
-        }
+    fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
+      viewModelScope.launch {
+        newPhoneNumber
+          .attemptVerification(code)
+          .onSuccess {
+            // Update the state to show that the phone number has been verified
+            _uiState.value = UiState.Verified
+          }
+          .onFailure {
+            Log.e("AddPhoneViewModel", "Failed to verify phone number: ${it.errorMessage}")
+          }
       }
+    }
 
-      fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
-        viewModelScope.launch {
-          newPhoneNumber
-            .attemptVerification(code)
-            .onSuccess {
-              // Update the state to show that the phone number has been verified
-              _uiState.value = UiState.Verified
-            }
-            .onFailure {
-              Log.e("AddPhoneViewModel", "Failed to verify phone number: ${it.errorMessage}")
-            }
-        }
-      }
+    sealed interface UiState {
+      data object Loading : UiState
 
-      sealed interface UiState {
-        data object Loading : UiState
-        data object NeedsVerification : UiState
-        data class Verifying(val phoneNumber: PhoneNumber) : UiState
-        data object Verified : UiState
-        data object SignedOut : UiState
-      }
+      data object NeedsVerification : UiState
+
+      data class Verifying(val phoneNumber: PhoneNumber) : UiState
+
+      data object Verified : UiState
+
+      data object SignedOut : UiState
+    }
     }
     ```
 
     ```kotlin {{ filename: 'AddPhoneActivity.kt', collapsible: true }}
+    package com.clerk.customflows.addphone
+
     import android.os.Bundle
     import androidx.activity.ComponentActivity
     import androidx.activity.compose.setContent
@@ -505,71 +511,67 @@
     import com.clerk.api.phonenumber.PhoneNumber
 
     class AddPhoneActivity : ComponentActivity() {
-      val viewModel: AddPhoneViewModel by viewModels()
+    val viewModel: AddPhoneViewModel by viewModels()
 
-      override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-          val state by viewModel.uiState.collectAsStateWithLifecycle()
-          AddPhoneView(
-            state = state,
-            onCreatePhoneNumber = viewModel::createPhoneNumber,
-            onVerifyCode = viewModel::verifyCode,
-          )
-        }
+    override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      setContent {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        AddPhoneView(
+          state = state,
+          onCreatePhoneNumber = viewModel::createPhoneNumber,
+          onVerifyCode = viewModel::verifyCode,
+        )
       }
+    }
     }
 
     @Composable
     fun AddPhoneView(
-      state: AddPhoneViewModel.UiState,
-      onCreatePhoneNumber: (String) -> Unit,
-      onVerifyCode: (String, PhoneNumber) -> Unit,
+    state: AddPhoneViewModel.UiState,
+    onCreatePhoneNumber: (String) -> Unit,
+    onVerifyCode: (String, PhoneNumber) -> Unit,
     ) {
-      Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when (state) {
-          AddPhoneViewModel.UiState.NeedsVerification -> {
-            InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
-              onCreatePhoneNumber(it)
-            }
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      when (state) {
+        AddPhoneViewModel.UiState.NeedsVerification -> {
+          InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
+            onCreatePhoneNumber(it)
           }
-
-          AddPhoneViewModel.UiState.Verified -> Text("Verified!")
-
-          is AddPhoneViewModel.UiState.Verifying -> {
-            InputContentView(buttonText = "Verify", placeholder = "Enter code") {
-              onVerifyCode(it, state.phoneNumber)
-            }
-          }
-
-          AddPhoneViewModel.UiState.Loading -> CircularProgressIndicator()
-          AddPhoneViewModel.UiState.SignedOut -> Text("You must be signed in to add a phone number.")
         }
+
+        AddPhoneViewModel.UiState.Verified -> Text("Verified!")
+
+        is AddPhoneViewModel.UiState.Verifying -> {
+          InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+            onVerifyCode(it, state.phoneNumber)
+          }
+        }
+
+        AddPhoneViewModel.UiState.Loading -> CircularProgressIndicator()
+        AddPhoneViewModel.UiState.SignedOut -> Text("You must be signed in to add a phone number.")
       }
+    }
     }
 
     @Composable
     fun InputContentView(
-      buttonText: String,
-      placeholder: String,
-      modifier: Modifier = Modifier,
-      onClick: (String) -> Unit,
+    buttonText: String,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    onClick: (String) -> Unit,
     ) {
-      var input by remember { mutableStateOf("") }
-      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        TextField(
-          modifier = Modifier.padding(bottom = 16.dp),
-          value = input,
-          onValueChange = { input = it },
-          placeholder = { Text(placeholder) },
-        )
-        Button(onClick = { onClick(input) }) { Text(buttonText) }
-      }
+    var input by remember { mutableStateOf("") }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+      TextField(
+        modifier = Modifier.padding(bottom = 16.dp),
+        value = input,
+        onValueChange = { input = it },
+        placeholder = { Text(placeholder) },
+      )
+      Button(onClick = { onClick(input) }) { Text(buttonText) }
+    }
     }
     ```
   </CodeBlockTabs>
-</If>
-
-<If sdk={["js-frontend", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

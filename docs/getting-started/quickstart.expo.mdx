@@ -35,14 +35,15 @@ sdk: expo
   npm install
   ```
 
-  ## Install `@clerk/clerk-expo`
+  ## Install `@clerk/expo` and `expo-secure-store`
 
-  The [Clerk Expo SDK](/docs/reference/expo/overview) gives you access to prebuilt components, hooks, and helpers to make user authentication easier.
+  - The [Clerk Expo SDK](/docs/reference/expo/overview) gives you access to prebuilt components, hooks, and helpers to make user authentication easier.
+  - Clerk stores the active user's session token in memory by default. In Expo apps, the recommended way to store sensitive data, such as tokens, is by using `expo-secure-store` which encrypts the data before storing it.
 
-  Run the following command to install the SDK:
+  Run the following command to install the SDK and its required peer dependency for secure token storage:
 
   ```npm
-  npm install @clerk/clerk-expo
+  npm install @clerk/expo expo-secure-store
   ```
 
   ## Set your Clerk API keys
@@ -57,79 +58,27 @@ sdk: expo
 
   <Include src="_partials/clerk-provider/explanation" />
 
-  Add the component to your root layout, as shown in the following example:
+  Add the component to your root layout and pass your [Publishable Key](!publishable-key) and `tokenCache` from `@clerk/expo/token-cache` as props, as shown in the following example:
 
   ```tsx {{ filename: 'app/_layout.tsx' }}
-    import { useColorScheme } from '@/hooks/use-color-scheme'
-  + import { ClerkProvider } from '@clerk/clerk-expo'
-    import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
-    import { Stack } from 'expo-router'
-    import { StatusBar } from 'expo-status-bar'
-    import 'react-native-reanimated'
+  import { ClerkProvider } from '@clerk/expo'
+  import { tokenCache } from '@clerk/expo/token-cache'
+  import { Slot } from 'expo-router'
 
-    export const unstable_settings = {
-      anchor: '(tabs)',
-    }
+  const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
 
-    export default function RootLayout() {
-      const colorScheme = useColorScheme()
+  if (!publishableKey) {
+    throw new Error('Add your Clerk Publishable Key to the .env file')
+  }
 
-      return (
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-  +       <ClerkProvider>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            </Stack>
-            <StatusBar style="auto" />
-  +       </ClerkProvider>
-        </ThemeProvider>
-      )
-    }
+  export default function RootLayout() {
+    return (
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <Slot />
+      </ClerkProvider>
+    )
+  }
   ```
-
-  ## Configure the token cache
-
-  Clerk stores the active user's session token in memory by default. In Expo apps, the recommended way to store sensitive data, such as tokens, is by using `expo-secure-store` which encrypts the data before storing it.
-
-  To use `expo-secure-store` as your token cache:
-
-  1. Run the following command to install the library:
-
-     ```npm
-     npm install expo-secure-store
-     ```
-
-  1. Update your root layout to use the secure token cache:
-     ```tsx {{ filename: 'app/_layout.tsx' }}
-       import { useColorScheme } from '@/hooks/use-color-scheme'
-       import { ClerkProvider } from '@clerk/clerk-expo'
-     + import { tokenCache } from '@clerk/clerk-expo/token-cache'
-       import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
-       import { Stack } from 'expo-router'
-       import { StatusBar } from 'expo-status-bar'
-       import 'react-native-reanimated'
-
-       export const unstable_settings = {
-         anchor: '(tabs)',
-       }
-
-       export default function RootLayout() {
-         const colorScheme = useColorScheme()
-
-         return (
-           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-     +       <ClerkProvider tokenCache={tokenCache}>
-               <Stack>
-                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-               </Stack>
-               <StatusBar style="auto" />
-             </ClerkProvider>
-           </ThemeProvider>
-         )
-       }
-     ```
 
   > [!TIP]
   > When you sign a user out with [`signOut()`](/docs/reference/hooks/use-auth#returns), Clerk will remove the user's session JWT from the token cache.
@@ -146,11 +95,15 @@ sdk: expo
   1. In the `(auth)` group, create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to access the user's authentication state. If the user is already signed in, they will be redirected to the home page.
 
   ```tsx {{ filename: 'app/(auth)/_layout.tsx' }}
+  import { useAuth } from '@clerk/expo'
   import { Redirect, Stack } from 'expo-router'
-  import { useAuth } from '@clerk/clerk-expo'
 
   export default function AuthRoutesLayout() {
-    const { isSignedIn } = useAuth()
+    const { isSignedIn, isLoaded } = useAuth()
+
+    if (!isLoaded) {
+      return null
+    }
 
     if (isSignedIn) {
       return <Redirect href={'/'} />
@@ -182,18 +135,29 @@ sdk: expo
 
   You can control which content signed-in and signed-out users can see with Clerk's [prebuilt control components](/docs/reference/components/overview#control-components). For this quickstart, you'll use:
 
-  - [`<SignedIn>`](/docs/reference/components/control/signed-in): Children of this component can only be seen while **signed in**.
-  - [`<SignedOut>`](/docs/reference/components/control/signed-out): Children of this component can only be seen while **signed out**.
+  - [`<Show when="signed-in">`](/docs/reference/components/control/show): Children of this component can only be seen while **signed in**.
+  - [`<Show when="signed-out">`](/docs/reference/components/control/show): Children of this component can only be seen while **signed out**.
 
   To get started:
 
   1. Create a `(home)` route group.
-  1. In the `(home)` group, create a `_layout.tsx` file with the following code.
+  1. In the `(home)` group, create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to check authentication state. Signed-out users are redirected to the sign-in page.
 
   ```tsx {{ filename: 'app/(home)/_layout.tsx' }}
-  import { Stack } from 'expo-router/stack'
+  import { useAuth } from '@clerk/expo'
+  import { Redirect, Stack } from 'expo-router'
 
   export default function Layout() {
+    const { isSignedIn, isLoaded } = useAuth()
+
+    if (!isLoaded) {
+      return null
+    }
+
+    if (!isSignedIn) {
+      return <Redirect href="/(auth)/sign-in" />
+    }
+
     return <Stack />
   }
   ```
@@ -204,7 +168,7 @@ sdk: expo
   import { SignOutButton } from '@/components/sign-out-button'
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
-  import { SignedIn, SignedOut, useSession, useUser } from '@clerk/clerk-expo'
+  import { Show, useSession, useUser } from '@clerk/expo'
   import { Link } from 'expo-router'
   import { StyleSheet } from 'react-native'
 
@@ -220,20 +184,18 @@ sdk: expo
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title">Welcome!</ThemedText>
-        {/* Show the sign-in and sign-up buttons when the user is signed out */}
-        <SignedOut>
+        <Show when="signed-out">
           <Link href="/(auth)/sign-in">
             <ThemedText>Sign in</ThemedText>
           </Link>
           <Link href="/(auth)/sign-up">
             <ThemedText>Sign up</ThemedText>
           </Link>
-        </SignedOut>
-        {/* Show the sign-out button when the user is signed in */}
-        <SignedIn>
+        </Show>
+        <Show when="signed-in">
           <ThemedText>Hello {user?.emailAddresses[0].emailAddress}</ThemedText>
           <SignOutButton />
-        </SignedIn>
+        </Show>
       </ThemedView>
     )
   }
@@ -245,42 +207,6 @@ sdk: expo
       gap: 16,
     },
   })
-  ```
-
-  ## Add the new routes to your stack
-
-  In `app/_layout.tsx`, add the `(auth)` and `(home)` routes to the `<Stack />` so that they're accessible.
-
-  ```tsx {{ filename: 'app/_layout.tsx' }}
-    import { useColorScheme } from '@/hooks/use-color-scheme'
-    import { ClerkProvider } from '@clerk/clerk-expo'
-    import { tokenCache } from '@clerk/clerk-expo/token-cache'
-    import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
-    import { Stack } from 'expo-router'
-    import { StatusBar } from 'expo-status-bar'
-    import 'react-native-reanimated'
-
-    export const unstable_settings = {
-      anchor: '(tabs)',
-    }
-
-    export default function RootLayout() {
-      const colorScheme = useColorScheme()
-
-      return (
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <ClerkProvider tokenCache={tokenCache}>
-            <Stack>
-  +           <Stack.Screen name="(home)" options={{ headerShown: false }} />
-  +           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </ClerkProvider>
-        </ThemeProvider>
-      )
-    }
   ```
 
   ## Run your project

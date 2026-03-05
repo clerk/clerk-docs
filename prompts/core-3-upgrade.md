@@ -132,7 +132,7 @@ const { checkout, errors, fetchStatus } = useCheckout({ planId, planPeriod })
 ## Behavior Changes
 
 - `ClerkAPIError.kind` changed from `'ClerkApiError'` → `'ClerkAPIError'`. Update any direct string comparisons.
-- Satellite apps no longer auto-redirect on first visit. Set `satelliteAutoSync: true` in middleware and `ClerkProvider` to restore Core 2 behavior.
+- Satellite apps still auto-redirect on first visit by default (`satelliteAutoSync` defaults to `true`). Set `satelliteAutoSync: false` to disable automatic syncing and improve performance for apps where most visitors are anonymous.
 
 ## Token & Auth Changes
 

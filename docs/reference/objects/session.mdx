@@ -38,6 +38,13 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
 
   ---
 
+  - `agent`
+  - `AgentActClaim | null`
+
+  When the session's `actor` claim has `type: 'agent'`, this property exposes that same actor data with a more specific type. Use it to detect sessions created via [impersonation](/docs/guides/users/impersonation) where the impersonator was an agent (e.g. an automated system). When `actor.type` is not `'agent'`, this property is `null`.
+
+  ---
+
   - `createdAt`
   - `Date`
 
@@ -123,9 +130,9 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   ---
 
   - `user`
-  - [`User`](/docs/reference/objects/user)
+  - [`User`](/docs/reference/objects/user) | null
 
-  The user associated with the session.
+  The user associated with the session, or `null` if none.
 </Properties>
 
 ## Methods
@@ -143,7 +150,11 @@ function attemptFirstFactorVerification(
 #### `SessionVerifyAttemptFirstFactorParams`
 
 ```ts
-type SessionVerifyAttemptFirstFactorParams = EmailCodeAttempt | PhoneCodeAttempt | PasswordAttempt
+type SessionVerifyAttemptFirstFactorParams =
+  | EmailCodeAttempt
+  | PhoneCodeAttempt
+  | PasswordAttempt
+  | PasskeyAttempt
 
 type EmailCodeAttempt = {
   strategy: 'email_code'
@@ -158,6 +169,11 @@ type PhoneCodeAttempt = {
 type PasswordAttempt = {
   strategy: 'password'
   password: string
+}
+
+type PasskeyAttempt = {
+  strategy: 'passkey'
+  publicKeyCredential: PublicKeyCredential
 }
 ```
 
@@ -306,7 +322,7 @@ function end(): Promise<Session>
 
 Retrieves the current user's [session token](/docs/guides/sessions/session-tokens) or a [custom JWT template](/docs/guides/sessions/jwt-templates).
 
-This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for a Clerk token is one minute.
+This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for a Clerk token is one minute. It retries on transient failures (e.g. network errors); when the browser is offline and retries are exhausted, it throws `ClerkOfflineError`.
 
 Tokens can only be generated if the user is signed in.
 
@@ -357,7 +373,11 @@ function prepareFirstFactorVerification(
 #### `SessionVerifyPrepareFirstFactorParams`
 
 ```ts
-type SessionVerifyPrepareFirstFactorParams = EmailCodeConfig | PhoneCodeConfig
+type SessionVerifyPrepareFirstFactorParams =
+  | EmailCodeConfig
+  | PhoneCodeConfig
+  | PasskeyConfig
+  | EnterpriseSSOConfig
 
 type EmailCodeConfig = {
   strategy: 'email_code'
@@ -370,6 +390,17 @@ type PhoneCodeConfig = {
   phoneNumberId: string
   primary?: boolean
   default?: boolean
+}
+
+type PasskeyConfig = {
+  strategy: 'passkey'
+}
+
+type EnterpriseSSOConfig = {
+  strategy: 'enterprise_sso'
+  emailAddressId: string
+  enterpriseConnectionId: string
+  redirectUrl: string
 }
 ```
 

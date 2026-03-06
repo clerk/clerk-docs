@@ -32,7 +32,7 @@ async function createTempFiles(files: Array<{ path: string; content: string }>) 
       const entries = await fs.readdir(fullDir, { withFileTypes: true, recursive: true })
       return entries
         .filter((entry) => entry.isFile())
-        .map((entry) => path.relative(tempDir, path.join(entry.path, entry.name)))
+        .map((entry) => path.relative(tempDir, path.join(entry.parentPath ?? entry.path, entry.name)))
         .sort()
     } catch {
       return []

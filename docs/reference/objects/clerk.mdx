@@ -106,9 +106,9 @@ sdk: js-frontend, astro, chrome-extension, expo, nextjs, react, react-router, re
   ---
 
   - `isStandardBrowser`
-  - `boolean`
+  - `boolean | undefined`
 
-  Indicates if the instance is being loaded in a standard browser environment. (E.g. `false` on native platforms.)
+  Indicates if the instance is being loaded in a standard browser environment. Set to `false` on native platforms where cookies cannot be set. When `undefined`, Clerk assumes a standard browser.
 
   ---
 
@@ -134,7 +134,7 @@ sdk: js-frontend, astro, chrome-extension, expo, nextjs, react, react-router, re
   ---
 
   - `proxyUrl`
-  - `string`
+  - `string | undefined`
 
   Your Clerk app's proxy URL. Required for applications that run behind a reverse proxy. Can be either a relative path (`/__clerk`) or a full URL (`https://<your-domain>/__clerk`).
 
@@ -148,9 +148,9 @@ sdk: js-frontend, astro, chrome-extension, expo, nextjs, react, react-router, re
   ---
 
   - `sdkMetadata`
-  - `{ name: string; version: string; environment: string }`
+  - `{ name: string; version: string; environment?: string } | undefined`
 
-  Contains information about the SDK that the host application is using. You don't need to set this value yourself unless you're [developing an SDK](/docs/guides/development/sdk-development/overview).
+  Contains information about the SDK that the host application is using (e.g. `{ name: '@clerk/nextjs', version: '1.0.0' }`). You don't need to set this value yourself unless you're [developing an SDK](/docs/guides/development/sdk-development/overview).
 
   ---
 
@@ -188,7 +188,7 @@ sdk: js-frontend, astro, chrome-extension, expo, nextjs, react, react-router, re
   ---
 
   - `version`
-  - `string`
+  - `string | undefined`
 
   The Clerk SDK version.
 </Properties>
@@ -200,8 +200,29 @@ sdk: js-frontend, astro, chrome-extension, expo, nextjs, react, react-router, re
 Registers a listener that triggers a callback whenever a change in the [`Client`][client-ref], [`Session`][session-ref], or [`User`][user-ref] object occurs. This method is primarily used to build frontend SDKs like [`@clerk/react`](https://www.npmjs.com/package/@clerk/react). Returns an `UnsubscribeCallback` function that can be used to remove the listener from the `Clerk` object.
 
 ```typescript
-function addListener(listener: (emission: Resources) => void): UnsubscribeCallback
+function addListener(
+  callback: (emission: Resources) => void,
+  options?: ListenerOptions,
+): UnsubscribeCallback
 ```
+
+#### Parameters
+
+<Properties>
+  - `callback`
+  - <code>(emission: [Resources](#resources)) => void</code>
+
+  The function to call when Clerk resources change.
+
+  ---
+
+  - `options?`
+  - `ListenerOptions`
+
+  Optional configuration. `ListenerOptions` is an object that accepts the following properties:
+
+  - `skipInitialEmit` (boolean): if `true`, the callback is not called immediately after registration. Defaults to `false`.
+</Properties>
 
 #### `Resources`
 
@@ -223,16 +244,6 @@ function addListener(listener: (emission: Resources) => void): UnsubscribeCallba
 
   - `organization`
   - <code>[Organization][organization-ref] | null | undefined</code>
-
-  ---
-
-  - `lastOrganizationInvitation`
-  - <code>[OrganizationInvitation](/docs/reference/types/organization-invitation) | null | undefined</code>
-
-  ---
-
-  - `lastOrganizationMember`
-  - <code>[OrganizationMembership](/docs/reference/types/organization-membership) | null | undefined</code>
 </Properties>
 
 > [!NOTE]
@@ -522,6 +533,32 @@ function authenticateWithWeb3({
   The name of the wallet provider to use for the authentication process. This parameter is required when using `web3_solana_signature` as the `strategy`.
 </Properties>
 
+### `authenticateWithGoogleOneTap()`
+
+Authenticates the user using a Google token from Google Identity Services (e.g. Google One Tap). Returns the resulting [`SignIn`](/docs/reference/objects/sign-in) or [`SignUp`](/docs/reference/objects/sign-up) resource; use [`handleGoogleOneTapCallback()`](#handlegoogleonetapcallback) to complete the flow after redirect.
+
+```typescript
+function authenticateWithGoogleOneTap(
+  params: AuthenticateWithGoogleOneTapParams,
+): Promise<SignIn | SignUp>
+```
+
+#### `AuthenticateWithGoogleOneTapParams`
+
+<Properties>
+  - `token`
+  - `string`
+
+  The Google credential token from the Google Identity Services response.
+
+  ---
+
+  - `legalAccepted?`
+  - `boolean`
+
+  A boolean indicating whether the user has agreed to the [legal compliance](/docs/guides/secure/legal-compliance) documents.
+</Properties>
+
 ### `buildCreateOrganizationUrl()`
 
 Returns the configured URL where [`<CreateOrganization />`](/docs/reference/components/organization/create-organization) is mounted or a custom create-organization page is rendered.
@@ -585,7 +622,7 @@ function buildSignUpUrl(options?: RedirectOptions): string
 Decorates the provided URL with the auth token for development instances.
 
 ```typescript
-function buildUrlWithAuth(to: string, options?: BuildUrlWithAuthParams): string
+function buildUrlWithAuth(to: string): string
 ```
 
 #### Parameters
@@ -595,22 +632,6 @@ function buildUrlWithAuth(to: string, options?: BuildUrlWithAuthParams): string
   - `string`
 
   The route to create a URL towards.
-
-  ---
-
-  - `options`
-  - [`BuildUrlWithAuthParams`](#build-url-with-auth-params)
-
-  Options to apply toward the URL builder.
-</Properties>
-
-#### `BuildUrlWithAuthParams`
-
-<Properties>
-  - `useQueryParam`
-  - `boolean | null | undefined`
-
-  Controls if dev browser JWT is added as a query param.
 </Properties>
 
 ### `buildUserProfileUrl()`
@@ -620,6 +641,89 @@ Returns the URL where [`<UserProfile />`](/docs/reference/components/user/user-p
 ```typescript
 function buildUserProfileUrl(): string
 ```
+
+### `buildTasksUrl()`
+
+Returns the configured URL where [session tasks](!session-tasks) are mounted.
+
+```typescript
+function buildTasksUrl(): string
+```
+
+### `buildAfterSignInUrl()`
+
+Returns the configured after-sign-in URL of the instance.
+
+```typescript
+function buildAfterSignInUrl(options?: { params?: URLSearchParams }): string
+```
+
+#### Parameters
+
+<Properties>
+  - `options?.params`
+  - `URLSearchParams | undefined`
+
+  Optional query parameters to append to the URL.
+</Properties>
+
+### `buildAfterSignUpUrl()`
+
+Returns the configured after-sign-up URL of the instance.
+
+```typescript
+function buildAfterSignUpUrl(options?: { params?: URLSearchParams }): string
+```
+
+#### Parameters
+
+<Properties>
+  - `options?.params`
+  - `URLSearchParams | undefined`
+
+  Optional query parameters to append to the URL.
+</Properties>
+
+### `buildAfterSignOutUrl()`
+
+Returns the configured after-sign-out URL of the instance.
+
+```typescript
+function buildAfterSignOutUrl(): string
+```
+
+### `buildNewSubscriptionRedirectUrl()`
+
+Returns the configured URL to redirect to after a new subscription is created.
+
+```typescript
+function buildNewSubscriptionRedirectUrl(): string
+```
+
+### `buildAfterMultiSessionSingleSignOutUrl()`
+
+Returns the configured URL to redirect to after a user signs out of a single session in a multi-session application.
+
+```typescript
+function buildAfterMultiSessionSingleSignOutUrl(): string
+```
+
+### `buildWaitlistUrl()`
+
+Returns the configured URL where [`<Waitlist />`](/docs/reference/components/authentication/waitlist) is mounted or a custom waitlist page is rendered.
+
+```typescript
+function buildWaitlistUrl(options?: { initialValues?: Record<string, string> }): string
+```
+
+#### Parameters
+
+<Properties>
+  - `options?.initialValues`
+  - `Record<string, string> | undefined`
+
+  Optional initial values to prefill the waitlist form (e.g. email).
+</Properties>
 
 ### `constructor()`
 
@@ -791,11 +895,11 @@ Take a look at the function parameters below for more usage details.
 
 ### `handleRedirectCallback()`
 
-Completes a custom OAuth flow that was started by calling either [`SignIn.authenticateWithRedirect(params)`](/docs/reference/objects/sign-in) or [`SignUp.authenticateWithRedirect(params)`](/docs/reference/objects/sign-up).
+Completes a custom OAuth or SAML redirect flow that was started by calling [`SignIn.authenticateWithRedirect(params)`](/docs/reference/objects/sign-in) or [`SignUp.authenticateWithRedirect(params)`](/docs/reference/objects/sign-up).
 
 ```typescript
 function handleRedirectCallback(
-  params: HandleOAuthCallbackParams,
+  params: HandleOAuthCallbackParams | HandleSamlCallbackParams,
   customNavigate?: ((to: string) => Promise<unknown>) | undefined,
 ): Promise<unknown>
 ```
@@ -804,9 +908,9 @@ function handleRedirectCallback(
 
 <Properties>
   - `params`
-  - [`HandleOAuthCallbackParams`](#handle-o-auth-callback-params)
+  - `HandleOAuthCallbackParams` | `HandleSamlCallbackParams`
 
-  Additional props that define where the user will be redirected to at the end of a successful OAuth flow.
+  Additional props that define where the user will be redirected to at the end of a successful OAuth or SAML flow.
 
   ---
 
@@ -911,6 +1015,41 @@ function handleRedirectCallback(
 
 See the [custom flow](/docs/guides/development/custom-flows/authentication/oauth-connections) guide for implementation details on how to implement a custom OAuth flow.
 
+### `handleGoogleOneTapCallback()`
+
+Completes a Google One Tap redirect flow started by [`authenticateWithGoogleOneTap()`](#authenticatewithgoogleonetap). Call this when the user returns from the Google One Tap redirect.
+
+```typescript
+function handleGoogleOneTapCallback(
+  signInOrUp: SignIn | SignUp,
+  params: HandleOAuthCallbackParams,
+  customNavigate?: (to: string) => Promise<unknown>,
+): Promise<unknown>
+```
+
+#### Parameters
+
+<Properties>
+  - `signInOrUp`
+  - [`SignIn`](/docs/reference/objects/sign-in) | [`SignUp`](/docs/reference/objects/sign-up)
+
+  The resource returned from the initial `authenticateWithGoogleOneTap()` call (before redirect).
+
+  ---
+
+  - `params`
+  - [`HandleOAuthCallbackParams`](#handle-o-auth-callback-params)
+
+  Redirect URLs and options for the callback (e.g. `signInUrl`, `signUpUrl`, `signInForceRedirectUrl`).
+
+  ---
+
+  - `customNavigate?`
+  - `(to: string) => Promise<unknown>`
+
+  A function that overrides Clerk's default navigation behavior.
+</Properties>
+
 ### `handleUnauthenticated()`
 
 Handles a 401 response from [Frontend API](/docs/reference/frontend-api){{ target: '_blank' }} by refreshing the client and session object accordingly.
@@ -957,7 +1096,7 @@ Helper method which will use the custom push navigation function of your applica
 Returns a promise that can be `await`ed in order to listen for the navigation to finish. The inner value should not be relied on, as it can change based on the framework it's used within.
 
 ```typescript
-function navigate(to: string | undefined): Promise<unknown>
+function navigate(to: string | undefined, options?: NavigateOptions): Promise<unknown> | void
 ```
 
 #### Parameters
@@ -967,6 +1106,16 @@ function navigate(to: string | undefined): Promise<unknown>
   - `string | undefined`
 
   The route to navigate to.
+
+  ---
+
+  - `options?`
+  - `NavigateOptions`
+
+  Optional configuration. `NavigateOptions` is an object that accepts the following properties:
+
+  - `replace?` (boolean): If `true`, replace the current history entry instead of pushing a new one.
+  - `metadata?` (RouterMetadata): Optional router metadata.
 </Properties>
 
 ### `on()`
@@ -1112,7 +1261,56 @@ function redirectWithAuth(to: string): Promise<unknown>
   - `to`
   - `string | undefined`
 
-  The route to navigate to
+  The route to navigate to.
+</Properties>
+
+### `redirectToAfterSignIn()`
+
+Redirects to the configured after-sign-in URL.
+
+```typescript
+function redirectToAfterSignIn(): void
+```
+
+### `redirectToAfterSignUp()`
+
+Redirects to the configured after-sign-up URL.
+
+```typescript
+function redirectToAfterSignUp(): void
+```
+
+### `redirectToAfterSignOut()`
+
+Redirects to the configured after-sign-out URL.
+
+```typescript
+function redirectToAfterSignOut(): void
+```
+
+### `redirectToWaitlist()`
+
+Redirects to the configured URL where [`<Waitlist />`](/docs/reference/components/authentication/waitlist) is mounted.
+
+```typescript
+function redirectToWaitlist(): void
+```
+
+### `redirectToTasks()`
+
+Redirects to the configured URL where [session tasks](!session-tasks) are mounted.
+
+```typescript
+function redirectToTasks(options?: TasksRedirectOptions): Promise<unknown>
+```
+
+#### Parameters
+
+<Properties>
+  - `options?`
+  - <code>[TasksRedirectOptions](/docs/reference/types/redirect-options) | undefined</code>
+
+  Options to control the redirect (e.g. redirect URL after tasks are complete).
 </Properties>
 
 ### `setActive()`
@@ -1239,6 +1437,7 @@ The `Clerk` class also contains a number of methods for interacting with prebuil
 
 - [`mountOrganizationSwitcher()`](/docs/reference/components/organization/organization-switcher#mount-organization-switcher)
 - [`unmountOrganizationSwitcher()`](/docs/reference/components/organization/organization-switcher#unmount-organization-switcher)
+- `__experimental_prefetchOrganizationSwitcher()` — Prefetches organization switcher data when using standalone mode to avoid loading states. Experimental.
 
 ### `<CreateOrganization />`
 
@@ -1258,6 +1457,34 @@ The `Clerk` class also contains a number of methods for interacting with prebuil
 - [`unmountWaitlist()`](/docs/reference/components/authentication/waitlist#unmount-waitlist)
 - [`openWaitlist()`](/docs/reference/components/authentication/waitlist#open-waitlist)
 - [`closeWaitlist()`](/docs/reference/components/authentication/waitlist#close-waitlist)
+
+### `<PricingTable />`
+
+- [`mountPricingTable()`](/docs/reference/components/billing/pricing-table#mount-pricing-table)
+- [`unmountPricingTable()`](/docs/reference/components/billing/pricing-table#unmount-pricing-table)
+
+### `<APIKeys />`
+
+> [!IMPORTANT]
+> This API is in early access and may change in future releases.
+
+- [`mountAPIKeys()`](/docs/reference/components/api-keys#mount-api-keys)
+- [`unmountAPIKeys()`](/docs/reference/components/api-keys#unmount-api-keys)
+
+### `<TaskChooseOrganization />`
+
+- [`mountTaskChooseOrganization()`](/docs/reference/components/authentication/task-choose-organization#mount-task-choose-organization)
+- [`unmountTaskChooseOrganization()`](/docs/reference/components/authentication/task-choose-organization#unmount-task-choose-organization)
+
+### `<TaskResetPassword />`
+
+- [`mountTaskResetPassword()`](/docs/reference/components/authentication/task-reset-password#mount-task-reset-password)
+- [`unmountTaskResetPassword()`](/docs/reference/components/authentication/task-reset-password#unmount-task-reset-password)
+
+### `<TaskSetupMFA />`
+
+- [`mountTaskSetupMFA()`](/docs/reference/components/authentication/task-setup-mfa#mount-task-setup-mfa)
+- [`unmountTaskSetupMFA()`](/docs/reference/components/authentication/task-setup-mfa#unmount-task-setup-mfa)
 
 [client-ref]: /docs/reference/objects/client
 

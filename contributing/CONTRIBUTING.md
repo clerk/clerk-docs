@@ -1462,7 +1462,6 @@ Available values for the `sdk` prop:
 | Express                | "expressjs"            |
 | Fastify                | "fastify"              |
 | React Router           | "react-router"         |
-| Remix                  | "remix"                |
 | Tanstack React Start   | "tanstack-react-start" |
 | Go                     | "go"                   |
 | Astro                  | "astro"                |
@@ -1499,8 +1498,8 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 <summary>Filter within a filter</summary>
 
 ```mdx
-<If sdk={['nextjs', 'remix']}>
-  This content will only be rendered if the active SDK is Next.js or Remix.
+<If sdk={['nextjs', 'react']}>
+  This content will only be rendered if the active SDK is Next.js or React.
   <If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
 </If>
 ```

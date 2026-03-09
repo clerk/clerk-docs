@@ -7038,10 +7038,10 @@ describe('Multiple document variants for pages', () => {
         content: `---
 title: API Documentation
 description: x
-sdk: nextjs, remix
+sdk: nextjs, react
 ---
 
-Documentation specific to Next.js and Remix`,
+Documentation specific to Next.js and React`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -7058,7 +7058,7 @@ Documentation specific to React.js`,
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'remix'],
+        validSdks: ['react', 'nextjs', 'expo'],
       }),
     )
 
@@ -7071,7 +7071,7 @@ Documentation specific to React.js`,
           {
             title: 'API Doc',
             href: '/docs/:sdk:/api-doc',
-            sdk: ['nextjs', 'remix', 'react'],
+            sdk: ['nextjs', 'expo', 'react'],
           },
         ],
       ],
@@ -7080,31 +7080,31 @@ Documentation specific to React.js`,
     expect(await readFile('./dist/nextjs/api-doc.mdx')).toBe(`---
 title: API Documentation
 description: x
-sdk: nextjs, remix, react
+sdk: nextjs, expo, react
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-availableSdks: nextjs,remix,react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: nextjs
 sourceFile: /docs/api-doc.mdx
 ---
 
-Documentation specific to Next.js and Remix
+Documentation specific to Next.js
 `)
 
-    expect(await readFile('./dist/remix/api-doc.mdx')).toBe(`---
+    expect(await readFile('./dist/expo/api-doc.mdx')).toBe(`---
 title: API Documentation
 description: x
-sdk: nextjs, remix, react
+sdk: nextjs, expo, react
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-availableSdks: nextjs,remix,react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
-activeSdk: remix
+activeSdk: expo
 sourceFile: /docs/api-doc.mdx
 ---
 
-Documentation specific to Next.js and Remix
+Documentation specific to Expo
 `)
 
     expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
@@ -7112,14 +7112,14 @@ title: API Documentation for React
 description: x
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-sdk: nextjs, remix, react
-availableSdks: nextjs,remix,react
+sdk: nextjs, expo, react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: react
 sourceFile: /docs/api-doc.react.mdx
 ---
 
-Documentation specific to React.js
+Documentation specific to React
 `)
 
     expect(await readFile('./dist/api-doc.mdx')).toBe(`---
@@ -7128,13 +7128,13 @@ metadata:
 description: x
 template: wide
 redirectPage: "true"
-availableSdks: nextjs,remix,react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 search:
   exclude: true
 canonical: /docs/:sdk:/api-doc
 ---
-<SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
+<SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","expo","react"]} />`)
 
     expect(await listFiles('dist/')).toEqual([
       'api-doc.mdx',
@@ -7142,7 +7142,7 @@ canonical: /docs/:sdk:/api-doc
       'manifest.json',
       'nextjs/api-doc.mdx',
       'react/api-doc.mdx',
-      'remix/api-doc.mdx',
+      'expo/api-doc.mdx',
     ])
   })
 
@@ -7263,10 +7263,10 @@ canonical: /docs/:sdk:/test
         content: `---
 title: API Documentation
 description: x
-sdk: nextjs, remix
+sdk: nextjs, expo
 ---
 
-Documentation specific to Next.js and Remix`,
+Documentation specific to Next.js and Expo`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -7292,7 +7292,7 @@ description: x
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'remix'],
+        validSdks: ['react', 'nextjs', 'expo'],
       }),
     )
 
@@ -7304,7 +7304,7 @@ canonical: /docs/overview
 sourceFile: /docs/overview.mdx
 ---
 
-<SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]}>API Doc</SDKLink>
+<SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","expo","react"]}>API Doc</SDKLink>
 `)
   })
 
@@ -7326,10 +7326,10 @@ sourceFile: /docs/overview.mdx
         content: `---
 title: API Documentation
 description: x
-sdk: nextjs, remix
+sdk: nextjs, expo
 ---
 
-Documentation specific to Next.js and Remix`,
+Documentation specific to Next.js and Expo`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -7354,7 +7354,7 @@ description: x
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
-      validSdks: ['react', 'nextjs', 'remix'],
+      validSdks: ['react', 'nextjs', 'expo'],
     })
     const store = createBlankStore()
     const invalidate = invalidateFile(store, config)
@@ -7366,8 +7366,8 @@ title: API Documentation for React
 description: x
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-sdk: nextjs, remix, react
-availableSdks: nextjs,remix,react
+sdk: nextjs, expo, react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: react
 sourceFile: /docs/api-doc.react.mdx
@@ -7396,8 +7396,8 @@ title: API Documentation for React
 description: x
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-sdk: nextjs, remix, react
-availableSdks: nextjs,remix,react
+sdk: nextjs, expo, react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: react
 sourceFile: /docs/api-doc.react.mdx
@@ -7419,7 +7419,7 @@ Updated Documentation specific to React.js
                 items: [
                   [
                     { title: 'Doc 1', sdk: ['nextjs'], items: [[{ title: 'Doc 1', href: '/docs/doc-1' }]] },
-                    { title: 'Doc 1', sdk: ['react', 'remix'], href: '/docs/doc-1' },
+                    { title: 'Doc 1', sdk: ['react', 'expo'], href: '/docs/doc-1' },
                     { title: 'Doc 2', href: '/docs/doc-2' },
                     {
                       title: 'Doc 3 & 4',
@@ -7456,13 +7456,13 @@ sdk: react
 # Doc 1 for React`,
       },
       {
-        path: './docs/doc-1.remix.mdx',
+        path: './docs/doc-1.expo.mdx',
         content: `---
-title: Doc 1 for Remix
-sdk: remix
+title: Doc 1 for Expo
+sdk: expo
 ---
 
-# Doc 1 for Remix`,
+# Doc 1 for Expo`,
       },
       {
         path: './docs/doc-2.mdx',
@@ -7496,7 +7496,7 @@ sdk: react
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'remix', 'vue'],
+        validSdks: ['react', 'nextjs', 'expo', 'vue'],
       }),
     )
 
@@ -7516,7 +7516,7 @@ sdk: react
                       {
                         href: '/docs/:sdk:/doc-1',
                         title: 'Doc 1',
-                        sdk: ['nextjs', 'react', 'remix'],
+                        sdk: ['nextjs', 'react', 'expo'],
                       },
                     ],
                   ],
@@ -7524,7 +7524,7 @@ sdk: react
                 {
                   href: '/docs/:sdk:/doc-1',
                   title: 'Doc 1',
-                  sdk: ['react', 'remix'],
+                  sdk: ['react', 'expo'],
                 },
                 {
                   href: '/docs/doc-2',

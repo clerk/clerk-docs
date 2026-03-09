@@ -7038,10 +7038,10 @@ describe('Multiple document variants for pages', () => {
         content: `---
 title: API Documentation
 description: x
-sdk: nextjs, react
+sdk: nextjs, expo
 ---
 
-Documentation specific to Next.js and React`,
+Documentation specific to Next.js and Expo`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -7089,7 +7089,7 @@ activeSdk: nextjs
 sourceFile: /docs/api-doc.mdx
 ---
 
-Documentation specific to Next.js
+Documentation specific to Next.js and Expo
 `)
 
     expect(await readFile('./dist/expo/api-doc.mdx')).toBe(`---
@@ -7104,7 +7104,7 @@ activeSdk: expo
 sourceFile: /docs/api-doc.mdx
 ---
 
-Documentation specific to Expo
+Documentation specific to Next.js and Expo
 `)
 
     expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
@@ -7119,7 +7119,7 @@ activeSdk: react
 sourceFile: /docs/api-doc.react.mdx
 ---
 
-Documentation specific to React
+Documentation specific to React.js
 `)
 
     expect(await readFile('./dist/api-doc.mdx')).toBe(`---
@@ -7139,10 +7139,10 @@ canonical: /docs/:sdk:/api-doc
     expect(await listFiles('dist/')).toEqual([
       'api-doc.mdx',
       'directory.json',
+      'expo/api-doc.mdx',
       'manifest.json',
       'nextjs/api-doc.mdx',
       'react/api-doc.mdx',
-      'expo/api-doc.mdx',
     ])
   })
 

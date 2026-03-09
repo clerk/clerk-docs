@@ -1,0 +1,69 @@
+The following example demonstrates how to use the [`useSignInWithApple()`](/docs/reference/expo/native-hooks/use-sign-in-with-apple) hook to manage the Apple authentication flow. Because the `useSignInWithApple()` hook automatically manages the [transfer flow](!transfer-flow) between sign-up and sign-in, you can use this component for both your sign-up and sign-in pages.
+
+```tsx {{ filename: 'components/AppleSignInButton.tsx', collapsible: true }}
+import { useSignInWithApple } from '@clerk/expo/apple'
+import { useRouter } from 'expo-router'
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+
+export function AppleSignInButton({ onSignInComplete }: { onSignInComplete?: () => void }) {
+  const { startAppleAuthenticationFlow } = useSignInWithApple()
+  const router = useRouter()
+
+  // Only show on iOS
+  if (Platform.OS !== 'ios') return null
+
+  const handleAppleSignIn = async () => {
+    try {
+      const { createdSessionId, setActive } = await startAppleAuthenticationFlow()
+
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId })
+
+        if (onSignInComplete) {
+          onSignInComplete()
+        } else {
+          router.replace('/')
+        }
+      }
+    } catch (err: any) {
+      if (err.code === 'ERR_REQUEST_CANCELED') return
+
+      Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+      console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+    }
+  }
+
+  return (
+    <View style={styles.container}>
+      <Pressable
+        style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+        onPress={handleAppleSignIn}
+      >
+        <Text style={styles.buttonText}>Continue with Apple</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    marginVertical: 8,
+  },
+  button: {
+    backgroundColor: '#000',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buttonPressed: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+})
+```

@@ -151,3 +151,20 @@ export const safeFail = <TCode extends WarningCode, TArgs extends Parameters<(ty
     vfile.fail(message, position)
   }
 }
+
+export const safeError = <TCode extends WarningCode, TArgs extends Parameters<(typeof errorMessages)[TCode]>>(
+  config: BuildConfig,
+  vfile: VFile,
+  filePath: string,
+  section: WarningsSection,
+  warningCode: TCode,
+  args: TArgs,
+  position?: Position,
+) => {
+  if (!shouldIgnoreWarning(config, filePath, section, warningCode)) {
+    // @ts-expect-error - TypeScript has trouble with spreading args into the function
+    const message = errorMessages[warningCode](...args)
+    const vfileMessage = vfile.message(message, position)
+    vfileMessage.fatal = true
+  }
+}

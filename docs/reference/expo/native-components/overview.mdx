@@ -1,0 +1,106 @@
+---
+title: Expo Native Components (beta)
+description: Pre-built native authentication and user management components for iOS and Android.
+sdk: expo
+---
+
+<Include src="_partials/expo/beta-callout" />
+
+The Clerk Expo SDK provides prebuilt native UI components rendered with **SwiftUI** on iOS and **Jetpack Compose** on Android. These components provide a fully native authentication experience while automatically synchronizing with the JavaScript SDK.
+
+## Available components
+
+| Component | Description |
+| - | - |
+| [`<AuthView />`](/docs/reference/expo/native-components/auth-view) | Full sign-in and sign-up authentication UI |
+| [`<UserButton />`](/docs/reference/expo/native-components/user-button) | Circular avatar button that opens the user profile |
+| [`<UserProfileView />`](/docs/reference/expo/native-components/user-profile-view) | Complete profile management interface |
+
+## Requirements
+
+Native components require:
+
+- Expo SDK 53 or later. See the [quickstart](/docs/expo/getting-started/quickstart) guide.
+
+- A [development build](https://docs.expo.dev/develop/development-builds/introduction/) (`npx expo run:ios` or `npx expo run:android`), as these components are not available in Expo Go.
+
+- The `@clerk/expo` plugin configured in your `app.json` file:
+
+  ```json {{ filename: 'app.json' }}
+  {
+    "expo": {
+      "plugins": ["@clerk/expo"]
+    }
+  }
+  ```
+
+- If using social connections, you must register your native application credentials in the Clerk Dashboard. See the [Sign in with Google](/docs/guides/configure/auth-strategies/sign-in-with-google) and [Sign in with Apple](/docs/guides/configure/auth-strategies/sign-in-with-apple) guides for setup steps.
+
+## How it works
+
+The native components handle authentication through the native Clerk SDKs ([clerk-ios](https://github.com/clerk/clerk-ios) and [clerk-android](https://github.com/clerk/clerk-android)). When authentication completes, the session is automatically synchronized to the JavaScript SDK:
+
+1. **Native Authentication** - User authenticates through the native UI
+1. **Session Created** - Native SDK creates and manages the session
+1. **Session Sync** - `@clerk/expo` syncs the native session to the JS SDK
+1. **JS SDK Ready** - All hooks (`useUser`, `useAuth`, `useSession`, etc.) reflect the authenticated state
+
+## Session synchronization
+
+Native components do not use imperative callbacks. Instead, use hooks like `useAuth()`, `useUser()`, or `useSession()` in a `useEffect` to react to authentication state changes:
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import { AuthView } from '@clerk/expo/native'
+import { useAuth } from '@clerk/expo'
+import { useRouter } from 'expo-router'
+import { useEffect } from 'react'
+
+export default function SignInScreen() {
+  const { isSignedIn } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (isSignedIn) {
+      router.replace('/(home)')
+    }
+  }, [isSignedIn])
+
+  return <AuthView mode="signInOrUp" />
+}
+```
+
+The same pattern applies to sign-out detection:
+
+```tsx {{ filename: 'app/(home)/profile.tsx' }}
+import { UserProfileView } from '@clerk/expo/native'
+import { useAuth } from '@clerk/expo'
+import { useRouter } from 'expo-router'
+import { useEffect } from 'react'
+
+export default function ProfileScreen() {
+  const { isSignedIn } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      router.replace('/(auth)/sign-in')
+    }
+  }, [isSignedIn])
+
+  return <UserProfileView style={{ flex: 1 }} />
+}
+```
+
+## Web compatibility
+
+For Expo web projects, use the web-specific components from `@clerk/expo/web`:
+
+```tsx {{ filename: 'app/sign-in.web.tsx' }}
+import { SignIn } from '@clerk/expo/web'
+
+export default function SignInScreen() {
+  return <SignIn />
+}
+```
+
+See the [web component reference](/docs/reference/components/overview) for more information.

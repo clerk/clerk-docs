@@ -33,7 +33,7 @@ sdk: ios
   ## Install the Clerk iOS SDK
 
   Follow [the Swift Package Manager instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to install Clerk as a dependency.
-  When prompted for the package URL, enter `https://github.com/clerk/clerk-ios`. Be sure to add the package to your target.
+  When prompted for the package URL, enter `https://github.com/clerk/clerk-ios`. Be sure to add both `ClerkKit` and `ClerkKitUI` to your target.
 
   ## Add your Native Application
 
@@ -53,32 +53,29 @@ sdk: ios
   > [!NOTE]
   > Replace `{YOUR_FRONTEND_API_URL}` with your [Frontend API URL](!frontend-api-url).
 
-  ## Load Clerk
+  ## Configure Clerk
 
-  To use Clerk in your app, you must first configure and load `Clerk`.
+  Configure Clerk once at app launch and provide it to your SwiftUI environment.
 
   1. Inside your new project in Xcode, open your `@main` app file.
-  1. Import `Clerk`.
-  1. Create a reference to the shared `Clerk` instance.
-  1. Inject the `clerk` instance into the SwiftUI environment using `.environment(\.clerk, clerk)` so your views can access it.
-  1. Add a `.task` modifier that configures Clerk with your Clerk [Publishable Key](!publishable-key) and loads it when the app starts.
+  1. Import `ClerkKit`.
+  1. Configure Clerk with your Clerk [Publishable Key](!publishable-key) in your app's initializer.
+  1. Inject `Clerk.shared` into the SwiftUI environment using `.environment(Clerk.shared)` so your views can access it.
 
-  ```swift {{ filename: 'ClerkQuickstartApp.swift', mark: [2, 6, [11, 15]] }}
+  ```swift {{ filename: 'ClerkQuickstartApp.swift', mark: [2, [6, 8], 13] }}
   import SwiftUI
-  import Clerk
+  import ClerkKit
 
   @main
   struct ClerkQuickstartApp: App {
-    @State private var clerk = Clerk.shared
+    init() {
+      Clerk.configure(publishableKey: "{{pub_key}}")
+    }
 
     var body: some Scene {
       WindowGroup {
         ContentView()
-          .environment(\.clerk, clerk)
-          .task {
-            clerk.configure(publishableKey: "{{pub_key}}")
-            try? await clerk.load()
-          }
+          .environment(Clerk.shared)
       }
     }
   }
@@ -89,20 +86,20 @@ sdk: ios
   To render content based on whether a user is authenticated or not:
 
   1. Open your `ContentView` file.
-  1. Import `Clerk` and access the shared `Clerk` instance that you injected into the environment in the previous step.
+  1. Import `ClerkKit` and access the shared `Clerk` instance that you injected into the environment in the previous step.
   1. Replace the content of the view body with a conditional that checks for a `clerk.user`.
 
   ```swift {{ filename: 'ContentView.swift', mark: [2, 5, [8, 14]] }}
   import SwiftUI
-  import Clerk
+  import ClerkKit
 
   struct ContentView: View {
-    @Environment(\.clerk) private var clerk
+    @Environment(Clerk.self) private var clerk
 
     var body: some View {
       VStack {
         if let user = clerk.user {
-          Text("Hello, \(user.firstName ?? "User")")
+          Text("Hello, \(user.id)")
         } else {
           Text("You are signed out")
         }
@@ -121,27 +118,25 @@ sdk: ios
 
   - [`UserButton`](/docs/reference/views/user/user-button): A circular button that displays the user's profile image. When tapped, it automatically presents the [`UserProfileView`](/docs/reference/views/user/user-profile-view) where users can manage their account, update their profile, and sign out.
 
-  Replace the existing content with the following code:
+  Replace the existing content with the following code. Import both `ClerkKit` and `ClerkKitUI` when using prebuilt views:
 
-  ```swift {{ filename: 'ContentView.swift', mark: [2, 5, 6, [9, 21]] }}
+  ```swift {{ filename: 'ContentView.swift', mark: [[2, 3], 6, [10, 14], [16, 19]] }}
   import SwiftUI
-  import Clerk
+  import ClerkKit
+  import ClerkKitUI
 
   struct ContentView: View {
-    @Environment(\.clerk) private var clerk
     @State private var authIsPresented = false
 
     var body: some View {
       VStack {
-        if clerk.user != nil {
-          UserButton()
-            .frame(width: 36, height: 36)
-        } else {
+        UserButton(signedOutContent: {
           Button("Sign in") {
             authIsPresented = true
           }
-        }
+        })
       }
+      .prefetchClerkImages()
       .sheet(isPresented: $authIsPresented) {
         AuthView()
       }
@@ -178,6 +173,6 @@ Learn more about Clerk views, how to customize them, and explore the Clerk iOS S
 
   ---
 
-  - [Clerk iOS SDK Reference](/docs/reference/ios/overview)
+  - [Clerk iOS SDK Reference](/docs/reference/native-mobile/overview)
   - Learn about the Clerk iOS SDK and how to integrate it into your app.
 </Cards>

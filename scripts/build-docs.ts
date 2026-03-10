@@ -194,6 +194,10 @@ async function main() {
         // temp migration ignores
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
+
+        // API error docs contain upstream URLs that may be outdated
+        'guides/development/errors/backend-api.mdx': ['link-doc-not-found'],
+        'guides/development/errors/frontend-api.mdx': ['link-doc-not-found'],
       },
       typedoc: {},
       partials: {},
@@ -263,7 +267,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   let staticBloomFilter: unknown | undefined = undefined
   let staticCompactRedirects: Record<string, string> | undefined = undefined
   let dynamicRedirects: Redirect[] | undefined = undefined
-  let allStaticRedirects: Redirect[] | undefined = undefined
 
   if (config.redirects) {
     const redirects = await readRedirects(config)
@@ -274,16 +277,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     staticBloomFilter = createRedirectsBloomFilter(optimizedStaticRedirects)
     staticCompactRedirects = transformRedirectsToCompactObject(optimizedStaticRedirects)
     dynamicRedirects = redirects.dynamicRedirects
-    allStaticRedirects = redirects.staticRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
   }
-
-  // Used by validateLinks to check codeblock URLs against redirects
-  const redirectsForValidation =
-    allStaticRedirects && dynamicRedirects
-      ? { static: allStaticRedirects, dynamic: dynamicRedirects }
-      : undefined
 
   abortSignal?.throwIfAborted()
 
@@ -603,17 +599,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateLinks(
-              config,
-              docsMap,
-              partial.path,
-              'partials',
-              (linkInPartial) => {
-                links.add(linkInPartial)
-              },
-              undefined,
-              redirectsForValidation,
-            ),
+            validateLinks(config, docsMap, partial.path, 'partials', (linkInPartial) => {
+              links.add(linkInPartial)
+            }),
           )
           .use(() => (tree) => {
             node = tree
@@ -655,17 +643,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(
-              config,
-              docsMap,
-              tooltipPath,
-              'tooltips',
-              (linkInTooltip) => {
-                links.add(linkInTooltip)
-              },
-              undefined,
-              redirectsForValidation,
-            ),
+            validateLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
+              links.add(linkInTooltip)
+            }),
           )
           .use(() => (tree, vfile) => {
             node = tree
@@ -703,17 +683,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(
-              config,
-              docsMap,
-              filePath,
-              'typedoc',
-              (linkInTypedoc) => {
-                links.add(linkInTypedoc)
-              },
-              undefined,
-              redirectsForValidation,
-            ),
+            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              links.add(linkInTypedoc)
+            }),
           )
           .use(() => (tree, vfile) => {
             node = tree
@@ -737,17 +709,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(
-              validateLinks(
-                config,
-                docsMap,
-                filePath,
-                'typedoc',
-                (linkInTypedoc) => {
-                  links.add(linkInTypedoc)
-                },
-                undefined,
-                redirectsForValidation,
-              ),
+              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+                links.add(linkInTypedoc)
+              }),
             )
             .use(() => (tree, vfile) => {
               node = tree
@@ -861,7 +825,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 foundLinks.add(link)
               },
               doc.file.href,
-              redirectsForValidation,
             ),
           )
           .use(
@@ -1049,17 +1012,7 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(
-                validateLinks(
-                  config,
-                  docsMap,
-                  doc.file.filePath,
-                  'docs',
-                  undefined,
-                  doc.file.href,
-                  redirectsForValidation,
-                ),
-              )
+              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))

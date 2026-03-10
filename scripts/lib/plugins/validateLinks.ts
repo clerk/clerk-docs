@@ -3,70 +3,11 @@ import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
 import type { BuildConfig } from '../config'
 import { type WarningsSection, safeMessage } from '../error-messages'
-import type { Redirect } from '../redirects'
 import type { DocsMap } from '../store'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 
 // Match clerk.com/docs URLs but require a path after /docs (not just /docs or /docs/)
 const CLERK_DOCS_URL_PATTERN = /https?:\/\/clerk\.com(\/docs\/[^\s\)\]"'`}]+)/g
-
-export interface ValidateLinksOptions {
-  config: BuildConfig
-  docsMap: DocsMap
-  filePath: string
-  section: WarningsSection
-  foundLink?: (link: string) => void
-  href?: string
-  redirects?: {
-    static: Redirect[]
-    dynamic: Redirect[]
-  }
-}
-
-/**
- * Follow redirect chain to get final destination
- */
-function followRedirectChain(
-  url: string,
-  staticRedirects: Map<string, string>,
-  dynamicRedirects: Redirect[],
-  maxRedirects = 10,
-): string | null {
-  let currentUrl = url
-  let redirectCount = 0
-
-  while (redirectCount < maxRedirects) {
-    // Check static redirects first
-    const staticDest = staticRedirects.get(currentUrl)
-    if (staticDest) {
-      currentUrl = staticDest
-      redirectCount++
-      continue
-    }
-
-    // Check dynamic redirects (simple prefix matching for common patterns)
-    let foundDynamic = false
-    for (const redirect of dynamicRedirects) {
-      // Handle simple wildcard patterns like /docs/old/:path* -> /docs/new/:path*
-      const sourceBase = redirect.source.replace(/:\w+\*?$/, '')
-      if (currentUrl.startsWith(sourceBase)) {
-        const remainder = currentUrl.slice(sourceBase.length)
-        const destBase = redirect.destination.replace(/:\w+\*?$/, '')
-        currentUrl = destBase + remainder
-        foundDynamic = true
-        redirectCount++
-        break
-      }
-    }
-
-    if (!foundDynamic) {
-      // No more redirects
-      return currentUrl !== url ? currentUrl : null
-    }
-  }
-
-  return currentUrl !== url ? currentUrl : null
-}
 
 /**
  * Remark plugin to validate Markdown links in documentation.
@@ -74,7 +15,6 @@ function followRedirectChain(
  * - Checks that clerk.com/docs URLs in code block comments point to existing documents.
  * - Optionally tracks found links via callback.
  * - Warns if a link points to a missing document or heading.
- * - Warns if a link redirects to a different URL.
  * - Skips ignored paths and links.
  */
 export const validateLinks =
@@ -85,33 +25,13 @@ export const validateLinks =
     section: WarningsSection,
     foundLink?: (link: string) => void,
     href?: string,
-    redirects?: { static: Redirect[]; dynamic: Redirect[] },
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
-    // Build redirect lookup map
-    const staticRedirectsMap = new Map<string, string>()
-    if (redirects?.static) {
-      for (const r of redirects.static) {
-        staticRedirectsMap.set(r.source, r.destination)
-      }
-    }
-    const dynamicRedirects = redirects?.dynamic ?? []
-
     return mdastMap(tree, (node) => {
       // Check clerk.com/docs URLs in code blocks
       if (node.type === 'code' && 'value' in node && typeof node.value === 'string') {
-        validateCodeBlockUrls(
-          config,
-          docsMap,
-          filePath,
-          section,
-          vfile,
-          node.value,
-          node.position,
-          staticRedirectsMap,
-          dynamicRedirects,
-        )
+        validateCodeBlockUrls(config, docsMap, filePath, section, vfile, node.value, node.position)
         return node
       }
 
@@ -192,7 +112,6 @@ export const validateLinks =
 /**
  * Validate clerk.com/docs URLs found in code block comments.
  * Extracts URLs from comment lines and checks they point to existing docs.
- * If a URL redirects, suggests the correct destination.
  */
 function validateCodeBlockUrls(
   config: BuildConfig,
@@ -202,8 +121,6 @@ function validateCodeBlockUrls(
   vfile: VFile,
   codeValue: string,
   position: Node['position'],
-  staticRedirectsMap: Map<string, string>,
-  dynamicRedirects: Redirect[],
 ): void {
   const lines = codeValue.split('\n')
 
@@ -225,25 +142,7 @@ function validateCodeBlockUrls(
       const linkedDoc = docsMap.get(url)
 
       if (linkedDoc === undefined) {
-        // Check if this URL redirects to a valid destination
-        const redirectDest = followRedirectChain(url, staticRedirectsMap, dynamicRedirects)
-
-        if (redirectDest && docsMap.get(redirectDest)) {
-          // URL redirects to a valid page - suggest the new URL
-          const newUrl = hash ? `${redirectDest}#${hash}` : redirectDest
-          safeMessage(
-            config,
-            vfile,
-            filePath,
-            section,
-            'link-redirects',
-            [match[0], `https://clerk.com${newUrl}`],
-            position,
-          )
-        } else {
-          // URL doesn't exist and doesn't redirect to a valid page
-          safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [match[0], `${url}.mdx`], position)
-        }
+        safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [match[0], `${url}.mdx`], position)
         continue
       }
 

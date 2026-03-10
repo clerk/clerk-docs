@@ -7133,14 +7133,6 @@ describe('API Errors Generation', () => {
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
-        ignoreWarnings: {
-          ...baseConfig.ignoreWarnings,
-          docs: {
-            // API error docs contain upstream URLs that may be outdated
-            'guides/development/errors/backend-api.mdx': ['link-doc-not-found'],
-            'guides/development/errors/frontend-api.mdx': ['link-doc-not-found'],
-          },
-        },
         flags: {
           skipApiErrors: false,
           skipGit: true,

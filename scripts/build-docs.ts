@@ -194,10 +194,6 @@ async function main() {
         // temp migration ignores
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
-
-        // API error docs contain upstream URLs that may be outdated
-        'guides/development/errors/backend-api.mdx': ['link-doc-not-found'],
-        'guides/development/errors/frontend-api.mdx': ['link-doc-not-found'],
       },
       typedoc: {},
       partials: {},

@@ -1407,7 +1407,7 @@ The `<Typedoc />` component is used to inject the contents of an MDX file from t
 For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
-<Typedoc src="clerk-react/use-auth" />
+<Typedoc src="react/use-auth" />
 ```
 
 ### `<If />`

@@ -74,7 +74,7 @@ The parameters, return types, and type definitions for each hook are autogenerat
 For example, in the `/reference/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth-params.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
-<Typedoc src="clerk-react/use-auth-params" />
+<Typedoc src="react/use-auth-params" />
 ```
 
 #### Handwritten content
@@ -107,7 +107,7 @@ When embedding Typedoc output for a hook in the docs, the package you import fro
 - If the hook is exported from `packages/react/src/hooks/index.ts`, **import its Typedoc output from the `clerk-react` package**, with the exception of `useOrganization`, `useOrganizationList`, and `useReverification`. Here's how the import would look like:
 
   ```mdx
-  <Typedoc src="clerk-react/<FILENAME>" />
+  <Typedoc src="react/<FILENAME>" />
   ```
 
 - If the hook is exported from `packages/shared/src/react/hooks/index.ts`, **import its Typedoc output from the `shared` package**, as such:

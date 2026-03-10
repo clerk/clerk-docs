@@ -1,7 +1,6 @@
 ---
 title: Build a custom checkout flow with a new payment method
 description: Learn how to use the Clerk API to build a custom checkout flow that allows users to add a new payment method during checkout.
-sdk: nextjs, react
 ---
 
 <Include src="_partials/custom-flows-callout" />
@@ -10,17 +9,16 @@ sdk: nextjs, react
 
 This guide will walk you through how to build a custom user interface for a checkout flow that allows users to **add a new payment method during checkout**.
 
-See the dedicated guides for other custom payment flows:
+For the custom flow that allows users to checkout **with an existing payment** method, see the [dedicated guide](/docs/guides/development/custom-flows/billing/checkout-existing-payment-method).
 
-- [Checkout with an **existing payment method**](/docs/guides/development/custom-flows/billing/checkout-existing-payment-method)
-- [Add a new payment method **outside of a checkout flow**](/docs/guides/development/custom-flows/billing/add-new-payment-method)
+For the custom flow that allows users to add a new payment method to their account, **outside of a checkout flow**, see the [dedicated guide](/docs/guides/development/custom-flows/billing/add-new-payment-method).
 
 <Steps>
   ## Enable Billing Features
 
   To use Billing Features, you first need to ensure they are enabled for your application. Follow the [Billing documentation](/docs/guides/billing/overview) to enable them and setup your Plans.
 
-  ## Checkout flow
+  ## Build the custom flow
 
   To create a checkout session with a new payment card, you must:
 
@@ -32,20 +30,22 @@ See the dedicated guides for other custom payment flows:
 
   The following example:
 
-  1. Uses the [`useCheckout()`](/docs/reference/hooks/use-checkout) hook to get to initiate and manage the checkout session.
+  1. Uses the [`useCheckout()`](/docs/reference/hooks/use-checkout) hook to initiate and manage the checkout session.
   1. Uses the [`usePaymentElement()`](/docs/reference/hooks/use-payment-element) hook to control the payment element, which is rendered by `<PaymentElement />`.
   1. Assumes that you have already have a valid `planId`, which you can acquire in many ways.
-     - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/~/billing/plans?tab=user).
-     - Use the [Clerk Backend API](/docs/reference/backend-api/tag/commerce/get/commerce/plans#tag/commerce/get/commerce/plans){{ target: '_blank' }}.
-     - Use the new [`usePlans()`](/docs/reference/hooks/use-plans) hook to get the Plan details.
 
-  **This example is written for Next.js App Router but can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+  - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/~/billing/plans).
+  - Use the [Clerk Backend API](/docs/reference/backend-api/tag/commerce/get/commerce/plans#tag/commerce/get/commerce/plans){{ target: '_blank' }}.
+  - Use the new [`usePlans()`](/docs/reference/hooks/use-plans) hook to get the Plan details.
 
-  ```tsx {{ filename: 'app/checkout/page.tsx', collapsible: true }}
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
+
+  ```tsx {{ filename: 'app/checkout/page.tsx' }}
   'use client'
-
   import * as React from 'react'
-  import { SignedIn, ClerkLoaded } from '@clerk/nextjs'
+  import { Show, ClerkLoaded } from '@clerk/nextjs'
   import {
     CheckoutProvider,
     useCheckout,
@@ -57,11 +57,12 @@ See the dedicated guides for other custom payment flows:
 
   export default function CheckoutPage() {
     return (
-      <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
+      // Update with your Plan ID and Plan Period
+      <CheckoutProvider for="user" planId="cplan_38GgHD9MBVUMcnMrl1PvCptgQUw" planPeriod="month">
         <ClerkLoaded>
-          <SignedIn>
+          <Show when="signed-in">
             <CustomCheckout />
-          </SignedIn>
+          </Show>
         </ClerkLoaded>
       </CheckoutProvider>
     )
@@ -69,9 +70,8 @@ See the dedicated guides for other custom payment flows:
 
   function CustomCheckout() {
     const { checkout } = useCheckout()
-    const { status } = checkout
 
-    if (status === 'needs_initialization') {
+    if (checkout.status === 'needs_initialization') {
       return <CheckoutInitialization />
     }
 
@@ -87,23 +87,21 @@ See the dedicated guides for other custom payment flows:
   }
 
   function CheckoutInitialization() {
-    const { checkout } = useCheckout()
-    const { start, status, fetchStatus } = checkout
+    const { checkout, fetchStatus } = useCheckout()
 
-    if (status !== 'needs_initialization') {
+    if (checkout.status !== 'needs_initialization') {
       return null
     }
 
     return (
-      <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+      <button onClick={() => checkout.start()} disabled={fetchStatus === 'fetching'}>
         {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
       </button>
     )
   }
 
   function PaymentSection() {
-    const { checkout } = useCheckout()
-    const { isConfirming, confirm, finalize, error } = checkout
+    const { checkout, errors, fetchStatus } = useCheckout()
 
     const { isFormReady, submit } = usePaymentElement()
     const [isProcessing, setIsProcessing] = React.useState(false)
@@ -112,7 +110,7 @@ See the dedicated guides for other custom payment flows:
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
-      if (!isFormReady || isProcessing) return
+      if (!isFormReady || isProcessing || fetchStatus === 'fetching') return
       setIsProcessing(true)
 
       try {
@@ -120,13 +118,25 @@ See the dedicated guides for other custom payment flows:
         const { data, error } = await submit()
         // Usually a validation error from stripe that you can ignore
         if (error) {
+          console.error(JSON.stringify(error, null, 2))
           return
         }
         // Confirm checkout with payment method
-        await confirm(data)
+        const { error: confirmError } = await checkout.confirm(data)
+        if (confirmError) {
+          console.error(JSON.stringify(confirmError, null, 2))
+          return
+        }
         // Complete checkout and redirect
-        await finalize({
-          navigate: () => router.push('/dashboard'),
+        await checkout.finalize({
+          navigate: ({ decorateUrl }) => {
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url)
+            }
+          },
         })
       } catch (error) {
         console.error('Payment failed:', error)
@@ -135,14 +145,22 @@ See the dedicated guides for other custom payment flows:
       }
     }
 
+    const isSubmitting = isProcessing || fetchStatus === 'fetching'
+
     return (
       <form onSubmit={handleSubmit}>
         <PaymentElement fallback={<div>Loading payment element...</div>} />
 
-        {error && <div>{error.message}</div>}
+        {errors.global && (
+          <ul>
+            {errors.global.map((error, index) => (
+              <li key={index}>{error.longMessage || error.message}</li>
+            ))}
+          </ul>
+        )}
 
-        <button type="submit" disabled={!isFormReady || isProcessing || isConfirming}>
-          {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+        <button type="submit" disabled={!isFormReady || isSubmitting}>
+          {isSubmitting ? 'Processing...' : 'Complete Purchase'}
         </button>
       </form>
     )
@@ -150,18 +168,17 @@ See the dedicated guides for other custom payment flows:
 
   function CheckoutSummary() {
     const { checkout } = useCheckout()
-    const { plan, totals } = checkout
 
-    if (!plan) {
+    if (!checkout.plan) {
       return null
     }
 
     return (
       <div>
         <h2>Order Summary</h2>
-        <span>{plan.name}</span>
+        <span>{checkout.plan.name}</span>
         <span>
-          {totals.totalDueNow.currencySymbol} {totals.totalDueNow.amountFormatted}
+          {checkout.totals.totalDueNow.currencySymbol} {checkout.totals.totalDueNow.amountFormatted}
         </span>
       </div>
     )

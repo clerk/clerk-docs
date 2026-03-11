@@ -321,4 +321,123 @@ When using a proxy, all requests to the Frontend API will be made through your d
   Your application should now be able to access the Frontend API from your proxy!
 </Steps>
 
+## Proxying for satellite domains
+
+If you use [satellite domains](/docs/guides/dashboard/dns-domains/satellite-domains) and are unable to add CNAME records, you can proxy the Frontend API instead. This replaces the CNAME-based DNS setup described in the satellite domains guide.
+
+> [!NOTE]
+> Before following these steps, make sure you have already [added your satellite domain](/docs/guides/dashboard/dns-domains/satellite-domains#add-your-first-satellite-domain) in the Clerk Dashboard and configured `allowedRedirectOrigins` on your primary domain app. See the [satellite domains guide](/docs/guides/dashboard/dns-domains/satellite-domains) for the full setup walkthrough.
+
+<Steps>
+  ### Configure your proxy server
+
+  Set up a proxy on your satellite domain that forwards requests to Clerk's Frontend API. The requirements are the same as [configuring a proxy for a primary domain](#configure-your-proxy-server) — requests to your satellite's proxy path (e.g., `https://satellite.dev/__clerk/*`) must be forwarded to `https://frontend-api.clerk.dev/*` with the body, all headers, and the three required additional headers (`Clerk-Proxy-Url`, `Clerk-Secret-Key`, `X-Forwarded-For`).
+
+  ### Enable proxying for the satellite domain
+
+  <Tabs items={["Dashboard", "Backend API"]}>
+    <Tab>
+      1. In the Clerk Dashboard, navigate to the **[Domains](https://dashboard.clerk.com/~/domains)** page.
+      1. Select the **Satellites** tab.
+      1. Select your satellite domain.
+      1. Set the proxy URL (e.g., `https://satellite.dev/__clerk`). The proxy URL must be a valid URL and resolve correctly.
+    </Tab>
+
+    <Tab>
+      The request below will update the satellite domain to use a proxy URL. Replace `{{DOMAIN ID}}` with your satellite domain's ID.
+
+      ```bash
+      curl -X PATCH https://api.clerk.com/v1/domains/{{DOMAIN ID}} \
+          -H "Authorization: Bearer {{SECRET KEY}}" \
+          -H "Content-Type: application/json" \
+          -d '{"proxy_url": "https://satellite.dev/__clerk"}'
+      ```
+    </Tab>
+  </Tabs>
+
+  ### Configure your satellite app
+
+  When using a proxy for a satellite domain, set `proxyUrl` / `CLERK_PROXY_URL` **instead of** `domain` / `CLERK_DOMAIN`. The `proxyUrl` replaces `domain` — you should not set both.
+
+  <Tabs items={["Environment variables", "Properties"]}>
+    <Tab>
+      <CodeBlockTabs options={["Next.js", "Remix"]}>
+        ```env {{ filename: '.env' }}
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+        CLERK_SECRET_KEY={{secret}}
+        NEXT_PUBLIC_CLERK_IS_SATELLITE=true
+        NEXT_PUBLIC_CLERK_PROXY_URL=https://satellite.dev/__clerk
+        NEXT_PUBLIC_CLERK_SIGN_IN_URL=https://primary.dev/sign-in
+        NEXT_PUBLIC_CLERK_SIGN_UP_URL=https://primary.dev/sign-up
+        ```
+
+        ```env {{ filename: '.env' }}
+        CLERK_PUBLISHABLE_KEY={{pub_key}}
+        CLERK_SECRET_KEY={{secret}}
+        CLERK_IS_SATELLITE=true
+        CLERK_PROXY_URL=https://satellite.dev/__clerk
+        CLERK_SIGN_IN_URL=https://primary.dev/sign-in
+        CLERK_SIGN_UP_URL=https://primary.dev/sign-up
+        ```
+      </CodeBlockTabs>
+    </Tab>
+
+    <Tab>
+      If you prefer to use properties instead of environment variables, set `isSatellite`, `proxyUrl`, `signInUrl`, and `signUpUrl` on your `<ClerkProvider>` (and in your middleware, for Next.js):
+
+      <CodeBlockTabs options={["Next.js", "Remix"]}>
+        ```tsx {{ filename: 'app/layout.tsx' }}
+        import { ClerkProvider } from '@clerk/nextjs'
+
+        export default function RootLayout({ children }: { children: React.ReactNode }) {
+          return (
+            <html lang="en">
+              <body>
+                <ClerkProvider
+                  isSatellite
+                  proxyUrl="https://satellite.dev/__clerk"
+                  signInUrl="https://primary.dev/sign-in"
+                  signUpUrl="https://primary.dev/sign-up"
+                >
+                  {children}
+                </ClerkProvider>
+              </body>
+            </html>
+          )
+        }
+        ```
+
+        ```tsx {{ filename: 'root.tsx' }}
+        export const loader = (args) => {
+          return rootAuthLoader(
+            args,
+            ({ req }) => {
+              const { userId, sessionId, getToken } = req.auth
+              return json({
+                message: `Hello from the root loader :)`,
+                ENV: getBrowserEnvironment(),
+              })
+            },
+            {
+              loadUser: true,
+              isSatellite: true,
+              proxyUrl: 'https://satellite.dev/__clerk',
+              signInUrl: 'https://primary.dev/sign-in',
+              signUpUrl: 'https://primary.dev/sign-up',
+            } as const,
+          )
+        }
+
+        export default ClerkApp(App, {
+          isSatellite: true,
+          proxyUrl: 'https://satellite.dev/__clerk',
+          signInUrl: 'https://primary.dev/sign-in',
+          signUpUrl: 'https://primary.dev/sign-up',
+        })
+        ```
+      </CodeBlockTabs>
+    </Tab>
+  </Tabs>
+</Steps>
+
 If you have any questions about proxying, or you're having any trouble setting this up, contact [support@clerk.com](mailto:support@clerk.com).

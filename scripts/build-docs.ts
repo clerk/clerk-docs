@@ -327,11 +327,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
-  console.info(
-    config.flags.silenceTypedocErrors
-      ? `✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached, typedoc errors silenced)`
-      : `✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`,
-  )
+  console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
 
   abortSignal?.throwIfAborted()
 
@@ -388,16 +384,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       }),
       ...(apiErrorsFiles
         ? apiErrorsFiles.map(async (file) => {
-            const inManifest = docsInManifest.has(file.href)
+          const inManifest = docsInManifest.has(file.href)
 
-            const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
-            )
+          const markdownFile = await markdownCache(file.filePath, () =>
+            parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
+          )
 
-            docsMap.set(file.href, markdownFile)
+          docsMap.set(file.href, markdownFile)
 
-            return markdownFile
-          })
+          return markdownFile
+        })
         : []),
     ])
   ).map((doc) => {
@@ -673,17 +669,42 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const validatedTypedocsRaw = await Promise.all(
-    typedocs.map(
-      async (typedoc): Promise<(typeof typedoc & { vfile: unknown; node: Node; links: Set<string> }) | null> => {
-        const filePath = path.join(config.typedocRelativePath, typedoc.path)
+  const validatedTypedocs = await Promise.all(
+    typedocs.map(async (typedoc) => {
+      const filePath = path.join(config.typedocRelativePath, typedoc.path)
 
+      try {
+        let node: Node | null = null
+        const links: Set<string> = new Set()
+
+        const vfile = await remark()
+          .use(remarkMdx)
+          .use(
+            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              links.add(linkInTypedoc)
+            }),
+          )
+          .use(() => (tree, vfile) => {
+            node = tree
+          })
+          .process(typedoc.vfile)
+
+        if (node === null) {
+          throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+        }
+
+        return {
+          ...typedoc,
+          vfile,
+          node: node as Node,
+          links,
+        }
+      } catch (error) {
         try {
           let node: Node | null = null
           const links: Set<string> = new Set()
 
           const vfile = await remark()
-            .use(remarkMdx)
             .use(
               validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
@@ -705,41 +726,12 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             links,
           }
         } catch (error) {
-          try {
-            let node: Node | null = null
-            const links: Set<string> = new Set()
-
-            const vfile = await remark()
-              .use(
-                validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-                  links.add(linkInTypedoc)
-                }),
-              )
-              .use(() => (tree, vfile) => {
-                node = tree
-              })
-              .process(typedoc.vfile)
-
-            if (node === null) {
-              throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
-            }
-
-            return {
-              ...typedoc,
-              vfile,
-              node: node as Node,
-              links,
-            }
-          } catch (err) {
-            if (config.flags.silenceTypedocErrors) return null
-            console.error(err)
-            throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
-          }
+          console.error(error)
+          throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
         }
-      },
-    ),
+      }
+    }),
   )
-  const validatedTypedocs = validatedTypedocsRaw.filter((t): t is NonNullable<typeof t> => t !== null)
   console.info(`✓ Validated all typedocs`)
 
   abortSignal?.throwIfAborted()
@@ -948,15 +940,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             doc.file.filePathInDocsFolder,
             `---
 ${yaml.stringify({
-  metadata: { title: doc.frontmatter.title },
-  description: doc.frontmatter.description,
-  template: 'wide',
-  redirectPage: 'true',
-  availableSdks: sdks.join(','),
-  notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
-  search: { exclude: true },
-  canonical: canonical.replace('/index', ''),
-})}---
+              metadata: { title: doc.frontmatter.title },
+              description: doc.frontmatter.description,
+              template: 'wide',
+              redirectPage: 'true',
+              availableSdks: sdks.join(','),
+              notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+              search: { exclude: true },
+              canonical: canonical.replace('/index', ''),
+            })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )
         } else {
@@ -1211,12 +1203,11 @@ ${yaml.stringify({
   // The same doc can be processed multiple times (once as a core doc + once per SDK variant),
   // each producing its own VFile with the same warnings. Merge them into a single VFile per path
   // so warnings are only reported once.
-  // When --silence-typedoc-errors is set, exclude typedoc vfiles so their warnings are not reported.
   const allVFiles = [
     ...coreVFiles,
     ...partialsVFiles,
     ...tooltipsVFiles,
-    ...(config.flags.silenceTypedocErrors ? [] : typedocVFiles),
+    ...typedocVFiles,
     ...flatSdkSpecificVFiles,
     manifestVfile,
     ...headingValidationVFiles,

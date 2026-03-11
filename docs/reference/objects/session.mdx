@@ -5,7 +5,7 @@ search:
   rank: 1
   keywords:
      - getToken()
-sdk: js-frontend
+sdk: js-frontend, astro, chrome-extension, expo, nextjs, react, react-router, tanstack-react-start, nuxt, vue
 ---
 
 The `Session` object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
@@ -21,6 +21,39 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
 > [!NOTE]
 > For more information regarding the different session states, see the [guide on session management](/docs/guides/secure/session-options).
 
+## Example
+
+<If sdk="js-frontend">
+  The `Session` object is available on the [`Clerk`](/docs/reference/objects/clerk) object.
+
+  ```js {{ filename: 'src/main.js' }}
+  import { Clerk } from '@clerk/clerk-js'
+
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+  // Initialize Clerk with your Clerk Publishable Key
+  const clerk = new Clerk(publishableKey)
+
+  // Load Clerk
+  await clerk.load()
+
+  // Access the session object
+  const session = clerk.session
+  ```
+</If>
+
+<If notSdk={["js-frontend", "astro", "vue", "nuxt"]}>
+  <Include src="_partials/hooks/use-session" />
+</If>
+
+<If sdk="astro">
+  <Include src="_partials/astro/session-store" />
+</If>
+
+<If sdk={["vue", "nuxt"]}>
+  <Include src="_partials/vue-nuxt/use-session" />
+</If>
+
 ## Properties
 
 <Properties>
@@ -35,6 +68,13 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   - `ActJWTClaim | null`
 
   The JWT actor for the session. Holds identifier for the user that is impersonating the current user. Read more about [impersonation](/docs/guides/users/impersonation).
+
+  ---
+
+  - `agent`
+  - `AgentActClaim | null`
+
+  When the session's `actor` claim has `type: 'agent'`, this property exposes information about the agent and [Agent Task](TODO) that was used to create the session.
 
   ---
 
@@ -123,9 +163,9 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   ---
 
   - `user`
-  - [`User`](/docs/reference/objects/user)
+  - [`User`](/docs/reference/objects/user) | null
 
-  The user associated with the session.
+  The user associated with the session, or `null` if none.
 </Properties>
 
 ## Methods
@@ -143,7 +183,11 @@ function attemptFirstFactorVerification(
 #### `SessionVerifyAttemptFirstFactorParams`
 
 ```ts
-type SessionVerifyAttemptFirstFactorParams = EmailCodeAttempt | PhoneCodeAttempt | PasswordAttempt
+type SessionVerifyAttemptFirstFactorParams =
+  | EmailCodeAttempt
+  | PhoneCodeAttempt
+  | PasswordAttempt
+  | PasskeyAttempt
 
 type EmailCodeAttempt = {
   strategy: 'email_code'
@@ -159,15 +203,11 @@ type PasswordAttempt = {
   strategy: 'password'
   password: string
 }
-```
 
-#### Example
-
-```js
-await clerk.session.attemptFirstFactorVerification({
-  strategy: 'email_code',
-  code: '123456',
-})
+type PasskeyAttempt = {
+  strategy: 'passkey'
+  publicKeyCredential: PublicKeyCredential
+}
 ```
 
 ### `attemptSecondFactorVerification()`
@@ -199,15 +239,6 @@ type BackupCodeAttempt = {
   strategy: 'backup_code'
   code: string
 }
-```
-
-#### Example
-
-```js
-await clerk.session.attemptSecondFactorVerification({
-  strategy: 'phone_code',
-  code: '123456',
-})
 ```
 
 ### `checkAuthorization()`
@@ -304,40 +335,12 @@ type CheckAuthorizationParams = WithReverification<
   The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use**.
 </Properties>
 
-#### Example: Authorization
-
-For more information, see the [guide on authorization checks](/docs/guides/secure/authorization-checks).
-
-```js
-// Check if the current user has the 'admin' Role
-clerk.session.checkAuthorization({
-  role: 'admin',
-})
-```
-
-#### Example: Reverification
-
-For more information, see the [guide on reverification](/docs/guides/secure/reverification).
-
-```js
-// Require the user to reverify their first factor after 2 minutes
-clerk.session.checkAuthorization({
-  reverification: { afterMinutes: 2, level: 'first_factor' },
-})
-```
-
 ### `clearCache()`
 
 Clears the cache for the current session. This is useful if the session has been updated and the cache is no longer valid.
 
 ```typescript
 function clearCache(): void
-```
-
-#### Example
-
-```js
-clerk.session.clearCache()
 ```
 
 ### `end()`
@@ -348,17 +351,11 @@ Terminates the current session, invalidating it for this `Client` instance. Upon
 function end(): Promise<Session>
 ```
 
-#### Example
-
-```js
-await clerk.session.end()
-```
-
 ### `getToken()`
 
 Retrieves the current user's [session token](/docs/guides/sessions/session-tokens) or a [custom JWT template](/docs/guides/sessions/jwt-templates).
 
-This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for a Clerk token is one minute.
+This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for a Clerk token is one minute. It retries on transient failures (e.g. network errors); when the browser is offline and retries are exhausted, it throws `ClerkOfflineError`.
 
 Tokens can only be generated if the user is signed in.
 
@@ -396,12 +393,6 @@ function getToken(options?: GetTokenOptions): Promise<string | null>
   The Organization associated with the generated session token. _Does not modify the session's currently [Active Organization](!active-organization)._
 </Properties>
 
-#### Example
-
-```js
-await clerk.session.getToken({ template: 'Test' })
-```
-
 ### `prepareFirstFactorVerification()`
 
 Initiates the [first factor verification](!first-factor-verification) process. This is a required step to complete a reverification flow when using a preparable factor. Returns a [`SessionVerification`](/docs/reference/types/session-verification) instance with its status and supported factors.
@@ -415,7 +406,11 @@ function prepareFirstFactorVerification(
 #### `SessionVerifyPrepareFirstFactorParams`
 
 ```ts
-type SessionVerifyPrepareFirstFactorParams = EmailCodeConfig | PhoneCodeConfig
+type SessionVerifyPrepareFirstFactorParams =
+  | EmailCodeConfig
+  | PhoneCodeConfig
+  | PasskeyConfig
+  | EnterpriseSSOConfig
 
 type EmailCodeConfig = {
   strategy: 'email_code'
@@ -429,15 +424,17 @@ type PhoneCodeConfig = {
   primary?: boolean
   default?: boolean
 }
-```
 
-#### Example
+type PasskeyConfig = {
+  strategy: 'passkey'
+}
 
-```js
-await clerk.session.prepareFirstFactorVerification({
-  strategy: 'email_code',
-  emailAddressId: 'email_address_123',
-})
+type EnterpriseSSOConfig = {
+  strategy: 'enterprise_sso'
+  emailAddressId: string
+  enterpriseConnectionId: string
+  redirectUrl: string
+}
 ```
 
 ### `prepareSecondFactorVerification()`
@@ -461,26 +458,12 @@ type PhoneCodeSecondFactorConfig = {
 }
 ```
 
-#### Example
-
-```js
-await clerk.session.prepareSecondFactorVerification({
-  strategy: 'phone_code',
-})
-```
-
 ### `remove()`
 
 Invalidates the current session by marking it as removed. Once removed, the session will be deactivated for the current Client instance and its `status` will be set to `removed`. This operation cannot be undone.
 
 ```typescript
 function remove(): Promise<Session>
-```
-
-#### Example
-
-```js
-await clerk.session.remove()
 ```
 
 ### `startVerification()`
@@ -499,14 +482,6 @@ type SessionVerifyCreateParams = {
 }
 ```
 
-#### Example
-
-```js
-await clerk.session.startVerification({
-  level: 'first_factor',
-})
-```
-
 ### `touch()`
 
 Updates the session's last active timestamp to the current time. This method should be called periodically to indicate ongoing user activity and prevent the session from becoming stale. The updated timestamp is used for session management and analytics purposes.
@@ -515,24 +490,12 @@ Updates the session's last active timestamp to the current time. This method sho
 function touch(): Promise<Session>
 ```
 
-#### Example
-
-```js
-await clerk.session.touch()
-```
-
 ### `verifyWithPasskey()`
 
 Initiates a verification flow using passkeys. Returns a [`SessionVerification`](/docs/reference/types/session-verification) instance with its status and supported factors.
 
 ```typescript
 function verifyWithPasskey(): Promise<SessionVerificationResource>
-```
-
-#### Example
-
-```js
-await clerk.session.verifyWithPasskey()
 ```
 
 [client-ref]: /docs/reference/objects/client

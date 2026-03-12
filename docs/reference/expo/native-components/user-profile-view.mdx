@@ -1,0 +1,178 @@
+---
+title: '`<UserProfileView />` component'
+description: A native profile management component providing complete account settings for iOS and Android.
+sdk: expo
+---
+
+> [!NOTE]
+> This documents the native `<UserProfileView />` from `@clerk/expo/native`. For web projects, use the [web `<UserProfile />` component](/docs/reference/components/user/user-profile).
+
+The `<UserProfileView />` component renders a fully native profile management interface using SwiftUI on iOS and Jetpack Compose on Android. It allows users to manage:
+
+- Profile details
+- Email addresses
+- Phone numbers
+- Multi-factor authentication (MFA)
+- Passkeys
+- Connected accounts
+- Active sessions
+
+<Include src="_partials/expo/expo-requirements-callout" />
+
+## Usage
+
+There are **three ways** to render the profile view in an Expo app:
+
+1. **Native modal (recommended):** Use the `useUserProfileModal()` hook to present the profile view as a native modal (SwiftUI/Jetpack Compose). This uses a native `X` button for dismissal.
+1. **React Native Modal:** Wrap the inline `<UserProfileView />` in a React Native `<Modal>` component. You must provide your own close button to dismiss the modal.
+1. **Inline:** Render `<UserProfileView />` directly in your layout without a modal.
+
+If you need to react to sign-out, use `useAuth()` inside a `useEffect`.
+
+Use the following tabs to select your preferred approach.
+
+<Tabs items={["Using Native modal (recommended)", "Using a React Native Modal", "Inline"]}>
+  <Tab>
+    The `useUserProfileModal()` hook provides an imperative `presentUserProfile()` function that opens the native profile modal directly from a button press. No component is needed.
+
+    ```tsx {{ filename: 'app/(home)/index.tsx' }}
+    import { useUserProfileModal } from '@clerk/expo'
+    import { Text, TouchableOpacity, View } from 'react-native'
+
+    export default function HomeScreen() {
+      const { presentUserProfile } = useUserProfileModal()
+
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity onPress={presentUserProfile}>
+            <Text>Manage Profile</Text>
+          </TouchableOpacity>
+        </View>
+      )
+    }
+    ```
+
+    #### `useUserProfileModal()` return values
+
+    <Properties>
+      - `presentUserProfile`
+      - `() => Promise<void>`
+
+      Opens the native profile modal. The promise resolves when the modal is dismissed. If the user signs out from within the modal, the JS SDK session is automatically cleared.
+
+      ---
+
+      - `isAvailable`
+      - `boolean`
+
+      Whether the native module supports presenting the profile modal. Returns `false` on web or when the `@clerk/expo` plugin is not installed.
+
+      ---
+
+      - `sessions`
+      - <code>Ref\<[Session](/docs/reference/javascript/session)></code>
+
+      A list of sessions that have been registered on the client device.
+    </Properties>
+  </Tab>
+
+  <Tab>
+    When rendering inside a React Native `<Modal>`, ensure `isDismissable` is set to `false` (the default) and provide your own close button to dismiss the modal.
+
+    > [!IMPORTANT]
+    > Do not use `useUserProfileModal()` when rendering inside a React Native `<Modal>`. The native modal system and React Native Modal are separate presentation layers and cannot coordinate dismissal. Use one approach or the other, not both.
+
+    ```tsx {{ filename: 'app/(home)/index.tsx' }}
+    import { useState } from 'react'
+    import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native'
+    import { UserProfileView } from '@clerk/expo/native'
+
+    export default function HomeScreen() {
+      const [showProfile, setShowProfile] = useState(false)
+
+      return (
+        <View style={{ flex: 1 }}>
+          <TouchableOpacity onPress={() => setShowProfile(true)}>
+            <Text>Open Profile</Text>
+          </TouchableOpacity>
+
+          <Modal visible={showProfile} animationType="slide">
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowProfile(false)}>
+                <Text style={styles.closeButton}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <UserProfileView />
+          </Modal>
+        </View>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      modalHeader: {
+        paddingTop: 60,
+        paddingHorizontal: 20,
+        paddingBottom: 8,
+        alignItems: 'flex-end',
+        backgroundColor: '#fff',
+      },
+      closeButton: {
+        color: '#007AFF',
+        fontSize: 17,
+        fontWeight: '600',
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    You can render `<UserProfileView />` directly in your layout without a modal. This is useful for dedicated profile screens.
+
+    ```tsx {{ filename: 'app/(home)/profile.tsx' }}
+    import { UserProfileView } from '@clerk/expo/native'
+    import { useAuth } from '@clerk/expo'
+    import { useRouter } from 'expo-router'
+    import { useEffect } from 'react'
+
+    export default function ProfileScreen() {
+      const { isSignedIn } = useAuth()
+      const router = useRouter()
+
+      useEffect(() => {
+        if (!isSignedIn) {
+          router.replace('/(auth)/sign-in')
+        }
+      }, [isSignedIn])
+
+      return <UserProfileView style={{ flex: 1 }} />
+    }
+    ```
+
+    ## Properties
+
+    <Properties>
+      - `isDismissable`
+      - `boolean`
+
+      Whether the inline profile view can be dismissed by the user. When `true`, a dismiss button appears. This does not present a modal — to present a native modal, use the `useUserProfileModal()` hook instead. Defaults to `false`.
+
+      > [!IMPORTANT]
+      > Do not set `isDismissable={true}` when rendering inside a React Native `<Modal>`. The native dismiss button relies on SwiftUI (iOS) or Jetpack Compose (Android) to close the view, which cannot dismiss a React Native `<Modal>`. Tapping the native dismiss button will not close the modal and may leave the screen unresponsive.
+
+      ---
+
+      - `style`
+      - `StyleProp<ViewStyle>`
+
+      Style applied to the container view.
+    </Properties>
+  </Tab>
+</Tabs>
+
+## Platform support
+
+| Platform | Status |
+| - | - |
+| iOS | Supported (SwiftUI) |
+| Android | Supported (Jetpack Compose) |
+| Web | Use [`<UserProfile />`](/docs/reference/components/user/user-profile) from `@clerk/expo/web` |

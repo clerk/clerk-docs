@@ -4,6 +4,8 @@ description: Learn how to handle a combined sign-up and sign-in flow in your app
 search:
   keywords:
     - combined
+    - sign up if missing
+    - user enumeration
 ---
 
 <Include src="_partials/custom-flows-callout" />
@@ -21,17 +23,25 @@ search:
   > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/sign-in-or-up).
 </If>
 
-This guide demonstrates how to build a custom user interface that **allows users to sign up or sign in within a single flow**. It uses email and password authentication, but you can modify this approach according to the needs of your application.
+This guide demonstrates how to build a custom user interface that **allows users to sign up or sign in within a single flow**. There are two approaches:
 
-## Enable email and password authentication
+- [**Standard flow**](#standard-sign-in-or-up-flow): The sign-in attempt immediately tells you whether an account exists. If it doesn't, you start the sign-up flow. This is simple and gives users immediate feedback, but it reveals whether an account exists before any verification, making it susceptible to [user enumeration](/docs/guides/secure/user-enumeration-protection) attacks.
+- [**`signUpIfMissing` flow**](#sign-in-or-up-with-signupifmissing): The sign-in proceeds to verification regardless of whether an account exists. Only after verification does the backend reveal whether the account exists or needs to be created. This prevents user enumeration attacks.
+
+## Standard sign-in-or-up flow
+
+### Enable email and password authentication
 
 **This example uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.**
 
 <Include src="_partials/custom-flows/enable-email-password" />
 
-## Sign-in-or-up flow
+### Build the flow
 
 To blend a sign-up and sign-in flow into a single flow, you must **treat it as a sign-in flow**, but with the ability to sign up a new user if they don't have an account. You can do this by **checking for the `form_identifier_not_found` error** if the sign-in process fails, and then starting the sign-up process.
+
+> [!NOTE]
+> This approach reveals whether an account exists before verification. If you need to protect against user enumeration attacks, use the [`signUpIfMissing` flow](#sign-in-or-up-with-signupifmissing) instead.
 
 <If notSdk="nextjs">
   <Include src="_partials/sdk-examples-not-available-callout" />
@@ -266,6 +276,305 @@ To blend a sign-up and sign-in flow into a single flow, you must **treat it as a
         {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
 
         {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+        <div id="clerk-captcha" />
+      </>
+    )
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  {/* TODO */}
+</If>
+
+## Sign-in-or-up with `signUpIfMissing`
+
+The `signUpIfMissing` option provides a privacy-preserving alternative to the standard sign-in-or-up flow. Instead of immediately revealing whether an account exists, the backend proceeds to verification regardless. Only after the user verifies do they learn whether they are signing in to an existing account or creating a new one. It is recommended that the `signUpIfMissing` flow be used in combination with enabling strict user enumeration protections in the Clerk Dashboard, but it does not require that setting.
+
+### How the flow works
+
+1. Start sign-in with `signIn.create({ identifier, signUpIfMissing: true })`.
+1. Prepare and complete verification (e.g., `signIn.emailCode.sendCode()` and `signIn.emailCode.verifyCode()`). The backend sends a verification code whether or not the account exists.
+1. After verification:
+   - If the account **exists**, `signIn.status` becomes `'complete'` and you finalize the sign-in.
+   - If the account **does not exist**, `verifyCode()` returns an error with the code `sign_up_if_missing_transfer`. You then transfer to sign-up by calling `signUp.create({ transfer: true })`.
+1. After transferring, the sign-up may complete immediately, or it may have `status === 'missing_requirements'` if additional fields are needed (e.g., legal acceptance, first/last name). In that case, collect the missing fields and call `signUp.update()` to complete the sign-up.
+
+### Restrictions
+
+- **Password strategy is not supported.** The flow requires a strategy with a separate prepare step (such as email code, phone code, or email link) because the backend needs to proceed to verification regardless of whether the account exists.
+- **Only email address, phone number, and Web3 wallet identifiers are supported.** Username is not supported because there's no way to contact a user for verification using just a username. Social sign-in (OAuth) is already safe against user enumeration attacks regardless of the sign-in-or-up flow chosen.
+- **Not available in restricted or waitlist sign-up modes.** The instance must allow public sign-ups.
+
+### Bot protection
+
+When `signUpIfMissing` is enabled and [bot sign-up protection](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection) is active (which is the default), CAPTCHA is also required on sign-in because the sign-in may result in a new account being created. You **must** include a `<div id="clerk-captcha" />` element in your form so the CAPTCHA widget can render.
+
+### Enable email code authentication
+
+This example uses email code (OTP) authentication since password is not supported with `signUpIfMissing`.
+
+1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+1. Ensure **Require email address** is enabled.
+1. Ensure **Verify at sign-up** is enabled, with **Email verification code** selected.
+1. Ensure **Sign-in with email** is enabled, with **Email verification code** selected.
+
+### Build the flow
+
+<If notSdk="nextjs">
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
+
+<If notSdk="expo">
+  ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+  'use client'
+
+  import { useSignIn, useSignUp } from '@clerk/nextjs'
+  import { useRouter } from 'next/navigation'
+  import React from 'react'
+
+  export default function Page() {
+    const { signIn, errors, fetchStatus } = useSignIn()
+    const { signUp } = useSignUp()
+    const router = useRouter()
+
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [code, setCode] = React.useState('')
+    const [verifying, setVerifying] = React.useState(false)
+    const [showMissingRequirements, setShowMissingRequirements] = React.useState(false)
+
+    // Helper to finalize sign-in and navigate
+    const finalizeSignIn = async () => {
+      await signIn.finalize({
+        navigate: ({ session, decorateUrl }) => {
+          if (session?.currentTask) {
+            // Handle pending session tasks
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+            console.log(session?.currentTask)
+            return
+          }
+
+          const url = decorateUrl('/')
+          if (url.startsWith('http')) {
+            window.location.href = url
+          } else {
+            router.push(url)
+          }
+        },
+      })
+    }
+
+    // Helper to finalize sign-up and navigate
+    const finalizeSignUp = async () => {
+      await signUp.finalize({
+        navigate: ({ session, decorateUrl }) => {
+          if (session?.currentTask) {
+            // Handle pending session tasks
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+            console.log(session?.currentTask)
+            return
+          }
+
+          const url = decorateUrl('/')
+          if (url.startsWith('http')) {
+            window.location.href = url
+          } else {
+            router.push(url)
+          }
+        },
+      })
+    }
+
+    // Step 1: Start sign-in with signUpIfMissing and send email code
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
+
+      // Create sign-in with signUpIfMissing enabled.
+      // The backend will proceed to verification regardless of whether an account exists.
+      const { error: createError } = await signIn.create({
+        identifier: emailAddress,
+        signUpIfMissing: true,
+      })
+      if (createError) {
+        console.error(JSON.stringify(createError, null, 2))
+        return
+      }
+
+      // Send the email code for first-factor verification
+      const { error: sendError } = await signIn.emailCode.sendCode()
+      if (sendError) {
+        console.error(JSON.stringify(sendError, null, 2))
+        return
+      }
+
+      setVerifying(true)
+    }
+
+    // Step 2: Verify the email code
+    const handleVerify = async (e: React.FormEvent) => {
+      e.preventDefault()
+
+      const { error } = await signIn.emailCode.verifyCode({ code })
+
+      // When the user doesn't exist, verifyCode returns an error with
+      // the code 'sign_up_if_missing_transfer'. Check for this error
+      // to determine if we need to transfer to sign-up.
+      if (error) {
+        if (error.errors[0]?.code === 'sign_up_if_missing_transfer') {
+          // The user doesn't exist - transfer to sign-up
+          await handleTransfer()
+          return
+        }
+
+        // Some other error occurred
+        console.error(JSON.stringify(error, null, 2))
+        return
+      }
+
+      // The user exists and verification succeeded
+      if (signIn.status === 'complete') {
+        await finalizeSignIn()
+      } else if (signIn.status === 'needs_second_factor') {
+        // Handle MFA if required
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+      } else if (signIn.status === 'needs_client_trust') {
+        // Handle client trust if required
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/client-trust
+      } else {
+        console.error('Sign-in attempt not complete:', signIn.status)
+      }
+    }
+
+    // Step 3: Transfer to sign-up
+    const handleTransfer = async () => {
+      // Create sign-up using transfer.
+      // This moves the verified identification from the sign-in to a new sign-up.
+      const { error } = await signUp.create({ transfer: true })
+      if (error) {
+        console.error(JSON.stringify(error, null, 2))
+        return
+      }
+
+      if (signUp.status === 'complete') {
+        // No additional requirements - sign-up is complete
+        await finalizeSignUp()
+      } else if (signUp.status === 'missing_requirements') {
+        // Additional fields are required to complete sign-up.
+        // Common missing fields include legal_accepted, first_name, last_name, etc.
+        // Show a form to collect the missing fields.
+        setShowMissingRequirements(true)
+      } else {
+        console.error('Unexpected sign-up status:', signUp.status)
+      }
+    }
+
+    // Step 4: Submit missing requirements to complete sign-up
+    const handleMissingRequirements = async (e: React.FormEvent) => {
+      e.preventDefault()
+
+      // This example handles legal_accepted.
+      // You can extend this to handle other missing fields like first_name, last_name, etc.
+      // by checking signUp.missingFields and collecting the appropriate values.
+      const { error } = await signUp.update({
+        legalAccepted: true,
+      })
+      if (error) {
+        console.error(JSON.stringify(error, null, 2))
+        return
+      }
+
+      if (signUp.status === 'complete') {
+        await finalizeSignUp()
+      } else if (signUp.status === 'missing_requirements') {
+        // Still missing other fields
+        console.error('Additional fields still required:', signUp.missingFields)
+      } else {
+        console.error('Unexpected sign-up status:', signUp.status)
+      }
+    }
+
+    // Step 4 UI: Show missing requirements form
+    if (showMissingRequirements) {
+      return (
+        <>
+          <h1>Complete your account</h1>
+          <p>Your email has been verified. Please complete the following to create your account.</p>
+
+          <form onSubmit={handleMissingRequirements}>
+            {signUp.missingFields.includes('legal_accepted') && (
+              <div>
+                <label>
+                  <input type="checkbox" required />I agree to the Terms of Service and Privacy Policy
+                </label>
+              </div>
+            )}
+            <button type="submit" disabled={fetchStatus === 'fetching'}>
+              Create account
+            </button>
+          </form>
+
+          <button onClick={() => signIn.reset()}>Start over</button>
+        </>
+      )
+    }
+
+    // Step 2 UI: Show verification code form
+    if (verifying) {
+      return (
+        <>
+          <h1>Verify your email</h1>
+          <p>
+            We sent a verification code to <strong>{emailAddress}</strong>
+          </p>
+          <form onSubmit={handleVerify}>
+            <div>
+              <label htmlFor="code">Verification code</label>
+              <input
+                id="code"
+                name="code"
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              {errors.fields.code && <p>{errors.fields.code.message}</p>}
+            </div>
+            <button type="submit" disabled={fetchStatus === 'fetching'}>
+              Verify
+            </button>
+          </form>
+          <button onClick={() => signIn.emailCode.sendCode()}>Resend code</button>
+          <button onClick={() => signIn.reset()}>Start over</button>
+        </>
+      )
+    }
+
+    // Step 1 UI: Show email input form
+    return (
+      <>
+        <h1>Sign in or sign up</h1>
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="email">Enter email address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              value={emailAddress}
+              onChange={(e) => setEmailAddress(e.target.value)}
+            />
+            {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+          </div>
+          <button type="submit" disabled={fetchStatus === 'fetching'}>
+            Continue
+          </button>
+        </form>
+
+        {/*
+          Required: Bot sign-up protection is enabled by default.
+          When using signUpIfMissing, CAPTCHA may also be required on sign-in
+          because the sign-in may result in a new account being created.
+          See https://clerk.com/docs/guides/development/custom-flows/authentication/bot-sign-up-protection
+        */}
         <div id="clerk-captcha" />
       </>
     )

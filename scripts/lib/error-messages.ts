@@ -165,6 +165,8 @@ export const safeError = <TCode extends WarningCode, TArgs extends Parameters<(t
     // @ts-expect-error - TypeScript has trouble with spreading args into the function
     const message = errorMessages[warningCode](...args)
     const vfileMessage = vfile.message(message, position)
+    // Marks the message as an error (not just a warning) so vfile-reporter
+    // formats it with ✖ and the build exits with a non-zero code.
     vfileMessage.fatal = true
   }
 }

@@ -416,6 +416,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   })
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
+  // docsMap contains base hrefs AND variant keys (e.g. `/docs/quickstart.react`)
+  // needed for internal build lookups. routableDocsMap contains only URLs that
+  // are actually routable on the site, used for link validation.
   const routableDocsMap: DocsMap = new Map()
   docsArray.forEach((doc) => {
     routableDocsMap.set(doc.file.href, docsMap.get(doc.file.href) ?? doc)
@@ -1271,6 +1274,9 @@ ${yaml.stringify({
       await fs.rm(`.ignored_dist`, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
   } else if (config.flags.skipWriteDist) {
+    // The build still writes files to a temp dir (created in createConfig) as a
+    // side effect, so we clean it up here. Skipping those writes entirely would
+    // require threading the flag through every writeDistFile call.
     await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   } else if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail

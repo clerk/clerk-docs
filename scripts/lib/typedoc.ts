@@ -67,7 +67,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
         node: node as Node,
       }
     } catch (err) {
-      if (silenceErrors) return null
+      // Plain-markdown fallback (no remarkMdx); some typedoc files only parse this way
       let node: Node | null = null
 
       const vfile = await remark()
@@ -81,6 +81,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
         })
 
       if (node === null) {
+        if (silenceErrors) return null
         throw new Error(errorMessages['typedoc-parse-error'](typedocPath))
       }
 

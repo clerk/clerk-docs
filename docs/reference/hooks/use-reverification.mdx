@@ -1,7 +1,7 @@
 ---
 title: useReverification()
 description: Clerk's useReverification() hook enhances a fetcher function to handle a session's reverification flow.
-sdk: chrome-extension, expo, nextjs, react, react-router, remix, tanstack-react-start
+sdk: chrome-extension, expo, nextjs, react, react-router, tanstack-react-start
 ---
 
 <Include src="_partials/reverification-callout" />
@@ -534,47 +534,6 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
       ```
     </If>
 
-    <If sdk="remix">
-      ```tsx {{ filename: 'components/AccountBalance.tsx' }}
-      import { useReverification } from '@clerk/remix'
-      import { isClerkRuntimeError, isReverificationCancelledError } from '@clerk/shared'
-      import { useState } from 'react'
-
-      export function AccountBalance() {
-        const [balance, setBalance] = useState<number | null>(null)
-        const accountBalance = useReverification(async () => {
-          const response = await fetch('/api/balance')
-          return await response.json()
-        })
-
-        const handleClick = async () => {
-          try {
-            const accountBalanceResponse = await accountBalance()
-
-            setBalance(accountBalanceResponse.amount)
-          } catch (e) {
-            // Handle if user cancels the reverification process
-            if (isClerkRuntimeError(e) && isReverificationCancelledError(e)) {
-              console.error('User cancelled reverification', e.code)
-            }
-
-            // Handle other errors
-            // See https://clerk.com/docs/custom-flows/error-handling
-            // for more info on error handling
-            console.error(JSON.stringify(e, null, 2))
-          }
-        }
-
-        return (
-          <div>
-            <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
-            <button onClick={() => handleClick()}>See account balance</button>
-          </div>
-        )
-      }
-      ```
-    </If>
-
     <If sdk="tanstack-react-start">
       ```tsx {{ filename: 'src/components/AccountBalance.tsx' }}
       import { useReverification } from '@clerk/tanstack-react-start'
@@ -960,96 +919,6 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
           import { isClerkRuntimeError, isReverificationCancelledError } from '@clerk/shared'
           import { useState } from 'react'
           import type { SessionVerificationLevel } from '@clerk/shared/types'
-          import { VerificationComponent } from './VerificationComponent'
-
-          export function UpdateUserEmail() {
-            // Use `useUser()` to get the current user's `User` object
-            // `User` includes the `update()` method to update the user's primary email address
-            const { user } = useUser()
-
-            // TODO: Update to use exported type once available
-            const [verificationState, setVerificationState] = useState<
-              | {
-                  complete: () => void
-                  cancel: () => void
-                  level: SessionVerificationLevel | undefined
-                  inProgress: boolean
-                }
-              | undefined
-            >(undefined)
-
-            // Use `useReverification()` to enhance the `update()` method
-            // to handle the reverification process
-            const changePrimaryEmail = useReverification(
-              (emailAddressId: string) => user?.update({ primaryEmailAddressId: emailAddressId }),
-              {
-                onNeedsReverification: ({ complete, cancel, level }) => {
-                  setVerificationState({
-                    complete,
-                    cancel,
-                    level,
-                    inProgress: true,
-                  })
-                },
-              },
-            )
-
-            const handleClick = async (emailAddressId: string) => {
-              try {
-                await changePrimaryEmail(emailAddressId)
-              } catch (e) {
-                // Handle if user cancels the reverification process
-                if (isClerkRuntimeError(e) && isReverificationCancelledError(e)) {
-                  console.error('User cancelled reverification', e.code)
-                }
-
-                // Handle other errors
-                // See https://clerk.com/docs/custom-flows/error-handling
-                // for more info on error handling
-                console.error(JSON.stringify(e, null, 2))
-              }
-            }
-
-            return (
-              <div>
-                <span>Your primary email address is {user?.primaryEmailAddress?.emailAddress}</span>
-
-                <ul>
-                  {user?.emailAddresses.map((email) => (
-                    <li key={email.id}>
-                      <span>{email.emailAddress}</span>
-                      {user?.primaryEmailAddressId !== email.id && (
-                        <button onClick={() => handleClick(email.id)}>Make primary</button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-
-                {verificationState?.inProgress && (
-                  <VerificationComponent
-                    level={verificationState?.level}
-                    onComplete={() => {
-                      verificationState.complete()
-                      setVerificationState(undefined)
-                    }}
-                    onCancel={() => {
-                      verificationState.cancel()
-                      setVerificationState(undefined)
-                    }}
-                  />
-                )}
-              </div>
-            )
-          }
-          ```
-        </If>
-
-        <If sdk="remix">
-          ```tsx {{ filename: 'components/UpdateUserEmail.tsx', collapsible: true }}
-          import { useReverification, useUser } from '@clerk/remix'
-          import { isClerkRuntimeError, isReverificationCancelledError } from '@clerk/shared'
-          import { useState } from 'react'
-          import { SessionVerificationLevel } from '@clerk/shared/types'
           import { VerificationComponent } from './VerificationComponent'
 
           export function UpdateUserEmail() {
@@ -1586,92 +1455,6 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
           import { useEffect, useRef, useState } from 'react'
           import { useSession } from '@clerk/chrome-extension'
           import type {
-            EmailCodeFactor,
-            SessionVerificationLevel,
-            SessionVerificationResource,
-          } from '@clerk/shared/types'
-
-          export function VerificationComponent({
-            level = 'first_factor',
-            onComplete,
-            onCancel,
-          }: {
-            level: SessionVerificationLevel | undefined
-            onComplete: () => void
-            onCancel: () => void
-          }) {
-            const { session } = useSession()
-            const [code, setCode] = useState<string>('')
-            const reverificationRef = useRef<SessionVerificationResource | undefined>(undefined)
-            const [determinedStartingFirstFactor, setDeterminedStartingFirstFactor] = useState<
-              EmailCodeFactor | undefined
-            >()
-
-            useEffect(() => {
-              if (reverificationRef.current) {
-                return
-              }
-
-              session?.startVerification({ level }).then(async (response) => {
-                reverificationRef.current = response
-                await prepareEmailVerification(response)
-              })
-            }, [])
-
-            const prepareEmailVerification = async (verificationResource: SessionVerificationResource) => {
-              // To simplify the example we will only handle the first factor verification
-              if (verificationResource.status === 'needs_first_factor') {
-                // Determine the starting first factor from the supported first factors
-                const determinedStartingFirstFactor = verificationResource.supportedFirstFactors?.filter(
-                  (factor) => factor.strategy === 'email_code',
-                )[0]
-
-                if (determinedStartingFirstFactor) {
-                  setDeterminedStartingFirstFactor(determinedStartingFirstFactor)
-                  // Prepare the first factor verification with the determined starting first factor
-                  await session?.prepareFirstFactorVerification({
-                    strategy: determinedStartingFirstFactor.strategy,
-                    emailAddressId: determinedStartingFirstFactor?.emailAddressId,
-                  })
-                }
-              }
-            }
-
-            const handleVerificationAttempt = async () => {
-              try {
-                // Attempt to verify the session with the provided code
-                await session?.attemptFirstFactorVerification({
-                  strategy: 'email_code',
-                  code,
-                })
-                onComplete()
-              } catch (e) {
-                // Any error from the attempt to verify the session can be handled here
-                console.error('Error verifying session', e)
-              }
-            }
-
-            if (!determinedStartingFirstFactor) {
-              return null
-            }
-
-            return (
-              <div>
-                <p>Enter verification code sent to {determinedStartingFirstFactor.safeIdentifier || ''}</p>
-                <input type="number" name="code" onChange={(e) => setCode(e.target.value)} />
-                <button onClick={async () => handleVerificationAttempt()}>Complete</button>
-                <button onClick={() => onCancel()}>Cancel</button>
-              </div>
-            )
-          }
-          ```
-        </If>
-
-        <If sdk="remix">
-          ```tsx {{ filename: 'components/VerificationComponent.tsx', collapsible: true }}
-          import { useEffect, useRef, useState } from 'react'
-          import { useSession } from '@clerk/remix'
-          import {
             EmailCodeFactor,
             SessionVerificationLevel,
             SessionVerificationResource,

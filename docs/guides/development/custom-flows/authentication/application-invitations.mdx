@@ -39,251 +39,297 @@ For example, if the redirect URL was `https://www.example.com/accept-invitation`
 
   To create a sign-up flow using that invitation token, you need to call the [`signUp.ticket()`](/docs/reference/javascript/sign-up-future#ticket) method, as shown in the following example. The following example also demonstrates how to collect additional user information for the sign-up; you can either remove these fields or adjust them to fit your application.
 
-  ```tsx {{ filename: 'app/accept-invitation/page.tsx', collapsible: true }}
-  'use client'
+  <If notSdk="expo">
+    ```tsx {{ filename: 'app/sign-up/accept-invitation/page.tsx', collapsible: true }}
+    'use client'
 
-  import * as React from 'react'
-  import { useSignUp, useUser } from '@clerk/nextjs'
-  import { useRouter } from 'next/navigation'
+    import * as React from 'react'
+    import { useSignUp, useUser } from '@clerk/nextjs'
+    import { useRouter, useSearchParams } from 'next/navigation'
 
-  export default function Page() {
-    const { isSignedIn, user } = useUser()
-    const { signUp, errors, fetchStatus } = useSignUp()
-    const router = useRouter()
+    export default function Page() {
+      const { isSignedIn } = useUser()
+      const { signUp, errors, fetchStatus } = useSignUp()
+      const router = useRouter()
+      const searchParams = useSearchParams()
 
-    const handleSubmit = async (formData: FormData) => {
-      const firstName = formData.get('firstName') as string
-      const lastName = formData.get('lastName') as string
-      const password = formData.get('password') as string
+      // Handle signed-in users visiting this page, or sign-up already complete (e.g. after refresh)
+      React.useEffect(() => {
+        if (isSignedIn || signUp.status === 'complete') {
+          router.push('/')
+        }
+      }, [isSignedIn, signUp.status, router])
 
-      const { error } = await signUp.ticket({
-        firstName,
-        lastName,
-        password,
-      })
-      if (error) {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        console.error(JSON.stringify(error, null, 2))
-        return
+      // Get the ticket from the query params
+      const ticket = searchParams.get('__clerk_ticket')
+
+      // If there is no invitation ticket, restrict access to this page
+      if (!ticket) {
+        return <p>No invitation ticket found.</p>
       }
 
-      if (signUp.status === 'complete') {
-        await signUp.finalize({
-          navigate: ({ session, decorateUrl }) => {
-            if (session?.currentTask) {
-              // Handle pending session tasks
-              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-              console.log(session?.currentTask)
-              return
-            }
+      const handleSubmit = async (formData: FormData) => {
+        // Optionally, collect additional fields that your app requires
+        const firstName = formData.get('firstName') as string
+        const lastName = formData.get('lastName') as string
 
-            const url = decorateUrl('/')
-            if (url.startsWith('http')) {
-              window.location.href = url
-            } else {
-              router.push(url)
-            }
-          },
+        const { error } = await signUp.ticket({
+          firstName,
+          lastName,
+          ticket,
         })
-      } else {
-        // Check why the sign-up is not complete
-        console.error('Sign-up attempt not complete:', signUp)
+        if (error) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          console.error(JSON.stringify(error, null, 2))
+          return
+        }
+
+        if (signUp.status === 'complete') {
+          await signUp.finalize({
+            navigate: ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else {
+          // Check why the sign-up is not complete
+          console.error('Sign-up attempt not complete:', signUp)
+        }
       }
-    }
 
-    if (signUp.status === 'complete' || isSignedIn) {
-      return null
-    }
+      return (
+        <>
+          <h1>Sign up</h1>
+          <form action={handleSubmit}>
+            <div>
+              <label htmlFor="firstName">Enter first name</label>
+              <input id="firstName" type="text" name="firstName" />
+              {errors.fields.firstName && <p>{errors.fields.firstName.message}</p>}
+            </div>
+            <div>
+              <label htmlFor="lastName">Enter last name</label>
+              <input id="lastName" type="text" name="lastName" />
+              {errors.fields.lastName && <p>{errors.fields.lastName.message}</p>}
+            </div>
+            <div>
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Next
+              </button>
+            </div>
+          </form>
 
-    return (
-      <>
-        <h1>Sign up</h1>
-        <form action={handleSubmit}>
-          <div>
-            <label htmlFor="firstName">Enter first name</label>
-            <input id="firstName" type="text" name="firstName" />
-            {errors.fields.firstName && <p>{errors.fields.firstName.message}</p>}
-          </div>
-          <div>
-            <label htmlFor="lastName">Enter last name</label>
-            <input id="lastName" type="text" name="lastName" />
-            {errors.fields.lastName && <p>{errors.fields.lastName.message}</p>}
-          </div>
-          <div>
-            <label htmlFor="password">Enter password</label>
-            <input id="password" type="password" name="password" />
-            {errors.fields.password && <p>{errors.fields.password.message}</p>}
-          </div>
+          {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+          {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+
+          {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
           <div id="clerk-captcha" />
-          <div>
-            <button type="submit" disabled={fetchStatus === 'fetching'}>
-              Next
-            </button>
-          </div>
-        </form>
-      </>
-    )
-  }
-  ```
-</If>
+        </>
+      )
+    }
+    ```
+  </If>
 
-<If sdk="expo">
-  ```tsx {{ filename: 'app/(auth)/accept-invitation.tsx', collapsible: true }}
-  import { ThemedText } from '@/components/themed-text'
-  import { ThemedView } from '@/components/themed-view'
-  import { Colors } from '@/constants/theme'
-  import { useColorScheme } from '@/hooks/use-color-scheme'
-  import { useAuth, useSignUp } from '@clerk/expo'
-  import { type Href, useRouter } from 'expo-router'
-  import React from 'react'
-  import { Pressable, StyleSheet, TextInput, View } from 'react-native'
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/(auth)/accept-invitation.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useSignUp, useUser } from '@clerk/expo'
+    import { type Href, Link, useRouter, useLocalSearchParams } from 'expo-router'
+    import React from 'react'
+    import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
-  export default function Page() {
-    const { isSignedIn } = useAuth()
-    const { signUp, errors, fetchStatus } = useSignUp()
-    const router = useRouter()
-    const colorScheme = useColorScheme() ?? 'light'
-    const themeColors = Colors[colorScheme]
+    export default function Page() {
+      const { isSignedIn } = useUser()
+      const { signUp, errors, fetchStatus } = useSignUp()
+      const router = useRouter()
+      // Get the ticket from the query params
+      const { __clerk_ticket: ticket } = useLocalSearchParams<{ __clerk_ticket?: string }>()
 
-    const [firstName, setFirstName] = React.useState('')
-    const [lastName, setLastName] = React.useState('')
+      // Optionally, collect additional fields that your app requires
+      const [firstName, setFirstName] = React.useState('')
+      const [lastName, setLastName] = React.useState('')
 
-    const handleSubmit = async () => {
-      const { error } = await signUp.ticket({
-        firstName,
-        lastName,
-      })
-      if (error) {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        console.error(JSON.stringify(error, null, 2))
-        return
+      // Handle signed-in users visiting this page, or sign-up already complete (e.g. after refresh)
+      React.useEffect(() => {
+        if (isSignedIn || signUp.status === 'complete') {
+          router.push('/')
+        }
+      }, [isSignedIn, signUp.status, router])
+
+      // If there is no invitation ticket, restrict access to this page
+      if (!ticket) {
+        return (
+          <ThemedView style={styles.container}>
+            <ThemedText type="title" style={styles.title}>
+              No invitation ticket found.
+            </ThemedText>
+            <Link href="/">
+              <ThemedText type="link">Go home</ThemedText>
+            </Link>
+          </ThemedView>
+        )
       }
 
-      if (signUp.status === 'complete') {
-        await signUp.finalize({
-          navigate: ({ session, decorateUrl }) => {
-            if (session?.currentTask) {
-              // Handle pending session tasks
-              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-              console.log(session?.currentTask)
-              return
-            }
-
-            const url = decorateUrl('/')
-            if (url.startsWith('http')) {
-              window.location.href = url
-            } else {
-              router.push(url as Href)
-            }
-          },
+      const handleSubmit = async () => {
+        const { error } = await signUp.ticket({
+          firstName,
+          lastName,
+          ticket,
         })
-      } else {
-        // Check why the sign-up is not complete
-        console.error('Sign-up attempt not complete:', signUp)
+        if (error) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          console.error(JSON.stringify(error, null, 2))
+          return
+        }
+
+        if (signUp.status === 'complete') {
+          await signUp.finalize({
+            navigate: ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url as Href)
+              }
+            },
+          })
+        } else {
+          // Check why the sign-up is not complete
+          console.error('Sign-up attempt not complete:', signUp)
+        }
       }
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Sign up
+          </ThemedText>
+
+          <ThemedText style={styles.label}>First name</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={firstName}
+            placeholder="Enter first name"
+            placeholderTextColor="#666666"
+            onChangeText={setFirstName}
+            autoCapitalize="words"
+          />
+          {errors.fields.firstName && (
+            <ThemedText style={styles.error}>{errors.fields.firstName.message}</ThemedText>
+          )}
+
+          <ThemedText style={styles.label}>Last name</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={lastName}
+            placeholder="Enter last name"
+            placeholderTextColor="#666666"
+            onChangeText={setLastName}
+            autoCapitalize="words"
+          />
+          {errors.fields.lastName && (
+            <ThemedText style={styles.error}>{errors.fields.lastName.message}</ThemedText>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              (!firstName || !lastName || fetchStatus === 'fetching') && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleSubmit}
+            disabled={!firstName || !lastName || fetchStatus === 'fetching'}
+          >
+            <ThemedText style={styles.buttonText}>Next</ThemedText>
+          </Pressable>
+
+          {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+          {errors && <ThemedText style={styles.debug}>{JSON.stringify(errors, null, 2)}</ThemedText>}
+
+          {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+          <View nativeID="clerk-captcha" />
+        </ThemedView>
+      )
     }
 
-    if (signUp.status === 'complete' || isSignedIn) {
-      return null
-    }
-
-    return (
-      <ThemedView style={styles.container}>
-        <ThemedText type="title" style={styles.title}>
-          Sign up
-        </ThemedText>
-        <ThemedText style={styles.label}>Enter first name</ThemedText>
-        <TextInput
-          style={[
-            styles.input,
-            { backgroundColor: themeColors.background, borderColor: themeColors.icon },
-          ]}
-          value={firstName}
-          placeholder="Enter first name"
-          placeholderTextColor={themeColors.icon}
-          onChangeText={(firstName) => setFirstName(firstName)}
-        />
-        {errors.fields.firstName && (
-          <ThemedText style={styles.error}>{errors.fields.firstName.message}</ThemedText>
-        )}
-        <ThemedText style={styles.label}>Enter last name</ThemedText>
-        <TextInput
-          style={[
-            styles.input,
-            { backgroundColor: themeColors.background, borderColor: themeColors.icon },
-          ]}
-          value={lastName}
-          placeholder="Enter last name"
-          placeholderTextColor={themeColors.icon}
-          onChangeText={(lastName) => setLastName(lastName)}
-        />
-        {errors.fields.lastName && (
-          <ThemedText style={styles.error}>{errors.fields.lastName.message}</ThemedText>
-        )}
-
-        {errors.fields.password && (
-          <ThemedText style={styles.error}>{errors.fields.password.message}</ThemedText>
-        )}
-        <View nativeID="clerk-captcha" />
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            fetchStatus === 'fetching' && styles.buttonDisabled,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={handleSubmit}
-          disabled={fetchStatus === 'fetching'}
-        >
-          <ThemedText style={styles.buttonText}>Next</ThemedText>
-        </Pressable>
-      </ThemedView>
-    )
-  }
-
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      padding: 20,
-      gap: 12,
-    },
-    title: {
-      marginBottom: 8,
-    },
-    label: {
-      fontWeight: '600',
-      fontSize: 14,
-    },
-    input: {
-      borderWidth: 1,
-      borderRadius: 8,
-      padding: 12,
-      fontSize: 16,
-    },
-    button: {
-      backgroundColor: '#0a7ea4',
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    buttonPressed: {
-      opacity: 0.7,
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-    buttonText: {
-      color: '#fff',
-      fontWeight: '600',
-    },
-    error: {
-      color: '#d32f2f',
-      fontSize: 12,
-      marginTop: -8,
-    },
-  })
-  ```
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 12,
+      },
+      title: {
+        marginBottom: 8,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      linkContainer: {
+        flexDirection: 'row',
+        gap: 4,
+        marginTop: 12,
+        alignItems: 'center',
+      },
+      error: {
+        color: '#d32f2f',
+        fontSize: 12,
+        marginTop: -8,
+      },
+      debug: {
+        fontSize: 10,
+        opacity: 0.5,
+        marginTop: 8,
+      },
+      captchaContainer: {
+        minHeight: 1,
+      },
+    })
+    ```
+  </If>
 </If>
 
 <If sdk="ios">

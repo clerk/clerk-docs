@@ -214,7 +214,6 @@ async function main() {
       controlled: args.includes('--controlled'),
       skipApiErrors: args.includes('--skip-api-errors'),
       skipGit: args.includes('--skip-git'),
-      skipWriteDist: args.includes('--skip-write-dist'),
     },
   })
 
@@ -1273,11 +1272,6 @@ ${yaml.stringify({
       console.info('✓ Removing .ignored_dist folder')
       await fs.rm(`.ignored_dist`, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
-  } else if (config.flags.skipWriteDist) {
-    // The build still writes files to a temp dir (created in createConfig) as a
-    // side effect, so we clean it up here. Skipping those writes entirely would
-    // require threading the flag through every writeDistFile call.
-    await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   } else if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })

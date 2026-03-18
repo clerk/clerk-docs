@@ -257,6 +257,13 @@ function isDefinedOutsideRepo(url: string): boolean {
   return DEFINED_OUTSIDE_REPO.includes(url)
 }
 
+/**
+ * Matches any URL that starts with /docs/core- (e.g. /docs/core-2/, /docs/core-2/some/guide).
+ */
+function isCoreDocsDestination(url: string): boolean {
+  return url.startsWith('/docs/core-')
+}
+
 async function checkRedirects(): Promise<void> {
   console.log('🔎 Loading directory and redirects...')
 
@@ -334,6 +341,11 @@ async function checkRedirects(): Promise<void> {
 
     // Skip destinations that are valid but defined outside this repo
     if (isDefinedOutsideRepo(destination)) {
+      continue
+    }
+
+    // Skip validation for `/docs/core-*/[[...slug]]` destinations (pages exist but are not in the directory)
+    if (isCoreDocsDestination(destination)) {
       continue
     }
 

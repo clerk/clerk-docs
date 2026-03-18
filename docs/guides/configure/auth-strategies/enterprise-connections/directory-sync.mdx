@@ -1,0 +1,96 @@
+---
+title: Directory Sync (SCIM)
+description: Learn how to use Directory Sync (SCIM) to automatically provision and deprovision users from your identity provider.
+---
+
+> [!WARNING]
+> Directory Sync is currently in beta. Please email [team-orgs@clerk.dev](mailto:team-orgs@clerk.dev) to enroll in the beta.
+
+Directory Sync allows you to automatically provision and deprovision users in your Clerk application by connecting it to your organization's directory service via the SCIM protocol. When Directory Sync is enabled, changes made in your identity provider (IdP) — such as creating, updating, or removing users — are automatically reflected in Clerk.
+
+This is especially useful for organizations that manage large user bases through an IdP like Okta or Microsoft Entra ID (formerly Azure AD), since it eliminates the need to manually manage user accounts across multiple systems.
+
+## How Directory Sync works
+
+Once configured, your IdP pushes user changes to Clerk using the SCIM 2.0 protocol. Clerk acts as the SCIM service provider and handles the following operations:
+
+- **Create**: When a user is assigned to the app in your IdP, Clerk automatically creates a corresponding user account. A `user.created` webhook event is fired.
+- **Update**: When common user attributes (such as name or email) are updated in the IdP, Clerk syncs those changes automatically. A `user.updated` webhook event is fired.
+- **Delete / Disable**: When a user is removed or deactivated in the IdP, Clerk disables the corresponding Clerk user and immediately revokes all of their active sessions.
+
+Directory Sync works in conjunction with your existing enterprise SSO connection. You must have a SAML or OIDC enterprise connection set up before enabling Directory Sync.
+
+> [!NOTE]
+> Phase 1 of Directory Sync supports user provisioning and deprovisioning only. Group syncing and custom attribute mapping are not yet supported.
+
+### Directory Sync vs. JIT Provisioning
+
+[Just-in-Time (JIT) Provisioning](/docs/guides/configure/auth-strategies/enterprise-connections/jit-provisioning) creates user accounts on first sign-in. Directory Sync, by contrast, proactively keeps your Clerk user base in sync with your IdP — users are created before they ever sign in, and removed as soon as they're deprovisioned in the IdP, without requiring a sign-in event to trigger the change.
+
+For organizations that require immediate deprovisioning (e.g., when an employee leaves), Directory Sync is the recommended approach.
+
+## Enable and configure Directory Sync
+
+Directory Sync is configured per enterprise connection. To set it up:
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+1. Select the enterprise connection you want to enable Directory Sync for.
+1. Select the **Directory Sync** tab.
+1. Toggle on **Enable Directory Sync**. Clerk will generate a **SCIM base URL** and a **Bearer token**. Save these values since you'll need to provide them to your IdP.
+
+## Connect your identity provider
+
+Once Directory Sync is enabled in Clerk, configure your IdP to point to Clerk's SCIM endpoint.
+
+### Okta
+
+1. In the Okta admin dashboard, navigate to your enterprise app's **Provisioning** tab.
+1. Select **Configure API Integration** and enable the **Enable API integration** option.
+1. Paste the **SCIM base URL** from Clerk into the **SCIM connector base URL** field.
+1. Set the **Unique identifier field for users** to `userName`.
+1. Enter the **Bearer token** from Clerk into the **API Token** field.
+1. Select **Test API Credentials** to verify the connection, then select **Save**.
+1. Under **To App**, enable the operations you want Okta to push to Clerk: **Create Users**, **Update User Attributes**, and **Deactivate Users**.
+1. Select **Save**.
+
+### Microsoft Entra ID
+
+1. In the Azure portal, navigate to your enterprise application and select **Provisioning**.
+1. Set **Provisioning Mode** to **Automatic**.
+1. In the **Admin Credentials** section, paste the **SCIM base URL** from Clerk into the **Tenant URL** field.
+1. Paste the **Bearer token** from Clerk into the **Secret Token** field.
+1. Select **Test Connection** to verify, then select **Save**.
+1. Expand the **Mappings** section and confirm that attribute mappings are configured for `userName`, `name.givenName`, `name.familyName`, and `active`.
+1. Under **Settings**, set the **Provisioning Status** to **On** and select **Save**.
+
+## Synced user attributes
+
+The following user attributes are synced from your IdP to Clerk via SCIM:
+
+| SCIM attribute | Clerk field |
+| --- | --- |
+| `id` | External SCIM ID |
+| `userName` | Username / primary identifier |
+| `emails[0].value` | Email address |
+| `name.givenName` | First name |
+| `name.familyName` | Last name |
+| `active` | User enabled/disabled state |
+
+> [!NOTE]
+> Attributes managed by Directory Sync are read-only in Clerk — they cannot be edited from the Clerk Dashboard or by the user in `<UserProfile />`. Changes must be made in the IdP and will sync automatically.
+
+## View directory users
+
+The **Directory users** tab on your connection shows every user that has been provisioned through Directory Sync. For each user you can see their current status (**Active** or **Deactivated**) and when they were last synced from the IdP. Selecting a user takes you to their user page.
+
+This is useful as a first debugging step. If a user isn't appearing in your app after being assigned in the IdP, check here to confirm they were actually provisioned and that their status is **Active**.
+
+## Debug with directory events
+
+For more detailed debugging, SCIM activity is logged in the [**Events**](https://dashboard.clerk.com/~/events) tab of the Clerk Dashboard alongside all other application events. Filter by the following event types to isolate Directory Sync activity:
+
+- `scim.user.created` — a user was provisioned from the IdP
+- `scim.user.patched` — a user's attributes were updated from the IdP
+- `scim.user.deleted` — a user was deprovisioned from the IdP
+
+Selecting an event shows its full details: event ID, timestamp, trace ID, source (for example, `scim-gateway`), and the complete event payload including the data received from the IdP. This is helpful for verifying exactly what your IdP sent. For example, confirming that the right attributes were included in a `scim.user.patched` event or investigating why a user wasn't created as expected.

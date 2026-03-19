@@ -64,6 +64,7 @@ type BuildConfigOptions = {
     controlled?: boolean
     skipGit?: boolean
     skipApiErrors?: boolean
+    silenceTypedocErrors?: boolean
   }
 }
 
@@ -194,6 +195,7 @@ export async function createConfig(config: BuildConfigOptions) {
         controlled: config.flags?.controlled ?? false,
         skipGit: config.flags?.skipGit ?? false,
         skipApiErrors: config.flags?.skipApiErrors ?? false,
+        silenceTypedocErrors: config.flags?.silenceTypedocErrors ?? false,
       },
     }
   }

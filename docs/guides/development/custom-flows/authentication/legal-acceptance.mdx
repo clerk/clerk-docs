@@ -3,7 +3,18 @@ title: Build a custom flow for handling legal acceptance
 description: Learn how to use the Clerk API to build a custom user interface for handling legal acceptance.
 ---
 
-<Include src="_partials/custom-flows-callout" />
+<If sdk={["nextjs", "react", "expo", "js-frontend", "react-router", "tanstack-react-start"]}>
+  > [!IMPORTANT]
+  > This guide applies to the following Clerk SDKs:
+  >
+  > - `@clerk/react` v6 or higher
+  > - `@clerk/nextjs` v7 or higher
+  > - `@clerk/expo` v3 or higher
+  > - `@clerk/react-router` v3 or higher
+  > - `@clerk/tanstack-react-start` v0.26.0 or higher
+  >
+  > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/legal-acceptance).
+</If>
 
 When the legal acceptance feature is enabled, users are required to agree to your Terms of Service and Privacy Policy before they can sign up to your application.
 
@@ -17,608 +28,602 @@ By default, the legal acceptance feature is disabled. To enable it, navigate to 
 
 ## Add legal acceptance to your sign-up flow
 
-<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
-  The following example adds the legal acceptance logic to the [Email and password custom flow](/docs/guides/development/custom-flows/authentication/email-password), but you can apply the same logic to any custom flow.
+To support legal acceptance in your sign-up custom flow, pass the `legalAccepted` boolean to whichever method is initializing the sign-up process (e.g., [`SignUp.password()`](/docs/reference/objects/sign-up-future#password), [`SignUp.create()`](/docs/reference/objects/sign-up-future#create), etc.). Because `legalAccepted` is tracked through a simple boolean, this means that you can add any kind of "legal acceptance" fields to your sign-up form that you want - you are not limited to only "Terms of Service" or "Privacy Policy" fields.
 
-  <If notSdk="expo">
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+**This example uses the [email and password sign-up custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.**
 
-    To support legal acceptance, you need to add a checkbox to your sign-up form, capture the checkbox value, and pass it to the [`SignUp.create()`](/docs/reference/javascript/sign-up#create) method.
+{/* TODO(Docs): Keep examples in sync with the email and password sign-up custom flow guide. */}
 
-    ```tsx {{ filename: 'app/sign-up/[[...sign-up]]/page.tsx', mark: [12, 28, [129, 141]], collapsible: true }}
+<If notSdk={["ios", "android", "expo"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
+
+  ```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
     'use client'
 
-    import * as React from 'react'
-    import { useSignUp } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
+    import { useAuth, useSignUp } from '@clerk/nextjs'
     import Link from 'next/link'
+    import { useRouter } from 'next/navigation'
 
     export default function Page() {
-      const { isLoaded, signUp, setActive } = useSignUp()
-      const [emailAddress, setEmailAddress] = React.useState('')
-      const [password, setPassword] = React.useState('')
-      const [legalAccepted, setLegalAccepted] = React.useState(false)
-      const [verifying, setVerifying] = React.useState(false)
-      const [code, setCode] = React.useState('')
+      const { signUp, errors, fetchStatus } = useSignUp()
+      const { isSignedIn } = useAuth()
       const router = useRouter()
 
-      // Handle submission of the sign-up form
-      const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
+      const handleSubmit = async (formData: FormData) => {
+        const emailAddress = formData.get('email') as string
+        const password = formData.get('password') as string
+  +     const legalAccepted = formData.get('legalAccepted') as boolean
 
-        if (!isLoaded) return <div>Loading...</div>
-
-        // Start the sign-up process using the email and password provided
-        try {
-          await signUp.create({
-            emailAddress,
-            password,
-            legalAccepted,
-          })
-
-          // Send the user an email with the verification code
-          await signUp.prepareEmailAddressVerification({
-            strategy: 'email_code',
-          })
-
-          // Set 'verifying' true to display second form
-          // and capture the code
-          setVerifying(true)
-        } catch (err: any) {
+        const { error } = await signUp.password({
+          emailAddress,
+          password,
+  +       legalAccepted,
+        })
+        if (error) {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
+          console.error(JSON.stringify(error, null, 2))
+          return
+        }
+
+        if (!error) await signUp.verifications.sendEmailCode()
+      }
+
+      const handleVerify = async (formData: FormData) => {
+        const code = formData.get('code') as string
+
+        await signUp.verifications.verifyEmailCode({
+          code,
+        })
+        if (signUp.status === 'complete') {
+          await signUp.finalize({
+            // Redirect the user to the home page after signing up
+            navigate: ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else {
+          // Check why the sign-up is not complete
+          console.error('Sign-up attempt not complete:', signUp)
         }
       }
 
-      // Handle the submission of the verification form
-      const handleVerify = async (e: React.FormEvent) => {
-        e.preventDefault()
-
-        if (!isLoaded) return <div>Loading...</div>
-
-        try {
-          // Use the code the user provided to attempt verification
-          const signUpAttempt = await signUp.attemptEmailAddressVerification({
-            code,
-          })
-
-          // If verification was completed, set the session to active
-          // and redirect the user
-          if (signUpAttempt.status === 'complete') {
-            await setActive({
-              session: signUpAttempt.createdSessionId,
-              navigate: async ({ session }) => {
-                if (session?.currentTask) {
-                  // Check for session tasks and navigate to custom UI to help users resolve them
-                  // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-                  console.log(session?.currentTask)
-                  router.push('/sign-up/tasks')
-                  return
-                }
-
-                router.push('/')
-              },
-            })
-          } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error('Sign-up attempt not complete:', signUpAttempt)
-            console.error('Sign-up attempt status:', signUpAttempt.status)
-          }
-        } catch (err: any) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
-        }
+      if (signUp.status === 'complete' || isSignedIn) {
+        return null
       }
 
-      // Display the verification form to capture the code
-      if (verifying) {
+      if (
+        signUp.status === 'missing_requirements' &&
+        signUp.unverifiedFields.includes('email_address') &&
+        signUp.missingFields.length === 0
+      ) {
         return (
           <>
-            <h1>Verify your email</h1>
-            <form onSubmit={handleVerify}>
-              <label id="code">Enter your verification code</label>
-              <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
-              <button type="submit">Verify</button>
+            <h1>Verify your account</h1>
+            <form action={handleVerify}>
+              <div>
+                <label htmlFor="code">Code</label>
+                <input id="code" name="code" type="text" />
+              </div>
+              {errors.fields.code && <p>{errors.fields.code.message}</p>}
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Verify
+              </button>
             </form>
+            <button onClick={() => signUp.verifications.sendEmailCode()}>I need a new code</button>
           </>
         )
       }
 
-      // Display the initial sign-up form to capture the email and password
       return (
         <>
           <h1>Sign up</h1>
-          <form onSubmit={handleSubmit}>
+          <form action={handleSubmit}>
             <div>
               <label htmlFor="email">Enter email address</label>
-              <input
-                id="email"
-                type="email"
-                name="email"
-                value={emailAddress}
-                onChange={(e) => setEmailAddress(e.target.value)}
-              />
+              <input id="email" type="email" name="email" />
+              {errors.fields.emailAddress && <p>{errors.fields.emailAddress.message}</p>}
             </div>
-
             <div>
               <label htmlFor="password">Enter password</label>
-              <input
-                id="password"
-                type="password"
-                name="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <input id="password" type="password" name="password" />
+              {errors.fields.password && <p>{errors.fields.password.message}</p>}
             </div>
-
-            <div>
-              <label htmlFor="legalAccepted">
-                I accept the <Link href="/terms">Terms of Service</Link> and{' '}
-                <Link href="/privacy">Privacy Policy</Link>
-              </label>
-              <input
-                id="legalAccepted"
-                type="checkbox"
-                name="legalAccepted"
-                checked={legalAccepted}
-                onChange={(e) => setLegalAccepted(e.target.checked)}
-              />
-            </div>
-
-            {/* Required for sign-up flows
-            Clerk's bot sign-up protection is enabled by default */}
-            <div id="clerk-captcha" />
-
-            <div>
-              <button type="submit">Continue</button>
-            </div>
+  +         <div>
+  +           <label htmlFor="legalAccepted">
+  +             I accept the <Link href="/terms">Terms of Service</Link> and{' '}
+  +             <Link href="/privacy">Privacy Policy</Link>
+  +           </label>
+  +           <input id="legalAccepted" type="checkbox" name="legalAccepted" defaultChecked={false} />
+  +         </div>
+            <button type="submit" disabled={fetchStatus === 'fetching'}>
+              Continue
+            </button>
           </form>
+          {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+          {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+
+          {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+          <div id="clerk-captcha" />
         </>
       )
     }
-    ```
-  </If>
+  ```
+</If>
 
-  <If sdk="expo">
-    This example uses `expo-checkbox` to create the checkbox. Install it with the following command:
+<If sdk="expo">
+  ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useAuth, useSignUp } from '@clerk/expo'
+    import { type Href, Link, useRouter } from 'expo-router'
+    import React from 'react'
+    import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
-    ```npm
-    npm install expo-checkbox
-    ```
+    export default function Page() {
+      const { signUp, errors, fetchStatus } = useSignUp()
+      const { isSignedIn } = useAuth()
+      const router = useRouter()
 
-    Then, update your sign-up page to include the legal acceptance checkbox. The following example uses the [email and password sign-up example](/docs/guides/development/custom-flows/authentication/email-password).
+      const [emailAddress, setEmailAddress] = React.useState('')
+      const [password, setPassword] = React.useState('')
+  +   const [legalAccepted, setLegalAccepted] = React.useState(false)
+      const [code, setCode] = React.useState('')
 
-    ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
-      import { ThemedText } from '@/components/themed-text'
-      import { ThemedView } from '@/components/themed-view'
-      import { useSignUp } from '@clerk/clerk-expo'
-      import { Link, useRouter } from 'expo-router'
-      import * as React from 'react'
-      import { Pressable, StyleSheet, TextInput, View } from 'react-native'
-    + import Checkbox from 'expo-checkbox'
-
-      export default function Page() {
-        const { isLoaded, signUp, setActive } = useSignUp()
-        const router = useRouter()
-
-        const [emailAddress, setEmailAddress] = React.useState('')
-        const [password, setPassword] = React.useState('')
-    +   const [legalAccepted, setLegalAccepted] = React.useState(false)
-        const [pendingVerification, setPendingVerification] = React.useState(false)
-        const [code, setCode] = React.useState('')
-
-        // Handle submission of sign-up form
-        const onSignUpPress = async () => {
-          if (!isLoaded) return
-
-          // Start sign-up process using email and password provided
-          try {
-            await signUp.create({
-              emailAddress,
-              password,
-    +         legalAccepted,
-            })
-
-            // Send user an email with verification code
-            await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
-
-            // Set 'pendingVerification' to true to display second form
-            // and capture code
-            setPendingVerification(true)
-          } catch (err) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(JSON.stringify(err, null, 2))
-          }
+      const handleSubmit = async () => {
+        const { error } = await signUp.password({
+          emailAddress,
+          password,
+  +       legalAccepted,
+        })
+        if (error) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(error, null, 2))
+          return
         }
 
-        // Handle submission of verification form
-        const onVerifyPress = async () => {
-          if (!isLoaded) return
+        if (!error) await signUp.verifications.sendEmailCode()
+      }
 
-          try {
-            // Use the code the user provided to attempt verification
-            const signUpAttempt = await signUp.attemptEmailAddressVerification({
-              code,
-            })
+      const handleVerify = async () => {
+        await signUp.verifications.verifyEmailCode({
+          code,
+        })
+        if (signUp.status === 'complete') {
+          await signUp.finalize({
+            // Redirect the user to the home page after signing up
+            navigate: ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
 
-            // If verification was completed, set the session to active
-            // and redirect the user
-            if (signUpAttempt.status === 'complete') {
-              await setActive({
-                session: signUpAttempt.createdSessionId,
-                navigate: async ({ session }) => {
-                  if (session?.currentTask) {
-                    // Handle pending session tasks
-                    // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-                    console.log(session?.currentTask)
-                    return
-                  }
-
-                  router.replace('/')
-                },
-              })
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error(JSON.stringify(signUpAttempt, null, 2))
-            }
-          } catch (err) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(JSON.stringify(err, null, 2))
-          }
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url as Href)
+              }
+            },
+          })
+        } else {
+          // Check why the sign-up is not complete
+          console.error('Sign-up attempt not complete:', signUp)
         }
+      }
 
-        if (pendingVerification) {
-          return (
-            <ThemedView style={styles.container}>
-              <ThemedText type="title" style={styles.title}>
-                Verify your email
-              </ThemedText>
-              <ThemedText style={styles.description}>
-                A verification code has been sent to your email.
-              </ThemedText>
-              <TextInput
-                style={styles.input}
-                value={code}
-                placeholder="Enter your verification code"
-                placeholderTextColor="#666666"
-                onChangeText={(code) => setCode(code)}
-                keyboardType="numeric"
-              />
-              <Pressable
-                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-                onPress={onVerifyPress}
-              >
-                <ThemedText style={styles.buttonText}>Verify</ThemedText>
-              </Pressable>
-            </ThemedView>
-          )
-        }
+      if (signUp.status === 'complete' || isSignedIn) {
+        return null
+      }
 
+      if (
+        signUp.status === 'missing_requirements' &&
+        signUp.unverifiedFields.includes('email_address') &&
+        signUp.missingFields.length === 0
+      ) {
         return (
           <ThemedView style={styles.container}>
             <ThemedText type="title" style={styles.title}>
-              Sign up
+              Verify your account
             </ThemedText>
-            <ThemedText style={styles.label}>Email address</ThemedText>
+            <ThemedText style={styles.label}>Code</ThemedText>
             <TextInput
               style={styles.input}
-              autoCapitalize="none"
-              value={emailAddress}
-              placeholder="Enter email"
+              value={code}
+              placeholder="Enter your verification code"
               placeholderTextColor="#666666"
-              onChangeText={(email) => setEmailAddress(email)}
-              keyboardType="email-address"
+              onChangeText={(code) => setCode(code)}
+              keyboardType="numeric"
             />
-            <ThemedText style={styles.label}>Password</ThemedText>
-            <TextInput
-              style={styles.input}
-              value={password}
-              placeholder="Enter password"
-              placeholderTextColor="#666666"
-              secureTextEntry={true}
-              onChangeText={(password) => setPassword(password)}
-            />
-    +       <View style={styles.legalContainer}>
-    +         <Checkbox value={legalAccepted} onValueChange={setLegalAccepted} style={styles.checkbox} />
-    +         <Pressable onPress={() => setLegalAccepted(!legalAccepted)}>
-    +           <ThemedText style={styles.legalText}>
-    +             I accept the{' '}
-    +             <Link href="/terms">
-    +               <ThemedText type="link">Terms of Service</ThemedText>
-    +             </Link>{' '}
-    +             and{' '}
-    +             <Link href="/privacy">
-    +               <ThemedText type="link">Privacy Policy</ThemedText>
-    +             </Link>
-    +           </ThemedText>
-    +         </Pressable>
-    +       </View>
+            {errors.fields.code && (
+              <ThemedText style={styles.error}>{errors.fields.code.message}</ThemedText>
+            )}
             <Pressable
               style={({ pressed }) => [
                 styles.button,
-                (!emailAddress || !password || !legalAccepted) && styles.buttonDisabled,
+                fetchStatus === 'fetching' && styles.buttonDisabled,
                 pressed && styles.buttonPressed,
               ]}
-              onPress={onSignUpPress}
-              disabled={!emailAddress || !password || !legalAccepted}
+              onPress={handleVerify}
+              disabled={fetchStatus === 'fetching'}
             >
-              <ThemedText style={styles.buttonText}>Continue</ThemedText>
+              <ThemedText style={styles.buttonText}>Verify</ThemedText>
             </Pressable>
-            <View style={styles.linkContainer}>
-              <ThemedText>Have an account? </ThemedText>
-              <Link href="/sign-in">
-                <ThemedText type="link">Sign in</ThemedText>
-              </Link>
-            </View>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+              onPress={() => signUp.verifications.sendEmailCode()}
+            >
+              <ThemedText style={styles.secondaryButtonText}>I need a new code</ThemedText>
+            </Pressable>
           </ThemedView>
         )
       }
 
-      const styles = StyleSheet.create({
-        container: {
-          flex: 1,
-          padding: 20,
-          gap: 12,
-        },
-        title: {
-          marginBottom: 8,
-        },
-        description: {
-          fontSize: 14,
-          marginBottom: 16,
-          opacity: 0.8,
-        },
-        label: {
-          fontWeight: '600',
-          fontSize: 14,
-        },
-        input: {
-          borderWidth: 1,
-          borderColor: '#ccc',
-          borderRadius: 8,
-          padding: 12,
-          fontSize: 16,
-          backgroundColor: '#fff',
-        },
-        legalContainer: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginVertical: 8,
-        },
-        checkbox: {
-          marginRight: 8,
-        },
-        legalText: {
-          flex: 1,
-        },
-        button: {
-          backgroundColor: '#0a7ea4',
-          paddingVertical: 12,
-          paddingHorizontal: 24,
-          borderRadius: 8,
-          alignItems: 'center',
-          marginTop: 8,
-        },
-        buttonPressed: {
-          opacity: 0.7,
-        },
-        buttonDisabled: {
-          opacity: 0.5,
-        },
-        buttonText: {
-          color: '#fff',
-          fontWeight: '600',
-        },
-        linkContainer: {
-          flexDirection: 'row',
-          gap: 4,
-          marginTop: 12,
-          alignItems: 'center',
-        },
-      })
-    ```
-  </If>
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Sign up
+          </ThemedText>
+          <ThemedText style={styles.label}>Enter email address</ThemedText>
+          <TextInput
+            style={styles.input}
+            autoCapitalize="none"
+            value={emailAddress}
+            placeholder="Enter email"
+            placeholderTextColor="#666666"
+            onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+            keyboardType="email-address"
+          />
+          {errors.fields.emailAddress && (
+            <ThemedText style={styles.error}>{errors.fields.emailAddress.message}</ThemedText>
+          )}
+          <ThemedText style={styles.label}>Enter password</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={password}
+            placeholder="Enter password"
+            placeholderTextColor="#666666"
+            secureTextEntry
+            onChangeText={(password) => setPassword(password)}
+          />
+          {errors.fields.password && (
+            <ThemedText style={styles.error}>{errors.fields.password.message}</ThemedText>
+          )}
+  +       <Pressable style={styles.legalRow} onPress={() => setLegalAccepted((v) => !v)}>
+  +         <View style={[styles.checkbox, legalAccepted && styles.checkboxChecked]}>
+  +           {legalAccepted && <ThemedText style={styles.checkmark}>✓</ThemedText>}
+  +         </View>
+  +         <View style={styles.legalLabelRow}>
+  +           <ThemedText style={styles.legalLabel}>I accept the </ThemedText>
+  +           <Link href={'/terms' as Href}>
+  +             <ThemedText type="link">Terms of Service</ThemedText>
+  +           </Link>
+  +           <ThemedText style={styles.legalLabel}> and </ThemedText>
+  +           <Link href={'/privacy' as Href}>
+  +             <ThemedText type="link">Privacy Policy</ThemedText>
+  +           </Link>
+  +         </View>
+  +       </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              fetchStatus === 'fetching' && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleSubmit}
+            disabled={fetchStatus === 'fetching'}
+          >
+            <ThemedText style={styles.buttonText}>Continue</ThemedText>
+          </Pressable>
+          {errors && <ThemedText style={styles.debug}>{JSON.stringify(errors, null, 2)}</ThemedText>}
+
+          <View nativeID="clerk-captcha" />
+        </ThemedView>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 12,
+      },
+      title: {
+        marginBottom: 8,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      secondaryButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      secondaryButtonText: {
+        color: '#0a7ea4',
+        fontWeight: '600',
+      },
+      legalRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 4,
+      },
+      checkbox: {
+        width: 22,
+        height: 22,
+        borderWidth: 2,
+        borderColor: '#687076',
+        borderRadius: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      checkboxChecked: {
+        backgroundColor: '#0a7ea4',
+        borderColor: '#0a7ea4',
+      },
+      checkmark: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: 'bold',
+      },
+      legalLabelRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        flex: 1,
+      },
+      legalLabel: {
+        fontSize: 14,
+        lineHeight: 20,
+      },
+      error: {
+        color: '#d32f2f',
+        fontSize: 12,
+        marginTop: -8,
+      },
+      debug: {
+        fontSize: 10,
+        opacity: 0.5,
+        marginTop: 8,
+      },
+    })
+  ```
 </If>
 
 <If sdk="ios">
   ```swift {{ filename: 'LegalAcceptanceSignUpView.swift', collapsible: true }}
-      import SwiftUI
-      import ClerkKit
+  import SwiftUI
+  import ClerkKit
 
-      struct LegalAcceptanceSignUpView: View {
-        @Environment(Clerk.self) private var clerk
-        @State private var email = ""
-        @State private var password = ""
-      +    @State private var legalAccepted = false
+  struct LegalAcceptanceSignUpView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var email = ""
+    @State private var password = ""
+  +    @State private var legalAccepted = false
 
-        var body: some View {
-          TextField("Enter email address", text: $email)
-          SecureField("Enter password", text: $password)
-      +      Toggle("I accept the Terms of Service and Privacy Policy", isOn: $legalAccepted)
-          Button("Continue") {
-            Task { await submit(email: email, password: password, legalAccepted: legalAccepted) }
-          }
-        }
+    var body: some View {
+      TextField("Enter email address", text: $email)
+      SecureField("Enter password", text: $password)
+  +      Toggle("I accept the Terms of Service and Privacy Policy", isOn: $legalAccepted)
+      Button("Continue") {
+        Task { await submit(email: email, password: password, legalAccepted: legalAccepted) }
       }
+    }
+  }
 
-      extension LegalAcceptanceSignUpView {
+  extension LegalAcceptanceSignUpView {
 
-        func submit(email: String, password: String, legalAccepted: Bool) async {
-          do {
-            // Include legal acceptance in the sign-up payload
-            let signUp = try await clerk.auth.signUp(
-              emailAddress: email,
-              password: password,
-      +          legalAccepted: legalAccepted
-            )
+    func submit(email: String, password: String, legalAccepted: Bool) async {
+      do {
+        // Include legal acceptance in the sign-up payload
+        let signUp = try await clerk.auth.signUp(
+          emailAddress: email,
+          password: password,
+  +          legalAccepted: legalAccepted
+        )
 
-            dump(signUp.status)
-          } catch {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            dump(error)
-          }
-        }
+        dump(signUp.status)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
       }
+    }
+  }
   ```
 </If>
 
 <If sdk="android">
-  <CodeBlockTabs options={["LegalAcceptanceViewModel.kt", "LegalAcceptanceActivity.kt"]}>
-    ```kotlin {{ filename: 'LegalAcceptanceViewModel.kt', collapsible: true }}
-        import android.util.Log
-        import androidx.lifecycle.ViewModel
-        import androidx.lifecycle.viewModelScope
-        import com.clerk.api.Clerk
-        import com.clerk.api.network.serialization.errorMessage
-        import com.clerk.api.network.serialization.onFailure
-        import com.clerk.api.network.serialization.onSuccess
-        import com.clerk.api.signup.SignUp
-        import kotlinx.coroutines.flow.MutableStateFlow
-        import kotlinx.coroutines.flow.asStateFlow
-        import kotlinx.coroutines.flow.combine
-        import kotlinx.coroutines.flow.launchIn
-        import kotlinx.coroutines.launch
+  ```kotlin {{ filename: 'LegalAcceptanceViewModel.kt', collapsible: true }}
+  import android.util.Log
+  import androidx.lifecycle.ViewModel
+  import androidx.lifecycle.viewModelScope
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.errorMessage
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signup.SignUp
+  import kotlinx.coroutines.flow.MutableStateFlow
+  import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.flow.combine
+  import kotlinx.coroutines.flow.launchIn
+  import kotlinx.coroutines.launch
 
-        class LegalAcceptanceViewModel : ViewModel() {
-            private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
-            val uiState = _uiState.asStateFlow()
+  class LegalAcceptanceViewModel : ViewModel() {
+      private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+      val uiState = _uiState.asStateFlow()
 
-            init {
-                combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-                    _uiState.value = when {
-                        !isInitialized -> UiState.Loading
-                        user != null -> UiState.Authenticated
-                        else -> UiState.SignedOut
-                    }
-                }.launchIn(viewModelScope)
-            }
+      init {
+          combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+              _uiState.value = when {
+                  !isInitialized -> UiState.Loading
+                  user != null -> UiState.Authenticated
+                  else -> UiState.SignedOut
+              }
+          }.launchIn(viewModelScope)
+      }
 
-            fun signUp(email: String, password: String, legalAccepted: Boolean) {
-                viewModelScope.launch {
-                    // Include legal acceptance in the sign-up payload.
-                    Clerk.auth.signUp {
-                        this.email = email
-                        this.password = password
-                        this.legalAccepted = legalAccepted
-                    }.onSuccess {
-                        if (it.status == SignUp.Status.COMPLETE) {
-                            _uiState.value = UiState.Authenticated
-                        } else {
-                            // If the status is not complete, check why. User may need to
-                            // complete further steps, such as email verification.
-                            Log.d("LegalAcceptance", "Sign-up status: ${it.status}")
-                        }
-                    }.onFailure {
-                        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                        // for more info on error handling
-                        Log.e("LegalAcceptance", it.errorMessage, it.throwable)
-                    }
-                }
-            }
+      fun signUp(email: String, password: String, legalAccepted: Boolean) {
+          viewModelScope.launch {
+              // Include legal acceptance in the sign-up payload.
+              Clerk.auth.signUp {
+                  this.email = email
+                  this.password = password
+                  this.legalAccepted = legalAccepted
+              }.onSuccess {
+                  if (it.status == SignUp.Status.COMPLETE) {
+                      _uiState.value = UiState.Authenticated
+                  } else {
+                      // If the status is not complete, check why. User may need to
+                      // complete further steps, such as email verification.
+                      Log.d("LegalAcceptance", "Sign-up status: ${it.status}")
+                  }
+              }.onFailure {
+                  // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                  // for more info on error handling
+                  Log.e("LegalAcceptance", it.errorMessage, it.throwable)
+              }
+          }
+      }
 
-            sealed interface UiState {
-                data object Loading : UiState
+      sealed interface UiState {
+          data object Loading : UiState
 
-                data object SignedOut : UiState
+          data object SignedOut : UiState
 
-                data object Authenticated : UiState
-            }
-        }
-    ```
+          data object Authenticated : UiState
+      }
+  }
+  ```
 
-    ```kotlin {{ filename: 'LegalAcceptanceActivity.kt', collapsible: true }}
-    import android.os.Bundle
-    import androidx.activity.ComponentActivity
-    import androidx.activity.compose.setContent
-    import androidx.activity.viewModels
-    import androidx.compose.foundation.layout.Arrangement
-    import androidx.compose.foundation.layout.Column
-    import androidx.compose.foundation.layout.Row
-    import androidx.compose.foundation.layout.fillMaxSize
-    import androidx.compose.foundation.layout.fillMaxWidth
-    import androidx.compose.foundation.layout.padding
-    import androidx.compose.material3.Button
-    import androidx.compose.material3.Checkbox
-    import androidx.compose.material3.CircularProgressIndicator
-    import androidx.compose.material3.Text
-    import androidx.compose.material3.TextField
-    import androidx.compose.runtime.getValue
-    import androidx.compose.runtime.mutableStateOf
-    import androidx.compose.runtime.remember
-    import androidx.compose.runtime.setValue
-    import androidx.compose.ui.Alignment
-    import androidx.compose.ui.Modifier
-    import androidx.compose.ui.text.input.PasswordVisualTransformation
-    import androidx.compose.ui.unit.dp
-    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+  ```kotlin {{ filename: 'LegalAcceptanceActivity.kt', collapsible: true }}
+  import android.os.Bundle
+  import androidx.activity.ComponentActivity
+  import androidx.activity.compose.setContent
+  import androidx.activity.viewModels
+  import androidx.compose.foundation.layout.Arrangement
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.foundation.layout.Row
+  import androidx.compose.foundation.layout.fillMaxSize
+  import androidx.compose.foundation.layout.fillMaxWidth
+  import androidx.compose.foundation.layout.padding
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.Checkbox
+  import androidx.compose.material3.CircularProgressIndicator
+  import androidx.compose.material3.Text
+  import androidx.compose.material3.TextField
+  import androidx.compose.runtime.getValue
+  import androidx.compose.runtime.mutableStateOf
+  import androidx.compose.runtime.remember
+  import androidx.compose.runtime.setValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.compose.ui.text.input.PasswordVisualTransformation
+  import androidx.compose.ui.unit.dp
+  import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-    class LegalAcceptanceActivity : ComponentActivity() {
-        private val viewModel: LegalAcceptanceViewModel by viewModels()
+  class LegalAcceptanceActivity : ComponentActivity() {
+      private val viewModel: LegalAcceptanceViewModel by viewModels()
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            setContent {
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
-                var email by remember { mutableStateOf("") }
-                var password by remember { mutableStateOf("") }
-                var legalAccepted by remember { mutableStateOf(false) }
+      override fun onCreate(savedInstanceState: Bundle?) {
+          super.onCreate(savedInstanceState)
+          setContent {
+              val state by viewModel.uiState.collectAsStateWithLifecycle()
+              var email by remember { mutableStateOf("") }
+              var password by remember { mutableStateOf("") }
+              var legalAccepted by remember { mutableStateOf(false) }
 
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    when (state) {
-                        LegalAcceptanceViewModel.UiState.Authenticated -> Text("Authenticated")
-                        LegalAcceptanceViewModel.UiState.Loading -> CircularProgressIndicator()
-                        LegalAcceptanceViewModel.UiState.SignedOut -> {
-                            TextField(
-                                value = email,
-                                onValueChange = { email = it },
-                                label = { Text("Email") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            TextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                label = { Text("Password") },
-                                visualTransformation = PasswordVisualTransformation(),
-                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = legalAccepted,
-                                    onCheckedChange = { legalAccepted = it }
-                                )
-                                Text("I accept the Terms of Service and Privacy Policy")
-                            }
-                            Button(
-                                modifier = Modifier.padding(top = 12.dp),
-                                enabled = email.isNotBlank() && password.isNotBlank() && legalAccepted,
-                                onClick = { viewModel.signUp(email, password, legalAccepted) }
-                            ) {
-                                Text("Continue")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    ```
-  </CodeBlockTabs>
-</If>
-
-<If sdk={["js-frontend", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
+              Column(
+                  modifier = Modifier.fillMaxSize().padding(24.dp),
+                  verticalArrangement = Arrangement.Center,
+                  horizontalAlignment = Alignment.CenterHorizontally
+              ) {
+                  when (state) {
+                      LegalAcceptanceViewModel.UiState.Authenticated -> Text("Authenticated")
+                      LegalAcceptanceViewModel.UiState.Loading -> CircularProgressIndicator()
+                      LegalAcceptanceViewModel.UiState.SignedOut -> {
+                          TextField(
+                              value = email,
+                              onValueChange = { email = it },
+                              label = { Text("Email") },
+                              modifier = Modifier.fillMaxWidth()
+                          )
+                          TextField(
+                              value = password,
+                              onValueChange = { password = it },
+                              label = { Text("Password") },
+                              visualTransformation = PasswordVisualTransformation(),
+                              modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                          )
+                          Row(
+                              modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                              verticalAlignment = Alignment.CenterVertically
+                          ) {
+                              Checkbox(
+                                  checked = legalAccepted,
+                                  onCheckedChange = { legalAccepted = it }
+                              )
+                              Text("I accept the Terms of Service and Privacy Policy")
+                          }
+                          Button(
+                              modifier = Modifier.padding(top = 12.dp),
+                              enabled = email.isNotBlank() && password.isNotBlank() && legalAccepted,
+                              onClick = { viewModel.signUp(email, password, legalAccepted) }
+                          ) {
+                              Text("Continue")
+                          }
+                      }
+                  }
+              }
+          }
+      }
+  }
+  ```
 </If>

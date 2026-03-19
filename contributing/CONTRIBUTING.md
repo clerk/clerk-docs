@@ -43,7 +43,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<TutorialHero />`](#tutorialhero-)
     - [`<Cards>`](#cards)
     - [`<Properties>`](#properties-1)
-    - [`<ComparisonTable>`](#comparisontable)
+    - [Tables](#tables)
     - [`<Include />`](#include-)
     - [`<Typedoc />`](#typedoc-)
     - [`<If />`](#if-)
@@ -1301,71 +1301,49 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 </details>
 
-### `<ComparisonTable>`
+### Tables
 
-The `<ComparisonTable>` component is used to create feature comparison tables with styled checkmarks, X marks, and section headers. The table header stays sticky when scrolling the page.
-
-#### Related Components
-
-| Component                | Description                                                          |
-| ------------------------ | -------------------------------------------------------------------- |
-| `<ComparisonTable>`      | Wrapper component for the comparison table with sticky header        |
-| `<CompareSection>`       | Creates a section header row that spans all columns                  |
-| `<CompareYes />`         | Displays a green checkmark (✓). Use `inline` prop for inline display |
-| `<CompareNo />`          | Displays a red X (✗). Use `inline` prop for inline display           |
-| `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children       |
-| `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children         |
-
-#### Example
+Use standard markdown pipe tables. All tables are automatically styled with a bordered container, gray header row, sticky header on desktop, and a scroll fade indicator on mobile.
 
 ```mdx
-<ComparisonTable>
-  <thead>
-    <tr>
-      <th>Feature</th>
-      <th>Basic</th>
-      <th>Pro</th>
-    </tr>
-  </thead>
-  <tbody>
-    <CompareSection>Authentication</CompareSection>
-    <tr>
-      <td>Email/Password</td>
-      <td>
-        <CompareYes />
-      </td>
-      <td>
-        <CompareYes />
-      </td>
-    </tr>
-    <tr>
-      <td>Social Login</td>
-      <td>
-        <CompareNo />
-      </td>
-      <td>
-        <CompareYes />
-      </td>
-    </tr>
-    <tr>
-      <td>MFA</td>
-      <td>
-        <ComparePartial>Limited</ComparePartial>
-      </td>
-      <td>
-        <CompareYes />
-      </td>
-    </tr>
-  </tbody>
-</ComparisonTable>
+| Name     | Type     | Description                  |
+| -------- | -------- | ---------------------------- |
+| `userId` | `string` | The user's unique identifier |
+| `email`  | `string` | The user's primary email     |
 ```
 
-#### Inline Usage
+#### Column alignment
 
-Use the `inline` prop on `<CompareYes />` and `<CompareNo />` when you need them inline with text:
+Use [GFM alignment syntax](https://github.github.com/gfm/#tables-extension-) in the separator row to control horizontal text alignment:
+
+- `:---` or `---` — left-aligned (default)
+- `:---:` — centered
+- `---:` — right-aligned
 
 ```mdx
-The feature was removed (was <CompareYes inline />, now <CompareNo inline />).
+| Feature        | Basic | Pro |
+| -------------- | :---: | :-: |
+| Email/Password |  Yes  | Yes |
+| Social Login   |  No   | Yes |
+```
+
+#### Comparison markers
+
+Use these components inside table cells to display styled comparison icons.
+
+| Component                | Description                                                    |
+| ------------------------ | -------------------------------------------------------------- |
+| `<CompareYes />`         | Displays a green checkmark (✓)                                 |
+| `<CompareNo />`          | Displays a red X (✗)                                           |
+| `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children |
+| `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children   |
+
+```mdx
+| Feature        |                  Basic                   |      Pro       |
+| -------------- | :--------------------------------------: | :------------: |
+| Email/Password |              <CompareYes />              | <CompareYes /> |
+| Social Login   |              <CompareNo />               | <CompareYes /> |
+| MFA            | <ComparePartial>Limited</ComparePartial> | <CompareYes /> |
 ```
 
 ### `<Include />`
@@ -1429,7 +1407,7 @@ The `<Typedoc />` component is used to inject the contents of an MDX file from t
 For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
-<Typedoc src="clerk-react/use-auth" />
+<Typedoc src="react/use-auth" />
 ```
 
 ### `<If />`

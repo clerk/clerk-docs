@@ -64,6 +64,7 @@ interface ProtectedRoute {
 const PROTECTED_ROUTES = [
   '/docs/api/instance_keys',
   '/docs/core-1/[[...slug]]',
+  '/docs/core-2/[precomputeCode]/[[...slug]]',
   '/docs/experiment-create_account_from_docs_quickstart/[experiment]',
   '/docs/experiment-nextjs_quickstart_template/[experiment]',
   '/docs/images/[[...slug]]',
@@ -244,8 +245,16 @@ function hasHashFragment(url: string): boolean {
   return url.includes('#')
 }
 
+// Destinations that are valid pages on the site but live outside this repo
+// (e.g., in the clerk/clerk repo). These are skipped during validation.
+const DEFINED_OUTSIDE_REPO = ['/pricing']
+
 function isExternalUrl(url: string): boolean {
   return url.startsWith('http://') || url.startsWith('https://')
+}
+
+function isDefinedOutsideRepo(url: string): boolean {
+  return DEFINED_OUTSIDE_REPO.includes(url)
 }
 
 async function checkRedirects(): Promise<void> {
@@ -320,6 +329,11 @@ async function checkRedirects(): Promise<void> {
     // Skip external URLs
     if (isExternalUrl(destination)) {
       externalCount++
+      continue
+    }
+
+    // Skip destinations that are valid but defined outside this repo
+    if (isDefinedOutsideRepo(destination)) {
       continue
     }
 

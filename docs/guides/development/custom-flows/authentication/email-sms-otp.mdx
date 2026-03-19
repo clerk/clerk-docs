@@ -1,101 +1,103 @@
 ---
-title: Build a custom email or phone OTP authentication flow
-description: Learn how to build a custom email or phone one time code (OTP) authentication flow using the Clerk API.
+title: Build a custom sign-in flow with email or phone code
+description: Learn how build a custom passwordless sign-in flow with email or phone code using the Clerk API.
+search:
+  keywords:
+    - passwordless
 ---
 
 <Include src="_partials/custom-flows-callout" />
 
+<If sdk={["nextjs", "react", "expo", "js-frontend", "react-router", "tanstack-react-start"]}>
+  > [!IMPORTANT]
+  > This guide applies to the following Clerk SDKs:
+  >
+  > - `@clerk/react` v6 or higher
+  > - `@clerk/nextjs` v7 or higher
+  > - `@clerk/expo` v3 or higher
+  > - `@clerk/react-router` v3 or higher
+  > - `@clerk/tanstack-react-start` v0.26.0 or higher
+  >
+  > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/email-sms-otp).
+</If>
+
 Clerk supports passwordless authentication, which lets users sign in and sign up without having to remember a password. Instead, users receive a one-time password ([OTP](!otp)) via email or phone, which they can use to authenticate themselves.
 
-This guide will walk you through how to build a custom phone OTP sign-up and sign-in flow. The process for using email OTP is similar, and the differences will be highlighted throughout.
-
-<Include src="_partials/custom-flows/phone-number" />
+This guide demonstrates how to build a custom user interface for signing up and signing in using phone OTP. The process for using email OTP is similar, and the differences will be highlighted throughout.
 
 <Steps>
   ## Enable phone OTP
 
-  To use phone [OTP](!otp), you first need to enable it for your application.
+  To use phone [OTP](!otp):
 
   1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+  1. Disable all email authentication settings, or these examples will error.
   1. Select the **Phone** tab and enable **Sign-up with phone** and **Sign-in with phone**. It's recommended to enable **Verify at sign-up**.
+  1. Ensure **Password** is disabled, as you want to use SMS OTP and not password authentication.
+
+  To use email [OTP](!otp):
+
+  1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+  1. Ensure **Require email address** is enabled.
+  1. Ensure **Verify at sign-up** is enabled, with **Email verification code** selected.
+  1. Ensure **Sign-in with email** is enabled, with **Email verification code** selected.
+  1. Ensure **Password** is disabled, as you want to use email OTP and not password authentication.
 
   ## Sign-up flow
 
-  To sign up a user using an [OTP](!otp), you must:
-
-  1. Initiate the sign-up process by collecting the user's identifier, which for this example is a phone number.
-  1. Send the user an [OTP](!otp) to the given identifier.
-  1. Verify the code supplied by the user.
-
   <If notSdk={["ios", "android"]}>
-    1) If the `SignUp.status` is `'complete'`, set the newly created session as the active session. You may need to check for [session tasks](!session-tasks) that are required for the user to complete after signing up.
-  </If>
+    <If notSdk="nextjs">
+      <Include src="_partials/sdk-examples-not-available-callout" />
+    </If>
 
-  <If sdk={["ios", "android"]}>
-    To create a sign-up flow for **email** [OTP](!otp), the flow is the same except you'll swap `phone` for `email` and `phoneNumber` for `emailAddress` throughout the code. You can find all available methods in the [`auth`](/docs/ios/reference/native-mobile/auth#sign-up) documentation.
-  </If>
+    <Include src="_partials/custom-flows/use-sign-up-hook" />
 
-  <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+    Then, to sign up a user using their phone number and verify their sign-up with an SMS code, you must:
 
-    To create a sign-up flow for **email** [OTP](!otp), the flow is the same except you'll swap `phoneNumber` for `emailAddress` throughout the code. You can find all available methods in the [`SignUp`](/docs/reference/javascript/sign-in) object documentation.
+    1. Initiate the sign-up process by collecting the user's phone number with the [`signUp.create()`](/docs/reference/objects/sign-up-future#create) method.
+    1. Send a one-time code to the provided phone number for verification with the [`signUp.verifications.sendPhoneCode()`](/docs/reference/objects/sign-up-future#verifications-send-phone-code) method (or [`signUp.verifications.sendEmailCode()`](/docs/reference/objects/sign-up-future#verifications-send-email-code) if you're modifying this example for email OTP).
+    1. Collect the one-time code and verify it with the [`signUp.verifications.verifyPhoneCode()`](/docs/reference/objects/sign-up-future#verifications-verify-phone-code) method (or [`signUp.verifications.verifyEmailCode()`](/docs/reference/objects/sign-up-future#verifications-verify-email-code) if you're modifying this example for email OTP).
+       <Include src="_partials/custom-flows/phone-number" />
+    1. If the phone number verification is successful, finalize the sign-up with the [`signUp.finalize()`](/docs/reference/objects/sign-up-future#finalize) method to create the user and set the newly created session as the active session.
 
-    ```tsx {{ filename: 'app/sign-up/[[...sign-up]]/page.tsx', collapsible: true }}
-    'use client'
+    <If notSdk="expo">
+      ```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
+      'use client'
 
-    import * as React from 'react'
-    import { useSignUp } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
+      import * as React from 'react'
+      import { useAuth, useSignUp } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
 
-    export default function Page() {
-      const { isLoaded, signUp, setActive } = useSignUp()
-      const [verifying, setVerifying] = React.useState(false)
-      const [phoneNumber, setPhoneNumber] = React.useState('')
-      const [code, setCode] = React.useState('')
-      const router = useRouter()
+      export default function SignUpPage() {
+        const { signUp, errors, fetchStatus } = useSignUp()
+        const { isSignedIn } = useAuth()
+        const router = useRouter()
 
-      async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
+        const handleSubmit = async (formData: FormData) => {
+          // For email OTP: collect the email address instead of the phone number
+          const phoneNumber = formData.get('phoneNumber') as string
 
-        if (!isLoaded && !signUp) return null
+          // For email OTP: change create({ phoneNumber }) to create({ emailAddress })
+          const { error } = await signUp.create({ phoneNumber })
+          if (error) {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            console.error(JSON.stringify(error, null, 2))
+            return
+          }
 
-        try {
-          // Start sign-up process using the phone number provided
-          await signUp.create({
-            phoneNumber,
-          })
-
-          // Start the verification - a text message will be sent to the
-          // number with a one-time password (OTP)
-          await signUp.preparePhoneNumberVerification()
-
-          // Set verifying to true to display second form
-          // and capture the OTP code
-          setVerifying(true)
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
+          // For email OTP: change sendPhoneCode() to sendEmailCode()
+          if (!error) await signUp.verifications.sendPhoneCode()
         }
-      }
 
-      async function handleVerification(e: React.FormEvent) {
-        e.preventDefault()
+        const handleVerify = async (formData: FormData) => {
+          const code = formData.get('code') as string
 
-        if (!isLoaded && !signUp) return null
+          // For email OTP: change verifyPhoneCode() to verifyEmailCode()
+          await signUp.verifications.verifyPhoneCode({ code })
 
-        try {
-          // Use the code provided by the user and attempt verification
-          const signUpAttempt = await signUp.attemptPhoneNumberVerification({
-            code,
-          })
-
-          // If verification was completed, set the session to active
-          // and redirect the user
-          if (signUpAttempt.status === 'complete') {
-            await setActive({
-              session: signUpAttempt.createdSessionId,
-              navigate: async ({ session }) => {
+          if (signUp.status === 'complete') {
+            await signUp.finalize({
+              navigate: ({ session, decorateUrl }) => {
                 if (session?.currentTask) {
                   // Handle pending session tasks
                   // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
@@ -103,225 +105,110 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
                   return
                 }
 
-                await router.push('/')
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
               },
             })
           } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(signUpAttempt)
+            // Check why the status is not complete
+            console.error('Sign-up attempt not complete.', signUp)
           }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
         }
-      }
 
-      if (verifying) {
+        if (signUp.status === 'complete' || isSignedIn) {
+          return null
+        }
+
+        if (
+          signUp.status === 'missing_requirements' &&
+          // For email OTP: check for phone_number instead of email_address
+          signUp.unverifiedFields.includes('phone_number') &&
+          signUp.missingFields.length === 0
+        ) {
+          return (
+            <>
+              <h1>Verify your account</h1>
+              <form action={handleVerify}>
+                <div>
+                  <label htmlFor="code">Code</label>
+                  <input id="code" name="code" type="text" />
+                </div>
+                {errors.fields.code && <p>{errors.fields.code.message}</p>}
+                <button type="submit" disabled={fetchStatus === 'fetching'}>
+                  Verify
+                </button>
+              </form>
+              {/* For email OTP: change sendPhoneCode() to sendEmailCode() */}
+              <button onClick={() => signUp.verifications.sendPhoneCode()}>I need a new code</button>
+            </>
+          )
+        }
+
         return (
           <>
-            <h1>Verify your phone number</h1>
-            <form onSubmit={handleVerification}>
-              <label htmlFor="code">Enter your verification code</label>
-              <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
-              <button type="submit">Verify</button>
+            <h1>Sign up</h1>
+            <form action={handleSubmit}>
+              {/* For email OTP: collect the emailAddress instead */}
+              <div>
+                <label htmlFor="phoneNumber">Phone number</label>
+                <input id="phoneNumber" name="phoneNumber" type="tel" />
+                {errors.fields.phoneNumber && <p>{errors.fields.phoneNumber.message}</p>}
+              </div>
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Continue
+              </button>
             </form>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+
+            {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+            <div id="clerk-captcha" />
           </>
         )
       }
-
-      return (
-        <>
-          <h1>Sign up</h1>
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="phone">Enter phone number</label>
-            <input
-              value={phoneNumber}
-              id="phone"
-              name="phone"
-              type="tel"
-              onChange={(e) => setPhoneNumber(e.target.value)}
-            />
-            <button type="submit">Continue</button>
-          </form>
-        </>
-      )
-    }
-    ```
-  </If>
-
-  <If sdk="js-frontend">
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="signed-in"></div>
-
-          <div id="task"></div>
-
-          <div id="sign-up">
-            <h2>Sign up</h2>
-            <form id="sign-up-form">
-              <label for="phone">Enter phone number</label>
-              <input type="tel" name="phone" id="sign-up-phone" />
-              <button type="submit">Continue</button>
-            </form>
-          </div>
-
-          <form id="verifying" hidden>
-            <h2>Verify your phone number</h2>
-            <label for="code">Enter your verification code</label>
-            <input id="code" name="code" />
-            <button type="submit" id="verify-button">Verify</button>
-          </form>
-
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
       ```
+    </If>
 
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
+    <If sdk="expo">
+      ```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
+      import { ThemedText } from '@/components/themed-text'
+      import { ThemedView } from '@/components/themed-view'
+      import { useSignUp } from '@clerk/expo'
+      import { type Href, Link, useRouter } from 'expo-router'
+      import React from 'react'
+      import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+      export default function Page() {
+        const { signUp, errors, fetchStatus } = useSignUp()
+        const router = useRouter()
 
-      const clerk = new Clerk(pubKey)
-      await clerk.load()
+        // For email OTP: collect the email address instead of the phone number
+        const [phoneNumber, setPhoneNumber] = React.useState('')
+        const [code, setCode] = React.useState('')
 
-      if (clerk.isSignedIn) {
-        // Mount user button component
-        document.getElementById('signed-in').innerHTML = `
-          <div id="user-button"></div>
-        `
-
-        const userbuttonDiv = document.getElementById('user-button')
-
-        clerk.mountUserButton(userbuttonDiv)
-      } else if (clerk.session?.currentTask) {
-        // Handle pending session tasks
-        // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-        switch (clerk.session.currentTask.key) {
-          case 'choose-organization': {
-            document.getElementById('app').innerHTML = `
-                  <div id="task"></div>
-                `
-
-            const taskDiv = document.getElementById('task')
-
-            clerk.mountTaskChooseOrganization(taskDiv)
+        const handleSubmit = async () => {
+          // For email OTP: change create({ phoneNumber }) to create({ emailAddress })
+          const { error } = await signUp.create({ phoneNumber })
+          if (error) {
+            console.error(JSON.stringify(error, null, 2))
+            return
           }
+
+          // For email OTP: change sendPhoneCode() to sendEmailCode()
+          if (!error) await signUp.verifications.sendPhoneCode()
         }
-      } else {
-        // Handle the sign-up form
-        document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
-          e.preventDefault()
 
-          const formData = new FormData(e.target)
-          const phoneNumber = formData.get('phone')
+        const handleVerify = async () => {
+          // For email OTP: change verifyPhoneCode() to verifyEmailCode()
+          await signUp.verifications.verifyPhoneCode({ code })
 
-          try {
-            // Start the sign-up process using the phone number method
-            await clerk.client.signUp.create({ phoneNumber })
-            await clerk.client.signUp.preparePhoneNumberVerification()
-            // Hide sign-up form
-            document.getElementById('sign-up').setAttribute('hidden', '')
-            // Show verification form
-            document.getElementById('verifying').removeAttribute('hidden')
-          } catch (error) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
-          }
-        })
-
-        // Handle the verification form
-        document.getElementById('verifying').addEventListener('submit', async (e) => {
-          const formData = new FormData(e.target)
-          const code = formData.get('code')
-
-          try {
-            // Verify the phone number
-            const verify = await clerk.client.signUp.attemptPhoneNumberVerification({
-              code,
-            })
-
-            // Now that the user is created, set the session to active.
-            await clerk.setActive({ session: verify.createdSessionId })
-          } catch (error) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
-          }
-        })
-      }
-      ```
-    </CodeBlockTabs>
-  </If>
-
-  <If sdk="expo">
-    ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
-    import { ThemedText } from '@/components/themed-text'
-    import { ThemedView } from '@/components/themed-view'
-    import { useSignUp } from '@clerk/clerk-expo'
-    import { Link, useRouter } from 'expo-router'
-    import * as React from 'react'
-    import { Pressable, StyleSheet, TextInput, View } from 'react-native'
-
-    export default function Page() {
-      const { isLoaded, signUp, setActive } = useSignUp()
-      const router = useRouter()
-
-      const [phoneNumber, setPhoneNumber] = React.useState('')
-      const [code, setCode] = React.useState('')
-      const [pendingVerification, setPendingVerification] = React.useState(false)
-
-      // Handle submission of sign-up form
-      const onSignUpPress = async () => {
-        if (!isLoaded) return
-
-        // Start sign-up process using the phone number provided
-        try {
-          await signUp.create({
-            phoneNumber,
-          })
-
-          // Start the verification - a text message will be sent to the
-          // number with a one-time password (OTP)
-          await signUp.preparePhoneNumberVerification()
-
-          // Set `verifying` to `true` to display second form
-          // and capture the OTP code
-          setPendingVerification(true)
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
-        }
-      }
-
-      // Handle submission of verification form
-      const onVerifyPress = async () => {
-        if (!isLoaded) return
-
-        try {
-          // Use the code the user provided to attempt verification
-          const signUpAttempt = await signUp.attemptPhoneNumberVerification({
-            code,
-          })
-
-          // If verification was completed, set the session to active
-          // and redirect the user
-          if (signUpAttempt.status === 'complete') {
-            await setActive({
-              session: signUpAttempt.createdSessionId,
-              navigate: async ({ session }) => {
+          if (signUp.status === 'complete') {
+            await signUp.finalize({
+              navigate: ({ session, decorateUrl }) => {
                 if (session?.currentTask) {
                   // Handle pending session tasks
                   // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
@@ -329,273 +216,327 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
                   return
                 }
 
-                router.replace('/')
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url as Href)
+                }
               },
             })
           } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(signUpAttempt, null, 2))
+            // Check why the sign-up is not complete
+            console.error('Sign-up attempt not complete:', signUp)
           }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
         }
-      }
 
-      if (pendingVerification) {
+        if (signUp.status === 'complete') {
+          return null
+        }
+
+        if (
+          signUp.status === 'missing_requirements' &&
+          // For email OTP: check for email_address instead of phone_number
+          signUp.unverifiedFields.includes('phone_number') &&
+          signUp.missingFields.length === 0
+        ) {
+          return (
+            <ThemedView style={styles.container}>
+              <ThemedText type="title" style={styles.title}>
+                Verify your account
+              </ThemedText>
+              <TextInput
+                style={styles.input}
+                value={code}
+                placeholder="Enter verification code"
+                placeholderTextColor="#666666"
+                onChangeText={(code) => setCode(code)}
+                keyboardType="numeric"
+              />
+              {errors.fields.code && (
+                <ThemedText style={styles.error}>{errors.fields.code.message}</ThemedText>
+              )}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  fetchStatus === 'fetching' && styles.buttonDisabled,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={handleVerify}
+                disabled={fetchStatus === 'fetching'}
+              >
+                <ThemedText style={styles.buttonText}>Verify</ThemedText>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+                // For email OTP: change sendPhoneCode() to sendEmailCode()
+                onPress={() => signUp.verifications.sendPhoneCode()}
+              >
+                <ThemedText style={styles.secondaryButtonText}>I need a new code</ThemedText>
+              </Pressable>
+            </ThemedView>
+          )
+        }
+
         return (
           <ThemedView style={styles.container}>
             <ThemedText type="title" style={styles.title}>
-              Verify your phone number
+              Sign up
             </ThemedText>
-            <ThemedText style={styles.description}>
-              A verification code has been sent to your phone.
-            </ThemedText>
+            <ThemedText style={styles.label}>Phone number</ThemedText>
+            {/* For email OTP: collect the emailAddress instead */}
             <TextInput
               style={styles.input}
-              value={code}
-              placeholder="Enter verification code"
+              value={phoneNumber}
+              placeholder="Enter phone number"
               placeholderTextColor="#666666"
-              onChangeText={(code) => setCode(code)}
-              keyboardType="numeric"
+              onChangeText={(phoneNumber) => setPhoneNumber(phoneNumber)}
+              keyboardType="phone-pad"
             />
+            {errors.fields.phoneNumber && (
+              <ThemedText style={styles.error}>{errors.fields.phoneNumber.message}</ThemedText>
+            )}
             <Pressable
-              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-              onPress={onVerifyPress}
+              style={({ pressed }) => [
+                styles.button,
+                (!phoneNumber || fetchStatus === 'fetching') && styles.buttonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={handleSubmit}
+              disabled={!phoneNumber || fetchStatus === 'fetching'}
             >
-              <ThemedText style={styles.buttonText}>Verify</ThemedText>
+              <ThemedText style={styles.buttonText}>Continue</ThemedText>
             </Pressable>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <ThemedText style={styles.debug}>{JSON.stringify(errors, null, 2)}</ThemedText>}
+
+            <View style={styles.linkContainer}>
+              <ThemedText>Already have an account? </ThemedText>
+              <Link href="/sign-in">
+                <ThemedText type="link">Sign in</ThemedText>
+              </Link>
+            </View>
           </ThemedView>
         )
       }
 
-      return (
-        <ThemedView style={styles.container}>
-          <ThemedText type="title" style={styles.title}>
-            Sign up
-          </ThemedText>
-          <ThemedText style={styles.label}>Phone number</ThemedText>
-          <TextInput
-            style={styles.input}
-            keyboardType="phone-pad"
-            value={phoneNumber}
-            placeholder="Enter phone number"
-            placeholderTextColor="#666666"
-            onChangeText={(phoneNumber) => setPhoneNumber(phoneNumber)}
-          />
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              !phoneNumber && styles.buttonDisabled,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={onSignUpPress}
-            disabled={!phoneNumber}
-          >
-            <ThemedText style={styles.buttonText}>Continue</ThemedText>
-          </Pressable>
-          <View style={styles.linkContainer}>
-            <ThemedText>Have an account? </ThemedText>
-            <Link href="/sign-in">
-              <ThemedText type="link">Sign in</ThemedText>
-            </Link>
-          </View>
-        </ThemedView>
-      )
-    }
-
-    const styles = StyleSheet.create({
-      container: {
-        flex: 1,
-        padding: 20,
-        gap: 12,
-      },
-      title: {
-        marginBottom: 8,
-      },
-      description: {
-        fontSize: 14,
-        marginBottom: 16,
-        opacity: 0.8,
-      },
-      label: {
-        fontWeight: '600',
-        fontSize: 14,
-      },
-      input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        backgroundColor: '#fff',
-      },
-      button: {
-        backgroundColor: '#0a7ea4',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 8,
-      },
-      buttonPressed: {
-        opacity: 0.7,
-      },
-      buttonDisabled: {
-        opacity: 0.5,
-      },
-      buttonText: {
-        color: '#fff',
-        fontWeight: '600',
-      },
-      linkContainer: {
-        flexDirection: 'row',
-        gap: 4,
-        marginTop: 12,
-        alignItems: 'center',
-      },
-    })
-    ```
+      const styles = StyleSheet.create({
+        container: {
+          flex: 1,
+          padding: 20,
+          gap: 12,
+        },
+        title: {
+          marginBottom: 8,
+        },
+        label: {
+          fontWeight: '600',
+          fontSize: 14,
+        },
+        input: {
+          borderWidth: 1,
+          borderColor: '#ccc',
+          borderRadius: 8,
+          padding: 12,
+          fontSize: 16,
+          backgroundColor: '#fff',
+        },
+        button: {
+          backgroundColor: '#0a7ea4',
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginTop: 8,
+        },
+        buttonPressed: {
+          opacity: 0.7,
+        },
+        buttonDisabled: {
+          opacity: 0.5,
+        },
+        buttonText: {
+          color: '#fff',
+          fontWeight: '600',
+        },
+        secondaryButton: {
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginTop: 8,
+        },
+        secondaryButtonText: {
+          color: '#0a7ea4',
+          fontWeight: '600',
+        },
+        linkContainer: {
+          flexDirection: 'row',
+          gap: 4,
+          marginTop: 12,
+          alignItems: 'center',
+        },
+        error: {
+          color: '#d32f2f',
+          fontSize: 12,
+          marginTop: -8,
+        },
+        debug: {
+          fontSize: 10,
+          opacity: 0.5,
+          marginTop: 8,
+        },
+      })
+      ```
+    </If>
   </If>
 
-  <If sdk="ios">
-    ```swift {{ filename: 'SMSOTPSignUpView.swift', collapsible: true }}
+  <If sdk={["ios", "android"]}>
+    1. Initiate the sign-up process by collecting the user's identifier, which for this example is a phone number.
+    1. Prepare the verification, which sends a one-time code to the given identifier.
+    1. Attempt to complete the verification with the code the user provides.
+    1. If the verification is successful, set the newly created session as the active session.
+
+    <If sdk="ios">
+      ```swift {{ filename: 'SMSOTPSignUpView.swift', collapsible: true }}
       import SwiftUI
       import ClerkKit
 
       struct SMSOTPSignUpView: View {
-        @Environment(Clerk.self) private var clerk
-        @State private var phoneNumber = ""
-        @State private var code = ""
-        @State private var isVerifying = false
+      @Environment(Clerk.self) private var clerk
+      // For email OTP: collect the email address instead of the phone number
+      @State private var phoneNumber = ""
+      @State private var code = ""
+      @State private var isVerifying = false
 
-        var body: some View {
-          if isVerifying {
-            TextField("Enter your verification code", text: $code)
-            Button("Verify") {
-              Task { await verify(code: code) }
-            }
-          } else {
-            TextField("Enter phone number", text: $phoneNumber)
-            Button("Continue") {
-              Task { await submit(phoneNumber: phoneNumber) }
-            }
+      var body: some View {
+        if isVerifying {
+          TextField("Enter your verification code", text: $code)
+          Button("Verify") {
+            Task { await verify(code: code) }
+          }
+        } else {
+          // For email OTP: change phoneNumber to emailAddress
+          TextField("Enter phone number", text: $phoneNumber)
+          Button("Continue") {
+            Task { await submit(phoneNumber: phoneNumber) }
           }
         }
+      }
       }
 
       extension SMSOTPSignUpView {
 
-        func submit(phoneNumber: String) async {
-          do {
-            // Start sign-up with phone number
-            let signUp = try await clerk.auth.signUp(phoneNumber: phoneNumber)
+      func submit(phoneNumber: String) async {
+        do {
+          // For email OTP: change phoneNumber to emailAddress
+          let signUp = try await clerk.auth.signUp(phoneNumber: phoneNumber)
 
-            // Send the user an SMS with the verification code
-            try await signUp.sendPhoneCode()
+          // For email OTP: change signUp.sendPhoneCode() to signUp.sendEmailCode()
+          try await signUp.sendPhoneCode()
 
-            isVerifying = true
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          dump(error)
-        }
-      }
-
-        func verify(code: String) async {
-          do {
-            // Verify that the provided code matches the code sent to the user
-            guard var signUp = clerk.auth.currentSignUp else { return }
-
-            signUp = try await signUp.verifyPhoneCode(code)
-
-            switch signUp.status {
-            case .complete:
-              dump(clerk.session)
-            default:
-              dump(signUp.status)
-            }
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          dump(error)
-        }
+          isVerifying = true
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
       }
       }
-    ```
-  </If>
 
-  <If sdk="android">
-    {/* TODO(Sam): Update for new Android API's */}
+      func verify(code: String) async {
+        do {
+          guard var signUp = clerk.auth.currentSignUp else { return }
 
-    <CodeBlockTabs options={["SMSOTPSignUpViewModel.kt", "SMSOTPSignUpActivity.kt"]}>
-      ```kotlin {{ filename: 'SMSOTPSignUpViewModel.kt', collapsible: true }}
-      import androidx.lifecycle.ViewModel
-      import androidx.lifecycle.viewModelScope
-      import com.clerk.api.Clerk
-      import com.clerk.api.network.serialization.flatMap
-      import com.clerk.api.network.serialization.onFailure
-      import com.clerk.api.network.serialization.onSuccess
-      import com.clerk.api.signup.SignUp
-      import com.clerk.api.signup.attemptVerification
-      import com.clerk.api.signup.prepareVerification
-      import kotlinx.coroutines.flow.MutableStateFlow
-      import kotlinx.coroutines.flow.asStateFlow
-      import kotlinx.coroutines.flow.combine
-      import kotlinx.coroutines.flow.launchIn
-      import kotlinx.coroutines.launch
+          // For email OTP: change signUp.verifyPhoneCode() to signUp.verifyEmailCode()
+          signUp = try await signUp.verifyPhoneCode(code)
 
-      class SMSOTPSignUpViewModel : ViewModel() {
+          switch signUp.status {
+          case .complete:
+            dump(clerk.session)
+          default:
+            dump(signUp.status)
+          }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+      }
+      }
+      ```
+    </If>
 
-      private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
-      val uiState = _uiState.asStateFlow()
+    <If sdk="android">
+      <CodeBlockTabs options={["SMSOTPSignUpViewModel.kt", "SMSOTPSignUpActivity.kt"]}>
+        ```kotlin {{ filename: 'SMSOTPSignUpViewModel.kt', collapsible: true }}
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.auth.types.VerificationType
+        import com.clerk.api.network.serialization.flatMap
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.signup.SignUp
+        import com.clerk.api.signup.sendCode
+        import com.clerk.api.signup.verifyCode
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.flow.combine
+        import kotlinx.coroutines.flow.launchIn
+        import kotlinx.coroutines.launch
 
-      init {
+        class SMSOTPSignUpViewModel : ViewModel() {
+
+        private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
+        val uiState = _uiState.asStateFlow()
+
+        init {
         combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-          _uiState.value =
-            when {
-              !isInitialized -> UiState.Loading
-              user == null -> UiState.Unverified
-              else -> UiState.Verified
+            _uiState.value =
+              when {
+                !isInitialized -> UiState.Loading
+                user == null -> UiState.Unverified
+                else -> UiState.Verified
+              }
+          }
+          .launchIn(viewModelScope)
+        }
+
+        fun submit(phoneNumber: String) {
+        viewModelScope.launch {
+          Clerk.auth
+            // For email OTP: change phone = phoneNumber to email = emailAddress
+            .signUp { phone = phoneNumber }
+            .flatMap { it.sendCode { phone = phoneNumber } }
+            .onSuccess { _uiState.value = UiState.Verifying }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
             }
         }
-        .launchIn(viewModelScope)
-      }
-
-      fun submit(phoneNumber: String) {
-        viewModelScope.launch {
-        SignUp.create(SignUp.CreateParams.Standard(phoneNumber = phoneNumber))
-          .flatMap { it.prepareVerification(SignUp.PrepareVerificationParams.Strategy.PhoneCode()) }
-          .onSuccess { _uiState.value = UiState.Verifying }
-          .onFailure {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-          }
         }
-      }
 
-      fun verify(code: String) {
-        val inProgressSignUp = Clerk.signUp ?: return
+        fun verify(code: String) {
+        val inProgressSignUp = Clerk.auth.currentSignUp ?: return
         viewModelScope.launch {
-        inProgressSignUp
-          .attemptVerification(SignUp.AttemptVerificationParams.PhoneCode(code))
-          .onSuccess {
-            if (it.status == SignUp.Status.COMPLETE) {
-              _uiState.value = UiState.Verified
-            } else {
-              // The user may need to complete further steps
+          inProgressSignUp
+            // For email OTP: change VerificationType.PHONE to VerificationType.EMAIL
+            .verifyCode(code, VerificationType.PHONE)
+            .onSuccess {
+              if (it.status == SignUp.Status.COMPLETE) {
+                _uiState.value = UiState.Verified
+              } else {
+                // The user may need to complete further steps
+              }
             }
-          }
-          .onFailure {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-          }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
         }
-      }
+        }
 
-      sealed interface UiState {
+        sealed interface UiState {
         data object Loading : UiState
 
         data object Unverified : UiState
@@ -604,192 +545,138 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
 
         data object Verified : UiState
         }
-      }
-      ```
+        }
+        ```
 
-      ```kotlin {{ filename: 'SMSOTPSignUpActivity.kt', collapsible: true }}
-      import android.os.Bundle
-      import androidx.activity.ComponentActivity
-      import androidx.activity.compose.setContent
-      import androidx.activity.viewModels
-      import androidx.compose.foundation.layout.Arrangement
-      import androidx.compose.foundation.layout.Box
-      import androidx.compose.foundation.layout.Column
-      import androidx.compose.foundation.layout.fillMaxSize
-      import androidx.compose.material3.Button
-      import androidx.compose.material3.CircularProgressIndicator
-      import androidx.compose.material3.Text
-      import androidx.compose.material3.TextField
-      import androidx.compose.runtime.Composable
-      import androidx.compose.runtime.getValue
-      import androidx.compose.runtime.mutableStateOf
-      import androidx.compose.runtime.remember
-      import androidx.compose.runtime.setValue
-      import androidx.compose.ui.Alignment
-      import androidx.compose.ui.Modifier
-      import androidx.compose.ui.unit.dp
-      import androidx.lifecycle.compose.collectAsStateWithLifecycle
+        ```kotlin {{ filename: 'SMSOTPSignUpActivity.kt', collapsible: true }}
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.activity.viewModels
+        import androidx.compose.foundation.layout.Arrangement
+        import androidx.compose.foundation.layout.Box
+        import androidx.compose.foundation.layout.Column
+        import androidx.compose.foundation.layout.fillMaxSize
+        import androidx.compose.material3.Button
+        import androidx.compose.material3.CircularProgressIndicator
+        import androidx.compose.material3.Text
+        import androidx.compose.material3.TextField
+        import androidx.compose.runtime.Composable
+        import androidx.compose.runtime.getValue
+        import androidx.compose.runtime.mutableStateOf
+        import androidx.compose.runtime.remember
+        import androidx.compose.runtime.setValue
+        import androidx.compose.ui.Alignment
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.unit.dp
+        import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-      class SMSOTPSignUpActivity : ComponentActivity() {
+        class SMSOTPSignUpActivity : ComponentActivity() {
         val viewModel: SMSOTPSignUpViewModel by viewModels()
 
         override fun onCreate(savedInstanceState: Bundle?) {
-          super.onCreate(savedInstanceState)
-          setContent {
-            val state by viewModel.uiState.collectAsStateWithLifecycle()
-            SMSOTPSignUpView(state, viewModel::submit, viewModel::verify)
-          }
+        super.onCreate(savedInstanceState)
+        setContent {
+          val state by viewModel.uiState.collectAsStateWithLifecycle()
+          SMSOTPSignUpView(state, viewModel::submit, viewModel::verify)
         }
-      }
+        }
+        }
 
-      @Composable
-      fun SMSOTPSignUpView(
+        @Composable
+        fun SMSOTPSignUpView(
         state: SMSOTPSignUpViewModel.UiState,
         onSubmit: (String) -> Unit,
         onVerify: (String) -> Unit,
-      ) {
+        ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (state) {
-            SMSOTPSignUpViewModel.UiState.Unverified -> {
-              InputContent(
-                placeholder = "Enter your phone number",
-                buttonText = "Continue",
-                onClick = onSubmit,
-              )
-            }
-            SMSOTPSignUpViewModel.UiState.Verified -> {
-              Text("Verified")
-            }
-            SMSOTPSignUpViewModel.UiState.Verifying -> {
-              InputContent(
-                placeholder = "Enter your verification code",
-                buttonText = "Verify",
-                onClick = onVerify,
-              )
-            }
+          // For email OTP: collect the email address instead of the phone number
+          SMSOTPSignUpViewModel.UiState.Unverified -> {
+            InputContent(
+              placeholder = "Enter your phone number",
+              buttonText = "Continue",
+              onClick = onSubmit,
+            )
+          }
+          SMSOTPSignUpViewModel.UiState.Verified -> {
+            Text("Verified")
+          }
+          SMSOTPSignUpViewModel.UiState.Verifying -> {
+            InputContent(
+              placeholder = "Enter your verification code",
+              buttonText = "Verify",
+              onClick = onVerify,
+            )
+          }
 
-            SMSOTPSignUpViewModel.UiState.Loading -> {
+          SMSOTPSignUpViewModel.UiState.Loading -> {
             CircularProgressIndicator()
-            }
           }
         }
-      }
+        }
+        }
 
-      @Composable
-      fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
+        @Composable
+        fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
         var value by remember { mutableStateOf("") }
         Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         ) {
-          TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
-          Button(onClick = { onClick(value) }) { Text(buttonText) }
+        TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
+        Button(onClick = { onClick(value) }) { Text(buttonText) }
         }
-      }
-      ```
-    </CodeBlockTabs>
-  </If>
-
-  <If sdk="nuxt">
-    <Include src="_partials/sdk-examples-not-available-callout" />
+        }
+        ```
+      </CodeBlockTabs>
+    </If>
   </If>
 
   ## Sign-in flow
 
-  To authenticate a user with an [OTP](!otp), you must:
-
-  1. Initiate the sign-in process by creating a `SignIn` using the identifier provided, which for this example is a phone number.
-  1. Send the user an [OTP](!otp) to the given identifier.
-  1. Verify the code supplied by the user.
-
   <If notSdk={["ios", "android"]}>
-    1) If the `SignIn.status` is `'complete'`, set the newly created session as the active session.
-  </If>
+    <If notSdk="nextjs">
+      <Include src="_partials/sdk-examples-not-available-callout" />
+    </If>
 
-  <If sdk={["ios", "android"]}>
-    To create a sign-in flow for **email** OTP, it's the same except you'll swap `phone` for `email` and `phoneNumber` for `emailAddress` throughout the code. You can find all available methods in the [`auth`](/docs/ios/reference/native-mobile/auth#sign-in) documentation.
-  </If>
+    <Include src="_partials/custom-flows/use-sign-in-hook" />
 
-  <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+    1. Initiate the sign-in process by collecting the user's phone number with the [`signIn.phoneCode.sendCode()`](/docs/reference/objects/sign-in-future#phone-code-send-code) method.
+    1. Send a one-time code to the provided phone number for verification with the [`signIn.phoneCode.verifyCode()`](/docs/reference/objects/sign-in-future#phone-code-verify-code) method (or [`signIn.emailCode.verifyCode()`](/docs/reference/objects/sign-in-future#email-code-verify-code) if you're modifying this example for email OTP).
+    1. Collect the one-time code and verify it with the [`signIn.phoneCode.verifyCode()`](/docs/reference/objects/sign-in-future#phone-code-verify-code) method (or [`signIn.emailCode.verifyCode()`](/docs/reference/objects/sign-in-future#email-code-verify-code) if you're modifying this example for email OTP).
+       <Include src="_partials/custom-flows/phone-number" />
+    1. If the phone number verification is successful, finalize the sign-in with the [`signIn.finalize()`](/docs/reference/objects/sign-in-future#finalize) method to set the newly created session as the active session.
 
-    To create a sign-in flow for **email** OTP, it's the same except you'll swap `phone` for `email` and `phoneNumber` for `emailAddress` throughout the code. You can find all available methods in the [`SignIn`](/docs/reference/javascript/sign-in) object documentation.
+    <If notSdk="expo">
+      ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+      'use client'
 
-    ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx', collapsible: true }}
-    'use client'
+      import { useSignIn } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
 
-    import * as React from 'react'
-    import { useSignIn } from '@clerk/nextjs'
-    import { PhoneCodeFactor, SignInFirstFactor } from '@clerk/types'
-    import { useRouter } from 'next/navigation'
+      export default function Page() {
+        const { signIn, errors, fetchStatus } = useSignIn()
+        const router = useRouter()
 
-    export default function Page() {
-      const { isLoaded, signIn, setActive } = useSignIn()
-      const router = useRouter()
+        async function handleSubmit(formData: FormData) {
+          // For email OTP: collect the email address instead of the phone number
+          const phoneNumber = formData.get('phoneNumber') as string
 
-      const [phoneNumber, setPhoneNumber] = React.useState('')
-      const [code, setCode] = React.useState('')
-      const [verifying, setVerifying] = React.useState(false)
-
-      async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-
-        if (!isLoaded && !signIn) return null
-
-        try {
-          // Start the sign-in process using the phone number method
-          const { supportedFirstFactors } = await signIn.create({
-            identifier: phoneNumber,
-          })
-
-          // Check if `phone_code` is a valid first factor
-          // This is required when Client Trust is enabled and the user
-          // is signing in from a new device.
-          // See https://clerk.com/docs/guides/secure/client-trust
-          const isPhoneCodeFactor = (factor: SignInFirstFactor): factor is PhoneCodeFactor => {
-            return factor.strategy === 'phone_code'
+          // For email OTP: change phoneNumber to emailAddress
+          const { error } = await signIn.create({ identifier: phoneNumber })
+          if (error) {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            console.error(JSON.stringify(error, null, 2))
+            return
           }
-          const phoneCodeFactor = supportedFirstFactors?.find(isPhoneCodeFactor)
 
-          if (phoneCodeFactor) {
-            // Grab the phoneNumberId
-            const { phoneNumberId } = phoneCodeFactor
+          // For email OTP: change phoneCode.sendCode() to emailCode.sendCode()
+          if (!error) await signIn.phoneCode.sendCode({ phoneNumber })
 
-            // Send the OTP code to the user
-            await signIn.prepareFirstFactor({
-              strategy: 'phone_code',
-              phoneNumberId,
-            })
-
-            // Set verifying to true to display second form
-            // and capture the OTP code
-            setVerifying(true)
-          }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
-        }
-      }
-
-      async function handleVerification(e: React.FormEvent) {
-        e.preventDefault()
-
-        if (!isLoaded && !signIn) return null
-
-        try {
-          // Use the code provided by the user and attempt verification
-          const signInAttempt = await signIn.attemptFirstFactor({
-            strategy: 'phone_code',
-            code,
-          })
-
-          // If verification was completed, set the session to active
-          // and redirect the user
-          if (signInAttempt.status === 'complete') {
-            await setActive({
-              session: signInAttempt.createdSessionId,
-              navigate: async ({ session }) => {
+          if (signIn.status === 'complete') {
+            await signIn.finalize({
+              navigate: ({ session, decorateUrl }) => {
                 if (session?.currentTask) {
                   // Handle pending session tasks
                   // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
@@ -797,245 +684,121 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
                   return
                 }
 
-                router.push('/')
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
               },
             })
           } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(signInAttempt)
+            // Check why the sign-in is not complete
+            console.error('Sign-in attempt not complete:', signIn)
           }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
         }
-      }
 
-      if (verifying) {
+        async function handleVerification(formData: FormData) {
+          const code = formData.get('code') as string
+
+          // For email OTP: change phoneCode.verifyCode() to emailCode.verifyCode()
+          await signIn.phoneCode.verifyCode({ code })
+
+          if (signIn.status === 'complete') {
+            await signIn.finalize({
+              navigate: ({ session, decorateUrl }) => {
+                if (session?.currentTask) {
+                  // Handle pending session tasks
+                  // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
+          } else {
+            // Check why the sign-in is not complete
+            console.error('Sign-in attempt not complete:', signIn)
+          }
+        }
+
+        if (signIn.status === 'needs_first_factor') {
+          return (
+            <>
+              <h1>Verify your phone number</h1>
+              <form action={handleVerification}>
+                <label htmlFor="code">Enter your verification code</label>
+                <input id="code" name="code" type="text" />
+                {errors.fields.code && <p>{errors.fields.code.message}</p>}
+                <button type="submit" disabled={fetchStatus === 'fetching'}>
+                  Verify
+                </button>
+              </form>
+              {/* For email OTP: change phoneCode.sendCode() to emailCode.sendCode() */}
+              <button onClick={() => signIn.phoneCode.sendCode()}>I need a new code</button>
+              <button onClick={() => signIn.reset()}>Start over</button>
+            </>
+          )
+        }
+
         return (
           <>
-            <h1>Verify your phone number</h1>
-            <form onSubmit={handleVerification}>
-              <label htmlFor="code">Enter your verification code</label>
-              <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
-              <button type="submit">Verify</button>
+            <h1>Sign in</h1>
+            <form action={handleSubmit}>
+              {/* For email OTP: collect the email address instead of the phone number */}
+              <label htmlFor="phoneNumber">Enter phone number</label>
+              <input id="phoneNumber" name="phoneNumber" type="tel" />
+              {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Continue
+              </button>
             </form>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
           </>
         )
       }
-
-      return (
-        <>
-          <h1>Sign in</h1>
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="phone">Enter phone number</label>
-            <input
-              value={phoneNumber}
-              id="phone"
-              name="phone"
-              type="tel"
-              onChange={(e) => setPhoneNumber(e.target.value)}
-            />
-            <button type="submit">Continue</button>
-          </form>
-        </>
-      )
-    }
-    ```
-  </If>
-
-  <If sdk="js-frontend">
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="signed-in"></div>
-
-          <div id="sign-in">
-            <h2>Sign in</h2>
-            <form id="sign-in-form">
-              <label for="phone">Enter phone number</label>
-              <input type="tel" name="phone" id="sign-in-phone" />
-              <button type="submit">Continue</button>
-            </form>
-          </div>
-
-          <form id="verifying" hidden>
-            <h2>Verify your phone number</h2>
-            <label for="code">Enter your verification code</label>
-            <input id="code" name="code" />
-            <button type="submit" id="verify-button">Verify</button>
-          </form>
-
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
       ```
+    </If>
 
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
+    <If sdk="expo">
+      ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+      import { ThemedText } from '@/components/themed-text'
+      import { ThemedView } from '@/components/themed-view'
+      import { useSignIn } from '@clerk/expo'
+      import { type Href, Link, useRouter } from 'expo-router'
+      import React from 'react'
+      import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+      export default function Page() {
+        const { signIn, errors, fetchStatus } = useSignIn()
+        const router = useRouter()
 
-      const clerk = new Clerk(pubKey)
-      await clerk.load()
+        // For email OTP: collect the email address instead of the phone number
+        const [phoneNumber, setPhoneNumber] = React.useState('')
+        const [code, setCode] = React.useState('')
 
-      if (clerk.isSignedIn) {
-        // Mount user button component
-        document.getElementById('signed-in').innerHTML = `
-          <div id="user-button"></div>
-        `
-
-        const userbuttonDiv = document.getElementById('user-button')
-
-        clerk.mountUserButton(userbuttonDiv)
-      } else {
-        // Handle the sign-in form
-        document.getElementById('sign-in-form').addEventListener('submit', async (e) => {
-          e.preventDefault()
-
-          const formData = new FormData(e.target)
-          const phone = formData.get('phone')
-
-          try {
-            // Start the sign-in process using the user's identifier.
-            // In this case, it's their phone number.
-            const { supportedFirstFactors } = await clerk.client.signIn.create({
-              identifier: phone,
-            })
-
-            // Find the phoneNumberId from all the available first factors for the current sign-in
-            const firstPhoneFactor = supportedFirstFactors.find((factor) => {
-              return factor.strategy === 'phone_code'
-            })
-
-            const { phoneNumberId } = firstPhoneFactor
-
-            // Prepare first factor verification, specifying
-            // the phone code strategy.
-            await clerk.client.signIn.prepareFirstFactor({
-              strategy: 'phone_code',
-              phoneNumberId,
-            })
-
-            // Hide sign-in form
-            document.getElementById('sign-in').setAttribute('hidden', '')
-            // Show verification form
-            document.getElementById('verifying').removeAttribute('hidden')
-          } catch (error) {
+        const handleSubmit = async () => {
+          // For email OTP: change phoneNumber to emailAddress
+          const { error } = await signIn.create({ identifier: phoneNumber })
+          if (error) {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
+            console.error(JSON.stringify(error, null, 2))
+            return
           }
-        })
 
-        // Handle the verification form
-        document.getElementById('verifying').addEventListener('submit', async (e) => {
-          const formData = new FormData(e.target)
-          const code = formData.get('code')
+          // For email OTP: change phoneCode.sendCode() to emailCode.sendCode()
+          if (!error) await signIn.phoneCode.sendCode({ phoneNumber })
 
-          try {
-            // Verify the phone number
-            const verify = await clerk.client.signIn.attemptFirstFactor({
-              strategy: 'phone_code',
-              code,
-            })
-
-            // Now that the user is created, set the session to active.
-            await clerk.setActive({ session: verify.createdSessionId })
-          } catch (error) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
-          }
-        })
-      }
-      ```
-    </CodeBlockTabs>
-  </If>
-
-  <If sdk="expo">
-    ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
-    import { ThemedText } from '@/components/themed-text'
-    import { ThemedView } from '@/components/themed-view'
-    import { useSignIn } from '@clerk/clerk-expo'
-    import type { PhoneCodeFactor, SignInFirstFactor } from '@clerk/types'
-    import { Link, useRouter } from 'expo-router'
-    import React from 'react'
-    import { Pressable, StyleSheet, TextInput, View } from 'react-native'
-
-    export default function Page() {
-      const { signIn, setActive, isLoaded } = useSignIn()
-      const router = useRouter()
-
-      const [phoneNumber, setPhoneNumber] = React.useState('')
-      const [code, setCode] = React.useState('')
-      const [verifying, setVerifying] = React.useState(false)
-
-      // Handle the submission of the sign-in form
-      const onSignInPress = async () => {
-        if (!isLoaded) return
-
-        // Start the sign-in process using the phone number provided
-        try {
-          const { supportedFirstFactors } = await signIn.create({
-            identifier: phoneNumber,
-          })
-
-          // Check if `phone_code` is a valid first factor
-          // This is required when Client Trust is enabled and the user
-          // is signing in from a new device.
-          // See https://clerk.com/docs/guides/secure/client-trust
-          const isPhoneCodeFactor = (factor: SignInFirstFactor): factor is PhoneCodeFactor => {
-            return factor.strategy === 'phone_code'
-          }
-          const phoneCodeFactor = supportedFirstFactors?.find(isPhoneCodeFactor)
-
-          if (phoneCodeFactor) {
-            // Grab the phoneNumberId
-            const { phoneNumberId } = phoneCodeFactor
-
-            // Send the OTP code to the user
-            await signIn.prepareFirstFactor({
-              strategy: 'phone_code',
-              phoneNumberId,
-            })
-
-            // Set verifying to true to display second form
-            // and capture the OTP code
-            setVerifying(true)
-          }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
-        }
-      }
-
-      // Handle the submission of the phone verification code
-      const onVerifyPress = async () => {
-        if (!isLoaded) return
-
-        try {
-          // Use the code the user provided to attempt verification
-          const signInAttempt = await signIn.attemptFirstFactor({
-            strategy: 'phone_code',
-            code,
-          })
-
-          // If verification was completed, set the session to active
-          // and redirect the user
-          if (signInAttempt.status === 'complete') {
-            await setActive({
-              session: signInAttempt.createdSessionId,
-              navigate: async ({ session }) => {
+          if (signIn.status === 'complete') {
+            await signIn.finalize({
+              navigate: ({ session, decorateUrl }) => {
                 if (session?.currentTask) {
                   // Handle pending session tasks
                   // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
@@ -1043,367 +806,437 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
                   return
                 }
 
-                router.replace('/')
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url as Href)
+                }
               },
             })
           } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(signInAttempt, null, 2))
+            // Check why the sign-in is not complete
+            console.error('Sign-in attempt not complete:', signIn)
           }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
         }
-      }
 
-      // Display phone code verification form
-      if (verifying) {
+        const handleVerification = async () => {
+          // For email OTP: change phoneCode.verifyCode() to emailCode.verifyCode()
+          await signIn.phoneCode.verifyCode({ code })
+
+          if (signIn.status === 'complete') {
+            await signIn.finalize({
+              navigate: ({ session, decorateUrl }) => {
+                if (session?.currentTask) {
+                  // Handle pending session tasks
+                  // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url as Href)
+                }
+              },
+            })
+          } else {
+            // Check why the sign-in is not complete
+            console.error('Sign-in attempt not complete:', signIn)
+          }
+        }
+
+        if (signIn.status === 'needs_first_factor') {
+          return (
+            <ThemedView style={styles.container}>
+              <ThemedText type="title" style={styles.title}>
+                Verify your phone number
+              </ThemedText>
+              <TextInput
+                style={styles.input}
+                value={code}
+                placeholder="Enter your verification code"
+                placeholderTextColor="#666666"
+                onChangeText={(code) => setCode(code)}
+                keyboardType="numeric"
+              />
+              {errors.fields.code && (
+                <ThemedText style={styles.error}>{errors.fields.code.message}</ThemedText>
+              )}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  fetchStatus === 'fetching' && styles.buttonDisabled,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={handleVerification}
+                disabled={fetchStatus === 'fetching'}
+              >
+                <ThemedText style={styles.buttonText}>Verify</ThemedText>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+                // For email OTP: change phoneCode.sendCode() to emailCode.sendCode()
+                onPress={() => signIn.phoneCode.sendCode()}
+              >
+                <ThemedText style={styles.secondaryButtonText}>I need a new code</ThemedText>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+                onPress={() => signIn.reset()}
+              >
+                <ThemedText style={styles.secondaryButtonText}>Start over</ThemedText>
+              </Pressable>
+            </ThemedView>
+          )
+        }
+
         return (
           <ThemedView style={styles.container}>
             <ThemedText type="title" style={styles.title}>
-              Verify your phone number
+              Sign in
             </ThemedText>
-            <ThemedText style={styles.description}>
-              A verification code has been sent to your phone.
-            </ThemedText>
+            {/* For email OTP: collect the email address instead of the phone number */}
+            <ThemedText style={styles.label}>Phone number</ThemedText>
             <TextInput
               style={styles.input}
-              keyboardType="numeric"
-              value={code}
-              placeholder="Enter verification code"
+              value={phoneNumber}
+              placeholder="Enter phone number"
               placeholderTextColor="#666666"
-              onChangeText={(code) => setCode(code)}
+              onChangeText={(phoneNumber) => setPhoneNumber(phoneNumber)}
+              keyboardType="phone-pad"
             />
+            {errors.fields.identifier && (
+              <ThemedText style={styles.error}>{errors.fields.identifier.message}</ThemedText>
+            )}
             <Pressable
-              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-              onPress={onVerifyPress}
+              style={({ pressed }) => [
+                styles.button,
+                (!phoneNumber || fetchStatus === 'fetching') && styles.buttonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={handleSubmit}
+              disabled={!phoneNumber || fetchStatus === 'fetching'}
             >
-              <ThemedText style={styles.buttonText}>Verify</ThemedText>
+              <ThemedText style={styles.buttonText}>Continue</ThemedText>
             </Pressable>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <ThemedText style={styles.debug}>{JSON.stringify(errors, null, 2)}</ThemedText>}
+
+            <View style={styles.linkContainer}>
+              <ThemedText>Don't have an account? </ThemedText>
+              <Link href="/sign-up">
+                <ThemedText type="link">Sign up</ThemedText>
+              </Link>
+            </View>
           </ThemedView>
         )
       }
 
-      return (
-        <ThemedView style={styles.container}>
-          <ThemedText type="title" style={styles.title}>
-            Sign in
-          </ThemedText>
-          <ThemedText style={styles.label}>Phone number</ThemedText>
-          <TextInput
-            style={styles.input}
-            keyboardType="phone-pad"
-            value={phoneNumber}
-            placeholder="Enter phone number"
-            placeholderTextColor="#666666"
-            onChangeText={(phoneNumber) => setPhoneNumber(phoneNumber)}
-          />
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              !phoneNumber && styles.buttonDisabled,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={onSignInPress}
-            disabled={!phoneNumber}
-          >
-            <ThemedText style={styles.buttonText}>Sign in</ThemedText>
-          </Pressable>
-          <View style={styles.linkContainer}>
-            <ThemedText>Don't have an account? </ThemedText>
-            <Link href="/sign-up">
-              <ThemedText type="link">Sign up</ThemedText>
-            </Link>
-          </View>
-        </ThemedView>
-      )
-    }
-
-    const styles = StyleSheet.create({
-      container: {
-        flex: 1,
-        padding: 20,
-        gap: 12,
-      },
-      title: {
-        marginBottom: 8,
-      },
-      description: {
-        fontSize: 14,
-        marginBottom: 16,
-        opacity: 0.8,
-      },
-      label: {
-        fontWeight: '600',
-        fontSize: 14,
-      },
-      input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        backgroundColor: '#fff',
-      },
-      button: {
-        backgroundColor: '#0a7ea4',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 8,
-      },
-      buttonPressed: {
-        opacity: 0.7,
-      },
-      buttonDisabled: {
-        opacity: 0.5,
-      },
-      buttonText: {
-        color: '#fff',
-        fontWeight: '600',
-      },
-      linkContainer: {
-        flexDirection: 'row',
-        gap: 4,
-        marginTop: 12,
-        alignItems: 'center',
-      },
-    })
-    ```
+      const styles = StyleSheet.create({
+        container: {
+          flex: 1,
+          padding: 20,
+          gap: 12,
+        },
+        title: {
+          marginBottom: 8,
+        },
+        label: {
+          fontWeight: '600',
+          fontSize: 14,
+        },
+        input: {
+          borderWidth: 1,
+          borderColor: '#ccc',
+          borderRadius: 8,
+          padding: 12,
+          fontSize: 16,
+          backgroundColor: '#fff',
+        },
+        button: {
+          backgroundColor: '#0a7ea4',
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginTop: 8,
+        },
+        buttonPressed: {
+          opacity: 0.7,
+        },
+        buttonDisabled: {
+          opacity: 0.5,
+        },
+        buttonText: {
+          color: '#fff',
+          fontWeight: '600',
+        },
+        secondaryButton: {
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginTop: 8,
+        },
+        secondaryButtonText: {
+          color: '#0a7ea4',
+          fontWeight: '600',
+        },
+        linkContainer: {
+          flexDirection: 'row',
+          gap: 4,
+          marginTop: 12,
+          alignItems: 'center',
+        },
+        error: {
+          color: '#d32f2f',
+          fontSize: 12,
+          marginTop: -8,
+        },
+        debug: {
+          fontSize: 10,
+          opacity: 0.5,
+          marginTop: 8,
+        },
+      })
+      ```
+    </If>
   </If>
 
-  <If sdk="ios">
-    ```swift {{ filename: 'SMSOTPSignInView.swift', collapsible: true }}
+  <If sdk={["ios", "android"]}>
+    1. Initiate the sign-in process by creating a `SignIn` using the identifier provided, which for this example is a phone number.
+    1. Prepare the first factor verification.
+    1. Attempt verification with the code the user provides.
+    1. If the attempt is successful, set the newly created session as the active session.
+
+    <If sdk="ios">
+      ```swift {{ filename: 'SMSOTPSignInView.swift', collapsible: true }}
       import SwiftUI
       import ClerkKit
 
       struct SMSOTPSignInView: View {
-        @Environment(Clerk.self) private var clerk
-        @State private var phoneNumber = ""
-        @State private var code = ""
-        @State private var isVerifying = false
+      @Environment(Clerk.self) private var clerk
+      // For email OTP: collect the email address instead of the phone number
+      @State private var phoneNumber = ""
+      @State private var code = ""
+      @State private var isVerifying = false
 
-        var body: some View {
-          if isVerifying {
-            TextField("Enter your verification code", text: $code)
-            Button("Verify") {
-              Task { await verify(code: code) }
-            }
-          } else {
-            TextField("Enter phone number", text: $phoneNumber)
-            Button("Continue") {
-              Task { await submit(phoneNumber: phoneNumber) }
-            }
+      var body: some View {
+        if isVerifying {
+          TextField("Enter your verification code", text: $code)
+          Button("Verify") {
+            Task { await verify(code: code) }
+          }
+        } else {
+          // For email OTP: change phoneNumber to emailAddress
+          TextField("Enter phone number", text: $phoneNumber)
+          Button("Continue") {
+            Task { await submit(phoneNumber: phoneNumber) }
           }
         }
+      }
       }
 
       extension SMSOTPSignInView {
 
-        func submit(phoneNumber: String) async {
-          do {
-            // Start sign-in with phone number.
-            try await clerk.auth.signInWithPhoneCode(phoneNumber: phoneNumber)
+      func submit(phoneNumber: String) async {
+        do {
+          // For email OTP: change signInWithPhoneCode() to signInWithEmailCode()
+          try await clerk.auth.signInWithPhoneCode(phoneNumber: phoneNumber)
 
-            isVerifying = true
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling.
-          dump(error)
-        }
-      }
-
-        func verify(code: String) async {
-          do {
-            // Verify the SMS code.
-            guard var signIn = clerk.auth.currentSignIn else { return }
-
-            signIn = try await signIn.verifyCode(code)
-
-            switch signIn.status {
-            case .complete:
-              dump(clerk.session)
-            default:
-              dump(signIn.status)
-            }
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling.
-          dump(error)
-        }
+          isVerifying = true
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
       }
       }
-    ```
-  </If>
 
-  <If sdk="android">
-    {/* TODO(Sam): Update for new Android API's */}
+      func verify(code: String) async {
+        do {
+          guard var signIn = clerk.auth.currentSignIn else { return }
 
-    <CodeBlockTabs options={["SMSOTPSignInViewModel.kt", "SMSOTPSignInActivity.kt"]}>
-      ```kotlin {{ filename: 'SMSOTPSignInViewModel.kt', collapsible: true }}
-      import androidx.lifecycle.ViewModel
-      import androidx.lifecycle.viewModelScope
-      import com.clerk.api.Clerk
-      import com.clerk.api.network.serialization.flatMap
-      import com.clerk.api.network.serialization.onFailure
-      import com.clerk.api.network.serialization.onSuccess
-      import com.clerk.api.signin.SignIn
-      import com.clerk.api.signin.attemptFirstFactor
-      import com.clerk.api.signin.prepareFirstFactor
-      import kotlinx.coroutines.flow.MutableStateFlow
-      import kotlinx.coroutines.flow.asStateFlow
-      import kotlinx.coroutines.flow.combine
-      import kotlinx.coroutines.flow.launchIn
-      import kotlinx.coroutines.launch
+          signIn = try await signIn.verifyCode(code)
 
-      class SMSOTPSignInViewModel : ViewModel() {
+          switch signIn.status {
+          case .complete:
+            dump(clerk.session)
+          default:
+            dump(signIn.status)
+          }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+      }
+      }
+      ```
+    </If>
+
+    <If sdk="android">
+      <CodeBlockTabs options={["SMSOTPSignInViewModel.kt", "SMSOTPSignInActivity.kt"]}>
+        ```kotlin {{ filename: 'SMSOTPSignInViewModel.kt', collapsible: true }}
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.signin.SignIn
+        import com.clerk.api.signin.verifyCode
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.flow.combine
+        import kotlinx.coroutines.flow.launchIn
+        import kotlinx.coroutines.launch
+
+        class SMSOTPSignInViewModel : ViewModel() {
         private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
         val uiState = _uiState.asStateFlow()
 
         init {
-          combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-              _uiState.value =
-                when {
-                  !isInitialized -> UiState.Loading
-                  user == null -> UiState.Unverified
-                  else -> UiState.Verified
-                }
-            }
-            .launchIn(viewModelScope)
+        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+            _uiState.value =
+              when {
+                !isInitialized -> UiState.Loading
+                user == null -> UiState.Unverified
+                else -> UiState.Verified
+              }
+          }
+          .launchIn(viewModelScope)
         }
 
         fun submit(phoneNumber: String) {
-          viewModelScope.launch {
-            SignIn.create(SignIn.CreateParams.Strategy.PhoneCode(phoneNumber)).flatMap {
-              it
-                .prepareFirstFactor(SignIn.PrepareFirstFactorParams.PhoneCode())
-                .onSuccess { _uiState.value = UiState.Verifying }
-                .onFailure {
-                  // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                  // for more info on error handling
-                }
+        viewModelScope.launch {
+          Clerk.auth
+            // For email OTP: change phone = phoneNumber to email = emailAddress
+            .signInWithOtp { phone = phoneNumber }
+            .onSuccess { _uiState.value = UiState.Verifying }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
             }
-          }
+        }
         }
 
         fun verify(code: String) {
-          val inProgressSignIn = Clerk.signIn ?: return
-          viewModelScope.launch {
-            inProgressSignIn
-              .attemptFirstFactor(SignIn.AttemptFirstFactorParams.PhoneCode(code))
-              .onSuccess {
-                if (it.status == SignIn.Status.COMPLETE) {
-                  _uiState.value = UiState.Verified
-                } else {
-                  // The user may need to complete further steps
-                }
+        val inProgressSignIn = Clerk.auth.currentSignIn ?: return
+        viewModelScope.launch {
+          inProgressSignIn
+            .verifyCode(code)
+            .onSuccess {
+              if (it.status == SignIn.Status.COMPLETE) {
+                _uiState.value = UiState.Verified
+              } else {
+                // The user may need to complete further steps
               }
-              .onFailure {
-                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                // for more info on error handling
-              }
-          }
+            }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
         }
 
         sealed interface UiState {
-          data object Loading : UiState
+        data object Loading : UiState
 
-          data object Unverified : UiState
+        data object Unverified : UiState
 
-          data object Verifying : UiState
+        data object Verifying : UiState
 
-          data object Verified : UiState
+        data object Verified : UiState
         }
-      }
-      ```
+        }
+        ```
 
-      ```kotlin {{ filename: 'SMSOTPSignInActivity.kt', collapsible: true }}
-      import android.os.Bundle
-      import androidx.activity.ComponentActivity
-      import androidx.activity.compose.setContent
-      import androidx.activity.viewModels
-      import androidx.compose.foundation.layout.Arrangement
-      import androidx.compose.foundation.layout.Box
-      import androidx.compose.foundation.layout.Column
-      import androidx.compose.foundation.layout.fillMaxSize
-      import androidx.compose.material3.Button
-      import androidx.compose.material3.CircularProgressIndicator
-      import androidx.compose.material3.Text
-      import androidx.compose.material3.TextField
-      import androidx.compose.runtime.Composable
-      import androidx.compose.runtime.getValue
-      import androidx.compose.runtime.mutableStateOf
-      import androidx.compose.runtime.remember
-      import androidx.compose.runtime.setValue
-      import androidx.compose.ui.Alignment
-      import androidx.compose.ui.Modifier
-      import androidx.compose.ui.unit.dp
-      import androidx.lifecycle.compose.collectAsStateWithLifecycle
+        ```kotlin {{ filename: 'SMSOTPSignInActivity.kt', collapsible: true }}
+        package com.clerk.customflows.otp.signin
 
-      class SMSOTPSignInActivity : ComponentActivity() {
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.activity.viewModels
+        import androidx.compose.foundation.layout.Arrangement
+        import androidx.compose.foundation.layout.Box
+        import androidx.compose.foundation.layout.Column
+        import androidx.compose.foundation.layout.fillMaxSize
+        import androidx.compose.material3.Button
+        import androidx.compose.material3.CircularProgressIndicator
+        import androidx.compose.material3.Text
+        import androidx.compose.material3.TextField
+        import androidx.compose.runtime.Composable
+        import androidx.compose.runtime.getValue
+        import androidx.compose.runtime.mutableStateOf
+        import androidx.compose.runtime.remember
+        import androidx.compose.runtime.setValue
+        import androidx.compose.ui.Alignment
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.unit.dp
+        import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+        class SMSOTPSignInActivity : ComponentActivity() {
         val viewModel: SMSOTPSignInViewModel by viewModels()
 
         override fun onCreate(savedInstanceState: Bundle?) {
-          super.onCreate(savedInstanceState)
-          setContent {
-            val state by viewModel.uiState.collectAsStateWithLifecycle()
-            SMSOTPSignInView(state, viewModel::submit, viewModel::verify)
-          }
+        super.onCreate(savedInstanceState)
+        setContent {
+          val state by viewModel.uiState.collectAsStateWithLifecycle()
+          SMSOTPSignInView(state, viewModel::submit, viewModel::verify)
         }
-      }
+        }
+        }
 
-      @Composable
-      fun SMSOTPSignInView(
+        @Composable
+        fun SMSOTPSignInView(
         state: SMSOTPSignInViewModel.UiState,
         onSubmit: (String) -> Unit,
         onVerify: (String) -> Unit,
-      ) {
+        ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-          when (state) {
-            SMSOTPSignInViewModel.UiState.Unverified -> {
-              InputContent(
-                placeholder = "Enter your phone number",
-                buttonText = "Continue",
-                onClick = onSubmit,
-              )
-            }
-            SMSOTPSignInViewModel.UiState.Verified -> {
-              Text("Verified")
-            }
-            SMSOTPSignInViewModel.UiState.Verifying -> {
-              InputContent(
-                placeholder = "Enter your verification code",
-                buttonText = "Verify",
-                onClick = onVerify,
-              )
-            }
+        when (state) {
+          // For email OTP: collect the email address instead of the phone number
+          SMSOTPSignInViewModel.UiState.Unverified -> {
+            InputContent(
+              placeholder = "Enter your phone number",
+              buttonText = "Continue",
+              onClick = onSubmit,
+            )
+          }
+          SMSOTPSignInViewModel.UiState.Verified -> {
+            Text("Verified")
+          }
+          SMSOTPSignInViewModel.UiState.Verifying -> {
+            InputContent(
+              placeholder = "Enter your verification code",
+              buttonText = "Verify",
+              onClick = onVerify,
+            )
+          }
 
-            SMSOTPSignInViewModel.UiState.Loading -> {
-              CircularProgressIndicator()
-            }
+          SMSOTPSignInViewModel.UiState.Loading -> {
+            CircularProgressIndicator()
           }
         }
-      }
+        }
+        }
 
-      @Composable
-      fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
+        @Composable
+        fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
         var value by remember { mutableStateOf("") }
         Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         ) {
-          TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
-          Button(onClick = { onClick(value) }) { Text(buttonText) }
+        TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
+        Button(onClick = { onClick(value) }) { Text(buttonText) }
         }
-      }
-      ```
-    </CodeBlockTabs>
-  </If>
-
-  <If sdk="nuxt">
-    <Include src="_partials/sdk-examples-not-available-callout" />
+        }
+        ```
+      </CodeBlockTabs>
+    </If>
   </If>
 </Steps>

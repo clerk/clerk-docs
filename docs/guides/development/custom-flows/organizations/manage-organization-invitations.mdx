@@ -16,16 +16,20 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 >
 > Also, see the [custom flow for accepting Organization invitations](/docs/guides/development/custom-flows/organizations/accept-organization-invitations).
 
-<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+<If notSdk={["js-frontend", "ios", "android"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
+
   To invite a user:
 
   1. Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to get `organization`, which is the [Active Organization's](!active-organization).
-  1. Use `organization` to call the [`inviteMember()`](/docs/reference/javascript/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
+  1. Use `organization` to call the [`inviteMember()`](/docs/reference/objects/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
 
   To revoke an invitation:
 
   1. Use the `useOrganization()` hook to get `invitations`, which is a list of invitations for the [Active Organization's](!active-organization).
-  1. `invitations` is an array of [`OrganizationInvitation`](/docs/reference/javascript/types/organization-invitation) objects. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/javascript/types/organization-invitation#revoke) method that can be called to revoke the invitation.
+  1. `invitations` is an array of [`OrganizationInvitation`](/docs/reference/types/organization-invitation) objects. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/types/organization-invitation#revoke) method that can be called to revoke the invitation.
 
   The following example includes:
 
@@ -33,13 +37,11 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   - An `<InvitationList />` component that lists all pending invitations and allows administrators to revoke them.
 
   <If notSdk="expo">
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
     ```tsx {{ filename: 'app/components/InvitationList.tsx', collapsible: true }}
     'use client'
 
     import { useOrganization } from '@clerk/nextjs'
-    import { OrganizationCustomRoleKey } from '@clerk/types'
+    import { OrganizationCustomRoleKey } from '@clerk/shared/types'
     import { ChangeEventHandler, useEffect, useRef, useState } from 'react'
 
     export const OrgMembersParams = {
@@ -219,8 +221,8 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
     ```tsx {{ filename: 'app/components/manage-organization-invitations.tsx', collapsible: true }}
     import { ThemedText } from '@/components/themed-text'
     import { ThemedView } from '@/components/themed-view'
-    import { useOrganization } from '@clerk/clerk-expo'
-    import { OrganizationCustomRoleKey } from '@clerk/types'
+    import { useOrganization } from '@clerk/expo'
+    import { OrganizationCustomRoleKey } from '@clerk/shared/types'
     import * as React from 'react'
     import {
       ActivityIndicator,
@@ -620,18 +622,18 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   To check if the current user is an Organization admin:
 
   1. Get the [Active Organization's](!active-organization) ID from the `clerk` object.
-  1. Call the [`getOrganizationMemberships()`](/docs/reference/javascript/user#get-organization-memberships) method to get a list of Organizations that the user is a member of. This method returns `data`, which is an array of `OrganizationMembership` objects.
+  1. Call the [`getOrganizationMemberships()`](/docs/reference/objects/user#get-organization-memberships) method to get a list of Organizations that the user is a member of. This method returns `data`, which is an array of `OrganizationMembership` objects.
   1. In the list of Organizations that the user is a member of, find the `OrganizationMembership` object that has an ID that matches the Active Organization's ID.
   1. Check the `role` property of the `OrganizationMembership` object to see if the user is an admin.
 
   To invite a user:
 
-  1. Use the active `organization` object to call the [`inviteMember()`](/docs/reference/javascript/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
+  1. Use the active `organization` object to call the [`inviteMember()`](/docs/reference/objects/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
 
   To revoke an invitation:
 
-  1. Use the active `organization` object to call the [`getInvitations()`](/docs/reference/javascript/organization#get-invitations) method to get an array of `OrganizationInvitation` objects.
-  1. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/javascript/types/organization-invitation#revoke) method that can be called to revoke the invitation.
+  1. Use the active `organization` object to call the [`getInvitations()`](/docs/reference/objects/organization#get-invitations) method to get an array of `OrganizationInvitation` objects.
+  1. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/types/organization-invitation#revoke) method that can be called to revoke the invitation.
 
   The following example includes:
 
@@ -788,8 +790,119 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
+<If sdk="ios">
+  ```swift {{ filename: 'ManageOrganizationInvitationsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct ManageOrganizationInvitationsView: View {
+    @State private var emailAddress = ""
+    @State private var role = "org:member"
+    @State private var invitations: [OrganizationInvitation] = []
+    let organization: Organization
+
+    var body: some View {
+      VStack {
+        TextField("Enter email address", text: $emailAddress)
+        TextField("Enter role", text: $role)
+        Button("Invite member") {
+          Task {
+            await inviteMember(emailAddress: emailAddress, role: role)
+            await fetchPendingInvitations()
+          }
+        }
+
+        ForEach(invitations) { invitation in
+          HStack {
+            Text(invitation.emailAddress)
+            Button("Revoke") {
+              Task {
+                await revokeInvitation(invitation)
+                await fetchPendingInvitations()
+              }
+            }
+          }
+        }
+      }
+      .task { await fetchPendingInvitations() }
+    }
+  }
+
+  extension ManageOrganizationInvitationsView {
+
+    func inviteMember(emailAddress: String, role: String) async {
+      do {
+        try await organization.inviteMember(emailAddress: emailAddress, role: role)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func fetchPendingInvitations() async {
+      do {
+        invitations = try await organization.getInvitations(status: "pending").data
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        invitations = []
+      }
+    }
+
+    func revokeInvitation(_ invitation: OrganizationInvitation) async {
+      do {
+        try await invitation.revoke()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.Organization
+  import com.clerk.api.organizations.OrganizationInvitation
+  import com.clerk.api.organizations.createInvitation
+  import com.clerk.api.organizations.getInvitations
+  import com.clerk.api.organizations.revoke
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun activeOrganization(): Organization? {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return null
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return null
+    if (membershipsResult !is ClerkResult.Success) return null
+
+    return membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+  }
+
+  suspend fun inviteMember(emailAddress: String, role: String) {
+    val organization = activeOrganization() ?: return
+    organization.createInvitation(emailAddress = emailAddress, role = role)
+  }
+
+  suspend fun fetchPendingInvitations(): List<OrganizationInvitation> {
+    val organization = activeOrganization() ?: return emptyList()
+    return when (
+      val invitationsResult =
+        organization.getInvitations(status = OrganizationInvitation.Status.Pending)
+    ) {
+      is ClerkResult.Success -> invitationsResult.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun revokeInvitation(invitation: OrganizationInvitation) {
+    invitation.revoke()
+  }
+  ```
 </If>
 
 ## Next steps

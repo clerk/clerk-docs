@@ -23,18 +23,20 @@ The `__clerk_ticket` query parameter contains the ticket token, which is essenti
 
 The `__clerk_status` query parameter is the outcome of the ticket verification and will contain one of three values:
 
-- `sign_in` indicates the user already exists in your application. You should create a sign-in flow using the invitation token by extracting the token from the URL and passing it to the [`signIn.create()`](/docs/reference/javascript/sign-in#create) method.
-- `sign_up` indicates the user doesn't already exist in your application. You should create a sign-up flow using the invitation token by extracting the token from the URL and passing it to the [`signUp.create()`](/docs/reference/javascript/sign-up#create) method.
+- `sign_in` indicates the user already exists in your application. You should create a sign-in flow using the invitation token by extracting the token from the URL and passing it to the [`signIn.create()`](/docs/reference/objects/sign-in#create) method.
+- `sign_up` indicates the user doesn't already exist in your application. You should create a sign-up flow using the invitation token by extracting the token from the URL and passing it to the [`signUp.create()`](/docs/reference/objects/sign-up#create) method.
 - `complete` indicates the user already exists in your application, and was signed in. The flow has been completed and no further actions are required.
 
 The following example demonstrates how to handle both sign-up and sign-in flows using the invitation token:
 
 1. It extracts the token from the URL.
-1. It passes the token to either [`signUp.create()`](/docs/reference/javascript/sign-up#create) or [`signIn.create()`](/docs/reference/javascript/sign-in#create), depending on the `__clerk_status`.
+1. It passes the token to either [`signUp.create()`](/docs/reference/objects/sign-up#create) or [`signIn.create()`](/docs/reference/objects/sign-in#create), depending on the `__clerk_status`.
 1. It demonstrates how to collect additional fields during sign-up, such as first and last names. You can modify or remove these fields as needed for your application. If you do not have **First and last name** enabled for your instance [in the Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/user-and-authentication?user_auth_tab=user-profile), remove these fields or `signUp.create()` will throw an error.
 
-<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
-  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+<If notSdk={["expo", "ios", "android"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
 
   ```tsx {{ filename: 'app/accept-invitation/page.tsx', collapsible: true }}
   'use client'
@@ -187,7 +189,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
   ```tsx {{ filename: 'app/(auth)/accept-organization-invitation.tsx', collapsible: true }}
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
-  import { useOrganization, useSignIn, useSignUp } from '@clerk/clerk-expo'
+  import { useOrganization, useSignIn, useSignUp } from '@clerk/expo'
   import { useLocalSearchParams } from 'expo-router'
   import * as React from 'react'
   import { ActivityIndicator, Pressable, StyleSheet, TextInput } from 'react-native'
@@ -396,6 +398,168 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
   ```
 </If>
 
-<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
+<If sdk="ios">
+  ```swift {{ filename: 'AcceptOrganizationInvitationView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct AcceptOrganizationInvitationView: View {
+    @Environment(Clerk.self) private var clerk
+
+    // In your implementation, extract these values from the incoming redirect URL query parameters.
+    let ticket = "organization_invitation_ticket"
+    let accountStatus = "sign_in"
+
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var password = ""
+
+    var body: some View {
+      VStack {
+        if ticket.isEmpty {
+          Text("No invitation token found.")
+        } else {
+          switch accountStatus {
+          case "sign_in":
+            Text("Signing you in...")
+            ProgressView()
+
+          case "sign_up":
+            Text("Sign up")
+            TextField("Enter first name", text: $firstName)
+            TextField("Enter last name", text: $lastName)
+            SecureField("Enter password", text: $password)
+            Button("Continue") {
+              Task {
+                await handleOrganizationInvitation(
+                  ticket: ticket,
+                  accountStatus: accountStatus,
+                  firstName: firstName,
+                  lastName: lastName,
+                  password: password
+                )
+              }
+            }
+
+          case "complete":
+            Text("Organization invitation accepted!")
+
+          default:
+            Text("Invalid invitation status.")
+          }
+        }
+      }
+      .task {
+        guard !ticket.isEmpty, accountStatus == "sign_in" else { return }
+        await handleOrganizationInvitation(ticket: ticket, accountStatus: accountStatus)
+      }
+    }
+  }
+
+  extension AcceptOrganizationInvitationView {
+
+    func handleOrganizationInvitation(
+      ticket: String,
+      accountStatus: String,
+      firstName: String = "",
+      lastName: String = "",
+      password: String = ""
+    ) async {
+      do {
+        switch accountStatus {
+        case "sign_in":
+          let signIn = try await clerk.auth.signInWithTicket(ticket)
+          if signIn.status == .complete {
+            dump(clerk.session)
+          } else {
+            dump(signIn.status)
+          }
+
+        case "sign_up":
+          let signUp = try await clerk.auth.signUpWithTicket(ticket)
+          let updatedSignUp = try await signUp.update(
+            firstName: firstName,
+            lastName: lastName,
+            password: password
+          )
+
+          if updatedSignUp.status == .complete {
+            dump(clerk.session)
+          } else {
+            dump(updatedSignUp.status)
+          }
+
+        default:
+          break
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.auth.signInWithTicket
+  import com.clerk.api.auth.signUpWithTicket
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signin.SignIn
+  import com.clerk.api.signup.SignUp
+  import com.clerk.api.signup.update
+
+  suspend fun handleOrganizationInvitation(
+    ticket: String,
+    accountStatus: String,
+    firstName: String = "",
+    lastName: String = "",
+    password: String = "",
+  ) {
+    when (accountStatus) {
+      "sign_in" -> {
+        Clerk.auth
+          .signInWithTicket(ticket)
+          .onSuccess { signIn ->
+            if (signIn.status == SignIn.Status.COMPLETE && signIn.createdSessionId != null) {
+              Clerk.auth.setActive(sessionId = signIn.createdSessionId)
+            }
+          }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+          }
+      }
+      "sign_up" -> {
+        Clerk.auth
+          .signUpWithTicket(ticket)
+          .onSuccess { signUp ->
+            signUp
+              .update(
+                SignUp.SignUpUpdateParams.Standard(
+                  firstName = firstName,
+                  lastName = lastName,
+                  password = password,
+                ),
+              ).onSuccess { updatedSignUp ->
+                if (
+                  updatedSignUp.status == SignUp.Status.COMPLETE &&
+                    updatedSignUp.createdSessionId != null
+                ) {
+                  Clerk.auth.setActive(sessionId = updatedSignUp.createdSessionId)
+                }
+              }
+          }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+          }
+      }
+    }
+  }
+  ```
 </If>

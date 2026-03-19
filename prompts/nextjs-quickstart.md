@@ -1,5 +1,11 @@
 # Add Clerk to Next.js App Router
 
+If a Next.js App Router project does not already exist, first create one using:
+
+```bash
+npx create-next-app@latest my-clerk-app --yes
+```
+
 Install `@clerk/nextjs@latest`. Create `proxy.ts` with `clerkMiddleware()` from `@clerk/nextjs/server` (in `src/` if it exists, otherwise project root). Add `<ClerkProvider>` inside `<body>` in `app/layout.tsx`. Use `<Show>`, `<UserButton>`, `<SignInButton>`, `<SignUpButton>` from `@clerk/nextjs`.
 
 Latest docs: https://clerk.com/docs/nextjs/getting-started/quickstart

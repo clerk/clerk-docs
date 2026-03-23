@@ -35,150 +35,130 @@ This tutorial outlines how to integrate Clerk's authentication into your Encore 
 
   ## Set your Clerk API keys
 
-  In the Clerk Dashboard, copy your Secret Key from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page.
+  1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/~/api-keys) page.
+  1. In the **Quick Copy** section, copy your Clerk [Secret Key](!secret-key).
+  1. Encore provides built-in [secrets management](https://encore.dev/docs/ts/primitives/secrets) to securely store sensitive values. Add your key to Encore's secrets with the following command:
 
-  Add your secret key using Encore's secrets management:
+     ```bash
+     encore secret set --dev ClerkSecretKey
+     ```
 
-  ```bash
-  encore secret set --dev ClerkSecretKey
-  ```
-
-  When you deploy, set the production secret:
-
-  ```bash
-  encore secret set --prod ClerkSecretKey
-  ```
-
-  You'll use the Publishable Key in your client application (web or mobile).
+  > [!TIP]
+  > When you deploy your Encore app, you can set a different value for production to keep your keys secure.
+  >
+  > ```bash
+  > encore secret set --prod ClerkSecretKey
+  > ```
 
   ## Create a Clerk client
 
-  Create a file to configure the Clerk client:
+  1. Create a `auth` folder.
+  1. In the `auth` folder, create a `clerk.ts` file.
+  1. In your `clerk.ts` file, configure the Clerk client using the Clerk [Secret Key](!secret-key) you set, using [`createClerkClient`](/docs/getting-started/quickstart#usage) from `@clerk/backend`:
 
   ```ts {{ filename: 'auth/clerk.ts' }}
-  import { createClerkClient } from "@clerk/backend";
-  import { secret } from "encore.dev/config";
+  import { createClerkClient } from '@clerk/backend'
+  import { secret } from 'encore.dev/config'
 
-  const clerkSecretKey = secret("ClerkSecretKey");
+  const clerkSecretKey = secret('ClerkSecretKey')
 
   export const clerk = createClerkClient({
     secretKey: clerkSecretKey(),
-  });
-  ```
-
-  ## Create an auth service
-
-  Create the Encore service definition for your auth service:
-
-  ```ts {{ filename: 'auth/encore.service.ts' }}
-  import { Service } from "encore.dev/service";
-
-  export default new Service("auth");
+  })
   ```
 
   ## Create an auth handler
 
-  Encore has a built-in auth handler pattern for protecting endpoints. Create an auth handler that verifies Clerk session tokens:
+  Encore has a built-in auth handler pattern for protecting endpoints. In the `auth` folder, create a `handler.ts` file and copy and paste the following code. This is the auth handler that verifies Clerk [session tokens](/docs/guides/sessions/session-tokens) and makes authenticated user data available to your endpoints:
 
   ```ts {{ filename: 'auth/handler.ts', collapsible: true }}
-  import { APIError, Gateway, Header } from "encore.dev/api";
-  import { authHandler } from "encore.dev/auth";
-  import { verifyToken } from "@clerk/backend";
-  import { secret } from "encore.dev/config";
-  import { clerk } from "./clerk";
+  import { APIError, Gateway, Header } from 'encore.dev/api'
+  import { authHandler } from 'encore.dev/auth'
+  import { verifyToken } from '@clerk/backend'
+  import { secret } from 'encore.dev/config'
+  import { clerk } from './clerk'
 
-  const clerkSecretKey = secret("ClerkSecretKey");
+  const clerkSecretKey = secret('ClerkSecretKey')
 
   interface AuthParams {
-    authorization: Header<"Authorization">;
+    authorization: Header<'Authorization'>
   }
 
   export interface AuthData {
-    userID: string;
-    email: string;
-    firstName?: string;
-    lastName?: string;
+    userID: string
+    email: string
+    firstName?: string
+    lastName?: string
   }
 
   export const auth = authHandler<AuthParams, AuthData>(async (params) => {
-    const token = params.authorization?.replace("Bearer ", "");
+    const token = params.authorization?.replace('Bearer ', '')
 
     if (!token) {
-      throw APIError.unauthenticated("missing session token");
+      throw APIError.unauthenticated('missing session token')
     }
 
     try {
       const payload = await verifyToken(token, {
         secretKey: clerkSecretKey(),
-      });
+      })
 
-      const userId = payload.sub;
+      const userId = payload.sub
       if (!userId) {
-        throw new Error("No user ID in token");
+        throw new Error('No user ID in token')
       }
 
-      const user = await clerk.users.getUser(userId);
+      const user = await clerk.users.getUser(userId)
 
       return {
         userID: user.id,
         email:
-          user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)
-            ?.emailAddress || "",
+          user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress || '',
         firstName: user.firstName || undefined,
         lastName: user.lastName || undefined,
-      };
+      }
     } catch (err) {
-      throw APIError.unauthenticated("invalid session token");
+      throw APIError.unauthenticated('invalid session token')
     }
-  });
+  })
 
   export const gateway = new Gateway({
     authHandler: auth,
-  });
+  })
   ```
 
-  ## Protect your routes
+  ## Protect your routes using `getAuthData()`
 
-  Use `auth: true` to protect any endpoint. Access the authenticated user's data with `getAuthData()`:
+  This endpoint gets the authenticated user's profile information. The `auth: true` option protects the endpoint, allowing only authenticated requests to access it. The `getAuthData()` function retrieves the authenticated user's data from the auth handler. Learn more about authentication in [Encore documentation](https://encore.dev/docs/ts/develop/auth).
 
   ```ts {{ filename: 'user/profile.ts' }}
-  import { api } from "encore.dev/api";
-  import { getAuthData } from "~encore/auth";
+  import { api } from 'encore.dev/api'
+  import { getAuthData } from '~encore/auth'
 
   export const getProfile = api(
-    { expose: true, auth: true, method: "GET", path: "/user/profile" },
+    { expose: true, auth: true, method: 'GET', path: '/user/profile' },
     async () => {
-      const auth = getAuthData()!;
+      const auth = getAuthData()!
 
       return {
         userId: auth.userID,
         email: auth.email,
         firstName: auth.firstName,
         lastName: auth.lastName,
-      };
-    }
-  );
+      }
+    },
+  )
   ```
 
-  ## Run locally
+  ## Run your project
 
-  Start your Encore app:
+  Start your Encore app with the following command:
 
   ```bash
   encore run
   ```
 
-  Open the local development dashboard at `http://localhost:9400` in your browser to view traces for all requests, including auth handler execution.
+  Open the local development dashboard at [http://localhost:9400](http://localhost:9400) in your browser to view traces for all requests, including auth handler execution.
 </Steps>
 
-## Next steps
-
-<Cards>
-  - [Clerk Backend SDK reference](/docs/reference/backend/overview)
-  - Learn more about verifying tokens and managing users.
-
-  ---
-
-  - [Full Clerk + Encore tutorial](https://encore.dev/blog/clerk-tutorial)
-  - Complete guide with database integration, webhooks, and organizations.
-</Cards>
+If you wanted to add more to your Clerk + Encore integration, such as database integration, webhooks, or organizations, check out this [full Clerk + Encore tutorial](https://encore.dev/blog/clerk-tutorial) guide.

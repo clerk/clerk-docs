@@ -27,21 +27,21 @@ This guide will walk you through how to build a custom flow that allows users to
 
   ### Build the custom flow
 
-  This example consists of two pages:
+  <If notSdk={["ios", "android"]}>
+    <If notSdk="expo">
+      <If notSdk="nextjs">
+        <Include src="_partials/sdk-examples-not-available-callout" />
+      </If>
 
-  - The main page where users can manage their SMS MFA settings
-  - The page where users can add a phone number to their account
+      This example consists of two pages:
 
-  Use the following tabs to view the code necessary for each page.
+      - The main page where users can manage their SMS MFA settings
+      - The page where users can add a phone number to their account
 
-  <Tabs items={["Manage MFA page", "Add phone number page"]}>
-    <Tab>
-      <If notSdk={["ios", "android"]}>
-        <If notSdk="expo">
-          <If notSdk="nextjs">
-            <Include src="_partials/sdk-examples-not-available-callout" />
-          </If>
+      Use the following tabs to view the code necessary for each page.
 
+      <Tabs items={["Manage MFA page", "Add phone number page"]}>
+        <Tab>
           ```tsx {{ filename: 'app/account/manage-mfa/page.tsx', collapsible: true }}
           'use client'
 
@@ -299,9 +299,49 @@ This guide will walk you through how to build a custom flow that allows users to
             )
           }
           ```
-        </If>
+        </Tab>
 
-        <If sdk="expo">
+        <Tab>
+          <Include src="_partials/custom-flows/add-phone" />
+        </Tab>
+      </Tabs>
+    </If>
+
+    <If sdk="expo">
+      To allow users to configure their MFA settings, you'll create a basic dashboard.
+
+      This example consists of three pages:
+
+      - The layout page that checks if the user is signed in
+      - The page where users can manage their account, including their MFA settings
+      - The page where users can add a phone number to their account
+
+      Use the following tabs to view the code necessary for each page.
+
+      <Tabs items={["Layout", "Manage MFA page", "Add phone number page"]}>
+        <Tab>
+          1. Create the `(account)` route group. This groups your account page and the "Add TOTP" page.
+          1. Create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to check if the user is signed in. If the user isn't signed in, they'll be redirected to the sign-in page. You check if the user has a pending `setup-mfa` task because if they're trying to access their account settings to set up MFA, they should be able to access these routes, so we don't want to redirect them to the sign-in page.
+
+          ```tsx {{ filename: 'app/(account)/_layout.tsx' }}
+          import { Redirect, Stack } from 'expo-router'
+          import { useAuth, useSession } from '@clerk/expo'
+
+          export default function AuthenticatedLayout() {
+            const { isSignedIn } = useAuth()
+            const { session } = useSession()
+
+            // If the user isn't signed in and they're not trying to set up MFA, redirect them to the sign-in page
+            if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa') {
+              return <Redirect href={'/sign-in'} />
+            }
+
+            return <Stack />
+          }
+          ```
+        </Tab>
+
+        <Tab>
           ```tsx {{ filename: 'app/(account)/manage-mfa.tsx', collapsible: true }}
           import * as React from 'react'
           import {
@@ -312,19 +352,13 @@ This guide will walk you through how to build a custom flow that allows users to
             StyleSheet,
             ActivityIndicator,
           } from 'react-native'
-          import { useUser, useReverification, useClerk, useSession } from '@clerk/expo'
-          import { BackupCodeResource, PhoneNumberResource } from '@clerk/shared/types'
-          import { Link, useRouter } from 'expo-router'
+          import { useUser, useReverification, useClerk } from '@clerk/expo'
+          import { BackupCodeResource, PhoneNumberResource } from '@clerk/types'
+          import { Href, useRouter } from 'expo-router'
 
           // Display phone numbers reserved for MFA
           const ManageMfaPhoneNumbers = () => {
-            const { isSignedIn, user } = useUser()
-            const clerk = useClerk()
-
-            // Handle signed out state
-            // If the user is trying to set up MFA, they should be able to access this page
-            if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-              return <Text style={styles.warningText}>You must be signed in to access this page</Text>
+            const { user } = useUser()
 
             // Check if any phone numbers are reserved for MFA
             const mfaPhones = user?.phoneNumbers
@@ -384,9 +418,8 @@ This guide will walk you through how to build a custom flow that allows users to
 
           // Display phone numbers that are not reserved for MFA
           const ManageAvailablePhoneNumbers = () => {
-            const { isSignedIn, user } = useUser()
+            const { user } = useUser()
             const clerk = useClerk()
-            const router = useRouter()
 
             const setReservedForSecondFactor = useReverification((phone: PhoneNumberResource) =>
               phone.setReservedForSecondFactor({ reserved: true }),
@@ -396,28 +429,13 @@ This guide will walk you through how to build a custom flow that allows users to
             // Complete the session task when phone number is picked for MFA
             const completeTask = async () => {
               try {
-                await clerk.setActive({
-                  session: clerk.session?.id,
-                  navigate: async ({ decorateUrl }) => {
-                    const url = decorateUrl('/')
-                    if (url.startsWith('http')) {
-                      window.location.href = url
-                    } else {
-                      router.push(url)
-                    }
-                  },
-                })
+                await clerk.setActive({ session: clerk.session?.id })
               } catch (err) {
                 // See https://clerk.com/docs/guides/development/custom-flows/error-handling
                 // for more info on error handling
                 console.error(JSON.stringify(err, null, 2))
               }
             }
-
-            // Handle signed out state
-            // If the user is trying to set up MFA, they should be able to access this page
-            if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-              return <Text style={styles.warningText}>You must be signed in to access this page</Text>
 
             // Get verified phone numbers that aren't reserved for MFA
             const availableForMfaPhones = user?.phoneNumbers
@@ -533,31 +551,8 @@ This guide will walk you through how to build a custom flow that allows users to
           export default function ManageMFA() {
             const [showBackupCodes, setShowBackupCodes] = React.useState(false)
 
-            const { isLoaded, isSignedIn, user } = useUser()
-            const { session } = useSession()
-            const clerk = useClerk()
+            const { isLoaded, user } = useUser()
             const router = useRouter()
-
-            // Complete the session task when phone number is picked for MFA
-            const completeTask = async () => {
-              try {
-                await clerk.setActive({
-                  session: clerk.session?.id,
-                  navigate: async ({ decorateUrl }) => {
-                    const url = decorateUrl('/')
-                    if (url.startsWith('http')) {
-                      window.location.href = url
-                    } else {
-                      router.push(url)
-                    }
-                  },
-                })
-              } catch (err) {
-                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                // for more info on error handling
-                console.error(JSON.stringify(err, null, 2))
-              }
-            }
 
             // Handle loading state
             if (!isLoaded)
@@ -565,15 +560,6 @@ This guide will walk you through how to build a custom flow that allows users to
                 <View style={styles.container}>
                   <ActivityIndicator size="large" color="#6366f1" />
                   <Text style={styles.loadingText}>Loading...</Text>
-                </View>
-              )
-
-            // Handle signed out state
-            // If the user is trying to set up MFA, they should be able to access this page
-            if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa')
-              return (
-                <View style={styles.container}>
-                  <Text style={styles.warningText}>You must be signed in to access this page</Text>
                 </View>
               )
 
@@ -585,11 +571,13 @@ This guide will walk you through how to build a custom flow that allows users to
                 <ManageMfaPhoneNumbers />
                 <ManageAvailablePhoneNumbers />
 
-                <Link href="/add-phone" asChild>
-                  <TouchableOpacity style={[styles.button, styles.primaryButton, styles.linkButton]}>
-                    <Text style={styles.primaryButtonText}>Add a new phone number</Text>
-                  </TouchableOpacity>
-                </Link>
+                <TouchableOpacity
+                  style={[styles.button, styles.primaryButton, styles.linkButton]}
+                  onPress={() => router.push('/(account)/add-phone' as Href)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryButtonText}>Add a new phone number</Text>
+                </TouchableOpacity>
 
                 {/* Manage backup codes */}
                 {user?.twoFactorEnabled && (
@@ -610,10 +598,7 @@ This guide will walk you through how to build a custom flow that allows users to
                         <GenerateBackupCodes />
                         <TouchableOpacity
                           style={[styles.button, styles.successButton, styles.doneButton]}
-                          onPress={() => {
-                            setShowBackupCodes(false)
-                            completeTask()
-                          }}
+                          onPress={() => setShowBackupCodes(false)}
                         >
                           <Text style={styles.successButtonText}>Done</Text>
                         </TouchableOpacity>
@@ -721,6 +706,7 @@ This guide will walk you through how to build a custom flow that allows users to
             },
             linkButton: {
               marginTop: 8,
+              alignSelf: 'stretch',
             },
             infoText: {
               fontSize: 14,
@@ -785,14 +771,14 @@ This guide will walk you through how to build a custom flow that allows users to
             },
           })
           ```
-        </If>
-      </If>
-    </Tab>
+        </Tab>
 
-    <Tab>
-      <Include src="_partials/custom-flows/add-phone" />
-    </Tab>
-  </Tabs>
+        <Tab>
+          <Include src="_partials/custom-flows/add-phone" />
+        </Tab>
+      </Tabs>
+    </If>
+  </If>
 </Steps>
 
 ## Authenticator application (TOTP)
@@ -809,10 +795,10 @@ This guide will walk you through how to build a custom flow that allows users to
   <If sdk="expo">
     ### Install dependencies
 
-    Install `expo-checkbox` for the UI and `react-native-qr-svg` for the QR code.
+    Install `react-native-qr-svg` for the QR code.
 
     ```npm
-    npm install expo-checkbox react-native-qr-svg
+    npm install react-native-qr-svg
     ```
   </If>
 
@@ -1210,9 +1196,9 @@ This guide will walk you through how to build a custom flow that allows users to
             StyleSheet,
             ActivityIndicator,
           } from 'react-native'
-          import { useUser, useReverification, useClerk, useSession } from '@clerk/expo'
-          import { Link, useRouter } from 'expo-router'
-          import { BackupCodeResource } from '@clerk/shared/types'
+          import { useUser, useReverification, useClerk } from '@clerk/expo'
+          import { Href, useRouter } from 'expo-router'
+          import { BackupCodeResource } from '@clerk/types'
 
           // If TOTP is enabled, provide the option to disable it
           const TotpEnabled = () => {
@@ -1239,6 +1225,8 @@ This guide will walk you through how to build a custom flow that allows users to
 
           // If TOTP is disabled, provide the option to enable it
           const TotpDisabled = () => {
+            const router = useRouter()
+
             return (
               <View style={styles.section}>
                 <View style={styles.card}>
@@ -1248,11 +1236,13 @@ This guide will walk you through how to build a custom flow that allows users to
                       Add an authenticator app for two-factor authentication
                     </Text>
                   </View>
-                  <Link href="/add-mfa" asChild>
-                    <TouchableOpacity style={[styles.button, styles.primaryButton]}>
-                      <Text style={styles.primaryButtonText}>Add</Text>
-                    </TouchableOpacity>
-                  </Link>
+                  <TouchableOpacity
+                    style={[styles.button, styles.primaryButton, styles.buttonFullWidth]}
+                    onPress={() => router.push('/(account)/add-mfa' as Href)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.primaryButtonText}>Add</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )
@@ -1311,32 +1301,9 @@ This guide will walk you through how to build a custom flow that allows users to
           }
 
           export default function ManageMFA() {
-            const { isLoaded, isSignedIn, user } = useUser()
-            const clerk = useClerk()
-            const router = useRouter()
+            const { isLoaded, user } = useUser()
 
             const [showNewCodes, setShowNewCodes] = React.useState(false)
-
-            // Complete the session task when phone number is picked for MFA
-            const completeTask = async () => {
-              try {
-                await clerk.setActive({
-                  session: clerk.session?.id,
-                  navigate: async ({ decorateUrl }) => {
-                    const url = decorateUrl('/')
-                    if (url.startsWith('http')) {
-                      window.location.href = url
-                    } else {
-                      router.push(url)
-                    }
-                  },
-                })
-              } catch (err) {
-                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                // for more info on error handling
-                console.error(JSON.stringify(err, null, 2))
-              }
-            }
 
             // Handle loading state
             if (!isLoaded)
@@ -1344,15 +1311,6 @@ This guide will walk you through how to build a custom flow that allows users to
                 <View style={styles.container}>
                   <ActivityIndicator size="large" color="#6366f1" />
                   <Text style={styles.loadingText}>Loading...</Text>
-                </View>
-              )
-
-            // Handle signed out state
-            // If the user is trying to set up MFA, they should be able to access this page
-            if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-              return (
-                <View style={styles.container}>
-                  <Text style={styles.warningText}>You must be signed in to access this page</Text>
                 </View>
               )
 
@@ -1451,6 +1409,9 @@ This guide will walk you through how to build a custom flow that allows users to
               alignItems: 'center',
               justifyContent: 'center',
             },
+            buttonFullWidth: {
+              alignSelf: 'stretch',
+            },
             primaryButton: {
               backgroundColor: '#6366f1',
             },
@@ -1547,7 +1508,7 @@ This guide will walk you through how to build a custom flow that allows users to
 
           ```tsx {{ filename: 'app/(account)/add-mfa.tsx', collapsible: true }}
           import { useUser, useReverification, useClerk, useSession } from '@clerk/expo'
-          import { TOTPResource } from '@clerk/shared/types'
+          import { TOTPResource } from '@clerk/types'
           import * as React from 'react'
           import {
             View,
@@ -1559,7 +1520,7 @@ This guide will walk you through how to build a custom flow that allows users to
             ActivityIndicator,
             Alert,
           } from 'react-native'
-          import { Link, useRouter } from 'expo-router'
+          import { Href, Link, useRouter } from 'expo-router'
           import { QrCodeSvg } from 'react-native-qr-svg'
           import { GenerateBackupCodes } from './manage-mfa'
 
@@ -1764,17 +1725,7 @@ This guide will walk you through how to build a custom flow that allows users to
               setStep('success')
 
               try {
-                await clerk.setActive({
-                  session: clerk.session?.id,
-                  navigate: async ({ decorateUrl }) => {
-                    const url = decorateUrl('/')
-                    if (url.startsWith('http')) {
-                      window.location.href = url
-                    } else {
-                      router.push(url)
-                    }
-                  },
-                })
+                await clerk.setActive({ session: clerk.session?.id })
               } catch (err) {
                 console.error(JSON.stringify(err, null, 2))
               } finally {
@@ -1832,7 +1783,7 @@ This guide will walk you through how to build a custom flow that allows users to
                   </Text>
                   <Text style={styles.successScreenText}>Your account is now more secure.</Text>
 
-                  <Link href="/manage-mfa" asChild>
+                  <Link href="/(account)/manage-mfa" asChild>
                     <Pressable style={[styles.primaryButton, styles.fullWidthButton]}>
                       <Text style={styles.primaryButtonText}>Manage MFA Settings</Text>
                     </Pressable>

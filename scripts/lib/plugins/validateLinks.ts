@@ -125,8 +125,13 @@ function validateCodeBlockUrls(
   const lines = codeValue.split('\n')
 
   for (const line of lines) {
-    // Only check lines that look like comments
-    const isComment = line.includes('//') || line.includes('#') || line.includes('/*') || line.includes('*/')
+    // Only check lines that look like comments (exclude # inside URLs by stripping clerk.com URLs first)
+    const lineWithoutUrls = line.replace(CLERK_DOCS_URL_PATTERN, '')
+    const isComment =
+      lineWithoutUrls.includes('//') ||
+      lineWithoutUrls.includes('#') ||
+      lineWithoutUrls.includes('/*') ||
+      lineWithoutUrls.includes('*/')
     if (!isComment) continue
 
     // Find all clerk.com/docs URLs

@@ -7,125 +7,213 @@ description: Learn how to use the Clerk API to build a custom flow for creating 
 
 This guide demonstrates how to use Clerk's API to build a custom flow for creating Organizations.
 
-<Tabs items={["Next.js", "JavaScript"]}>
-  <Tab>
-    The following example uses the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access the `createOrganization()` method. This method is used to create a new Organization with the provided name.
+<If notSdk={["js-frontend", "ios", "android"]}>
+  The following example uses these hooks:
 
-    If you want to populate the form with suggested organization name and logo, based on your application's [default naming rules](/docs/guides/organizations/configure#default-naming-rules), you can use the [`/v1/me/organization_creation_defaults`](/docs/reference/frontend-api/tag/user/post/v1/me/organization_creation_defaults) endpoint to retrieve the suggested values.
+  - The [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access the `createOrganization()` method. This method is used to create a new Organization with the provided name.
+  - The [`useOrganizationCreationDefaults()`](/docs/reference/hooks/use-organization-creation-defaults) hook to pre-populate the form with a suggested organization name based on your application's [default naming rules](/docs/guides/organizations/configure#default-naming-rules), and to display a warning if an organization with that name or domain already exists.
 
-    This example is written for Next.js App Router but can be adapted for any React-based framework.
+  <Include src="_partials/custom-flows/create-organizations" />
+</If>
 
-    ```tsx {{ filename: 'app/components/CreateOrganization.tsx' }}
-    'use client'
+<If sdk="js-frontend">
+  The following example uses the [`clerk.createOrganization()`](/docs/reference/objects/clerk#create-organization) method to create a new Organization with the provided name.
 
-    import { useOrganizationList } from '@clerk/nextjs'
-    import { FormEventHandler, useState } from 'react'
+  Use the tabs to view the code necessary for the `index.html` and `main.js` files.
 
-    export default function CreateOrganization() {
-      const { isLoaded, createOrganization } = useOrganizationList()
-      const [organizationName, setOrganizationName] = useState('')
+  <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html' }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
 
-      if (!isLoaded) return null
-
-      const handleSubmit: FormEventHandler<HTMLFormElement> = async (e) => {
-        e.preventDefault()
-        createOrganization({ name: organizationName })
-          .then((res) => {
-            console.log(res)
-          })
-          .catch((err) => {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(JSON.stringify(err, null, 2))
-          })
-        setOrganizationName('')
-      }
-
-      return (
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            name="organizationName"
-            value={organizationName}
-            onChange={(e) => setOrganizationName(e.currentTarget.value)}
-          />
-          <button type="submit">Create organization</button>
+        <h1>Create an organization</h1>
+        <form id="create-organization">
+          <label for="name">Name</label>
+          <input id="name" name="name" />
+          <button>Create organization</button>
         </form>
-      )
+
+        <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js' }}
+    import { Clerk } from '@clerk/clerk-js'
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
+    }
+
+    const clerk = new Clerk(pubKey)
+    await clerk.load()
+
+    if (clerk.isSignedIn) {
+      const form = document.getElementById('create-organization')
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+
+        const inputEl = document.getElementById('name')
+
+        if (!inputEl) {
+          // ... handle empty input
+          return
+        }
+
+        try {
+          await clerk.createOrganization({ name: inputEl.value })
+          if (newOrganization) clerk.setActive({ organization: newOrganization.id })
+        } catch (error) {
+          console.log('An error occurred:', error)
+        }
+      })
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `
+
+      const signInDiv = document.getElementById('sign-in')
+
+      clerk.mountSignIn(signInDiv)
     }
     ```
-  </Tab>
+  </CodeBlockTabs>
+</If>
 
-  <Tab>
-    The following example uses the [`clerk.createOrganization()`](/docs/reference/javascript/clerk#create-organization) method to create a new Organization with the provided name.
+<If sdk="ios">
+  ```swift {{ filename: 'OrganizationView.swift', collapsible: true }}
+  import ClerkKit
+  import SwiftUI
 
-    Use the tabs to view the code necessary for the `index.html` and `main.js` files.
+  struct OrganizationView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var organizationName = ""
+    @State private var createdOrganization: Organization?
 
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html' }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="app"></div>
+    var body: some View {
+      VStack(alignment: .leading, spacing: 16) {
+        HStack(spacing: 10) {
+          TextField("Organization name", text: $organizationName)
+            .textFieldStyle(.roundedBorder)
 
-          <h1>Create an organization</h1>
-          <form id="create-organization">
-            <label for="name">Name</label>
-            <input id="name" name="name" />
-            <button>Create organization</button>
-          </form>
-
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
-
-      ```js {{ filename: 'main.js' }}
-      import { Clerk } from '@clerk/clerk-js'
-
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-      if (!pubKey) {
-        throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
-      }
-
-      const clerk = new Clerk(pubKey)
-      await clerk.load()
-
-      if (clerk.isSignedIn) {
-        const form = document.getElementById('create-organization')
-
-        form.addEventListener('submit', function (e) {
-          e.preventDefault()
-
-          const inputEl = document.getElementById('name')
-
-          if (!inputEl) {
-            // ... handle empty input
-            return
+          Button("Submit") {
+            Task { await createOrganization() }
           }
+        }
 
-          clerk
-            .createOrganization({ name: inputEl.value })
-            .then((res) => console.log(res))
-            .catch((error) => console.log('An error occurred:', error))
-        })
-      } else {
-        // If there is no active user, mount Clerk's <SignIn />
-        document.getElementById('app').innerHTML = `
-          <div id="sign-in"></div>
-        `
-
-        const signInDiv = document.getElementById('sign-in')
-
-        clerk.mountSignIn(signInDiv)
+        if let createdOrganization = createdOrganization {
+          Text("Successfully Created: \(createdOrganization.name)")
+        }
       }
-      ```
-    </CodeBlockTabs>
-  </Tab>
-</Tabs>
+      .padding()
+    }
+
+    @MainActor
+    private func createOrganization() async {
+      guard let user = clerk.user else { return }
+
+      do {
+        createdOrganization = try await user.createOrganization(name: organizationName)
+        organizationName = ""
+      } catch {
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin {{ filename: 'OrganizationView.kt', collapsible: true }}
+  import androidx.compose.foundation.layout.Arrangement
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.foundation.layout.Row
+  import androidx.compose.foundation.layout.fillMaxWidth
+  import androidx.compose.foundation.layout.padding
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.OutlinedTextField
+  import androidx.compose.material3.Text
+  import androidx.compose.runtime.Composable
+  import androidx.compose.runtime.getValue
+  import androidx.compose.runtime.mutableStateOf
+  import androidx.compose.runtime.remember
+  import androidx.compose.runtime.rememberCoroutineScope
+  import androidx.compose.runtime.setValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.compose.ui.unit.dp
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.organizations.Organization
+  import kotlinx.coroutines.launch
+
+  @Composable
+  fun OrganizationView() {
+    var organizationName by remember { mutableStateOf("") }
+    var createdOrganization by remember { mutableStateOf<Organization?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        OutlinedTextField(
+          modifier = Modifier.weight(1f),
+          value = organizationName,
+          onValueChange = { organizationName = it },
+          label = { Text("Organization name") },
+        )
+
+        Button(
+          onClick = {
+            coroutineScope.launch {
+              val organization = createOrganization(organizationName) ?: return@launch
+              createdOrganization = organization
+              organizationName = ""
+            }
+          },
+        ) {
+          Text("Submit")
+        }
+      }
+
+      createdOrganization?.let { organization ->
+        Text("Successfully Created: ${organization.name}")
+      }
+    }
+  }
+
+  private suspend fun createOrganization(organizationName: String): Organization? {
+    if (Clerk.user == null) return null
+
+    var createdOrganization: Organization? = null
+    Organization.create(name = organizationName)
+      .onSuccess { organization ->
+        createdOrganization = organization
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+
+    return createdOrganization
+  }
+  ```
+</If>

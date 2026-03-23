@@ -43,11 +43,13 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<TutorialHero />`](#tutorialhero-)
     - [`<Cards>`](#cards)
     - [`<Properties>`](#properties-1)
+    - [Tables](#tables)
     - [`<Include />`](#include-)
     - [`<Typedoc />`](#typedoc-)
     - [`<If />`](#if-)
     - [`<Accordion />`](#accordion-)
     - [Images and static assets](#images-and-static-assets)
+    - [API reference docs](#api-reference-docs)
   - [Help wanted!](#help-wanted)
 
 </details>
@@ -102,7 +104,9 @@ The structure of the PR should be:
 
 - **Title**: Summarize the change you made, using an active voice. E.g. "Fix broken "Home" link on sidenav"
   - If there is an issue that this PR is meant to resolve, the titles will probably be the same.
-- **Description ("Leave a comment")**: Describe what the concern was and summarize how you solved it.
+- **Description**: GitHub PRs are our source of truth, so descriptions should include as much relevant context as possible. Aim to be as detailed as possible (see [example](https://github.com/clerk/clerk-docs/pull/3003)).
+  - If the PR is a result of a new feature or update, include links to the relevant source code PRs in their respective repos (e.g. `clerk/javascript`) and clearly explain the behavior before —> now. If they are `clerk/dashboard` changes, include screenshots/videos showing the before —> now updates. If this context already exists in the source code PR (`clerk/javascript`, `clerk/dashboard`, `clerk/clerk`, etc.), then just copy it over to the `clerk-docs` PR description, or vice-versa (if it’s in `clerk-docs` PR description, add it to the source code PR description). Writing up context shouldn’t be too hard - AI is very much your friend here!
+  - The **Deadline** should always be filled out, even if the date is tentative/flexible. Try to provide a reasonable exact date so that it's trackable in the PR description. If there's truly no rush on it, write something like "No rush".
 
 ## Preview your changes
 
@@ -543,7 +547,50 @@ The `search` frontmatter field can be used to control how a page is indexed by [
 
 You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
 
+#### Preview
+
+The `preview` frontmatter field can be used to render a component preview at the start of the page. It has the following subfields:
+
+| Name     | Type     | Default | Description                                                                                                                                               |
+| -------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src`    | `string` | N/A     | The URL path to the live preview (e.g., `/sign-in`)                                                                                                       |
+| `shadcn` | `object` | N/A     | Optional object containing framework-specific shadcn component names for installation references that renders a button to copy the shadcn install command |
+
+The `shadcn` subfield supports the following framework keys:
+
+| Name     | Type     | Description                                                            |
+| -------- | -------- | ---------------------------------------------------------------------- |
+| `nextjs` | `string` | The name of the Next.js Shadcn component (e.g., `nextjs-sign-in-page`) |
+
 ##### Examples
+
+<details>
+<summary>Add a preview with live demo</summary>
+
+```diff
+  ---
+  title: Example
++ preview:
++   src: '/sign-in'
+  ---
+```
+
+</details>
+
+<details>
+<summary>Add a preview with Shadcn component reference</summary>
+
+```diff
+  ---
+  title: Example
++ preview:
++   src: '/sign-in'
++   shadcn:
++     nextjs: 'nextjs-sign-in-page'
+  ---
+```
+
+</details>
 
 <details>
 <summary>Exclude a page from search</summary>
@@ -1254,6 +1301,51 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 </details>
 
+### Tables
+
+Use standard markdown pipe tables. All tables are automatically styled with a bordered container, gray header row, sticky header on desktop, and a scroll fade indicator on mobile.
+
+```mdx
+| Name     | Type     | Description                  |
+| -------- | -------- | ---------------------------- |
+| `userId` | `string` | The user's unique identifier |
+| `email`  | `string` | The user's primary email     |
+```
+
+#### Column alignment
+
+Use [GFM alignment syntax](https://github.github.com/gfm/#tables-extension-) in the separator row to control horizontal text alignment:
+
+- `:---` or `---` — left-aligned (default)
+- `:---:` — centered
+- `---:` — right-aligned
+
+```mdx
+| Feature        | Basic | Pro |
+| -------------- | :---: | :-: |
+| Email/Password |  Yes  | Yes |
+| Social Login   |  No   | Yes |
+```
+
+#### Comparison markers
+
+Use these components inside table cells to display styled comparison icons.
+
+| Component                | Description                                                    |
+| ------------------------ | -------------------------------------------------------------- |
+| `<CompareYes />`         | Displays a green checkmark (✓)                                 |
+| `<CompareNo />`          | Displays a red X (✗)                                           |
+| `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children |
+| `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children   |
+
+```mdx
+| Feature        |                  Basic                   |      Pro       |
+| -------------- | :--------------------------------------: | :------------: |
+| Email/Password |              <CompareYes />              | <CompareYes /> |
+| Social Login   |              <CompareNo />               | <CompareYes /> |
+| MFA            | <ComparePartial>Limited</ComparePartial> | <CompareYes /> |
+```
+
 ### `<Include />`
 
 The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. This way, you write the content once and only have to maintain it in one place.
@@ -1315,7 +1407,7 @@ The `<Typedoc />` component is used to inject the contents of an MDX file from t
 For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
-<Typedoc src="clerk-react/use-auth" />
+<Typedoc src="react/use-auth" />
 ```
 
 ### `<If />`
@@ -1521,6 +1613,17 @@ The `Gallery` component displays multiple images in a grid layout. On mobile the
 | <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
 
 </details>
+
+### API reference docs
+
+The API reference documentation at `/docs/reference/*` is powered by [Scalar](https://scalar.com/) and displays OpenAPI specs for three APIs:
+
+- [Frontend API](https://clerk.com/docs/reference/frontend-api)
+- [Backend API](https://clerk.com/docs/reference/backend-api)
+- [Platform API](https://clerk.com/docs/reference/platform-api)
+
+> [!NOTE]
+> Only Clerk team members can update API reference docs, as these docs are stored in private repositories. For instructions, see the [guide in Notion](https://www.notion.so/clerkdev/Contributing-to-Scalar-docs-2f92b9ab44fe80298124c794fdc7a9fb).
 
 ## Help wanted!
 

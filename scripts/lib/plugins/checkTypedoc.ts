@@ -8,6 +8,7 @@
 import type { BuildConfig } from '../config'
 import type { Node } from 'unist'
 import type { VFile } from 'vfile'
+import { u } from 'unist-builder'
 import { map as mdastMap } from 'unist-util-map'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { errorMessages, safeMessage } from '../error-messages'
@@ -25,6 +26,8 @@ export const checkTypedoc =
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
+    const silenceTypedocErrors = config.flags?.silenceTypedocErrors === true
+
     return mdastMap(tree, (node) => {
       const typedocSrc = extractComponentPropValueFromNode(
         config,
@@ -40,16 +43,21 @@ export const checkTypedoc =
 
       if (typedocSrc === undefined) return node
 
-      const typedocFolderExists = existsSync(config.typedocPath)
+      if (!silenceTypedocErrors) {
+        const typedocFolderExists = existsSync(config.typedocPath)
 
-      if (typedocFolderExists === false && options.reportWarnings === true) {
-        throw new Error(errorMessages['typedoc-folder-not-found'](config.typedocPath))
+        if (typedocFolderExists === false && options.reportWarnings === true) {
+          throw new Error(errorMessages['typedoc-folder-not-found'](config.typedocPath))
+        }
       }
 
       const typedoc = typedocs.find(({ path }) => path === `${removeMdxSuffix(typedocSrc)}.mdx`)
 
       if (typedoc === undefined) {
-        if (options.reportWarnings === true) {
+        if (silenceTypedocErrors && options.embed === true) {
+          return u('paragraph', [])
+        }
+        if (options.reportWarnings === true && !silenceTypedocErrors) {
           safeMessage(
             config,
             vfile,

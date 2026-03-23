@@ -1,0 +1,383 @@
+---
+title: Chrome Extension Quickstart (JavaScript)
+description: Add authentication and user management to your Chrome Extension with Clerk using plain TypeScript and esbuild.
+sdk: chrome-extension
+---
+
+<TutorialHero
+  exampleRepo={[
+    {
+      title: "Chrome Extension JS Quickstart Repo",
+      link: "https://github.com/clerk/clerk-chrome-extension-js-quickstart"
+    }
+  ]}
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+<Steps>
+  ## Enable Native API
+
+  <Include src="_partials/native-api-callout" />
+
+  ## Configure your authentication options
+
+  When creating your Clerk application in the Clerk Dashboard, your authentication options will depend on how you configure your Chrome Extension. Chrome Extensions can be used as a popup, a side panel, or in conjunction with a web app. Popups and side panels have limited authentication options. [Learn more about what options are available](/docs/reference/chrome-extension/overview#authentication-options).
+
+  This guide will use a popup.
+
+  ## Create a new project
+
+  Create a new project directory and initialize a `package.json` file.
+
+  ```npm
+  mkdir clerk-chrome-extension-js
+  cd clerk-chrome-extension-js
+  npm init -y
+  ```
+
+  Then set the `type` field to `"module"` in `package.json` so you can use ES module syntax.
+
+  ```json {{ filename: 'package.json' }}
+  {
+    "type": "module"
+  }
+  ```
+
+  ## Set your Clerk API key
+
+  <Include src="_partials/quickstarts/set-clerk-publishable-key" />
+
+  ```env {{ filename: '.env' }}
+  CLERK_PUBLISHABLE_KEY={{pub_key}}
+  ```
+
+  ## Install dependencies
+
+  Install the Clerk Chrome Extension SDK and the development dependencies needed to build the extension.
+
+  ```npm
+  npm install @clerk/chrome-extension
+  npm install -D esbuild typescript @types/chrome
+  ```
+
+  - `esbuild` — A fast JavaScript bundler that compiles TypeScript and bundles your code.
+  - `typescript` — Adds type checking for your source files.
+  - `@types/chrome` — Type definitions for the Chrome Extension APIs.
+
+  ## Configure TypeScript and esbuild
+
+  Create a `tsconfig.json` file for TypeScript configuration.
+
+  ```json {{ filename: 'tsconfig.json' }}
+  {
+    "compilerOptions": {
+      "target": "ES2020",
+      "module": "ES2020",
+      "moduleResolution": "bundler",
+      "outDir": "build",
+      "rootDir": "src",
+      "strict": true,
+      "skipLibCheck": true
+    },
+    "include": ["src/**/*.ts"]
+  }
+  ```
+
+  Create an `esbuild.config.mjs` file that bundles your TypeScript source code and injects the `CLERK_PUBLISHABLE_KEY` environment variable at build time.
+
+  ```js {{ filename: 'esbuild.config.mjs' }}
+  import esbuild from 'esbuild'
+
+  process.loadEnvFile()
+
+  if (!process.env.CLERK_PUBLISHABLE_KEY) {
+    throw new Error('Missing CLERK_PUBLISHABLE_KEY in .env')
+  }
+
+  const watch = process.argv.includes('--watch')
+
+  /** @type {import('esbuild').BuildOptions} */
+  const options = {
+    entryPoints: ['./src/popup.ts'],
+    outfile: './build/popup.js',
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    sourcemap: true,
+    define: {
+      'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(process.env.CLERK_PUBLISHABLE_KEY),
+    },
+  }
+
+  if (watch) {
+    const ctx = await esbuild.context(options)
+    await ctx.watch()
+    console.log('Watching for changes...')
+  } else {
+    await esbuild.build(options)
+  }
+  ```
+
+  Add `build` and `dev` scripts to your `package.json`.
+
+  ```json {{ filename: 'package.json' }}
+  {
+    "scripts": {
+      "build": "node esbuild.config.mjs",
+      "dev": "node esbuild.config.mjs --watch"
+    }
+  }
+  ```
+
+  ## Create the extension files
+
+  Create a `build/` directory for the extension's static files and bundled output.
+
+  ```bash {{ filename: 'terminal' }}
+  mkdir build
+  ```
+
+  Create a `manifest.json` file for the Chrome Extension manifest. This declares the extension's name, version, permissions, and popup entry point.
+
+  ```json {{ filename: 'build/manifest.json' }}
+  {
+    "manifest_version": 3,
+    "name": "Clerk Extension JS Demo",
+    "description": "A Chrome extension demo using @clerk/chrome-extension with plain TypeScript.",
+    "version": "0.0.1",
+    "permissions": ["cookies", "storage"],
+    "host_permissions": ["http://localhost/*"],
+    "action": {
+      "default_title": "Clerk Extension Demo",
+      "default_popup": "popup.html"
+    }
+  }
+  ```
+
+  Create the `popup.html` file that serves as the extension popup's entry point.
+
+  ```html {{ filename: 'build/popup.html' }}
+  <!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Clerk Extension Demo</title>
+      <link rel="stylesheet" href="popup.css" />
+    </head>
+
+    <body>
+      <div id="app">
+        <h1>Clerk JS Chrome Extension Quickstart</h1>
+        <div id="content"></div>
+        <nav id="nav"></nav>
+      </div>
+      <script src="popup.js"></script>
+    </body>
+  </html>
+  ```
+
+  Create the `popup.css` file for styling the popup.
+
+  ```css {{ filename: 'build/popup.css' }}
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    width: 600px;
+    height: 600px;
+    background: #111;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    min-height: 600px;
+  }
+
+  h1 {
+    padding: 2rem 1rem;
+  }
+
+  #content {
+    padding: 1rem;
+    flex: 1;
+  }
+
+  #nav {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #222;
+  }
+
+  #nav:has(#sign-out-btn) {
+    justify-content: space-between;
+  }
+
+  button {
+    background: #6c47ff;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  ```
+
+  ## Update `.gitignore`
+
+  Create a `.gitignore` file that ignores `node_modules/`, build artifacts, and environment files. The static files in `build/` (`manifest.json`, `popup.html`, `popup.css`) remain tracked.
+
+  ```text {{ filename: '.gitignore' }}
+  node_modules/
+  build/*.js
+  build/*.js.map
+  .env
+  ```
+
+  ## Create the popup script
+
+  Create a `src/` directory.
+
+  ```bash {{ filename: 'terminal' }}
+  mkdir src
+  ```
+
+  Create an `env.d.ts` file that declares the `process.env` type so TypeScript can resolve the environment variable injected by esbuild at build time.
+
+  ```ts {{ filename: 'src/env.d.ts' }}
+  declare const process: { env: { CLERK_PUBLISHABLE_KEY: string } }
+  ```
+
+  The `popup.ts` file is the main script for the extension popup that handles authentication with Clerk.
+
+  ```ts {{ filename: 'src/popup.ts' }}
+  import { createClerkClient } from '@clerk/chrome-extension/client'
+
+  const publishableKey = process.env.CLERK_PUBLISHABLE_KEY
+
+  const EXTENSION_URL = chrome.runtime.getURL('.')
+  const POPUP_URL = `${EXTENSION_URL}popup.html`
+
+  const clerk = createClerkClient({ publishableKey })
+
+  const contentEl = document.getElementById('content') as HTMLDivElement
+  const navEl = document.getElementById('nav') as HTMLDivElement
+
+  function render() {
+    contentEl.innerHTML = ''
+    navEl.innerHTML = ''
+
+    if (clerk.user) {
+      const info = document.createElement('div')
+      const labelSpan = document.createElement('p')
+      labelSpan.textContent = 'Session ID'
+      const valueSpan = document.createElement('p')
+      valueSpan.textContent = clerk.session?.id ?? ''
+      info.appendChild(labelSpan)
+      info.appendChild(valueSpan)
+      contentEl.appendChild(info)
+
+      const userBtnEl = document.createElement('div')
+      navEl.appendChild(userBtnEl)
+      clerk.mountUserButton(userBtnEl)
+
+      const signOutBtn = document.createElement('button')
+      signOutBtn.textContent = 'Sign Out'
+      signOutBtn.id = 'sign-out-btn'
+      signOutBtn.addEventListener('click', () => {
+        clerk.signOut({ redirectUrl: POPUP_URL })
+      })
+      navEl.appendChild(signOutBtn)
+    } else {
+      const signInBtn = document.createElement('button')
+      signInBtn.textContent = 'Sign In'
+      signInBtn.id = 'sign-in-btn'
+      signInBtn.addEventListener('click', () => {
+        clerk.openSignIn({})
+      })
+      navEl.appendChild(signInBtn)
+    }
+  }
+
+  clerk
+    .load({
+      afterSignOutUrl: POPUP_URL,
+      signInForceRedirectUrl: POPUP_URL,
+      signUpForceRedirectUrl: POPUP_URL,
+      allowedRedirectProtocols: ['chrome-extension:'],
+    })
+    .then(() => {
+      clerk.addListener(render)
+      render()
+    })
+  ```
+
+  Key concepts in this file:
+
+  - **`createClerkClient()`** — Creates a Clerk client instance for use outside of React. This is the main entry point for the Chrome Extension SDK's vanilla JavaScript API.
+  - **`allowedRedirectProtocols`** — Set to `['chrome-extension:']` to allow Clerk to redirect to `chrome-extension://` URLs. Without this, redirects after sign-in or sign-up will fail.
+  - **`chrome.runtime.getURL('.')`** — Gets the base URL of the extension (`chrome-extension://<CRX_ID>/`). This is used to construct redirect URLs so Clerk navigates back to the popup after authentication.
+  - **`clerk.addListener(render)`** — Registers a callback that fires whenever the Clerk client state changes (for example, after sign-in or sign-out), keeping the UI in sync.
+
+  ## Build and load your extension
+
+  Run the dev command to bundle your TypeScript source into `build/popup.js`.
+
+  ```npm
+  npm run dev
+  ```
+
+  To load your Chrome Extension, follow these steps:
+
+  1. Open Chrome or a Chromium-based browser and navigate to `chrome://extensions`.
+  1. In the top-right, enable **Developer mode**.
+  1. In the top-left, select **Load unpacked**.
+  1. Navigate to where your project is located and select the `build/` folder, then press **Select**.
+  1. Your extension will now be loaded and shown in the list of extensions.
+
+  Open the extension popup and confirm that the **Sign In** button appears. Select it to open the sign-in flow, then sign in and confirm that your user information and the **Sign Out** button appear.
+
+  > [!WARNING]
+  > After signing in, your popup may close. This is expected behavior for Chrome Extension popups. Reopening the popup will show your signed-in state.
+</Steps>
+
+## Next steps
+
+Learn how to sync auth with your web app, keep sessions fresh with `createClerkClient()`, and prepare your extension for production using the following guides.
+
+<Cards>
+  - [Sync your Chrome Extension with your web app](/docs/guides/sessions/sync-host)
+  - Learn how to configure your Chrome Extension to sync user authentication with your web app.
+
+  ---
+
+  - [createClerkClient()](/docs/reference/chrome-extension/create-clerk-client)
+  - Learn how to use Clerk's `createClerkClient()` function in a background service worker to ensure that the user's session is always fresh.
+
+  ---
+
+  - [Deploy a Chrome Extension to production](/docs/guides/development/deployment/chrome-extension)
+  - Learn how to deploy your Clerk Chrome Extension to production.
+
+  ---
+
+  - [Configure a consistent CRX ID](/docs/guides/development/configure-consistent-crx-id)
+  - Learn how to configure a consistent CRX ID to ensure your extension has a stable, unchanging key.
+</Cards>

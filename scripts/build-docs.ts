@@ -101,6 +101,7 @@ import { checkTooltips } from './lib/plugins/checkTooltips'
 import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { getRoutableDocHref } from './lib/utils/getRoutableDocHref'
 import { existsSync } from 'node:fs'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
@@ -149,6 +150,7 @@ async function main() {
     ignoreLinks: ['/docs/quickstart'],
     ignorePaths: [
       '/docs/core-1',
+      '/docs/core-2',
       '/docs/reference/backend-api',
       '/docs/reference/frontend-api',
       '/docs/reference/platform-api',
@@ -212,6 +214,7 @@ async function main() {
       controlled: args.includes('--controlled'),
       skipApiErrors: args.includes('--skip-api-errors'),
       skipGit: args.includes('--skip-git'),
+      silenceTypedocErrors: args.includes('--silence-typedoc-errors'),
     },
   })
 
@@ -255,6 +258,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
+  const getRoutableHref = getRoutableDocHref(config)
 
   abortSignal?.throwIfAborted()
 
@@ -325,7 +329,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
-  console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
+  console.info(
+    config.flags.silenceTypedocErrors
+      ? `✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached, typedoc errors silenced)`
+      : `✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`,
+  )
 
   abortSignal?.throwIfAborted()
 
@@ -412,6 +420,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   })
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
+  // docsMap contains base hrefs AND variant keys (e.g. `/docs/quickstart.react`)
+  // needed for internal build lookups. routableDocsMap contains only URLs that
+  // are actually routable on the site, used for link validation.
+  const routableDocsMap: DocsMap = new Map()
+  docsArray.forEach((doc) => {
+    routableDocsMap.set(doc.file.href, docsMap.get(doc.file.href) ?? doc)
+  })
+
   abortSignal?.throwIfAborted()
 
   // Goes through and grabs the sdk scoping out of the manifest
@@ -494,8 +510,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       const updatedDoc = docsMap.get(item.href)
 
-      if (updatedDoc?.sdk) {
-        for (const sdk of [...(updatedDoc.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
+      if (updatedDoc?.frontmatter?.sdk) {
+        const docSDKs = [...(updatedDoc.frontmatter?.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]
+
+        for (const sdk of docSDKs) {
           // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
           // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
 
@@ -507,7 +525,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             throw new Error(`Existing doc not found for ${item.href}.${sdk}`)
           }
 
-          docsMap.set(item.href.replace(config.baseDocsLink, `${config.baseDocsLink}${sdk}/`), {
+          routableDocsMap.set(getRoutableHref(item.href, docSDKs, sdk), {
             ...existingDoc,
             sdk: [sdk], // override this fake copy of the doc so links to it believe this is the correct sdk
           })
@@ -521,11 +539,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const groupsItemsCombinedSDKs = (() => {
         const sdks = items?.flatMap((item) =>
           item.flatMap((item) => {
-            // For manifest items with hrefs, include distinctSDKVariants from the document
+            // For manifest items with hrefs, include frontmatter SDK and distinctSDKVariants from the document
             if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
               const doc = docsMap.get(item.href)
               if (doc) {
-                const sdks = [...(item.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+                const sdks = [...(item.sdk ?? []), ...(doc.frontmatter?.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
                 return sdks.length > 0 ? sdks : undefined
               }
             }
@@ -539,7 +557,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return uniqueSDKs
       })()
 
-      // This is the sdk of the group
+      // This is the sdk of the group (explicitly set in the manifest)
       const groupSDK = details.sdk
 
       // This is the sdk of the parent group
@@ -550,26 +568,23 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
       }
 
-      // If the group has explicit SDK scoping in the manifest, that takes precedence
-      if (groupSDK !== undefined && groupSDK.length > 0) {
-        return {
-          ...details,
-          sdk: groupSDK,
-          items,
-        } as ManifestGroup
+      // If the group has an explicit SDK restriction, preserve it even if children support more SDKs
+      // This handles cases like "Mobile Navigation" where the folder itself should only appear for ios/android
+      // even though children like "Quickstart" may support other SDKs
+      if (groupSDK !== undefined) {
+        return { ...details, sdk: groupSDK, items } as ManifestGroup
       }
 
-      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
+      // If all the children items support all SDKs, then we don't need to set the sdk on the group
       if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
         return { ...details, sdk: undefined, items } as ManifestGroup
       }
 
-      const combinedSDKs = Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? []
-
+      // Use the computed children SDKs - this takes precedence over any inherited SDK from parent
+      // This ensures folders like "App Router" get SDK scoping based on their children's frontmatter
       return {
         ...details,
-        // If there are children items, then we combine the sdks of the group and the children items sdks
-        sdk: combinedSDKs,
+        sdk: groupsItemsCombinedSDKs,
         items,
       } as ManifestGroup
     },
@@ -597,7 +612,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, partial.path, 'partials', (linkInPartial) => {
+            validateLinks(config, routableDocsMap, partial.path, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
             }),
           )
@@ -641,7 +656,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
+            validateLinks(config, routableDocsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
               links.add(linkInTooltip)
             }),
           )
@@ -670,44 +685,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const validatedTypedocs = await Promise.all(
-    typedocs.map(async (typedoc) => {
-      const filePath = path.join(config.typedocRelativePath, typedoc.path)
+  const validatedTypedocsRaw = await Promise.all(
+    typedocs.map(
+      async (typedoc): Promise<(typeof typedoc & { vfile: unknown; node: Node; links: Set<string> }) | null> => {
+        const filePath = path.join(config.typedocRelativePath, typedoc.path)
 
-      try {
-        let node: Node | null = null
-        const links: Set<string> = new Set()
-
-        const vfile = await remark()
-          .use(remarkMdx)
-          .use(
-            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-              links.add(linkInTypedoc)
-            }),
-          )
-          .use(() => (tree, vfile) => {
-            node = tree
-          })
-          .process(typedoc.vfile)
-
-        if (node === null) {
-          throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
-        }
-
-        return {
-          ...typedoc,
-          vfile,
-          node: node as Node,
-          links,
-        }
-      } catch (error) {
         try {
           let node: Node | null = null
           const links: Set<string> = new Set()
 
           const vfile = await remark()
+            .use(remarkMdx)
             .use(
-              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              validateLinks(config, routableDocsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
               }),
             )
@@ -727,12 +717,41 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             links,
           }
         } catch (error) {
-          console.error(error)
-          throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+          try {
+            let node: Node | null = null
+            const links: Set<string> = new Set()
+
+            const vfile = await remark()
+              .use(
+                validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+                  links.add(linkInTypedoc)
+                }),
+              )
+              .use(() => (tree, vfile) => {
+                node = tree
+              })
+              .process(typedoc.vfile)
+
+            if (node === null) {
+              throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+            }
+
+            return {
+              ...typedoc,
+              vfile,
+              node: node as Node,
+              links,
+            }
+          } catch (err) {
+            if (config.flags.silenceTypedocErrors) return null
+            console.error(err)
+            throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+          }
         }
-      }
-    }),
+      },
+    ),
   )
+  const validatedTypedocs = validatedTypedocsRaw.filter((t): t is NonNullable<typeof t> => t !== null)
   console.info(`✓ Validated all typedocs`)
 
   abortSignal?.throwIfAborted()
@@ -785,6 +804,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         async (group) => ({
           title: group.title,
           topNav: group.topNav,
+          flatNav: group.flatNav,
           tag: group.tag,
           wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,
@@ -815,7 +835,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             validateLinks(
               config,
-              docsMap,
+              routableDocsMap,
               doc.file.filePath,
               'docs',
               (link) => {
@@ -849,7 +869,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             embedLinks(
               config,
-              docsMap,
+              routableDocsMap,
               sdks,
               (link) => {
                 foundLinks.add(link)
@@ -1009,12 +1029,12 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(validateLinks(config, routableDocsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
+              .use(embedLinks(config, routableDocsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(
@@ -1199,20 +1219,48 @@ ${yaml.stringify({
   const tooltipsVFiles = validatedTooltips.map((tooltip) => tooltip.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
-  const warnings = reporter(
-    [
-      ...coreVFiles,
-      ...partialsVFiles,
-      ...tooltipsVFiles,
-      ...typedocVFiles,
-      ...flatSdkSpecificVFiles,
-      manifestVfile,
-      ...headingValidationVFiles,
-    ],
-    {
-      quiet: true,
-    },
-  )
+  // Deduplicate messages across VFiles that share the same file path.
+  // The same doc can be processed multiple times (once as a core doc + once per SDK variant),
+  // each producing its own VFile with the same warnings. Merge them into a single VFile per path
+  // so warnings are only reported once.
+  // When --silence-typedoc-errors is set, exclude typedoc vfiles so their warnings are not reported.
+  const allVFiles = [
+    ...coreVFiles,
+    ...partialsVFiles,
+    ...tooltipsVFiles,
+    ...(config.flags.silenceTypedocErrors ? [] : typedocVFiles),
+    ...flatSdkSpecificVFiles,
+    manifestVfile,
+    ...headingValidationVFiles,
+  ]
+
+  const deduplicatedVFiles: VFile[] = []
+  const seenPaths = new Map<string, VFile>()
+
+  for (const vfile of allVFiles) {
+    // Normalize path: core VFiles use "docs/..." while SDK-specific use "/docs/..."
+    const filePath = String(vfile.path ?? '').replace(/^(?!\/)/, '/')
+    const existing = seenPaths.get(filePath)
+
+    if (!existing) {
+      seenPaths.set(filePath, vfile)
+      deduplicatedVFiles.push(vfile)
+    } else {
+      // Merge any new unique messages into the existing VFile
+      const existingMessages = new Set(existing.messages.map((m) => `${m.message}:${m.line}:${m.column}`))
+      for (const msg of vfile.messages) {
+        const key = `${msg.message}:${msg.line}:${msg.column}`
+        if (!existingMessages.has(key)) {
+          existing.messages.push(msg)
+          existingMessages.add(key)
+        }
+      }
+    }
+  }
+
+  const warnings = reporter(deduplicatedVFiles, {
+    quiet: true,
+  })
 
   abortSignal?.throwIfAborted()
 

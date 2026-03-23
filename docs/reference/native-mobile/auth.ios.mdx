@@ -1,0 +1,434 @@
+---
+title: Authentication flows
+description: Learn how to handle sign-in, sign-up, MFA, password reset, and session management with the Clerk iOS SDK.
+sdk: ios
+---
+
+Use `Auth` for sign-in and sign-up flows, and to manage sessions. You can access auth with `clerk.auth`.
+
+## Sign in
+
+### Sign in with password
+
+Sign in directly with an identifier (email, phone, or username) and password:
+
+```swift
+var signIn = try await clerk.auth.signInWithPassword(
+  identifier: "user@email.com",
+  password: "secretpassword"
+)
+```
+
+### Sign in with OTP (email)
+
+Send an [OTP](!otp) to the supplied email, and then verify the code.
+
+```swift
+var signIn = try await clerk.auth.signInWithEmailCode(emailAddress: "user@email.com")
+signIn = try await signIn.verifyCode("123456")
+```
+
+### Sign in with OTP (phone)
+
+Send an [OTP](!otp) to the supplied phone number, and then verify the code.
+
+```swift
+var signIn = try await clerk.auth.signInWithPhoneCode(phoneNumber: "+1234567890")
+signIn = try await signIn.verifyCode("123456")
+```
+
+### Sign in with OAuth
+
+Sign in using an OAuth provider (e.g., Google, GitHub):
+
+```swift
+var result = try await clerk.auth.signInWithOAuth(provider: .google)
+```
+
+### Sign in with Apple
+
+Sign in using Sign in with Apple:
+
+```swift
+var result = try await clerk.auth.signInWithApple()
+```
+
+See the [Sign in with Apple guide](/docs/guides/configure/auth-strategies/sign-in-with-apple) for native iOS setup.
+
+### Sign in with ID token
+
+Sign in with an ID token from a provider:
+
+```swift
+var result = try await clerk.auth.signInWithIdToken(
+  idToken,
+  provider: .apple
+)
+```
+
+### Sign in with passkey
+
+Sign in using a passkey:
+
+```swift
+var signIn = try await clerk.auth.signInWithPasskey()
+```
+
+### Sign in with Enterprise SSO
+
+Sign in using [Enterprise SSO](/docs/guides/configure/auth-strategies/enterprise-connections/overview):
+
+```swift
+var result = try await clerk.auth.signInWithEnterpriseSSO(emailAddress: "user@company.com")
+```
+
+### Sign in with ticket
+
+Sign in using a ticket generated from the Backend API:
+
+```swift
+var signIn = try await clerk.auth.signInWithTicket(ticket)
+```
+
+### Sign in with identifier
+
+Start a sign-in with an identifier (email, phone, or username):
+
+```swift
+// Email
+var signIn = try await clerk.auth.signIn("user@email.com")
+```
+
+```swift
+// Phone
+var signIn = try await clerk.auth.signIn("+1234567890")
+```
+
+```swift
+// Username
+var signIn = try await clerk.auth.signIn("johndoe")
+```
+
+### Continue an existing sign-in
+
+Use these methods when you already have a `SignIn` from `clerk.auth.signIn(...)` or `clerk.auth.currentSignIn`, and want to complete it with a specific factor or provider.
+
+#### Send and verify email code
+
+Send the user an [OTP](!otp) via email to verify their sign-in. Then verify the code that the user supplies:
+
+```swift
+signIn = try await signIn.sendEmailCode()
+signIn = try await signIn.verifyCode("123456")
+```
+
+#### Send and verify phone code
+
+Send the user an [OTP](!otp) via SMS to verify their sign-in. Then verify the code that the user supplies:
+
+```swift
+signIn = try await signIn.sendPhoneCode()
+signIn = try await signIn.verifyCode("123456")
+```
+
+#### Authenticate with password
+
+```swift
+signIn = try await signIn.authenticateWithPassword("secretpassword")
+```
+
+#### Authenticate with OAuth
+
+Authenticate with an OAuth provider (e.g., Google, GitHub, see [all providers](/docs/guides/configure/auth-strategies/social-connections/overview#supported-social-providers)):
+
+```swift
+var result = try await signIn.authenticateWithOAuth(provider: .google)
+```
+
+#### Authenticate with Enterprise SSO
+
+```swift
+var result = try await signIn.authenticateWithEnterpriseSSO()
+```
+
+#### Authenticate with Apple
+
+```swift
+var result = try await signIn.authenticateWithApple()
+```
+
+See the [Sign in with Apple guide](/docs/guides/configure/auth-strategies/sign-in-with-apple) for native iOS setup.
+
+#### Authenticate with ID token
+
+```swift
+signIn = try await signIn.authenticateWithIdToken(
+  idToken,
+  provider: .apple
+)
+```
+
+#### Authenticate with passkey
+
+```swift
+signIn = try await signIn.authenticateWithPasskey()
+```
+
+### Multi-factor authentication
+
+After completing first factor verification, if multi-factor authentication (MFA) is required, use these methods to complete the second factor verification. The examples assume you already have a `SignIn` from a sign-in flow.
+
+#### MFA with phone code
+
+Send and verify an MFA code via SMS:
+
+```swift
+signIn = try await signIn.sendMfaPhoneCode()
+signIn = try await signIn.verifyMfaCode(
+  "123456",
+  type: .phoneCode
+)
+```
+
+#### MFA with email code
+
+Send and verify an MFA code via email:
+
+```swift
+signIn = try await signIn.sendMfaEmailCode()
+signIn = try await signIn.verifyMfaCode(
+  "123456",
+  type: .emailCode
+)
+```
+
+#### MFA with TOTP (authenticator app)
+
+Verify using a TOTP code from an authenticator app:
+
+```swift
+signIn = try await signIn.verifyMfaCode(
+  "123456",
+  type: .totp
+)
+```
+
+### MFA with backup code
+
+Verify using a backup code:
+
+```swift
+signIn = try await signIn.verifyMfaCode(
+  "backup123",
+  type: .backupCode
+)
+```
+
+### Password reset
+
+The Clerk iOS SDK provides methods to reset user passwords via email or phone verification.
+
+#### Password reset with email
+
+Reset password using email verification:
+
+```swift
+var signIn = try await clerk.auth.signIn("user@email.com")
+signIn = try await signIn.sendResetPasswordEmailCode()
+signIn = try await signIn.verifyCode("123456")
+signIn = try await signIn.resetPassword(
+  newPassword: "newpassword",
+  signOutOfOtherSessions: true
+)
+```
+
+#### Password reset with phone
+
+Reset password using phone verification:
+
+```swift
+var signIn = try await clerk.auth.signIn("+1234567890")
+signIn = try await signIn.sendResetPasswordPhoneCode()
+signIn = try await signIn.verifyCode("123456")
+signIn = try await signIn.resetPassword(
+  newPassword: "newpassword",
+  signOutOfOtherSessions: true
+)
+```
+
+## Sign up
+
+### Create a new sign-up
+
+Create a new account:
+
+```swift
+var signUp = try await clerk.auth.signUp(
+  emailAddress: "newuser@email.com",
+  phoneNumber: "+1234567890",
+  password: "secretpassword",
+  firstName: "John",
+  lastName: "Doe",
+  username: "johndoe",
+  legalAccepted: true
+)
+```
+
+### Update a sign-up
+
+Update sign-up information:
+
+```swift
+signUp = try await signUp.update(
+  emailAddress: "newuser@email.com",
+  phoneNumber: "+1234567890",
+  password: "secretpassword",
+  firstName: "John",
+  lastName: "Doe",
+  username: "johndoe",
+  legalAccepted: true
+)
+```
+
+### Sign up with OAuth
+
+Sign up using OAuth (e.g., Google, GitHub):
+
+```swift
+var result = try await clerk.auth.signUpWithOAuth(provider: .google)
+```
+
+### Sign up with Apple
+
+Sign up using sign in with Apple:
+
+```swift
+var result = try await clerk.auth.signUpWithApple()
+```
+
+See the [Sign in with Apple guide](/docs/guides/configure/auth-strategies/sign-in-with-apple) for native iOS setup.
+
+### Sign up with ID token
+
+Sign up using an ID token:
+
+```swift
+var result = try await clerk.auth.signUpWithIdToken(
+  idToken,
+  provider: .apple,
+  firstName: "John",
+  lastName: "Doe"
+)
+```
+
+### Sign up with Enterprise SSO
+
+Sign up using [Enterprise SSO](/docs/guides/configure/auth-strategies/enterprise-connections/overview):
+
+```swift
+var result = try await clerk.auth.signUpWithEnterpriseSSO(emailAddress: "user@company.com")
+```
+
+### Sign up with ticket
+
+Sign up using a ticket generated from the Backend API:
+
+```swift
+var signUp = try await clerk.auth.signUpWithTicket(ticket)
+```
+
+### Continue an existing sign-up
+
+Use these methods when you already have a `SignUp` from `clerk.auth.signUp(...)` or `clerk.auth.currentSignUp` and want to complete it with a specific factor or provider.
+
+#### Send and verify email via OTP
+
+Send the user an [OTP](!otp) via email to verify their account. Then verify the code that the user supplies:
+
+```swift
+signUp = try await signUp.sendEmailCode()
+signUp = try await signUp.verifyEmailCode("123456")
+```
+
+#### Send and verify phone via OTP
+
+Send the user an [OTP](!otp) via SMS to verify their account. Then verify the code that the user supplies:
+
+```swift
+signUp = try await signUp.sendPhoneCode()
+signUp = try await signUp.verifyPhoneCode("123456")
+```
+
+## Current sign-in/sign-up
+
+Access the in-progress sign-in or sign-up stored on the client for multi-step flows.
+
+### Current sign-in
+
+```swift
+let currentSignIn = clerk.auth.currentSignIn
+```
+
+### Current sign-up
+
+```swift
+let currentSignUp = clerk.auth.currentSignUp
+```
+
+## Session management
+
+The Clerk iOS SDK provides methods to manage user sessions, including signing out, switching sessions, and revoking sessions.
+
+### Sessions
+
+Retrieve all sessions for the current client:
+
+```swift
+let sessions = clerk.auth.sessions
+```
+
+### Get session token
+
+Retrieve the user's session token:
+
+```swift
+guard let token = try await clerk.auth.getToken() else { return }
+```
+
+Use this token when calling your backend to authenticate the request:
+
+```swift
+var request = URLRequest(url: url)
+request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+```
+
+### Set current session
+
+Set the current session and optionally the [Active Organization](!active-organization):
+
+```swift
+try await clerk.auth.setActive(
+  sessionId: sessionId,
+  organizationId: organizationId
+)
+```
+
+### Revoke session
+
+Revoke a specific session:
+
+```swift
+let revokedSession = try await clerk.auth.revokeSession(session)
+```
+
+### Sign out
+
+Sign out the current user:
+
+```swift
+// Sign out from all sessions.
+try await clerk.auth.signOut()
+
+// Sign out from a specific session.
+try await clerk.auth.signOut(sessionId: sessionId)
+```

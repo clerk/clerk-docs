@@ -925,8 +925,8 @@ test`,
     )
 
     expect(output).toContain(`warning Hash "my-heading" not found in /docs/page-2`)
-    expect(output).toMatch(
-      /error\s+Matching file not found for path: \/docs\/page-3\. Expected file to exist at \/docs\/page-3\.mdx/,
+    expect(output).toContain(
+      `warning Matching file not found for path: /docs/page-3. Expected file to exist at /docs/page-3.mdx`,
     )
   })
 
@@ -3310,8 +3310,8 @@ title: Simple Test
       }),
     )
 
-    expect(output).toMatch(
-      /error\s+Matching file not found for path: \/docs\/non-existent-page\. Expected file to exist at \/docs\/non-existent-page\.mdx/,
+    expect(output).toContain(
+      `warning Matching file not found for path: /docs/non-existent-page. Expected file to exist at /docs/non-existent-page.mdx`,
     )
   })
 
@@ -5206,8 +5206,8 @@ title: Document with Warnings
     expect(await fileExists(pathJoin('./dist/document-with-warnings.mdx'))).toBe(true)
 
     // Check that warnings were reported
-    expect(output).toMatch(
-      /error\s+Matching file not found for path: \/docs\/non-existent-document\. Expected file to exist at \/docs\/non-existent-document\.mdx/,
+    expect(output).toContain(
+      `warning Matching file not found for path: /docs/non-existent-document. Expected file to exist at /docs/non-existent-document.mdx`,
     )
     expect(output).toContain('warning sdk "invalid-sdk" in <If /> is not a valid SDK')
   })
@@ -6679,7 +6679,7 @@ description: Generated API docs
     )
 
     expect(output).toContain(
-      'error Matching file not found for path: /docs/non-existent-file. Expected file to exist at /docs/non-existent-file.mdx',
+      'warning Matching file not found for path: /docs/non-existent-file. Expected file to exist at /docs/non-existent-file.mdx',
     )
   })
 
@@ -7643,7 +7643,7 @@ description: x
     )
 
     expect(output).toContain(
-      'error Matching file not found for path: /docs/invalid-link. Expected file to exist at /docs/invalid-link.mdx',
+      'warning Matching file not found for path: /docs/invalid-link. Expected file to exist at /docs/invalid-link.mdx',
     )
   })
 })

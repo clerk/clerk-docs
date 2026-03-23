@@ -2,7 +2,7 @@ import { Node } from 'unist'
 import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
 import type { BuildConfig } from '../config'
-import { type WarningsSection, safeError, safeMessage } from '../error-messages'
+import { type WarningsSection, safeMessage } from '../error-messages'
 import type { DocsMap } from '../store'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 
@@ -59,7 +59,7 @@ export const validateLinks =
       const linkedDoc = docsMap.get(url)
 
       if (linkedDoc === undefined) {
-        safeError(
+        safeMessage(
           config,
           vfile,
           filePath,

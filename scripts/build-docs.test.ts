@@ -3281,6 +3281,238 @@ description: This is a test page
   })
 })
 
+describe('Codeblock URL Validation', () => {
+  test('Warn if clerk.com/docs URL in code block comment points to non-existent page', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// Visit https://clerk.com/docs/non-existent-page for more info
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(
+      'warning Matching file not found for path: https://clerk.com/docs/non-existent-page. Expected file to exist at /docs/non-existent-page.mdx',
+    )
+  })
+
+  test('No warning if clerk.com/docs URL in code block comment points to valid page', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Other Page', href: '/docs/other-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// Visit https://clerk.com/docs/other-page for more info
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/other-page.mdx',
+        content: `---
+title: Other Page
+---
+
+# Other Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).not.toContain('warning Matching file not found')
+  })
+
+  test('Warn if clerk.com/docs URL in code block comment has invalid hash', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Other Page', href: '/docs/other-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// See https://clerk.com/docs/other-page#non-existent-hash
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/other-page.mdx',
+        content: `---
+title: Other Page
+---
+
+# Other Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain('warning Hash "non-existent-hash" not found in /docs/other-page')
+  })
+
+  test('Validate multiple clerk.com/docs URLs in the same code block', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Valid Page', href: '/docs/valid-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// See https://clerk.com/docs/valid-page
+// See https://clerk.com/docs/invalid-page
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/valid-page.mdx',
+        content: `---
+title: Valid Page
+---
+
+# Valid Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).not.toContain('warning Matching file not found for path: https://clerk.com/docs/valid-page')
+    expect(output).toContain(
+      'warning Matching file not found for path: https://clerk.com/docs/invalid-page. Expected file to exist at /docs/invalid-page.mdx',
+    )
+  })
+
+  test('Validate clerk.com/docs URLs with hash fragment pointing to valid heading', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Other Page', href: '/docs/other-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// See https://clerk.com/docs/other-page#valid-section
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/other-page.mdx',
+        content: `---
+title: Other Page
+---
+
+# Other Page
+
+## Valid Section`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).not.toContain('warning Matching file not found')
+    expect(output).not.toContain('warning Hash')
+  })
+})
+
 describe('Link Validation and Processing', () => {
   test('Fail if link is to non-existent page', async () => {
     const { tempDir } = await createTempFiles([

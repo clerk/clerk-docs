@@ -5207,7 +5207,7 @@ title: Document with Warnings
 
     // Check that warnings were reported
     expect(output).toContain(
-      'warning Matching file not found for path: /docs/non-existent-document. Expected file to exist at /docs/non-existent-document.mdx',
+      `warning Matching file not found for path: /docs/non-existent-document. Expected file to exist at /docs/non-existent-document.mdx`,
     )
     expect(output).toContain('warning sdk "invalid-sdk" in <If /> is not a valid SDK')
   })

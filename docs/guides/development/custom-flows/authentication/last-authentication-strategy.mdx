@@ -110,16 +110,15 @@ The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/r
 
         const { startSSOFlow } = useSSO()
         const router = useRouter()
+        const [submittingStrategy, setSubmittingStrategy] = React.useState<OAuthStrategy | null>(null)
 
     +   // Use the useClerk hook to access the clerk object
     +   const { client } = useClerk()
     +   // Use the clerk object to access the last authentication strategy
     +   const lastStrategy = client?.lastAuthenticationStrategy
 
-        const [isSubmitting, setIsSubmitting] = React.useState(false)
-
         const onPress = async (oauthStrategy: OAuthStrategy) => {
-          setIsSubmitting(true)
+          setSubmittingStrategy(oauthStrategy)
           try {
             const { createdSessionId, setActive } = await startSSOFlow({
               strategy: oauthStrategy,
@@ -157,7 +156,7 @@ The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/r
           } catch (err) {
             console.error(JSON.stringify(err, null, 2))
           } finally {
-            setIsSubmitting(false)
+            setSubmittingStrategy(null)
           }
         }
 
@@ -173,19 +172,30 @@ The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/r
             </ThemedText>
             <ThemedText style={styles.subtitle}>Choose a provider to continue</ThemedText>
             <View style={styles.buttonContainer}>
-              {providers.map((provider) => (
-                <Pressable
-                  key={provider.strategy}
-                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-                  onPress={() => onPress(provider.strategy as OAuthStrategy)}
-                >
-                  <ThemedText style={styles.buttonText}>
-                    {isSubmitting
-                      ? 'Opening…'
-    +                 : `Sign in with ${provider.name} ${lastStrategy === provider.strategy ? '(Last used)' : ''}`}
-                  </ThemedText>
-                </Pressable>
-              ))}
+              {providers.map((provider) => {
+                const strategy = provider.strategy as OAuthStrategy
+                const isThisProviderLoading = submittingStrategy === strategy
+                const isAnyLoading = submittingStrategy !== null
+
+                return (
+                  <Pressable
+                    key={provider.strategy}
+                    style={({ pressed }) => [
+                      styles.button,
+                      isAnyLoading && !isThisProviderLoading && styles.buttonDisabled,
+                      pressed && styles.buttonPressed,
+                    ]}
+                    onPress={() => onPress(strategy)}
+                    disabled={isAnyLoading}
+                  >
+                    <ThemedText style={styles.buttonText}>
+                      {isThisProviderLoading
+                        ? 'Opening…'
+    +                   : `Sign in with ${provider.name} ${lastStrategy === provider.strategy ? '(Last used)' : ''}`}
+                    </ThemedText>
+                  </Pressable>
+                )
+              })}
             </View>
           </ThemedView>
         )

@@ -126,31 +126,41 @@ export default function SignInScreen() {
 
 The redirect URL used during the SSO flow **must** be registered in the [Clerk Dashboard](https://dashboard.clerk.com) under **Redirect URLs**. Without this, the OAuth provider will complete authentication but the session will not be created.
 
-### For development builds
+### Recommended setup
 
-If your `app.json` has a `scheme` configured (e.g., `"scheme": "myapp"`), register:
+Use a custom app scheme and pass an explicit `redirectUrl` to `startSSOFlow()`. This ensures a **stable redirect URL** that works reliably across different environments, including Expo Go.
 
-```
-myapp://sso-callback
-```
+1. Configure a custom scheme in your `app.json`:
 
-### For Expo Go
+   ```json {{ filename: 'app.json' }}
+   {
+     "expo": {
+       "scheme": "myapp"
+     }
+   }
+   ```
 
-By default, `useSSO()` generates a redirect URL using `AuthSession.makeRedirectUri({ path: 'sso-callback' })`. In Expo Go, this produces a URL like `exp://192.168.x.x:PORT/--/sso-callback` which changes per network and port. For a stable URL in Expo Go, pass a custom `redirectUrl` using your app's scheme:
+1. Register the following redirect URL in the Clerk Dashboard:
 
-```tsx
-import * as AuthSession from 'expo-auth-session'
+   ```
+   myapp://sso-callback
+   ```
 
-const { createdSessionId } = await startSSOFlow({
-  strategy: 'oauth_google',
-  redirectUrl: AuthSession.makeRedirectUri({
-    scheme: 'myapp',
-    path: 'sso-callback',
-  }),
-})
-```
+1. Pass the same redirect URL explicitly when starting the SSO flow:
 
-Then register `myapp://sso-callback` in the Dashboard. This works in both Expo Go and development builds.
+   ```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+   import * as AuthSession from 'expo-auth-session'
+
+   const { createdSessionId } = await startSSOFlow({
+     strategy: 'oauth_google',
+     redirectUrl: AuthSession.makeRedirectUri({
+       scheme: 'myapp',
+       path: 'sso-callback',
+     }),
+   })
+   ```
+
+This is especially important in Expo Go. By default, `useSSO()` generates a redirect URL using `AuthSession.makeRedirectUri({ path: 'sso-callback' })`, which can produce a dynamic URL like `exp://192.168.x.x:PORT/--/sso-callback`. That URL changes based on your network and port, which makes it harder to register reliably in the Clerk Dashboard.
 
 For more detailed examples, see the following guides:
 

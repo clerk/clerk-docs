@@ -3281,6 +3281,238 @@ description: This is a test page
   })
 })
 
+describe('Codeblock URL Validation', () => {
+  test('Warn if clerk.com/docs URL in code block comment points to non-existent page', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// Visit https://clerk.com/docs/non-existent-page for more info
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(
+      'warning Matching file not found for path: https://clerk.com/docs/non-existent-page. Expected file to exist at /docs/non-existent-page.mdx',
+    )
+  })
+
+  test('No warning if clerk.com/docs URL in code block comment points to valid page', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Other Page', href: '/docs/other-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// Visit https://clerk.com/docs/other-page for more info
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/other-page.mdx',
+        content: `---
+title: Other Page
+---
+
+# Other Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).not.toContain('warning Matching file not found')
+  })
+
+  test('Warn if clerk.com/docs URL in code block comment has invalid hash', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Other Page', href: '/docs/other-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// See https://clerk.com/docs/other-page#non-existent-hash
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/other-page.mdx',
+        content: `---
+title: Other Page
+---
+
+# Other Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain('warning Hash "non-existent-hash" not found in /docs/other-page')
+  })
+
+  test('Validate multiple clerk.com/docs URLs in the same code block', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Valid Page', href: '/docs/valid-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// See https://clerk.com/docs/valid-page
+// See https://clerk.com/docs/invalid-page
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/valid-page.mdx',
+        content: `---
+title: Valid Page
+---
+
+# Valid Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).not.toContain('warning Matching file not found for path: https://clerk.com/docs/valid-page')
+    expect(output).toContain(
+      'warning Matching file not found for path: https://clerk.com/docs/invalid-page. Expected file to exist at /docs/invalid-page.mdx',
+    )
+  })
+
+  test('Validate clerk.com/docs URLs with hash fragment pointing to valid heading', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Other Page', href: '/docs/other-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+\`\`\`ts
+// See https://clerk.com/docs/other-page#valid-section
+const x = 1
+\`\`\`
+
+# Simple Test Page`,
+      },
+      {
+        path: './docs/other-page.mdx',
+        content: `---
+title: Other Page
+---
+
+# Other Page
+
+## Valid Section`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).not.toContain('warning Matching file not found')
+    expect(output).not.toContain('warning Hash')
+  })
+})
+
 describe('Link Validation and Processing', () => {
   test('Fail if link is to non-existent page', async () => {
     const { tempDir } = await createTempFiles([
@@ -7038,10 +7270,10 @@ describe('Multiple document variants for pages', () => {
         content: `---
 title: API Documentation
 description: x
-sdk: nextjs, remix
+sdk: nextjs, expo
 ---
 
-Documentation specific to Next.js and Remix`,
+Documentation specific to Next.js and Expo`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -7058,7 +7290,7 @@ Documentation specific to React.js`,
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'remix'],
+        validSdks: ['react', 'nextjs', 'expo'],
       }),
     )
 
@@ -7071,7 +7303,7 @@ Documentation specific to React.js`,
           {
             title: 'API Doc',
             href: '/docs/:sdk:/api-doc',
-            sdk: ['nextjs', 'remix', 'react'],
+            sdk: ['nextjs', 'expo', 'react'],
           },
         ],
       ],
@@ -7080,31 +7312,31 @@ Documentation specific to React.js`,
     expect(await readFile('./dist/nextjs/api-doc.mdx')).toBe(`---
 title: API Documentation
 description: x
-sdk: nextjs, remix, react
+sdk: nextjs, expo, react
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-availableSdks: nextjs,remix,react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: nextjs
 sourceFile: /docs/api-doc.mdx
 ---
 
-Documentation specific to Next.js and Remix
+Documentation specific to Next.js and Expo
 `)
 
-    expect(await readFile('./dist/remix/api-doc.mdx')).toBe(`---
+    expect(await readFile('./dist/expo/api-doc.mdx')).toBe(`---
 title: API Documentation
 description: x
-sdk: nextjs, remix, react
+sdk: nextjs, expo, react
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-availableSdks: nextjs,remix,react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
-activeSdk: remix
+activeSdk: expo
 sourceFile: /docs/api-doc.mdx
 ---
 
-Documentation specific to Next.js and Remix
+Documentation specific to Next.js and Expo
 `)
 
     expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
@@ -7112,8 +7344,8 @@ title: API Documentation for React
 description: x
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-sdk: nextjs, remix, react
-availableSdks: nextjs,remix,react
+sdk: nextjs, expo, react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: react
 sourceFile: /docs/api-doc.react.mdx
@@ -7128,21 +7360,21 @@ metadata:
 description: x
 template: wide
 redirectPage: "true"
-availableSdks: nextjs,remix,react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 search:
   exclude: true
 canonical: /docs/:sdk:/api-doc
 ---
-<SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
+<SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","expo","react"]} />`)
 
     expect(await listFiles('dist/')).toEqual([
       'api-doc.mdx',
       'directory.json',
+      'expo/api-doc.mdx',
       'manifest.json',
       'nextjs/api-doc.mdx',
       'react/api-doc.mdx',
-      'remix/api-doc.mdx',
     ])
   })
 
@@ -7263,10 +7495,10 @@ canonical: /docs/:sdk:/test
         content: `---
 title: API Documentation
 description: x
-sdk: nextjs, remix
+sdk: nextjs, expo
 ---
 
-Documentation specific to Next.js and Remix`,
+Documentation specific to Next.js and Expo`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -7292,7 +7524,7 @@ description: x
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'remix'],
+        validSdks: ['react', 'nextjs', 'expo'],
       }),
     )
 
@@ -7304,7 +7536,7 @@ canonical: /docs/overview
 sourceFile: /docs/overview.mdx
 ---
 
-<SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]}>API Doc</SDKLink>
+<SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","expo","react"]}>API Doc</SDKLink>
 `)
   })
 
@@ -7326,10 +7558,10 @@ sourceFile: /docs/overview.mdx
         content: `---
 title: API Documentation
 description: x
-sdk: nextjs, remix
+sdk: nextjs, expo
 ---
 
-Documentation specific to Next.js and Remix`,
+Documentation specific to Next.js and Expo`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -7354,7 +7586,7 @@ description: x
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
-      validSdks: ['react', 'nextjs', 'remix'],
+      validSdks: ['react', 'nextjs', 'expo'],
     })
     const store = createBlankStore()
     const invalidate = invalidateFile(store, config)
@@ -7366,8 +7598,8 @@ title: API Documentation for React
 description: x
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-sdk: nextjs, remix, react
-availableSdks: nextjs,remix,react
+sdk: nextjs, expo, react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: react
 sourceFile: /docs/api-doc.react.mdx
@@ -7396,8 +7628,8 @@ title: API Documentation for React
 description: x
 sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
-sdk: nextjs, remix, react
-availableSdks: nextjs,remix,react
+sdk: nextjs, expo, react
+availableSdks: nextjs,expo,react
 notAvailableSdks: ""
 activeSdk: react
 sourceFile: /docs/api-doc.react.mdx
@@ -7419,7 +7651,7 @@ Updated Documentation specific to React.js
                 items: [
                   [
                     { title: 'Doc 1', sdk: ['nextjs'], items: [[{ title: 'Doc 1', href: '/docs/doc-1' }]] },
-                    { title: 'Doc 1', sdk: ['react', 'remix'], href: '/docs/doc-1' },
+                    { title: 'Doc 1', sdk: ['react', 'expo'], href: '/docs/doc-1' },
                     { title: 'Doc 2', href: '/docs/doc-2' },
                     {
                       title: 'Doc 3 & 4',
@@ -7456,13 +7688,13 @@ sdk: react
 # Doc 1 for React`,
       },
       {
-        path: './docs/doc-1.remix.mdx',
+        path: './docs/doc-1.expo.mdx',
         content: `---
-title: Doc 1 for Remix
-sdk: remix
+title: Doc 1 for Expo
+sdk: expo
 ---
 
-# Doc 1 for Remix`,
+# Doc 1 for Expo`,
       },
       {
         path: './docs/doc-2.mdx',
@@ -7496,7 +7728,7 @@ sdk: react
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'remix', 'vue'],
+        validSdks: ['react', 'nextjs', 'expo', 'vue'],
       }),
     )
 
@@ -7516,7 +7748,7 @@ sdk: react
                       {
                         href: '/docs/:sdk:/doc-1',
                         title: 'Doc 1',
-                        sdk: ['nextjs', 'react', 'remix'],
+                        sdk: ['nextjs', 'react', 'expo'],
                       },
                     ],
                   ],
@@ -7524,7 +7756,7 @@ sdk: react
                 {
                   href: '/docs/:sdk:/doc-1',
                   title: 'Doc 1',
-                  sdk: ['react', 'remix'],
+                  sdk: ['react', 'expo'],
                 },
                 {
                   href: '/docs/doc-2',

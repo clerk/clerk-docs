@@ -122,6 +122,40 @@ function sanitizeBranchForPath(branch: string): string {
   return branch.replace(/[/\\]/g, '-')
 }
 
+/**
+ * Root .gitignore lines that hid the symlinked clerk-docs tree during the sync workflow.
+ * After migration, `clerk-docs/` is a normal tracked directory.
+ */
+function lineIgnoresSymlinkedClerkDocsRoot(line: string): boolean {
+  const beforeComment = line.split('#')[0]?.trim() ?? ''
+  if (!beforeComment) return false
+  return beforeComment === '/clerk-docs' || beforeComment === 'clerk-docs' || beforeComment === 'clerk-docs/'
+}
+
+async function stripClerkDocsRootGitignoreEntries(logger: Logger, clerkWorkPath: string): Promise<boolean> {
+  const gitignorePath = path.join(clerkWorkPath, '.gitignore')
+  if (!existsSync(gitignorePath)) {
+    logger.debug('No root .gitignore; skipping clerk-docs ignore cleanup', { clerkWorkPath })
+    return false
+  }
+  const raw = await fs.readFile(gitignorePath, 'utf8')
+  const lines = raw.split(/\r?\n/)
+  const kept: string[] = []
+  let removed = 0
+  for (const line of lines) {
+    if (lineIgnoresSymlinkedClerkDocsRoot(line)) {
+      removed++
+      continue
+    }
+    kept.push(line)
+  }
+  if (removed === 0) return false
+  const out = kept.join('\n') + (raw.endsWith('\n') ? '\n' : '')
+  await fs.writeFile(gitignorePath, out, 'utf8')
+  logger.info('Removed symlink-era clerk-docs rules from root .gitignore', { linesRemoved: removed })
+  return true
+}
+
 function expandHome(input: string): string {
   if (!input.startsWith('~/')) return input
   return process.env.HOME ? path.join(process.env.HOME, input.slice(2)) : input
@@ -749,6 +783,8 @@ async function migrateCurrentBranch(
       clerkWorkPath: clerkWorkPath || '(would clone clerk to temp)',
       suggestedBranch: `${headRef}-migrated`,
       clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
+      gitignore:
+        'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
     })
     return { newBranch: `${headRef}-migrated`, clerkPrUrl: '(dry-run)' }
   }
@@ -789,6 +825,16 @@ async function migrateCurrentBranch(
       ['merge', `${remoteName}/${headRef}`, '--allow-unrelated-histories', '-m', `Migrate clerk-docs branch ${headRef}`],
       clerkWorkPath,
     )
+    const gitignoreStripped = await stripClerkDocsRootGitignoreEntries(logger, clerkWorkPath)
+    if (gitignoreStripped) {
+      await runCommand(logger, 'git', ['add', '.gitignore'], clerkWorkPath)
+      await runCommand(
+        logger,
+        'git',
+        ['commit', '-m', 'chore: stop ignoring clerk-docs after in-repo migration'],
+        clerkWorkPath,
+      )
+    }
     await runCommand(logger, 'git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
 
     const existing = await commandJson<Array<{ url: string }>>(

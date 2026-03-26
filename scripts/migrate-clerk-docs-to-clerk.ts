@@ -45,6 +45,8 @@ interface PullRequestView {
 }
 
 const TARGET_DIR_IN_CLERK = 'clerk-docs'
+/** Temp `gh repo clone` of clerk: only baseRef snapshot + merge/push; full history not needed. */
+const CLERK_TEMP_CLONE_DEPTH = 1
 const SYNC_BOT_HINT = 'sync'
 const MIGRATION_NOTICE_MARKER = '[clerk-docs-migration-notice]'
 const MIN_TOOL_VERSIONS = {
@@ -617,12 +619,24 @@ async function prepareClerkWorkspace(
     path: tmpRoot,
     repo: config.clerkRepo,
     branch: baseRef,
-    note: 'Folder exists but stays empty until clone finishes; first step can take several minutes.',
+    depth: CLERK_TEMP_CLONE_DEPTH,
+    note: 'Shallow clone (depth 1): large repo downloads much faster; folder stays empty until clone finishes.',
   })
   await runCommand(
     logger,
     'gh',
-    ['repo', 'clone', config.clerkRepo, tmpRoot, '--', '--branch', baseRef, '--single-branch'],
+    [
+      'repo',
+      'clone',
+      config.clerkRepo,
+      tmpRoot,
+      '--',
+      '--branch',
+      baseRef,
+      '--single-branch',
+      '--depth',
+      String(CLERK_TEMP_CLONE_DEPTH),
+    ],
     process.cwd(),
     { inheritStdio: true },
   )

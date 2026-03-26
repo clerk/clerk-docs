@@ -25,6 +25,8 @@ interface CliConfig {
   debug: boolean
   clerkRepo: string
   clerkDocsRepo: string
+  /** When several open PRs share the same head, use this PR number (required with --yes if ambiguous) */
+  prNumber?: number
 }
 
 interface CommandResult {
@@ -98,7 +100,8 @@ Optional:
   --clerk-docs-repo <o/r>     Source PR lookup (default: clerk/clerk-docs)
   --clerk-base <branch>       Branch in clerk to base the new PR on (default: main)
   --dry-run                   Print actions only
-  --yes                       Skip checkpoint prompts
+  --yes                       Skip checkpoint prompts (with multiple PRs for this head, pass --pr)
+  --pr <number>              Open clerk-docs PR to use for title/body/comment when several match this branch
   --debug                     Verbose logs
   --help
 `)
@@ -126,7 +129,14 @@ function parseConfig(): CliConfig {
   }
 
   const clerkPathArg = getArg('--clerk-path')
+  const prArg = getArg('--pr')
   const cwd = process.cwd()
+  let prNumber: number | undefined
+  if (prArg !== undefined) {
+    const n = Number.parseInt(prArg, 10)
+    if (!Number.isFinite(n) || n < 1) throw new Error('--pr must be a positive integer (GitHub PR number)')
+    prNumber = n
+  }
   return {
     clerkPath: clerkPathArg ? path.resolve(expandHome(clerkPathArg)) : undefined,
     clerkDocsPath: path.resolve(expandHome(getArg('--clerk-docs-path') ?? cwd)),
@@ -136,6 +146,7 @@ function parseConfig(): CliConfig {
     debug: hasFlag('--debug'),
     clerkRepo: getArg('--clerk-repo') ?? 'clerk/clerk',
     clerkDocsRepo: getArg('--clerk-docs-repo') ?? 'clerk/clerk-docs',
+    prNumber,
   }
 }
 
@@ -152,6 +163,33 @@ async function checkpoint(
   try {
     const answer = (await rl.question('Continue? (y/N): ')).trim().toLowerCase()
     if (answer !== 'y' && answer !== 'yes') throw new Error('Stopped by user at checkpoint.')
+  } finally {
+    rl.close()
+  }
+}
+
+async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Promise<PullRequestView> {
+  output.write('\nMultiple open PRs use this branch. Pick one for title/body and the backlink comment:\n')
+  for (const pr of list) {
+    output.write(`  #${pr.number}  base=${pr.baseRefName}  ${pr.title}\n     ${pr.url}\n`)
+  }
+  const rl = readline.createInterface({ input, output })
+  try {
+    for (;;) {
+      const raw = (await rl.question('Enter PR number: ')).trim()
+      const n = Number.parseInt(raw, 10)
+      if (!Number.isFinite(n)) {
+        output.write('Please enter a numeric PR number.\n')
+        continue
+      }
+      const picked = list.find(pr => pr.number === n)
+      if (!picked) {
+        output.write(`No matching PR in the list. Choose one of: ${list.map(p => p.number).join(', ')}\n`)
+        continue
+      }
+      logger.info('User selected clerk-docs PR', { number: picked.number })
+      return picked
+    }
   } finally {
     rl.close()
   }
@@ -386,7 +424,7 @@ async function resolveSourcePr(
       '--json',
       'number,title,body,baseRefName,headRefName,url',
       '--limit',
-      '5',
+      '50',
     ],
     process.cwd(),
   )
@@ -397,7 +435,22 @@ async function resolveSourcePr(
   }
 
   if (list.length > 1) {
-    throw new Error(`Multiple open PRs found for head "${headBranch}". Close duplicates or rename branches.`)
+    if (config.prNumber !== undefined && Number.isFinite(config.prNumber)) {
+      const picked = list.find(pr => pr.number === config.prNumber)
+      if (!picked) {
+        throw new Error(
+          `--pr ${config.prNumber} does not match any of the open PRs for head "${headBranch}": ${list.map(p => p.number).join(', ')}`,
+        )
+      }
+      logger.info('Using clerk-docs PR from --pr', { number: picked.number })
+      return picked
+    }
+    if (config.autoApprove) {
+      throw new Error(
+        `Multiple open PRs for head "${headBranch}": ${list.map(p => `#${p.number}`).join(', ')}. Re-run with --pr <number> or drop --yes.`,
+      )
+    }
+    return await promptPickSourcePr(logger, list)
   }
 
   logger.warn('No open PR for this head; using generic title/body for clerk PR', { headBranch })

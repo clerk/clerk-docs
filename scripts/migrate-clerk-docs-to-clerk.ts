@@ -1,6 +1,6 @@
 /**
  * PR / branch migration only: run from your clerk-docs feature branch (not main).
- * Merges origin/main, rewrites history into clerk/clerk-docs/, pushes a branch in clerk and opens a PR only if an open clerk-docs PR exists, then comments that source PR.
+ * Merges origin/main, rewrites clerk-docs history under clerk/clerk-docs/, squash-imports it as one commit on a clerk branch, pushes and opens a PR only if an open clerk-docs PR exists, then comments that source PR.
  * No repo-wide bootstrap or multi-branch orchestration.
  */
 import { existsSync, lstatSync } from 'node:fs'
@@ -798,7 +798,9 @@ async function migrateCurrentBranch(
       suggestedBranch: `${headRef}-migrated`,
       clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
       gitignore:
-        'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
+        'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, folded into the same single import commit',
+      importCommits:
+        'would squash all imported docs history into one commit on the clerk branch (matches squash-merge to main)',
     })
     return { newBranch: `${headRef}-migrated`, clerkPrUrl: '(dry-run)' }
   }
@@ -836,19 +838,18 @@ async function migrateCurrentBranch(
     await runCommand(
       logger,
       'git',
-      ['merge', `${remoteName}/${headRef}`, '--allow-unrelated-histories', '-m', `Migrate clerk-docs branch ${headRef}`],
+      ['merge', '--squash', '--allow-unrelated-histories', `${remoteName}/${headRef}`],
       clerkWorkPath,
     )
     const gitignoreStripped = await stripClerkDocsRootGitignoreEntries(logger, clerkWorkPath)
     if (gitignoreStripped) {
       await runCommand(logger, 'git', ['add', '.gitignore'], clerkWorkPath)
-      await runCommand(
-        logger,
-        'git',
-        ['commit', '-m', 'chore: stop ignoring clerk-docs after in-repo migration'],
-        clerkWorkPath,
-      )
     }
+    const commitSubject = `Migrate clerk-docs branch ${headRef}`
+    const commitBody = gitignoreStripped
+      ? `Squashed import under ${TARGET_DIR_IN_CLERK}/. Root .gitignore updated so the in-repo docs tree is tracked.`
+      : `Squashed import under ${TARGET_DIR_IN_CLERK}/.`
+    await runCommand(logger, 'git', ['commit', '-m', commitSubject, '-m', commitBody], clerkWorkPath)
     await runCommand(logger, 'git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
 
     const existing = await commandJson<Array<{ url: string }>>(

@@ -207,6 +207,18 @@ async function runCommand(
     const child = spawn(command, args, { cwd, env: process.env })
     let stdout = ''
     let stderr = ''
+    let settled = false
+
+    const tryFinish = (result: CommandResult): void => {
+      if (settled) return
+      settled = true
+      if (result.code !== 0 && !options?.allowFailure) {
+        reject(new Error(`Command failed (${command} ${args.join(' ')}): ${(result.stdout + result.stderr).trim()}`))
+        return
+      }
+      resolve(result)
+    }
+
     child.stdout.on('data', chunk => {
       const text = chunk.toString()
       stdout += text
@@ -217,14 +229,19 @@ async function runCommand(
       stderr += text
       logger.debug('Command stderr chunk', { command, chunk: text.trim() })
     })
-    child.on('error', err => reject(err))
-    child.on('close', code => {
-      const result = { code: code ?? 1, stdout, stderr }
-      if (result.code !== 0 && !options?.allowFailure) {
-        reject(new Error(`Command failed (${command} ${args.join(' ')}): ${(stdout + stderr).trim()}`))
+    child.on('error', err => {
+      if (settled) return
+      const msg = err instanceof Error ? err.message : String(err)
+      if (options?.allowFailure) {
+        logger.debug('Spawn error treated as failed command', { command, message: msg })
+        tryFinish({ code: 127, stdout, stderr: stderr ? `${stderr}\n${msg}` : msg })
         return
       }
-      resolve(result)
+      settled = true
+      reject(err)
+    })
+    child.on('close', code => {
+      tryFinish({ code: code === null || code === undefined ? 1 : code, stdout, stderr })
     })
   })
 }
@@ -266,7 +283,11 @@ async function assertMinimumVersion(
 ): Promise<void> {
   logger.step(`Checking ${label} minimum version`, { minimumVersion })
   const result = await runCommand(logger, command, args, process.cwd())
-  const raw = `${result.stdout}\n${result.stderr}`.trim()
+  assertSemverAtLeast(logger, label, `${result.stdout}\n${result.stderr}`, minimumVersion)
+}
+
+function assertSemverAtLeast(logger: Logger, label: string, rawOutput: string, minimumVersion: string): void {
+  const raw = rawOutput.trim()
   const actualParsed = parseSemverLoose(raw)
   const minimumParsed = parseSemverLoose(minimumVersion)
   if (!actualParsed || !minimumParsed) {
@@ -281,6 +302,45 @@ async function assertMinimumVersion(
     detectedVersion: actualParsed.join('.'),
     minimumVersion,
   })
+}
+
+const GIT_FILTER_REPO_INSTALL_HINT = [
+  'git-filter-repo is not installed or not on your PATH.',
+  'Install it, then re-run:',
+  '  macOS:   brew install git-filter-repo',
+  '  pip:    pip install git-filter-repo   (or pipx install git-filter-repo)',
+  'Docs:    https://github.com/newren/git-filter-repo/blob/main/INSTALL.md',
+].join('\n')
+
+/** How to invoke filter-repo: either `git filter-repo ...` or standalone `git-filter-repo ...`. */
+interface GitFilterRepoInvoker {
+  command: string
+  argsPrefix: string[]
+}
+
+async function resolveGitFilterRepoInvoker(logger: Logger): Promise<GitFilterRepoInvoker> {
+  logger.step('Checking git-filter-repo (git filter-repo or git-filter-repo on PATH)')
+  const asSub = await runCommand(logger, 'git', ['filter-repo', '--version'], process.cwd(), { allowFailure: true })
+  if (asSub.code === 0) {
+    assertSemverAtLeast(
+      logger,
+      'git-filter-repo (git subcommand)',
+      `${asSub.stdout}\n${asSub.stderr}`,
+      MIN_TOOL_VERSIONS.gitFilterRepo,
+    )
+    return { command: 'git', argsPrefix: ['filter-repo'] }
+  }
+  const standalone = await runCommand(logger, 'git-filter-repo', ['--version'], process.cwd(), { allowFailure: true })
+  if (standalone.code === 0) {
+    assertSemverAtLeast(
+      logger,
+      'git-filter-repo (standalone)',
+      `${standalone.stdout}\n${standalone.stderr}`,
+      MIN_TOOL_VERSIONS.gitFilterRepo,
+    )
+    return { command: 'git-filter-repo', argsPrefix: [] }
+  }
+  throw new Error(GIT_FILTER_REPO_INSTALL_HINT)
 }
 
 async function assertGitRepo(logger: Logger, repoPath: string, label: string): Promise<void> {
@@ -511,6 +571,7 @@ async function maybeCommentWithMarker(
 async function migrateCurrentBranch(
   logger: Logger,
   config: CliConfig,
+  filterRepo: GitFilterRepoInvoker,
   clerkWorkPath: string,
   headRef: string,
   baseRef: string,
@@ -542,7 +603,12 @@ async function migrateCurrentBranch(
       ['clone', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
       process.cwd(),
     )
-    await runCommand(logger, 'git', ['filter-repo', '--to-subdirectory-filter', TARGET_DIR_IN_CLERK, '--force'], tempClonePath)
+    await runCommand(
+      logger,
+      filterRepo.command,
+      [...filterRepo.argsPrefix, '--to-subdirectory-filter', TARGET_DIR_IN_CLERK, '--force'],
+      tempClonePath,
+    )
     await runCommand(logger, 'git', ['remote', 'add', remoteName, tempClonePath], clerkWorkPath)
     await runCommand(logger, 'git', ['fetch', remoteName], clerkWorkPath)
     await runCommand(logger, 'git', ['checkout', baseRef], clerkWorkPath)
@@ -627,10 +693,9 @@ async function main(): Promise<void> {
     }
     await assertCommandAvailable(logger, 'git')
     await assertCommandAvailable(logger, 'gh')
-    await assertCommandAvailable(logger, 'git', ['filter-repo', '--version'])
     await assertMinimumVersion(logger, 'git', 'git', ['--version'], MIN_TOOL_VERSIONS.git)
     await assertMinimumVersion(logger, 'gh', 'gh', ['--version'], MIN_TOOL_VERSIONS.gh)
-    await assertMinimumVersion(logger, 'git-filter-repo', 'git', ['filter-repo', '--version'], MIN_TOOL_VERSIONS.gitFilterRepo)
+    const filterRepoInvoker = await resolveGitFilterRepoInvoker(logger)
     await assertGhAuthenticated(logger)
     await assertGitRepo(logger, config.clerkDocsPath, 'clerk-docs')
     await assertCleanWorkingTree(logger, config.clerkDocsPath, 'clerk-docs')
@@ -680,6 +745,7 @@ async function main(): Promise<void> {
     const { newBranch, clerkPrUrl } = await migrateCurrentBranch(
       logger,
       config,
+      filterRepoInvoker,
       workspace.path,
       clerkDocsBranch,
       baseRef,

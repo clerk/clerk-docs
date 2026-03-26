@@ -43,7 +43,7 @@ function startSSOFlow(startSSOFlowParams: StartSSOFlowParams): Promise<StartSSOF
   - `redirectUrl?`
   - `string`
 
-  The full URL or path to redirect to after the SSO flow is complete. If not specified, defaults to the `sso-callback` path using `AuthSession.makeRedirectUri()`. [This URL **must** be registered in the Clerk Dashboard under **Redirect URLs**](#redirect-url-configuration).
+  The full URL or path to redirect to after the SSO flow is complete. If not specified, defaults to the `sso-callback` path using `AuthSession.makeRedirectUri()`. This URL **must** be registered [in the Clerk Dashboard under **Redirect URLs**](https://dashboard.clerk.com/~/native-applications). See [redirect URL configuration](#redirect-url-configuration) for more information.
 
   ---
 
@@ -93,11 +93,16 @@ export default function SignInScreen() {
 
   const handleSSO = async (strategy: 'oauth_google' | 'oauth_apple' | 'oauth_github') => {
     try {
-      const { createdSessionId } = await startSSOFlow({ strategy })
+      const { createdSessionId, signIn, signUp } = await startSSOFlow({ strategy })
 
       if (createdSessionId) {
         // Session is active — isSignedIn is now true
         // Navigation will happen automatically via your auth layout
+      } else {
+        // If there is no `createdSessionId`,
+        // there are missing requirements, such as MFA
+        // Check what is missing and handle it accordingly
+        console.error(signIn?.status, signUp?.status)
       }
     } catch (err) {
       console.error('SSO error:', err)
@@ -119,13 +124,13 @@ export default function SignInScreen() {
 
 ## Redirect URL configuration
 
-The redirect URL used during the SSO flow **must** be registered in the [Clerk Dashboard](https://dashboard.clerk.com/~/native-applications) under **Redirect URLs**. Without this, the OAuth provider will complete authentication but the session will not be created.
-
 ### Recommended setup
 
-Use a custom app scheme and pass an explicit `redirectUrl` to `startSSOFlow()`. This ensures a **stable redirect URL** that works reliably across different environments, including Expo Go.
+By default, `useSSO()` generates a redirect URL using `AuthSession.makeRedirectUri({ path: 'sso-callback' })`, which can produce a dynamic URL like `exp://192.168.x.x:PORT/--/sso-callback`. That URL changes based on your network and port, which makes it harder to register reliably in the Clerk Dashboard.
 
-1. Configure a custom scheme in your `app.json`:
+To ensure a **stable redirect URL** that works reliably across different environments, use a custom app scheme and pass an explicit `redirectUrl` to `startSSOFlow()`.
+
+1. Configure a custom scheme in your `app.json`. This example uses `myapp`:
 
    ```json {{ filename: 'app.json' }}
    {
@@ -135,27 +140,28 @@ Use a custom app scheme and pass an explicit `redirectUrl` to `startSSOFlow()`. 
    }
    ```
 
-1. Register the following redirect URL in the Clerk Dashboard:
+1. The redirect URL used during the SSO flow **must** be registered for your Clerk application. Without this, the OAuth provider will complete authentication but the session will not be created. On the [**Native Applications**](https://dashboard.clerk.com/~/native-applications) page in the Clerk Dashboard, register the redirect URL for your application in the **Redirect URLs** field, like the following example:
 
    ```
    myapp://sso-callback
    ```
 
-1. Pass the same redirect URL explicitly when starting the SSO flow:
+1. Pass the redirect URL explicitly when starting the SSO flow:
 
-   ```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
-   import * as AuthSession from 'expo-auth-session'
+> [!TIP]
+> For more information about using `makeRedirectUri()`, see the [Expo AuthSession documentation](https://docs.expo.dev/versions/latest/sdk/auth-session/#authsessionmakeredirecturioptions).
 
-   const { createdSessionId } = await startSSOFlow({
-     strategy: 'oauth_google',
-     redirectUrl: AuthSession.makeRedirectUri({
-       scheme: 'myapp',
-       path: 'sso-callback',
-     }),
-   })
-   ```
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import * as AuthSession from 'expo-auth-session'
 
-This is especially important in Expo Go. By default, `useSSO()` generates a redirect URL using `AuthSession.makeRedirectUri({ path: 'sso-callback' })`, which can produce a dynamic URL like `exp://192.168.x.x:PORT/--/sso-callback`. That URL changes based on your network and port, which makes it harder to register reliably in the Clerk Dashboard.
+const { createdSessionId } = await startSSOFlow({
+  strategy: 'oauth_google',
+  redirectUrl: AuthSession.makeRedirectUri({
+    scheme: 'myapp',
+    path: 'sso-callback',
+  }),
+})
+```
 
 For more detailed examples, see the following guides:
 

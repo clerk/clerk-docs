@@ -280,7 +280,7 @@ You must configure your application instance through the Clerk Dashboard for the
 
   1. Uses the [`useSSO()`](/docs/reference/expo/native-hooks/use-sso) hook to access the `startSSOFlow()` method.
   1. Calls the `startSSOFlow()` method with the `strategy` param set to `oauth_google`, but you can use any of the [supported OAuth strategies](/docs/reference/types/sso#o-auth-strategy). The optional `redirect_url` param is also set in order to redirect the user once they finish the authentication flow.
-     - If authentication is successful, the `setActive()` method is called to set the active session with the new `createdSessionId`.
+     - If authentication is successful, the `createdSessionId` is returned.
      - If authentication is not successful, you can [handle the missing requirements](#handle-missing-requirements), such as MFA, using the [`signIn`](/docs/reference/objects/sign-in) or [`signUp`](/docs/reference/objects/sign-up) object returned from `startSSOFlow()`, depending on if the user is signing in or signing up. These objects include properties, like `status`, that can be used to determine the next steps. See the respective linked references for more information.
 
   ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
@@ -317,33 +317,22 @@ You must configure your application instance through the Clerk Dashboard for the
     const onPress = useCallback(async () => {
       try {
         // Start the authentication process by calling `startSSOFlow()`
-        const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+        const { createdSessionId, signIn, signUp } = await startSSOFlow({
           strategy: 'oauth_google',
-          // For web, defaults to current path
-          // For native, you must pass a scheme, like AuthSession.makeRedirectUri({ scheme, path })
-          // For more info, see https://docs.expo.dev/versions/latest/sdk/auth-session/#authsessionmakeredirecturioptions
-          redirectUrl: AuthSession.makeRedirectUri(),
+          // Defaults to /sso-callback
+          // For native, you must pass a scheme and path
+          // For more info, see https://clerk.com/docs/reference/expo/native-hooks/use-sso#redirect-url-configuration
+          redirectUrl: AuthSession.makeRedirectUri({
+            scheme: 'clerkexpoquickstart',
+            path: '/continue',
+          }),
         })
 
-        // If sign in was successful, set the active session
-        if (createdSessionId) {
-          setActive!({
-            session: createdSessionId,
-            // Handle session tasks
-            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-            navigate: async ({ session, decorateUrl }) => {
-              if (session?.currentTask) {
-                console.log(session?.currentTask)
-                return
-              }
-
-              router.push(decorateUrl('/'))
-            },
-          })
-        } else {
+        if (!createdSessionId) {
           // If there is no `createdSessionId`,
           // there are missing requirements, such as MFA
-          // See https://clerk.com/docs/guides/development/custom-flows/authentication/oauth-connections#handle-missing-requirements
+          // Check what is missing and handle it accordingly
+          console.error(signIn?.status, signUp?.status)
         }
       } catch (err) {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling

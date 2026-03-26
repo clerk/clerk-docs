@@ -318,11 +318,48 @@ interface GitFilterRepoInvoker {
   argsPrefix: string[]
 }
 
+function assertGitFilterRepoVersionOutput(logger: Logger, label: string, rawOutput: string, minimumVersion: string): void {
+  const raw = rawOutput.trim()
+  const semverMatch = raw.match(/(\d+)\.(\d+)\.(\d+)/)
+  if (semverMatch) {
+    const actualParsed: [number, number, number] = [
+      Number(semverMatch[1]),
+      Number(semverMatch[2]),
+      Number(semverMatch[3]),
+    ]
+    const minimumParsed = parseSemverLoose(minimumVersion)
+    if (!minimumParsed) {
+      throw new Error(`Invalid minimum version constant: ${minimumVersion}`)
+    }
+    if (!isSemverAtLeast(actualParsed, minimumParsed)) {
+      throw new Error(`${label} ${actualParsed.join('.')} is too old. Minimum supported is ${minimumVersion}.`)
+    }
+    logger.info(`${label} version check passed`, {
+      detectedVersion: actualParsed.join('.'),
+      minimumVersion,
+    })
+    return
+  }
+
+  // Some installs (e.g. brew) print only a git short hash for `git filter-repo --version`.
+  if (/^[0-9a-f]{7,40}$/i.test(raw)) {
+    logger.warn(
+      `${label} printed a build/commit id instead of semver; treating as installed (cannot verify >= ${minimumVersion})`,
+      { raw },
+    )
+    return
+  }
+
+  throw new Error(
+    `${label} version could not be parsed. Raw output: "${raw}". Expected semver like ${minimumVersion} or a git hash.`,
+  )
+}
+
 async function resolveGitFilterRepoInvoker(logger: Logger): Promise<GitFilterRepoInvoker> {
   logger.step('Checking git-filter-repo (git filter-repo or git-filter-repo on PATH)')
   const asSub = await runCommand(logger, 'git', ['filter-repo', '--version'], process.cwd(), { allowFailure: true })
   if (asSub.code === 0) {
-    assertSemverAtLeast(
+    assertGitFilterRepoVersionOutput(
       logger,
       'git-filter-repo (git subcommand)',
       `${asSub.stdout}\n${asSub.stderr}`,
@@ -332,7 +369,7 @@ async function resolveGitFilterRepoInvoker(logger: Logger): Promise<GitFilterRep
   }
   const standalone = await runCommand(logger, 'git-filter-repo', ['--version'], process.cwd(), { allowFailure: true })
   if (standalone.code === 0) {
-    assertSemverAtLeast(
+    assertGitFilterRepoVersionOutput(
       logger,
       'git-filter-repo (standalone)',
       `${standalone.stdout}\n${standalone.stderr}`,

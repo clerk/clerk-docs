@@ -117,6 +117,11 @@ function getArg(flag: string): string | undefined {
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag)
 }
+/** Avoid slashes in temp directory names (branch names like foo/bar are common). */
+function sanitizeBranchForPath(branch: string): string {
+  return branch.replace(/[/\\]/g, '-')
+}
+
 function expandHome(input: string): string {
   if (!input.startsWith('~/')) return input
   return process.env.HOME ? path.join(process.env.HOME, input.slice(2)) : input
@@ -195,16 +200,21 @@ async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Prom
   }
 }
 
+type RunCommandOptions = { allowFailure?: boolean; inheritStdio?: boolean }
+
 async function runCommand(
   logger: Logger,
   command: string,
   args: string[],
   cwd: string,
-  options?: { allowFailure?: boolean },
+  options?: RunCommandOptions,
 ): Promise<CommandResult> {
-  logger.debug('Executing command', { command, args, cwd })
+  if (options?.inheritStdio) {
+    logger.info('Running (live output below; large repos may take several minutes)', { command, args, cwd })
+  } else {
+    logger.debug('Executing command', { command, args, cwd })
+  }
   return await new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: process.env })
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -213,12 +223,35 @@ async function runCommand(
       if (settled) return
       settled = true
       if (result.code !== 0 && !options?.allowFailure) {
-        reject(new Error(`Command failed (${command} ${args.join(' ')}): ${(result.stdout + result.stderr).trim()}`))
+        const detail = options?.inheritStdio
+          ? `exit ${result.code}`
+          : (result.stdout + result.stderr).trim()
+        reject(new Error(`Command failed (${command} ${args.join(' ')}): ${detail}`))
         return
       }
       resolve(result)
     }
 
+    if (options?.inheritStdio) {
+      const child = spawn(command, args, { cwd, env: process.env, stdio: 'inherit' })
+      child.on('error', err => {
+        if (settled) return
+        const msg = err instanceof Error ? err.message : String(err)
+        if (options?.allowFailure) {
+          logger.debug('Spawn error treated as failed command', { command, message: msg })
+          tryFinish({ code: 127, stdout: '', stderr: msg })
+          return
+        }
+        settled = true
+        reject(err)
+      })
+      child.on('close', code => {
+        tryFinish({ code: code === null || code === undefined ? 1 : code, stdout: '', stderr: '' })
+      })
+      return
+    }
+
+    const child = spawn(command, args, { cwd, env: process.env })
     child.stdout.on('data', chunk => {
       const text = chunk.toString()
       stdout += text
@@ -546,12 +579,18 @@ async function prepareClerkWorkspace(
   }
 
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-migrate-'))
-  logger.step('Cloning clerk into temp workspace', { path: tmpRoot, repo: config.clerkRepo, branch: baseRef })
+  logger.step('Cloning clerk into temp workspace', {
+    path: tmpRoot,
+    repo: config.clerkRepo,
+    branch: baseRef,
+    note: 'Folder exists but stays empty until clone finishes; first step can take several minutes.',
+  })
   await runCommand(
     logger,
     'gh',
     ['repo', 'clone', config.clerkRepo, tmpRoot, '--', '--branch', baseRef, '--single-branch'],
     process.cwd(),
+    { inheritStdio: true },
   )
   const clerkNow = (await getCurrentBranch(logger, tmpRoot)).trim()
   if (clerkNow !== baseRef) {
@@ -713,15 +752,22 @@ async function migrateCurrentBranch(
   const newBranch = await ensureBranchNameAvailable(logger, clerkWorkPath, `${headRef}-migrated`)
   logger.step('Migrating current branch into clerk', { headRef, baseRef, newBranch, clerkWorkPath })
 
-  const tempClonePath = path.join(os.tmpdir(), `clerk-docs-migrate-${headRef}-${Date.now()}`)
+  const tempClonePath = path.join(os.tmpdir(), `clerk-docs-migrate-${sanitizeBranchForPath(headRef)}-${Date.now()}`)
   const remoteName = `clerk-docs-migrate-${Date.now()}`
 
   try {
+    logger.step('Duplicating local clerk-docs for filter-repo', {
+      from: config.clerkDocsPath,
+      to: tempClonePath,
+      branch: headRef,
+      note: 'This is a local git clone of your checkout (not gh clone of clerk/clerk-docs). Large repos can take many minutes.',
+    })
     await runCommand(
       logger,
       'git',
-      ['clone', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
+      ['clone', '--progress', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
       process.cwd(),
+      { inheritStdio: true },
     )
     await runCommand(
       logger,

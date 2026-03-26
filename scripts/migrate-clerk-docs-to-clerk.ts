@@ -400,6 +400,89 @@ async function assertGhAuthenticated(logger: Logger): Promise<void> {
   if (status.code !== 0) throw new Error('GitHub CLI is not authenticated. Run: gh auth login')
 }
 
+/** `permissions` from GET /repos/{owner}/{repo} for the authenticated user */
+interface RepoPermissions {
+  admin?: boolean
+  maintain?: boolean
+  push?: boolean
+  triage?: boolean
+  pull?: boolean
+}
+
+function parseRepoSlug(slug: string): [string, string] {
+  const parts = slug.split('/')
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error(`Invalid repo slug: ${slug} (expected owner/repo)`)
+  }
+  return [parts[0], parts[1]]
+}
+
+function canPushToRepo(p: RepoPermissions): boolean {
+  return !!(p.admin || p.maintain || p.push)
+}
+
+function canReadRepo(p: RepoPermissions): boolean {
+  return !!(p.admin || p.maintain || p.push || p.triage || p.pull)
+}
+
+function canCommentOnPrInRepo(p: RepoPermissions): boolean {
+  return !!(p.admin || p.maintain || p.push || p.triage)
+}
+
+async function fetchRepoPermissionsForUser(
+  logger: Logger,
+  slug: string,
+): Promise<{ full_name: string; permissions: RepoPermissions }> {
+  const [owner, repo] = parseRepoSlug(slug)
+  const apiPath = `repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  const result = await runCommand(logger, 'gh', ['api', apiPath], process.cwd(), { allowFailure: true })
+  if (result.code !== 0) {
+    const err = (result.stderr + result.stdout).trim()
+    throw new Error(
+      `Cannot access ${slug} via GitHub API (need to see the repo). ${err}\n` +
+        `If this org uses SAML SSO, authorize the org for GitHub CLI (GitHub → Settings → Applications → Authorized OAuth apps → GitHub CLI → Configure SSO).`,
+    )
+  }
+  const data = JSON.parse(result.stdout) as { full_name: string; permissions?: RepoPermissions }
+  if (!data.permissions) {
+    throw new Error(
+      `GitHub API did not return permissions for ${slug}. Re-authenticate or authorize SSO for the org.`,
+    )
+  }
+  return { full_name: data.full_name, permissions: data.permissions }
+}
+
+async function assertGithubRepoMigrationAccess(logger: Logger, config: CliConfig): Promise<void> {
+  logger.step('Checking GitHub API access for migration repos')
+  const me = await commandJson<{ login: string }>(logger, 'gh', ['api', 'user'], process.cwd())
+  logger.info('GitHub API user', { login: me.login })
+
+  const clerk = await fetchRepoPermissionsForUser(logger, config.clerkRepo)
+  if (!canPushToRepo(clerk.permissions)) {
+    throw new Error(
+      `Insufficient access to ${config.clerkRepo}: need push (or maintain/admin) to push a branch and open a PR. ` +
+        `Your permissions: ${JSON.stringify(clerk.permissions)}`,
+    )
+  }
+  logger.info('clerk repo access OK', { repo: clerk.full_name, permissions: clerk.permissions })
+
+  const docs = await fetchRepoPermissionsForUser(logger, config.clerkDocsRepo)
+  if (!canReadRepo(docs.permissions)) {
+    throw new Error(
+      `Insufficient access to ${config.clerkDocsRepo}: need at least pull to list PRs. ` +
+        `Your permissions: ${JSON.stringify(docs.permissions)}`,
+    )
+  }
+  if (!canCommentOnPrInRepo(docs.permissions)) {
+    logger.warn(
+      'You may lack triage or write on clerk-docs; commenting on the source PR could fail. Continuing.',
+      { repo: docs.full_name, permissions: docs.permissions },
+    )
+  } else {
+    logger.info('clerk-docs repo access OK for PR comment', { repo: docs.full_name, permissions: docs.permissions })
+  }
+}
+
 async function maybeWarnAboutSyncBotCommit(logger: Logger, repoPath: string): Promise<void> {
   const author = (await runCommand(logger, 'git', ['log', '-1', '--pretty=%an <%ae>'], repoPath)).stdout.trim()
   if (author.toLowerCase().includes(SYNC_BOT_HINT)) logger.warn('Latest commit author appears to be sync/bot-like.', { author })
@@ -734,6 +817,7 @@ async function main(): Promise<void> {
     await assertMinimumVersion(logger, 'gh', 'gh', ['--version'], MIN_TOOL_VERSIONS.gh)
     const filterRepoInvoker = await resolveGitFilterRepoInvoker(logger)
     await assertGhAuthenticated(logger)
+    await assertGithubRepoMigrationAccess(logger, config)
     await assertGitRepo(logger, config.clerkDocsPath, 'clerk-docs')
     await assertCleanWorkingTree(logger, config.clerkDocsPath, 'clerk-docs')
 

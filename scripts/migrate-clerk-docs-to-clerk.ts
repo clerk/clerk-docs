@@ -1,6 +1,6 @@
 /**
  * PR / branch migration only: run from your clerk-docs feature branch (not main).
- * Merges origin/main, rewrites history into clerk/clerk-docs/, opens a PR in clerk, comments the source PR.
+ * Merges origin/main, rewrites history into clerk/clerk-docs/, pushes a branch in clerk and opens a PR only if an open clerk-docs PR exists, then comments that source PR.
  * No repo-wide bootstrap or multi-branch orchestration.
  */
 import { existsSync, lstatSync } from 'node:fs'
@@ -620,7 +620,7 @@ async function ensureBranchNameAvailable(logger: Logger, repoPath: string, desir
 }
 
 /**
- * Optional open clerk-docs PR for title/body and backlink comment only.
+ * Open clerk-docs PR for this head, if any. Used for clerk PR title/body, backlink comment, and whether we may open a clerk PR.
  * The clerk PR base always comes from --clerk-base (default main).
  */
 async function resolveSourcePr(
@@ -672,7 +672,10 @@ async function resolveSourcePr(
     return await promptPickSourcePr(logger, list)
   }
 
-  logger.warn('No open PR for this head; using generic title/body for clerk PR', { headBranch })
+  logger.warn(
+    'No open clerk-docs PR for this head; migration will still push a clerk branch but will not open a clerk PR.',
+    { headBranch },
+  )
   return null
 }
 
@@ -742,9 +745,10 @@ async function migrateCurrentBranch(
     (sourcePr ? `\n\nMigrated from ${sourcePr.url}` : `\n\nMigrated from clerk-docs branch ${headRef}`)
 
   if (config.dryRun) {
-    logger.info('Dry-run: would filter-repo, merge, push, create PR', {
+    logger.info('Dry-run: would filter-repo, merge, push', {
       clerkWorkPath: clerkWorkPath || '(would clone clerk to temp)',
       suggestedBranch: `${headRef}-migrated`,
+      clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
     })
     return { newBranch: `${headRef}-migrated`, clerkPrUrl: '(dry-run)' }
   }
@@ -793,9 +797,12 @@ async function migrateCurrentBranch(
       ['pr', 'list', '--repo', config.clerkRepo, '--state', 'open', '--head', newBranch, '--json', 'url'],
       process.cwd(),
     )
-    const clerkPrUrl =
-      existing[0]?.url ??
-      (
+    let clerkPrUrl: string
+    if (existing[0]?.url) {
+      clerkPrUrl = existing[0].url
+      logger.info('Clerk PR already open for this branch', { url: clerkPrUrl })
+    } else if (sourcePr) {
+      clerkPrUrl = (
         await runCommand(
           logger,
           'gh',
@@ -816,6 +823,13 @@ async function migrateCurrentBranch(
           process.cwd(),
         )
       ).stdout.trim()
+    } else {
+      logger.warn(
+        'Skipping clerk PR creation: open a clerk-docs PR for this branch first, or open a clerk PR manually.',
+        { newBranch, headRef },
+      )
+      clerkPrUrl = '(no clerk PR — requires an open clerk-docs PR for this head)'
+    }
 
     if (sourcePr) {
       await maybeCommentWithMarker(
@@ -905,7 +919,7 @@ async function main(): Promise<void> {
     await checkpoint(logger, config, {
       title: 'Merge main complete',
       completed: phases.flatMap(p => p.completed),
-      next: 'Rewrite history and open PR in clerk',
+      next: 'Rewrite history and push in clerk (opens a clerk PR only if an open clerk-docs PR exists)',
     })
 
     currentPhase = 'migrate-branch'

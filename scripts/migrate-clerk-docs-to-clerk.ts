@@ -67,6 +67,11 @@ interface SourcePrMigrationMetadata {
 const TARGET_DIR_IN_CLERK = 'clerk-docs'
 /** Temp `gh repo clone` of clerk: only baseRef snapshot + merge/push; full history not needed. */
 const CLERK_TEMP_CLONE_DEPTH = 1
+/**
+ * Partial clone: skip downloading file blobs until Git needs them (smaller/faster initial clone).
+ * Merge + push still require the full tree at `baseRef` eventually, so blobs may stream in during merge.
+ */
+const CLERK_TEMP_CLONE_FILTER_BLOB_NONE = true
 const SYNC_BOT_HINT = 'sync'
 const MIGRATION_NOTICE_MARKER = '[clerk-docs-migration-notice]'
 const MIN_TOOL_VERSIONS = {
@@ -779,23 +784,21 @@ async function prepareClerkWorkspace(
     repo: config.clerkRepo,
     branch: baseRef,
     depth: CLERK_TEMP_CLONE_DEPTH,
-    note: 'Shallow clone (depth 1): large repo downloads much faster; folder stays empty until clone finishes.',
+    filterBlobNone: CLERK_TEMP_CLONE_FILTER_BLOB_NONE,
+    note: 'Shallow + optional blob-less filter: faster first download; merge may still pull many blobs for the full tree.',
   })
+  const gitClonePassthrough = [
+    '--branch',
+    baseRef,
+    '--single-branch',
+    '--depth',
+    String(CLERK_TEMP_CLONE_DEPTH),
+    ...(CLERK_TEMP_CLONE_FILTER_BLOB_NONE ? (['--filter=blob:none'] as const) : []),
+  ]
   await runCommand(
     logger,
     'gh',
-    [
-      'repo',
-      'clone',
-      config.clerkRepo,
-      tmpRoot,
-      '--',
-      '--branch',
-      baseRef,
-      '--single-branch',
-      '--depth',
-      String(CLERK_TEMP_CLONE_DEPTH),
-    ],
+    ['repo', 'clone', config.clerkRepo, tmpRoot, '--', ...gitClonePassthrough],
     process.cwd(),
     { inheritStdio: true },
   )

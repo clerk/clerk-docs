@@ -42,6 +42,7 @@ interface PullRequestView {
   baseRefName: string
   headRefName: string
   url: string
+  isDraft: boolean
 }
 
 const TARGET_DIR_IN_CLERK = 'clerk-docs'
@@ -689,7 +690,7 @@ async function resolveSourcePr(
       '--state',
       'open',
       '--json',
-      'number,title,body,baseRefName,headRefName,url',
+      'number,title,body,baseRefName,headRefName,url,isDraft',
       '--limit',
       '50',
     ],
@@ -709,7 +710,7 @@ async function resolveSourcePr(
           `--pr ${config.prNumber} does not match any of the open PRs for head "${headBranch}": ${list.map(p => p.number).join(', ')}`,
         )
       }
-      logger.info('Using clerk-docs PR from --pr', { number: picked.number })
+      logger.info('Using clerk-docs PR from --pr', { number: picked.number, isDraft: picked.isDraft })
       return picked
     }
     if (config.autoApprove) {
@@ -848,7 +849,8 @@ async function migrateCurrentBranch(
         ['commit', '-m', 'chore: stop ignoring clerk-docs after in-repo migration'],
         clerkWorkPath,
       )
-    }    await runCommand(logger, 'git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
+    }
+    await runCommand(logger, 'git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
 
     const existing = await commandJson<Array<{ url: string }>>(
       logger,
@@ -878,6 +880,7 @@ async function migrateCurrentBranch(
             title,
             '--body',
             body,
+            ...(sourcePr.isDraft ? ['--draft'] : []),
           ],
           process.cwd(),
         )

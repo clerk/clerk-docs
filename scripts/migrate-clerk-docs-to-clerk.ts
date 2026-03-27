@@ -42,6 +42,26 @@ interface PullRequestView {
   baseRefName: string
   headRefName: string
   url: string
+  isDraft: boolean
+}
+
+/** `gh pr view --json` subset for copying people + review context to the clerk PR */
+interface GhPrViewForMigration {
+  url: string
+  isDraft: boolean
+  assignees: Array<{ login?: string }>
+  reviewRequests: Array<{ __typename?: string; login?: string; slug?: string }>
+  latestReviews: Array<{ author?: { login?: string }; state?: string }>
+  reviewDecision: string
+}
+
+interface SourcePrMigrationMetadata {
+  url: string
+  isDraft: boolean
+  assigneeLogins: string[]
+  reviewerHandles: string[]
+  reviewDecision: string
+  latestReviewRows: Array<{ login: string; state: string }>
 }
 
 const TARGET_DIR_IN_CLERK = 'clerk-docs'
@@ -212,7 +232,8 @@ async function checkpoint(
 async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Promise<PullRequestView> {
   output.write('\nMultiple open PRs use this branch. Pick one for title/body and the backlink comment:\n')
   for (const pr of list) {
-    output.write(`  #${pr.number}  base=${pr.baseRefName}  ${pr.title}\n     ${pr.url}\n`)
+    const draftTag = pr.isDraft ? ' [draft]' : ''
+    output.write(`  #${pr.number}  base=${pr.baseRefName}${draftTag}  ${pr.title}\n     ${pr.url}\n`)
   }
   const rl = readline.createInterface({ input, output })
   try {
@@ -234,6 +255,144 @@ async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Prom
   } finally {
     rl.close()
   }
+}
+
+function reviewRequestToHandle(req: { __typename?: string; login?: string; slug?: string }): string | null {
+  if (req.__typename === 'User' && req.login) return req.login
+  if (req.__typename === 'Team' && req.slug) return req.slug
+  return null
+}
+
+function parseGhPrViewForMigration(raw: GhPrViewForMigration): SourcePrMigrationMetadata {
+  const assigneeLogins = (raw.assignees ?? []).map(a => a.login).filter((l): l is string => Boolean(l))
+  const reviewerHandles = (raw.reviewRequests ?? []).map(reviewRequestToHandle).filter((h): h is string => Boolean(h))
+  const latestReviewRows = (raw.latestReviews ?? []).map(r => ({
+    login: r.author?.login ?? '(unknown)',
+    state: r.state ?? 'UNKNOWN',
+  }))
+  return {
+    url: raw.url,
+    isDraft: Boolean(raw.isDraft),
+    assigneeLogins,
+    reviewerHandles,
+    reviewDecision: raw.reviewDecision ?? '',
+    latestReviewRows,
+  }
+}
+
+async function fetchSourcePrMigrationMetadata(
+  logger: Logger,
+  clerkDocsRepo: string,
+  prNumber: number,
+): Promise<SourcePrMigrationMetadata | null> {
+  try {
+    const raw = await commandJson<GhPrViewForMigration>(
+      logger,
+      'gh',
+      [
+        'pr',
+        'view',
+        String(prNumber),
+        '--repo',
+        clerkDocsRepo,
+        '--json',
+        'url,isDraft,assignees,reviewRequests,latestReviews,reviewDecision',
+      ],
+      process.cwd(),
+    )
+    return parseGhPrViewForMigration(raw)
+  } catch (error) {
+    logger.warn('Could not load source PR metadata (assignees/reviewers/reviews)', {
+      prNumber,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
+function formatSourcePrMigrationAppendix(meta: SourcePrMigrationMetadata): string {
+  const assigneeLine = meta.assigneeLogins.length > 0 ? meta.assigneeLogins.map(l => `@${l}`).join(', ') : '—'
+  const reviewerLine = meta.reviewerHandles.length > 0 ? meta.reviewerHandles.join(', ') : '—'
+  const decisionLine = meta.reviewDecision.trim() || '—'
+  const reviewLines =
+    meta.latestReviewRows.length > 0
+      ? meta.latestReviewRows.map(r => `  - @${r.login}: **${r.state}**`).join('\n')
+      : '  —'
+
+  return [
+    '',
+    '---',
+    '<details>',
+    '<summary>Source clerk-docs PR (reviewers, assignees, review state)</summary>',
+    '',
+    `Source PR: ${meta.url}`,
+    '',
+    `- **Draft (source):** ${meta.isDraft ? 'yes' : 'no'}`,
+    `- **Review decision (source):** ${decisionLine}`,
+    `- **Assignees (source):** ${assigneeLine}`,
+    `- **Requested reviewers (source):** ${reviewerLine}`,
+    '- **Latest reviews (source; GitHub does not transfer approvals to this repo):**',
+    reviewLines,
+    '',
+    '</details>',
+    '',
+  ].join('\n')
+}
+
+async function createClerkPullRequestWithPeople(
+  logger: Logger,
+  config: CliConfig,
+  params: {
+    baseRef: string
+    head: string
+    title: string
+    body: string
+    isDraft: boolean
+    assigneeLogins: string[]
+    reviewerHandles: string[]
+  },
+): Promise<string> {
+  const { baseRef, head, title, body, isDraft, assigneeLogins, reviewerHandles } = params
+
+  const buildArgs = (includePeople: boolean): string[] => {
+    const args = [
+      'pr',
+      'create',
+      '--repo',
+      config.clerkRepo,
+      '--base',
+      baseRef,
+      '--head',
+      head,
+      '--title',
+      title,
+      '--body',
+      body,
+    ]
+    if (isDraft) args.push('--draft')
+    if (includePeople) {
+      for (const login of assigneeLogins) {
+        args.push('--assignee', login)
+      }
+      for (const handle of reviewerHandles) {
+        args.push('--reviewer', handle)
+      }
+    }
+    return args
+  }
+
+  const hasPeople = assigneeLogins.length > 0 || reviewerHandles.length > 0
+  if (!hasPeople) {
+    return (await runCommand(logger, 'gh', buildArgs(false), process.cwd())).stdout.trim()
+  }
+
+  const withPeople = await runCommand(logger, 'gh', buildArgs(true), process.cwd(), { allowFailure: true })
+  if (withPeople.code === 0) return withPeople.stdout.trim()
+
+  logger.warn('gh pr create with assignees/reviewers failed; retrying without (metadata still in PR body)', {
+    stderr: (withPeople.stderr + withPeople.stdout).trim(),
+  })
+  return (await runCommand(logger, 'gh', buildArgs(false), process.cwd())).stdout.trim()
 }
 
 type RunCommandOptions = { allowFailure?: boolean; inheritStdio?: boolean }
@@ -689,7 +848,7 @@ async function resolveSourcePr(
       '--state',
       'open',
       '--json',
-      'number,title,body,baseRefName,headRefName,url',
+      'number,title,body,baseRefName,headRefName,url,isDraft',
       '--limit',
       '50',
     ],
@@ -697,7 +856,10 @@ async function resolveSourcePr(
   )
 
   if (list.length === 1) {
-    logger.info('Found open clerk-docs PR (for title/body and comment)', { number: list[0].number })
+    logger.info('Found open clerk-docs PR (for title/body and comment)', {
+      number: list[0].number,
+      isDraft: list[0].isDraft,
+    })
     return list[0]
   }
 
@@ -709,7 +871,7 @@ async function resolveSourcePr(
           `--pr ${config.prNumber} does not match any of the open PRs for head "${headBranch}": ${list.map(p => p.number).join(', ')}`,
         )
       }
-      logger.info('Using clerk-docs PR from --pr', { number: picked.number })
+      logger.info('Using clerk-docs PR from --pr', { number: picked.number, isDraft: picked.isDraft })
       return picked
     }
     if (config.autoApprove) {
@@ -788,7 +950,7 @@ async function migrateCurrentBranch(
   sourcePr: PullRequestView | null,
 ): Promise<{ newBranch: string; clerkPrUrl: string }> {
   const title = sourcePr?.title ?? `docs: migrate ${headRef}`
-  const body =
+  const bodyBase =
     (sourcePr?.body ?? '') +
     (sourcePr ? `\n\nMigrated from ${sourcePr.url}` : `\n\nMigrated from clerk-docs branch ${headRef}`)
 
@@ -799,8 +961,21 @@ async function migrateCurrentBranch(
       clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
       gitignore:
         'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
+      clerkPrPeople:
+        sourcePr !== null
+          ? 'would match draft + assignees + requested reviewers from source PR where possible; review approvals cannot transfer (summarized in PR body)'
+          : 'n/a',
     })
     return { newBranch: `${headRef}-migrated`, clerkPrUrl: '(dry-run)' }
+  }
+
+  const sourceMeta =
+    sourcePr !== null
+      ? await fetchSourcePrMigrationMetadata(logger, config.clerkDocsRepo, sourcePr.number)
+      : null
+  let body = bodyBase
+  if (sourceMeta) {
+    body += formatSourcePrMigrationAppendix(sourceMeta)
   }
 
   const newBranch = await ensureBranchNameAvailable(logger, clerkWorkPath, `${headRef}-migrated`)
@@ -848,7 +1023,8 @@ async function migrateCurrentBranch(
         ['commit', '-m', 'chore: stop ignoring clerk-docs after in-repo migration'],
         clerkWorkPath,
       )
-    }    await runCommand(logger, 'git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
+    }
+    await runCommand(logger, 'git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
 
     const existing = await commandJson<Array<{ url: string }>>(
       logger,
@@ -861,27 +1037,18 @@ async function migrateCurrentBranch(
       clerkPrUrl = existing[0].url
       logger.info('Clerk PR already open for this branch', { url: clerkPrUrl })
     } else if (sourcePr) {
-      clerkPrUrl = (
-        await runCommand(
-          logger,
-          'gh',
-          [
-            'pr',
-            'create',
-            '--repo',
-            config.clerkRepo,
-            '--base',
-            baseRef,
-            '--head',
-            newBranch,
-            '--title',
-            title,
-            '--body',
-            body,
-          ],
-          process.cwd(),
-        )
-      ).stdout.trim()
+      const isDraft = sourceMeta?.isDraft ?? sourcePr.isDraft
+      const assigneeLogins = sourceMeta?.assigneeLogins ?? []
+      const reviewerHandles = sourceMeta?.reviewerHandles ?? []
+      clerkPrUrl = await createClerkPullRequestWithPeople(logger, config, {
+        baseRef,
+        head: newBranch,
+        title,
+        body,
+        isDraft,
+        assigneeLogins,
+        reviewerHandles,
+      })
     } else {
       logger.warn(
         'Skipping clerk PR creation: open a clerk-docs PR for this branch first, or open a clerk PR manually.',

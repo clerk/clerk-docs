@@ -4,7 +4,7 @@ description: Clerk's useSSO() hook is used to create a new SSO flow.
 sdk: expo
 ---
 
-The `useSSO()` hook is used to create a new SSO flow. It can be used in both web and native apps.
+The `useSSO()` hook is used to create a new SSO flow. It handles the full authentication lifecycle including opening the in-app browser, processing the OAuth callback, and activating the session.
 
 ## Returns
 
@@ -43,7 +43,7 @@ function startSSOFlow(startSSOFlowParams: StartSSOFlowParams): Promise<StartSSOF
   - `redirectUrl?`
   - `string`
 
-  The full URL or path to redirect to after the SSO flow is complete. If not specified, defaults to `sso-callback` path.
+  The full URL or path to redirect to after the SSO flow is complete. If not specified, defaults to the `sso-callback` path using `AuthSession.makeRedirectUri()`. This URL **must** be registered [in the Clerk Dashboard under **Redirect URLs**](https://dashboard.clerk.com/~/native-applications). See [redirect URL configuration](#redirect-url-configuration) for more information.
 
   ---
 
@@ -51,6 +51,13 @@ function startSSOFlow(startSSOFlowParams: StartSSOFlowParams): Promise<StartSSOF
   - [`SignUpUnsafeMetadata`](/docs/reference/types/metadata#sign-up-unsafe-metadata)
 
   Metadata that can be read and set from the frontend and the backend. Once the authentication process is complete, the value of this field will be automatically copied to the created user's unsafe metadata (`User.unsafeMetadata`). One common use case is to collect custom information about the user during the authentication process and store it in this property. Read more about [unsafe metadata](/docs/guides/users/extending#unsafe-metadata).
+
+  ---
+
+  - `authSessionOptions?`
+  - `Pick<WebBrowser.AuthSessionOpenOptions, 'showInRecents'>`
+
+  Options passed to `WebBrowser.openAuthSessionAsync()`. Set `showInRecents: true` to keep the browser tab visible in Android's recent apps.
 </Properties>
 
 #### Returns
@@ -61,40 +68,102 @@ function startSSOFlow(startSSOFlowParams: StartSSOFlowParams): Promise<StartSSOF
   - `createdSessionId`
   - `string | null`
 
-  The ID of the session that was created.
+  The ID of the session that was created and activated. `null` if the flow was canceled or failed.
 
   ---
 
-  - `authSessionResult?`
-  - `WebBrowser.WebBrowserAuthSessionResult | undefined`
+  - `authSessionResult`
+  - `WebBrowser.WebBrowserAuthSessionResult | null`
 
   The result of the web browser session. See the [Expo WebBrowser documentation](https://docs.expo.dev/versions/latest/sdk/webbrowser/#webbrowserauthsessionresult) for more details.
-
-  ---
-
-  - `setActive?`
-  - `(params: SetActiveParams) => Promise<void>`
-
-  A method used to set the active session and/or Organization. Accepts a [`SetActiveParams`](/docs/reference/types/set-active-params) object.
-
-  ---
-
-  - `signIn?`
-  - <code>[SignIn](/docs/reference/objects/sign-in) | undefined</code>
-
-  The [`SignIn`](/docs/reference/objects/sign-in) object that was created, which holds the state of the current sign-in and provides helper methods to navigate and complete the sign-in process.
-
-  ---
-
-  - `signUp?`
-  - <code>[SignUp](/docs/reference/objects/sign-up) | undefined</code>
-
-  The [`SignUp`](/docs/reference/objects/sign-up) object that was created, which holds the state of the current sign-up and provides helper methods to navigate and complete the sign-up process.
 </Properties>
 
-## How to use the `useSSO()` hook
+## Example
 
-For detailed examples of how to use the `useSSO()` hook, see the following guides:
+The `useSSO()` hook handles the full flow internally. After `startSSOFlow()` resolves, the session is already active and `useAuth().isSignedIn` will be `true`.
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import { useSSO } from '@clerk/expo'
+import { useRouter } from 'expo-router'
+import { Text, TouchableOpacity, View } from 'react-native'
+
+export default function SignInScreen() {
+  const { startSSOFlow } = useSSO()
+  const router = useRouter()
+
+  const handleSSO = async (strategy: 'oauth_google' | 'oauth_apple' | 'oauth_github') => {
+    try {
+      const { createdSessionId, signIn, signUp } = await startSSOFlow({ strategy })
+
+      if (createdSessionId) {
+        // Session is active — isSignedIn is now true
+        // Navigation will happen automatically via your auth layout
+      } else {
+        // If there is no `createdSessionId`,
+        // there are missing requirements, such as MFA
+        // Check what is missing and handle it accordingly
+        console.error(signIn?.status, signUp?.status)
+      }
+    } catch (err) {
+      console.error('SSO error:', err)
+    }
+  }
+
+  return (
+    <View>
+      <TouchableOpacity onPress={() => handleSSO('oauth_google')}>
+        <Text>Continue with Google</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => handleSSO('oauth_apple')}>
+        <Text>Continue with Apple</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+```
+
+## Redirect URL configuration
+
+### Recommended setup
+
+By default, `useSSO()` generates a redirect URL using `AuthSession.makeRedirectUri({ path: 'sso-callback' })`, which can produce a dynamic URL like `exp://192.168.x.x:PORT/--/sso-callback`. That URL changes based on your network and port, which makes it harder to register reliably in the Clerk Dashboard.
+
+To ensure a **stable redirect URL** that works reliably across different environments, use a custom app scheme and pass an explicit `redirectUrl` to `startSSOFlow()`.
+
+1. Configure a custom scheme in your `app.json`. This example uses `myapp`:
+
+   ```json {{ filename: 'app.json' }}
+   {
+     "expo": {
+       "scheme": "myapp"
+     }
+   }
+   ```
+
+1. The redirect URL used during the SSO flow **must** be registered for your Clerk application. Without this, the OAuth provider will complete authentication but the session will not be created. On the [**Native Applications**](https://dashboard.clerk.com/~/native-applications) page in the Clerk Dashboard, register the redirect URL for your application in the **Redirect URLs** field, like the following example:
+
+   ```
+   myapp://sso-callback
+   ```
+
+1. Pass the redirect URL explicitly when starting the SSO flow:
+
+> [!TIP]
+> For more information about using `makeRedirectUri()`, see the [Expo AuthSession documentation](https://docs.expo.dev/versions/latest/sdk/auth-session/#authsessionmakeredirecturioptions).
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import * as AuthSession from 'expo-auth-session'
+
+const { createdSessionId } = await startSSOFlow({
+  strategy: 'oauth_google',
+  redirectUrl: AuthSession.makeRedirectUri({
+    scheme: 'myapp',
+    path: 'sso-callback',
+  }),
+})
+```
+
+For more detailed examples, see the following guides:
 
 - [OAuth custom flow](/docs/guides/development/custom-flows/authentication/oauth-connections)
 - [Enterprise SSO custom flow](/docs/guides/development/custom-flows/authentication/enterprise-connections)

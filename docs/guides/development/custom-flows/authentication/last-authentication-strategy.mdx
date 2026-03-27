@@ -118,42 +118,22 @@ The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/r
       const onPress = useCallback(async (oauthStrategy: OAuthStrategy) => {
         try {
           // Start the authentication process by calling `startSSOFlow()`
-          const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+          const { createdSessionId, signIn, signUp } = await startSSOFlow({
             strategy: oauthStrategy,
-            // For web, defaults to current path
-            // For native, you must pass a scheme, like AuthSession.makeRedirectUri({ scheme, path })
-            // For more info, see https://docs.expo.dev/versions/latest/sdk/auth-session/#authsessionmakeredirecturioptions
+            // Defaults to /sso-callback
+            // For native, you must pass a scheme and path
+            // For more info, see https://clerk.com/docs/reference/expo/native-hooks/use-sso#redirect-url-configuration
             redirectUrl: AuthSession.makeRedirectUri({
-              scheme: 'com.clerk.clerk-expo-quickstart',
+              scheme: 'clerkexpoquickstart',
               path: '/sign-in',
             }),
           })
 
-          // If sign in was successful, set the active session
-          if (createdSessionId) {
-            setActive!({
-              session: createdSessionId,
-              //  Handle pending session tasks
-              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-              navigate: async ({ session, decorateUrl }) => {
-                if (session?.currentTask) {
-                  console.log(session?.currentTask)
-                  return
-                }
-
-                const url = decorateUrl('/')
-                if (url.startsWith('http')) {
-                  window.location.href = url
-                } else {
-                  router.push(url)
-                }
-              },
-            })
-          } else {
+          if (!createdSessionId) {
             // If there is no `createdSessionId`,
             // there are missing requirements, such as MFA
-            // See https://clerk.com/docs/guides/development/custom-flows/authentication/oauth-connections#handle-missing-requirements
-            router.push('/sign-in/continue')
+            // Check what is missing and handle it accordingly
+            console.error(signIn?.status, signUp?.status)
           }
         } catch (err) {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling

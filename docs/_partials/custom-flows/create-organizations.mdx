@@ -227,43 +227,34 @@
 </If>
 
 <If sdk="expo">
-  ```tsx {{ filename: 'components/CreateOrganizationWithWarning.tsx' }}
+  ```tsx {{ filename: 'components/CreateOrganization.tsx' }}
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
-  import { useOrganizationCreationDefaults, useOrganizationList } from '@clerk/expo'
-  import { useEffect, useState } from 'react'
+  import { useOrganizationList } from '@clerk/expo'
+  import * as React from 'react'
   import { Pressable, StyleSheet, TextInput } from 'react-native'
 
-  export default function CreateOrganizationWithWarning() {
-    const { isLoaded, createOrganization, setActive } = useOrganizationList()
-    const { data: defaults, isLoading } = useOrganizationCreationDefaults()
-    const [organizationName, setOrganizationName] = useState('')
+  export default function CreateOrganization() {
+    const { createOrganization, setActive } = useOrganizationList()
 
-    useEffect(() => {
-      if (defaults?.form.name) {
-        setOrganizationName(defaults.form.name)
-      }
-    }, [defaults?.form.name])
-
-    if (!isLoaded || isLoading) {
-      return (
-        <ThemedView style={styles.container}>
-          <ThemedText>Loading...</ThemedText>
-        </ThemedView>
-      )
-    }
-
-    // Check if an organization with this name/domain already exists
-    const advisory = defaults?.advisory
-    const showWarning = advisory?.code === 'organization_already_exists'
-    const existingOrgName = advisory?.meta?.organization_name
-    const existingOrgDomain = advisory?.meta?.organization_domain
+    const [organizationName, setOrganizationName] = React.useState('')
+    const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [completed, setCompleted] = React.useState(false)
 
     const handleSubmit = async () => {
       try {
+        setIsSubmitting(true)
         const newOrganization = await createOrganization?.({ name: organizationName })
         // Set the created Organization as the Active Organization
-        if (newOrganization) await setActive({ organization: newOrganization.id })
+        if (newOrganization) {
+          await setActive?.({ organization: newOrganization.id })
+          setIsSubmitting(false)
+          setCompleted(true)
+          setOrganizationName('')
+          setTimeout(() => {
+            setCompleted(false)
+          }, 3000)
+        }
       } catch (err) {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
@@ -281,21 +272,19 @@
           placeholder="Organization name"
           placeholderTextColor="#666666"
         />
-        {showWarning && (
-          <ThemedText style={styles.warning}>
-            An organization "{existingOrgName}" already exists for the domain "{existingOrgDomain}".
-          </ThemedText>
-        )}
         <Pressable
           style={({ pressed }) => [
             styles.button,
-            !organizationName && styles.buttonDisabled,
-            pressed && styles.buttonPressed,
+            completed && styles.buttonSuccess,
+            !organizationName && !completed && styles.buttonDisabled,
+            pressed && !completed && styles.buttonPressed,
           ]}
           onPress={handleSubmit}
-          disabled={!organizationName}
+          disabled={!organizationName || isSubmitting}
         >
-          <ThemedText style={styles.buttonText}>Create organization</ThemedText>
+          <ThemedText style={styles.buttonText} disabled={isSubmitting}>
+            {completed ? 'Organization created' : 'Create organization'}
+          </ThemedText>
         </Pressable>
       </ThemedView>
     )
@@ -325,6 +314,9 @@
       alignItems: 'center',
       marginTop: 8,
     },
+    buttonSuccess: {
+      backgroundColor: '#2e7d32',
+    },
     buttonPressed: {
       opacity: 0.7,
     },
@@ -334,11 +326,6 @@
     buttonText: {
       color: '#fff',
       fontWeight: '600',
-    },
-    warning: {
-      color: '#f57c00',
-      fontSize: 14,
-      marginTop: -4,
     },
   })
   ```

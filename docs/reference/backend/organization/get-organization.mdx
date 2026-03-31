@@ -177,34 +177,33 @@ To use the `getOrganization()` method, you first need to initialize the [`clerkC
   </If>
 
   <If sdk="fastify">
-    ```ts {{ filename: 'server.ts' }}
-    import { getAuth, clerkClient, clerkPlugin } from '@clerk/fastify'
+    ```ts {{ filename: 'src/routes/example.ts' }}
+    import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+    import { getAuth, clerkClient } from '@clerk/fastify'
 
-    const fastify = Fastify()
+    export const exampleRoutes = (fastify: FastifyInstance) => {
+      fastify.get('/user', async (req: FastifyRequest, res: FastifyReply) => {
+        // Accessing the `Auth` object differs depending on the SDK you're using
+        // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+        const { isAuthenticated, orgId } = getAuth(req)
 
-    fastify.register(clerkPlugin)
+        // Protect the route from unauthenticated users
+        if (!isAuthenticated) {
+          res.status(401).json({ error: 'User not authenticated' })
+        }
 
-    fastify.get('/user', async (req, res) => {
-      // Accessing the `Auth` object differs depending on the SDK you're using
-      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-      const { isAuthenticated, orgId } = getAuth(req)
+        // Check if there is an Active Organization
+        if (!orgId) {
+          res.status(404).json({ error: 'Set an Active Organization to access this page.' })
+        }
 
-      // Protect the route from unauthenticated users
-      if (!isAuthenticated) {
-        res.status(401).json({ error: 'User not authenticated' })
-      }
+        // Use the `getOrganization()` method to get the Backend `Organization` object
+        const organization = await clerkClient.organizations.getOrganization({ organizationId: orgId })
 
-      // Check if there is an Active Organization
-      if (!orgId) {
-        res.status(404).json({ error: 'Set an Active Organization to access this page.' })
-      }
-
-      // Use the `getOrganization()` method to get the Backend `Organization` object
-      const organization = await clerkClient.organizations.getOrganization({ organizationId: orgId })
-
-      // Return the `Organization` object
-      res.json(organization)
-    })
+        // Return the `Organization` object
+        res.json(organization)
+      })
+    }
     ```
   </If>
 

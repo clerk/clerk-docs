@@ -184,18 +184,21 @@ describe('parseConfig', () => {
       'scripts/migrate-clerk-docs-to-clerk.ts',
       '--clerk-path',
       '~/work/clerk',
-      '--clerk-docs-path',
+      '--docs-path',
       './',
+      '--docs-base',
+      'docs-feature',
       '--clerk-base',
       'release',
       '--local-only',
+      '--allow-dirty-clerk',
       '--yes',
       '--dry-run',
-      '--allow-dirty-clerk-docs',
+      '--allow-dirty-docs',
       '--debug',
       '--clerk-repo',
       'acme/clerk',
-      '--clerk-docs-repo',
+      '--docs-repo',
       'acme/clerk-docs',
       '--pr',
       '9',
@@ -203,7 +206,9 @@ describe('parseConfig', () => {
 
     const config = parseConfig()
     expect(config.clerkBaseBranch).toBe('release')
+    expect(config.clerkDocsBaseBranch).toBe('docs-feature')
     expect(config.localOnly).toBe(true)
+    expect(config.allowDirtyClerk).toBe(true)
     expect(config.autoApprove).toBe(true)
     expect(config.dryRun).toBe(true)
     expect(config.allowDirtyClerkDocs).toBe(true)
@@ -222,5 +227,23 @@ describe('parseConfig', () => {
     process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--verbose']
     const config = parseConfig()
     expect(config.debug).toBe(true)
+  })
+
+  test('parseConfig still accepts legacy --clerk-docs-* flags', () => {
+    process.argv = [
+      'node',
+      'scripts/migrate-clerk-docs-to-clerk.ts',
+      '--clerk-docs-path',
+      './',
+      '--clerk-docs-base',
+      'legacy-branch',
+      '--clerk-docs-repo',
+      'legacy/docs',
+      '--allow-dirty-clerk-docs',
+    ]
+    const config = parseConfig()
+    expect(config.clerkDocsBaseBranch).toBe('legacy-branch')
+    expect(config.clerkDocsRepo).toBe('legacy/docs')
+    expect(config.allowDirtyClerkDocs).toBe(true)
   })
 })

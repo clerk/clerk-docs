@@ -188,8 +188,10 @@ describe('parseConfig', () => {
       './',
       '--clerk-base',
       'release',
+      '--local-only',
       '--yes',
       '--dry-run',
+      '--allow-dirty-clerk-docs',
       '--debug',
       '--clerk-repo',
       'acme/clerk',
@@ -201,8 +203,10 @@ describe('parseConfig', () => {
 
     const config = parseConfig()
     expect(config.clerkBaseBranch).toBe('release')
+    expect(config.localOnly).toBe(true)
     expect(config.autoApprove).toBe(true)
     expect(config.dryRun).toBe(true)
+    expect(config.allowDirtyClerkDocs).toBe(true)
     expect(config.debug).toBe(true)
     expect(config.clerkRepo).toBe('acme/clerk')
     expect(config.clerkDocsRepo).toBe('acme/clerk-docs')
@@ -212,5 +216,11 @@ describe('parseConfig', () => {
   test('parseConfig rejects invalid --pr values', () => {
     process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--pr', 'zero']
     expect(() => parseConfig()).toThrow('--pr must be a positive integer')
+  })
+
+  test('parseConfig accepts --verbose as debug alias', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--verbose']
+    const config = parseConfig()
+    expect(config.debug).toBe(true)
   })
 })

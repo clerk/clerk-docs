@@ -137,15 +137,15 @@
   ```tsx {{ filename: 'app/(account)/add-phone.tsx', collapsible: true }}
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
-  import { useSession, useUser } from '@clerk/expo'
-  import { PhoneNumberResource } from '@clerk/shared/types'
-  import { Redirect } from 'expo-router'
+  import { useUser } from '@clerk/expo'
+  import { PhoneNumberResource } from '@clerk/types'
+  import { Href, useRouter } from 'expo-router'
   import * as React from 'react'
-  import { Pressable, StyleSheet, TextInput } from 'react-native'
+  import { Pressable, StyleSheet, TextInput, TouchableOpacity } from 'react-native'
 
   export default function Page() {
-    const { isLoaded, isSignedIn, user } = useUser()
-    const { session } = useSession()
+    const { isLoaded, user } = useUser()
+    const router = useRouter()
 
     const [phone, setPhone] = React.useState('')
     const [code, setCode] = React.useState('')
@@ -162,13 +162,7 @@
       )
     }
 
-    // Handle signed-out state
-    // If the user is trying to set up MFA, they should be able to access this page
-    if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa') {
-      return <Redirect href="/sign-in" />
-    }
-
-    // Handle addition of the phone number
+    // Step 1: Add the phone number to the user's User object
     const handleSubmit = async () => {
       try {
         // Add unverified phone number to user
@@ -193,7 +187,7 @@
       }
     }
 
-    // Handle the submission of the verification form
+    // Step 2: Verify the OTP the user supplied
     const verifyCode = async () => {
       try {
         // Verify that the provided code matches the code sent to the user
@@ -211,18 +205,25 @@
       }
     }
 
-    // Display a success message if the phone number was added successfully
+    // Step 3 UI: Display a success message if the phone number was added successfully
     if (successful) {
       return (
         <ThemedView style={styles.container}>
           <ThemedText type="title" style={styles.title}>
             Phone added
           </ThemedText>
+          <TouchableOpacity
+            style={[styles.button]}
+            onPress={() => router.replace('/(account)/manage-mfa' as Href)}
+            activeOpacity={0.85}
+          >
+            <ThemedText style={styles.buttonText}>Manage MFA</ThemedText>
+          </TouchableOpacity>
         </ThemedView>
       )
     }
 
-    // Display the verification form to capture the code
+    // Step 2 UI: Display the verification form to capture the code
     if (isVerifying) {
       return (
         <ThemedView style={styles.container}>
@@ -253,7 +254,7 @@
       )
     }
 
-    // Display the initial form to capture the phone number
+    // Step 1 UI: Display the initial form to capture the phone number
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title" style={styles.title}>

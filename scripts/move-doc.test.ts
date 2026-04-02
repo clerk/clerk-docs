@@ -26,14 +26,33 @@ async function createTempFiles(files: Array<{ path: string; content: string }>) 
     await fs.writeFile(fullPath, content)
   }
 
+  // Manual walk instead of fs.readdir({ recursive: true }) because
+  // Dirent.path (needed to reconstruct full paths) was deprecated and
+  // returns unreliable values.
   const listFiles = async (dir: string = '') => {
     const fullDir = path.join(tempDir, dir)
+    const collectedFiles: string[] = []
+
+    const walk = async (currentDir: string) => {
+      const entries = await fs.readdir(currentDir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        const entryPath = path.join(currentDir, entry.name)
+
+        if (entry.isDirectory()) {
+          await walk(entryPath)
+          continue
+        }
+
+        if (entry.isFile()) {
+          collectedFiles.push(path.relative(tempDir, entryPath))
+        }
+      }
+    }
+
     try {
-      const entries = await fs.readdir(fullDir, { withFileTypes: true, recursive: true })
-      return entries
-        .filter((entry) => entry.isFile())
-        .map((entry) => path.relative(tempDir, path.join(entry.path, entry.name)))
-        .sort()
+      await walk(fullDir)
+      return collectedFiles.sort()
     } catch {
       return []
     }

@@ -55,7 +55,7 @@ Use the following tabs to choose your preferred method.
 
       ## Set your Clerk API keys
 
-      It's recommended to use environment variables to store your Clerk [Publishable Key](!publishable-key). In JavaScript projects, you can add these values in an `.env` file and load them into your app using a package like [`dotenv`](https://www.npmjs.com/package/dotenv). For Vite projects, environment variables in an `.env` file at the project root are automatically accessible through the [`import.meta.env` object](https://vitejs.dev/guide/env-and-mode.html#env-variables).
+      It's recommended to use environment variables to store your Clerk [Publishable Key](!publishable-key). In JavaScript projects, you can store these values in an `.env` file and load them using your framework's env variable support. In Node.js, you can load `.env` files by starting your app with the `--env-file=.env` flag. For Vite projects, environment variables in an `.env` file at the project root are automatically accessible through the [`import.meta.env` object](https://vitejs.dev/guide/env-and-mode.html#env-variables).
 
       <Include src="_partials/quickstarts/set-clerk-publishable-key" />
 
@@ -65,16 +65,39 @@ Use the following tabs to choose your preferred method.
 
       ## Initialize Clerk
 
-      To initialize Clerk, add the following code to your `main.js` file. This code imports your [Publishable Key](!publishable-key), creates a new [`Clerk`](/docs/reference/javascript/clerk) instance, and calls the [`load()`](/docs/reference/javascript/clerk#load) method to initialize Clerk.
+      To initialize Clerk, add the following code to your `main.js` file. This code does the following:
+
+      - Imports your [Publishable Key](!publishable-key) and derives the Clerk [Frontend API](!frontend-api-url) domain from it.
+      - Dynamically loads the UI bundle.
+      - Creates a new [`Clerk`](/docs/reference/objects/clerk) instance.
+      - Calls the [`load()`](/docs/reference/objects/clerk#load) method to initialize Clerk.
 
       ```js {{ filename: 'src/main.js' }}
       import { Clerk } from '@clerk/clerk-js'
 
       const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
+      if (!publishableKey) {
+        throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to the .env file')
+      }
+
+      // Derive the Frontend API domain from the publishable key
+      const clerkDomain = atob(publishableKey.split('_')[2]).slice(0, -1)
+
+      // Loads the Clerk UI bundle
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = `https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`
+        script.async = true
+        script.crossOrigin = 'anonymous'
+        script.onload = resolve
+        script.onerror = () => reject(new Error('Failed to load @clerk/ui bundle'))
+        document.head.appendChild(script)
+      })
+
       const clerk = new Clerk(publishableKey)
       await clerk.load({
-        // Set load options here
+        ui: { ClerkUI: window.__internal_ClerkUICtor },
       })
       ```
 
@@ -94,24 +117,40 @@ Use the following tabs to choose your preferred method.
 
       const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
+      if (!publishableKey) {
+        throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to the .env file')
+      }
+
+      // Derive the Frontend API domain from the publishable key
+      const clerkDomain = atob(publishableKey.split('_')[2]).slice(0, -1)
+
+      // Loads the Clerk UI bundle
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = `https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`
+        script.async = true
+        script.crossOrigin = 'anonymous'
+        script.onload = resolve
+        script.onerror = () => reject(new Error('Failed to load @clerk/ui bundle'))
+        document.head.appendChild(script)
+      })
+
       const clerk = new Clerk(publishableKey)
-      await clerk.load()
+      await clerk.load({
+        ui: { ClerkUI: window.__internal_ClerkUICtor },
+      })
 
       if (clerk.isSignedIn) {
         document.getElementById('app').innerHTML = `
           <div id="user-button"></div>
         `
-
         const userButtonDiv = document.getElementById('user-button')
-
         clerk.mountUserButton(userButtonDiv)
       } else {
         document.getElementById('app').innerHTML = `
           <div id="sign-in"></div>
         `
-
         const signInDiv = document.getElementById('sign-in')
-
         clerk.mountSignIn(signInDiv)
       }
       ```
@@ -144,34 +183,43 @@ Use the following tabs to choose your preferred method.
     <Steps>
       ## Add the SDK using a `<script>` tag
 
-      This `<script>` tag will load Clerk's JavaScript SDK from our CDN and initialize it with your Clerk [Publishable Key](!publishable-key) and [Frontend API URL](!frontend-api-url). It should be placed before any other `<script>` tags that use the JavaScript SDK.
+      These `<script>` tags will load Clerk's UI bundle and JavaScript SDK from the CDN and initialize them with your Clerk [Publishable Key](!publishable-key) and [Frontend API URL](!frontend-api-url). They should be placed before any other `<script>` tags that use the JavaScript SDK.
 
       1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/~/api-keys) page.
       1. In the **Quick Copy** section, select **JavaScript** from the dropdown menu.
-      1. Copy the `<script>` tag and paste it into your HTML file, as shown in the following example:
+      1. Copy the `<script>` tags and paste them into your HTML file, as shown in the following example:
 
       ```html {{ filename: 'index.html' }}
       <!-- Rest of your HTML file -->
 
       <script
-        async
+        defer
+        crossorigin="anonymous"
+        src="https://{{fapi_url}}/npm/@clerk/ui@1/dist/ui.browser.js"
+        type="text/javascript"
+      ></script>
+
+      <script
+        defer
         crossorigin="anonymous"
         data-clerk-publishable-key="{{pub_key}}"
-        src="https://{{fapi_url}}/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+        src="https://{{fapi_url}}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
         type="text/javascript"
       ></script>
       ```
 
       ## Listen for the `load` event
 
-      Below the `<script`> tag that initializes the SDK, create another `<script>` tag that listens for the `load` event and call Clerk's [`load()`](/docs/reference/javascript/clerk#load) method to load the SDK, as shown in the following example:
+      Below the `<script>` tags that initialize the SDK, create another `<script>` tag that listens for the `load` event and calls Clerk's [`load()`](/docs/reference/objects/clerk#load) method to load the SDK, as shown in the following example:
 
       ```html {{ filename: 'index.html' }}
       <!-- Rest of your HTML file -->
 
       <script>
         window.addEventListener('load', async function () {
-          await Clerk.load()
+          await Clerk.load({
+            ui: { ClerkUI: window.__internal_ClerkUICtor },
+          })
 
           console.log('ClerkJS is loaded')
         })
@@ -190,19 +238,26 @@ Use the following tabs to choose your preferred method.
       ```html {{ filename: 'index.html' }}
       <div id="app"></div>
 
-      <!-- Initialize Clerk with your
-      Clerk Publishable Key and Frontend API URL -->
       <script
-        async
+        defer
+        crossorigin="anonymous"
+        src="https://{{fapi_url}}/npm/@clerk/ui@1/dist/ui.browser.js"
+        type="text/javascript"
+      ></script>
+
+      <script
+        defer
         crossorigin="anonymous"
         data-clerk-publishable-key="{{pub_key}}"
-        src="https://{{fapi_url}}/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+        src="https://{{fapi_url}}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
         type="text/javascript"
       ></script>
 
       <script>
         window.addEventListener('load', async function () {
-          await Clerk.load()
+          await Clerk.load({
+            ui: { ClerkUI: window.__internal_ClerkUICtor },
+          })
 
           if (Clerk.isSignedIn) {
             document.getElementById('app').innerHTML = `
@@ -230,16 +285,11 @@ Use the following tabs to choose your preferred method.
 
 ## Next steps
 
-Learn more about Clerk components, how to customize them, and how to use Clerk's JavaScript classes using the following guides.
+Learn more about Clerk components, custom sign-in and sign-up flows (including MFA), and how to use Clerk's JavaScript classes using the following guides.
 
 <Cards>
   - [Prebuilt components](/docs/reference/components/overview)
   - Learn how to quickly add authentication to your app using Clerk's suite of components.
-
-  ---
-
-  - [Customization & localization](/docs/guides/customizing-clerk/appearance-prop/overview)
-  - Learn how to customize and localize Clerk components.
 
   ---
 
@@ -253,11 +303,6 @@ Learn more about Clerk components, how to customize them, and how to use Clerk's
 
   ---
 
-  - [Clerk class reference](/docs/reference/javascript/clerk)
+  - [Clerk class reference](/docs/reference/objects/clerk)
   - Learn more about the `Clerk` class and how to use it.
-
-  ---
-
-  - [Clerk JavaScript SDK Reference](/docs/reference/javascript/overview)
-  - Learn about the Clerk JavaScript SDK and how to integrate it into your app.
 </Cards>

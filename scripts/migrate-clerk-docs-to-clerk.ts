@@ -1204,6 +1204,27 @@ async function main(): Promise<void> {
   }
 }
 
+export {
+  Logger,
+  sanitizeBranchForPath,
+  lineIgnoresSymlinkedClerkDocsRoot,
+  stripClerkDocsRootGitignoreEntries,
+  parseConfig,
+  reviewRequestToHandle,
+  parseGhPrViewForMigration,
+  formatSourcePrMigrationAppendix,
+  runCommand,
+  commandJson,
+  parseSemverLoose,
+  isSemverAtLeast,
+  assertSemverAtLeast,
+  parseRepoSlug,
+  canPushToRepo,
+  canReadRepo,
+  canCommentOnPrInRepo,
+  assertGitFilterRepoVersionOutput,
+}
+
 if (require.main === module) {
   main().catch(error => {
     console.error('[migration][FATAL]', error instanceof Error ? error.message : String(error))

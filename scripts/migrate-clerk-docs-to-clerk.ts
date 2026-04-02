@@ -20,7 +20,11 @@ interface CliConfig {
   clerkDocsPath: string
   /** Branch in clerk (see --clerk-repo) to check out and open the new PR against; default main */
   clerkBaseBranch: string
+  /** Create migrated branch locally but do not push or open/comment PRs */
+  localOnly: boolean
   dryRun: boolean
+  /** Skip preflight refusal when clerk-docs has local uncommitted changes */
+  allowDirtyClerkDocs: boolean
   autoApprove: boolean
   debug: boolean
   clerkRepo: string
@@ -82,17 +86,57 @@ const MIN_TOOL_VERSIONS = {
 
 class Logger {
   private readonly debugEnabled: boolean
+  private readonly useColor: boolean
+  private stepCounter = 0
 
   public constructor(debugEnabled: boolean) {
     this.debugEnabled = debugEnabled
+    this.useColor = Boolean(output.isTTY && !process.env.NO_COLOR)
+  }
+
+  private color(text: string, code: number): string {
+    if (!this.useColor) return text
+    return `\u001B[${code}m${text}\u001B[0m`
+  }
+
+  private levelBadge(level: LogLevel): string {
+    switch (level) {
+      case 'debug':
+        return this.color('DEBUG', 90)
+      case 'info':
+        return this.color(' INFO', 36)
+      case 'warn':
+        return this.color(' WARN', 33)
+      case 'error':
+        return this.color('ERROR', 31)
+      case 'step':
+        return this.color(' STEP', 35)
+      default:
+        return this.color('  LOG', 37)
+    }
+  }
+
+  private formatMeta(meta: Json): string {
+    const lines = JSON.stringify(meta, null, 2).split('\n')
+    return lines
+      .map((line, idx) => {
+        const prefix = idx === 0 ? this.color('meta ', 90) : '     '
+        return `    ${prefix}${this.color('|', 90)} ${line}`
+      })
+      .join('\n')
   }
 
   public log(level: LogLevel, message: string, meta?: Json): void {
-    if (level === 'debug' && !this.debugEnabled) return
-    const ts = new Date().toISOString()
-    const prefix = `[migration][${ts}][${level.toUpperCase()}]`
-    console.log(`${prefix} ${message}`)
-    if (meta) console.log(`${prefix} META ${JSON.stringify(meta, null, 2)}`)
+    if ((level === 'debug' || level === 'info') && !this.debugEnabled) return
+    const badge = this.levelBadge(level)
+    if (level === 'step') {
+      this.stepCounter += 1
+      const stepLabel = this.color(`#${String(this.stepCounter).padStart(2, '0')}`, 95)
+      console.log(`\n${badge} ${stepLabel} ${message}`)
+    } else {
+      console.log(`${badge} ${message}`)
+    }
+    if (meta && this.debugEnabled) console.log(this.formatMeta(meta))
   }
   public debug(message: string, meta?: Json): void {
     this.log('debug', message, meta)
@@ -121,15 +165,17 @@ Run from your clerk-docs feature branch (not main). Migrates that branch into cl
 By default clones the clerk repo (see --clerk-repo) into a temp directory (needs gh auth with push access). Use --clerk-path for an existing local clone instead.
 
 Optional:
-  --clerk-path <path>         Existing local clerk clone (skips temp clone; expects ${TARGET_DIR_IN_CLERK} symlink as today)
+  --clerk-path <path>         Existing local clerk clone (skips temp clone)
   --clerk-docs-path <path>     clerk-docs repo (default: cwd)
   --clerk-repo <owner/repo>   Target PR repo (default: clerk/clerk)
   --clerk-docs-repo <o/r>     Source PR lookup (default: clerk/clerk-docs)
   --clerk-base <branch>       Branch in clerk to base the new PR on (default: main)
+  --local-only                Create branch locally only (skip push, PR creation, and source-PR comment)
   --dry-run                   Print actions only
-  --yes                       Skip checkpoint prompts (with multiple PRs for this head, pass --pr)
+  --allow-dirty-clerk-docs    Skip preflight error when clerk-docs has local uncommitted changes
+  --yes                       Non-interactive mode (with multiple PRs for this head, pass --pr)
   --pr <number>              Open clerk-docs PR to use for title/body/comment when several match this branch
-  --debug                     Verbose logs
+  --debug, --verbose          Verbose logs (includes JSON metadata)
   --help
 `)
 }
@@ -207,9 +253,11 @@ function parseConfig(): CliConfig {
     clerkPath: clerkPathArg ? path.resolve(expandHome(clerkPathArg)) : undefined,
     clerkDocsPath: path.resolve(expandHome(getArg('--clerk-docs-path') ?? cwd)),
     clerkBaseBranch: getArg('--clerk-base') ?? 'main',
+    localOnly: hasFlag('--local-only'),
     dryRun: hasFlag('--dry-run'),
+    allowDirtyClerkDocs: hasFlag('--allow-dirty-clerk-docs'),
     autoApprove: hasFlag('--yes'),
-    debug: hasFlag('--debug'),
+    debug: hasFlag('--debug') || hasFlag('--verbose'),
     clerkRepo: getArg('--clerk-repo') ?? 'clerk/clerk',
     clerkDocsRepo: getArg('--clerk-docs-repo') ?? 'clerk/clerk-docs',
     prNumber,
@@ -224,14 +272,7 @@ async function checkpoint(
   logger.step(`Checkpoint: ${details.title}`)
   logger.info('Completed in this phase', { completed: details.completed })
   logger.info('Next planned action', { next: details.next })
-  if (config.autoApprove) return logger.info('Auto-approved due to --yes.')
-  const rl = readline.createInterface({ input, output })
-  try {
-    const answer = (await rl.question('Continue? (y/N): ')).trim().toLowerCase()
-    if (answer !== 'y' && answer !== 'yes') throw new Error('Stopped by user at checkpoint.')
-  } finally {
-    rl.close()
-  }
+  if (config.autoApprove) logger.debug('Auto mode enabled (--yes).')
 }
 
 async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Promise<PullRequestView> {
@@ -489,7 +530,7 @@ async function commandJson<T>(logger: Logger, command: string, args: string[], c
 }
 
 async function assertCommandAvailable(logger: Logger, command: string, args: string[] = ['--version']): Promise<void> {
-  logger.step(`Checking dependency: ${command}`)
+  logger.info(`Checking dependency: ${command}`)
   await runCommand(logger, command, args, process.cwd())
 }
 
@@ -514,7 +555,7 @@ async function assertMinimumVersion(
   args: string[],
   minimumVersion: string,
 ): Promise<void> {
-  logger.step(`Checking ${label} minimum version`, { minimumVersion })
+  logger.info(`Checking ${label} minimum version`, { minimumVersion })
   const result = await runCommand(logger, command, args, process.cwd())
   assertSemverAtLeast(logger, label, `${result.stdout}\n${result.stderr}`, minimumVersion)
 }
@@ -589,7 +630,7 @@ function assertGitFilterRepoVersionOutput(logger: Logger, label: string, rawOutp
 }
 
 async function resolveGitFilterRepoInvoker(logger: Logger): Promise<GitFilterRepoInvoker> {
-  logger.step('Checking git-filter-repo (git filter-repo or git-filter-repo on PATH)')
+  logger.info('Checking git-filter-repo (git filter-repo or git-filter-repo on PATH)')
   const asSub = await runCommand(logger, 'git', ['filter-repo', '--version'], process.cwd(), { allowFailure: true })
   if (asSub.code === 0) {
     assertGitFilterRepoVersionOutput(
@@ -614,7 +655,7 @@ async function resolveGitFilterRepoInvoker(logger: Logger): Promise<GitFilterRep
 }
 
 async function assertGitRepo(logger: Logger, repoPath: string, label: string): Promise<void> {
-  logger.step(`Validating git repository for ${label}`, { repoPath })
+  logger.info(`Validating git repository for ${label}`, { repoPath })
   if (!existsSync(repoPath)) throw new Error(`${label} path does not exist: ${repoPath}`)
   await runCommand(logger, 'git', ['rev-parse', '--is-inside-work-tree'], repoPath)
 }
@@ -625,7 +666,10 @@ async function getCurrentBranch(logger: Logger, repoPath: string): Promise<strin
 
 async function assertCleanWorkingTree(logger: Logger, repoPath: string, label: string): Promise<void> {
   const status = await runCommand(logger, 'git', ['status', '--porcelain'], repoPath)
-  if (status.stdout.trim().length > 0) throw new Error(`${label} has uncommitted changes.`)
+  if (status.stdout.trim().length > 0) {
+    const suffix = label === 'clerk-docs' ? ' or rerun with --allow-dirty-clerk-docs.' : '.'
+    throw new Error(`${label} has uncommitted changes. Commit or stash your local changes first${suffix}`)
+  }
 }
 
 async function assertGhAuthenticated(logger: Logger): Promise<void> {
@@ -686,12 +730,19 @@ async function fetchRepoPermissionsForUser(
 }
 
 async function assertGithubRepoMigrationAccess(logger: Logger, config: CliConfig): Promise<void> {
-  logger.step('Checking GitHub API access for migration repos')
+  logger.info('Checking GitHub API access for migration repos')
   const me = await commandJson<{ login: string }>(logger, 'gh', ['api', 'user'], process.cwd())
   logger.info('GitHub API user', { login: me.login })
 
   const clerk = await fetchRepoPermissionsForUser(logger, config.clerkRepo)
-  if (!canPushToRepo(clerk.permissions)) {
+  if (config.localOnly) {
+    if (!canReadRepo(clerk.permissions)) {
+      throw new Error(
+        `Insufficient access to ${config.clerkRepo}: need at least pull access to clone and prepare a local branch. ` +
+          `Your permissions: ${JSON.stringify(clerk.permissions)}`,
+      )
+    }
+  } else if (!canPushToRepo(clerk.permissions)) {
     throw new Error(
       `Insufficient access to ${config.clerkRepo}: need push (or maintain/admin) to push a branch and open a PR. ` +
         `Your permissions: ${JSON.stringify(clerk.permissions)}`,
@@ -721,12 +772,24 @@ async function maybeWarnAboutSyncBotCommit(logger: Logger, repoPath: string): Pr
   if (author.toLowerCase().includes(SYNC_BOT_HINT)) logger.warn('Latest commit author appears to be sync/bot-like.', { author })
 }
 
-async function assertSymlinkAtTarget(logger: Logger, clerkPath: string): Promise<string> {
+async function reconcileClerkDocsTargetPath(logger: Logger, clerkPath: string, dryRun: boolean): Promise<string> {
   const target = path.join(clerkPath, TARGET_DIR_IN_CLERK)
-  if (!existsSync(target)) throw new Error(`Target path does not exist in clerk: ${target}`)
-  if (!lstatSync(target).isSymbolicLink()) {
-    throw new Error(`Expected ${TARGET_DIR_IN_CLERK} to be a symlink to local clerk-docs (not a real directory yet): ${target}`)
+  if (!existsSync(target)) {
+    logger.info(`Target path ${TARGET_DIR_IN_CLERK}/ does not exist in clerk yet; migration will create/populate it.`, { target })
+    return target
   }
+  if (lstatSync(target).isSymbolicLink()) {
+    if (dryRun) {
+      logger.info(`Dry-run: would remove existing ${TARGET_DIR_IN_CLERK}/ symlink before migration.`, { target })
+      return target
+    }
+    await fs.rm(target, { recursive: true, force: true })
+    logger.info(`Removed existing ${TARGET_DIR_IN_CLERK}/ symlink before migration.`, { target })
+    return target
+  }
+  logger.info(`${TARGET_DIR_IN_CLERK}/ already exists as a real directory; continuing and merging new changes into it.`, {
+    target,
+  })
   return target
 }
 
@@ -768,7 +831,7 @@ async function prepareClerkWorkspace(
       throw new Error(`clerk must be on branch "${baseRef}" (matching PR base). Current: ${clerkNow}`)
     }
     await maybeWarnAboutSyncBotCommit(logger, p)
-    await assertSymlinkAtTarget(logger, p)
+    await reconcileClerkDocsTargetPath(logger, p, config.dryRun)
     logger.info('Using local clerk workspace', { path: p })
     return { path: p, isTemporary: false }
   }
@@ -800,7 +863,6 @@ async function prepareClerkWorkspace(
     'gh',
     ['repo', 'clone', config.clerkRepo, tmpRoot, '--', ...gitClonePassthrough],
     process.cwd(),
-    { inheritStdio: true },
   )
   const clerkNow = (await getCurrentBranch(logger, tmpRoot)).trim()
   if (clerkNow !== baseRef) {
@@ -997,9 +1059,8 @@ async function migrateCurrentBranch(
     await runCommand(
       logger,
       'git',
-      ['clone', '--progress', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
+      ['clone', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
       process.cwd(),
-      { inheritStdio: true },
     )
     await runCommand(
       logger,
@@ -1027,6 +1088,11 @@ async function migrateCurrentBranch(
         clerkWorkPath,
       )
     }
+    if (config.localOnly) {
+      logger.warn(`--local-only enabled: created local branch "${newBranch}" in clerk workspace; skipping push and PR sync.`)
+      return { newBranch, clerkPrUrl: '(local-only: not pushed, no PR created)' }
+    }
+
     await runCommand(logger, 'git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
 
     const existing = await commandJson<Array<{ url: string }>>(
@@ -1082,21 +1148,155 @@ interface RunPhase {
   completed: string[]
 }
 
+function printRunIntro(config: CliConfig): void {
+  const lines = [
+    '',
+    'Migration overview',
+    '- Merges origin/main into your current clerk-docs feature branch',
+    '- Rewrites that branch history under clerk/clerk-docs/',
+    '- Merges rewritten history into a new branch in the clerk repo',
+    '- Pushes the branch and opens/links PRs when source PR context is available',
+    '',
+    'Run configuration',
+    `- mode: ${config.dryRun ? 'dry-run (no writes)' : 'execute'}`,
+    `- clerk-docs path: ${config.clerkDocsPath}`,
+    `- clerk path: ${config.clerkPath ?? '(temp clone via gh repo clone)'}`,
+    `- clerk repo: ${config.clerkRepo}`,
+    `- clerk-docs repo: ${config.clerkDocsRepo}`,
+    `- clerk base branch: ${config.clerkBaseBranch}`,
+    `- local-only (skip push/PR): ${config.localOnly ? 'yes' : 'no'}`,
+    `- allow dirty clerk-docs: ${config.allowDirtyClerkDocs ? 'yes' : 'no'}`,
+    `- non-interactive: ${config.autoApprove ? 'yes (--yes)' : 'no'}`,
+    `- verbose logging: ${config.debug ? 'yes' : 'no (use --verbose)'}`,
+    '',
+  ]
+  console.log(lines.join('\n'))
+}
+
+function printRunOutro(details: {
+  dryRun: boolean
+  localOnly: boolean
+  clerkDocsBranch: string
+  clerkBaseBranch: string
+  newBranchInClerk: string
+  clerkPrUrl: string
+  sourcePrUrl: string | null
+  workspacePath: string
+  workspaceWasTemporary: boolean
+  temporaryWorkspaceRemoved: boolean
+}): void {
+  const lines = [
+    '',
+    'Migration result',
+    `- status: success (${details.dryRun ? 'dry-run' : 'execute'})`,
+    `- clerk-docs branch: ${details.clerkDocsBranch}`,
+    `- clerk base branch: ${details.clerkBaseBranch}`,
+    `- new branch in clerk: ${details.newBranchInClerk}`,
+    `- clerk PR: ${details.clerkPrUrl}`,
+    `- source clerk-docs PR: ${details.sourcePrUrl ?? '(none found for this head)'}`,
+    `- local-only mode: ${details.localOnly ? 'yes (not pushed)' : 'no'}`,
+    `- clerk workspace: ${details.workspacePath}`,
+    `- temp workspace removed: ${details.workspaceWasTemporary ? (details.temporaryWorkspaceRemoved ? 'yes' : 'no') : 'n/a (using local workspace)'}`,
+    '',
+  ]
+  console.log(lines.join('\n'))
+}
+
+interface ActionableFailure {
+  summary: string
+  hints: string[]
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return String(error)
+}
+
+function describeFailure(error: unknown, config: CliConfig): ActionableFailure {
+  const raw = toErrorMessage(error).trim()
+  const summary = raw.split('\n')[0] ?? raw
+
+  if (summary.includes('uncommitted changes')) {
+    return {
+      summary,
+      hints: [
+        'Commit or stash changes in the mentioned repo, then rerun.',
+        ...(summary.includes('clerk-docs')
+          ? ['If intentional, rerun with --allow-dirty-clerk-docs to bypass this check.']
+          : []),
+      ],
+    }
+  }
+  if (summary.includes('GitHub CLI is not authenticated')) {
+    return {
+      summary,
+      hints: ['Run `gh auth login` and verify with `gh auth status`, then rerun.'],
+    }
+  }
+  if (summary.includes('Merge conflict while merging origin/main')) {
+    return {
+      summary,
+      hints: [
+        'Resolve conflicts in clerk-docs, create a commit, then rerun the migration.',
+        'If you want to postpone migration, abort and rebase/merge your branch first.',
+      ],
+    }
+  }
+  if (summary.includes('temporary migrate remote is still configured')) {
+    return {
+      summary,
+      hints: [
+        'In your clerk repo, remove stale remotes matching `clerk-docs-migrate-*`.',
+        'Ensure no partial migration branch/merge is in progress before rerunning.',
+      ],
+    }
+  }
+  if (summary.includes('Refusing to run on clerk-docs/main')) {
+    return {
+      summary,
+      hints: ['Checkout your feature branch in clerk-docs and rerun from there.'],
+    }
+  }
+  if (summary.includes('Insufficient access to')) {
+    return {
+      summary,
+      hints: [
+        'Verify your GitHub account has the required repo permissions.',
+        'If your org uses SSO, authorize GitHub CLI for the org and rerun.',
+      ],
+    }
+  }
+  if (summary.includes('git-filter-repo is not installed')) {
+    return {
+      summary,
+      hints: ['Install git-filter-repo (`brew install git-filter-repo`), then rerun.'],
+    }
+  }
+  if (summary.includes('Failed parsing JSON from')) {
+    return {
+      summary,
+      hints: ['Re-run with --verbose to capture command output and identify malformed JSON response.'],
+    }
+  }
+  return {
+    summary,
+    hints: config.debug ? [] : ['Re-run with --verbose for additional diagnostics.'],
+  }
+}
+
 async function main(): Promise<void> {
   const config = parseConfig()
   const logger = new Logger(config.debug)
   const phases: RunPhase[] = []
   let currentPhase = 'start'
   let workspace: ClerkWorkspace | null = null
+  let temporaryWorkspaceRemoved = false
 
-  logger.info('PR/branch migration starting', {
-    mode: config.dryRun ? 'dry-run' : 'execute',
-    clerkDocsPath: config.clerkDocsPath,
-    clerkPath: config.clerkPath ?? '(temp clone via gh)',
-  })
+  printRunIntro(config)
 
   try {
     currentPhase = 'preflight'
+    logger.step('Running preflight checks')
     if (config.clerkPath) {
       await assertNoStaleImportRemote(logger, config.clerkPath)
     }
@@ -1108,7 +1308,13 @@ async function main(): Promise<void> {
     await assertGhAuthenticated(logger)
     await assertGithubRepoMigrationAccess(logger, config)
     await assertGitRepo(logger, config.clerkDocsPath, 'clerk-docs')
-    await assertCleanWorkingTree(logger, config.clerkDocsPath, 'clerk-docs')
+    if (config.allowDirtyClerkDocs) {
+      logger.warn(
+        'Bypassing clean-working-tree check for clerk-docs due to --allow-dirty-clerk-docs. Local edits may affect migration output.',
+      )
+    } else {
+      await assertCleanWorkingTree(logger, config.clerkDocsPath, 'clerk-docs')
+    }
 
     const clerkDocsBranch = await getCurrentBranch(logger, config.clerkDocsPath)
     if (clerkDocsBranch === 'main') {
@@ -1168,39 +1374,45 @@ async function main(): Promise<void> {
 
     if (workspace.isTemporary && workspace.path && !config.dryRun) {
       await fs.rm(workspace.path, { recursive: true, force: true })
+      temporaryWorkspaceRemoved = true
       logger.info('Removed temporary clerk clone', { path: workspace.path })
     }
 
     logger.step('Migration completed')
-    logger.info('Summary', {
+    printRunOutro({
+      dryRun: config.dryRun,
+      localOnly: config.localOnly,
       clerkDocsBranch,
-      baseRef,
+      clerkBaseBranch: baseRef,
       newBranchInClerk: newBranch,
       clerkPrUrl,
-      sourcePrNumber: sourcePr?.number ?? null,
+      sourcePrUrl: sourcePr?.url ?? null,
+      workspacePath: workspace.path || '(dry-run)',
+      workspaceWasTemporary: workspace.isTemporary,
+      temporaryWorkspaceRemoved,
     })
   } catch (error) {
-    logger.error('Migration failed', { error: error instanceof Error ? error.message : String(error) })
-    logger.error('Progress before failure', {
-      currentPhase,
-      phasesCompleted: phases.map(p => p.name),
-      detail: phases,
-    })
+    const failure = describeFailure(error, config)
+    logger.error(`Migration failed: ${failure.summary}`)
+    if (failure.hints.length > 0) {
+      logger.error('Suggested fix:')
+      for (const hint of failure.hints) {
+        logger.error(`- ${hint}`)
+      }
+    }
+    logger.info(`Stopped in phase: ${currentPhase}`)
     if (workspace?.isTemporary && workspace.path) {
-      logger.error('Temporary clerk clone may still exist on disk', { path: workspace.path })
+      logger.warn(`Temporary clerk clone may still exist on disk: ${workspace.path}`)
     }
     logger.warn('No automatic cleanup on failure.')
     if (!config.dryRun) {
-      logger.error('Guidance', {
-        steps: [
-          'Reset clerk-docs if needed; fix the error above.',
-          'If you used a temp clerk clone, delete that folder manually if you are done inspecting it.',
-          'If you used --clerk-path, remove any clerk-docs-migrate-* remote from that repo if present.',
-          'Retry after fixing the error above.',
-        ],
-      })
+      logger.info('Cleanup reminders:')
+      logger.info('- Reset clerk-docs if needed before retrying.')
+      logger.info('- If you used a temp clerk clone, delete that folder when done inspecting it.')
+      logger.info('- If you used --clerk-path, remove any clerk-docs-migrate-* remote if present.')
     }
-    throw error
+    process.exitCode = 1
+    return
   }
 }
 

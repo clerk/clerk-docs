@@ -983,5 +983,210 @@ Depending on your instance settings, users might need to provide extra informati
 </If>
 
 <If sdk="android">
-  {/* TODO */}
+  After OAuth, if Clerk transferred the attempt to a sign-up with missing fields, read [`Clerk.auth.currentSignUp`](/docs/reference/native-mobile/auth#current-sign-up) and check [`SignUp.status`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/-status/index.html) for `MISSING_REQUIREMENTS`. This example uses first and last name for the missing requirements, so pass these collected values through [`signUp.update()`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/update.html) ([`SignUp.SignUpUpdateParams.Standard`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/-sign-up-update-params/-standard/index.html)), then when the sign-up is `COMPLETE`, call [`Clerk.auth.setActive()`](/docs/reference/native-mobile/auth#set-current-session) with `createdSessionId`. Use [`missingFields`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/missing-fields.html) to decide which inputs to show beyond this example.
+
+  <CodeBlockTabs options={['OAuthContinueSignUpViewModel.kt', 'OAuthContinueSignUpActivity.kt']}>
+    ```kotlin {{ filename: 'OAuthContinueSignUpViewModel.kt', collapsible: true }}
+    package com.clerk.customflows.oauth
+
+    import android.util.Log
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.api.Clerk
+    import com.clerk.api.network.serialization.errorMessage
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+    import com.clerk.api.signup.SignUp
+    import com.clerk.api.signup.update
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.flow.launchIn
+    import kotlinx.coroutines.launch
+
+    class OAuthContinueSignUpViewModel : ViewModel() {
+      private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+      val uiState = _uiState.asStateFlow()
+
+      init {
+        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+            _uiState.value =
+              when {
+                !isInitialized -> UiState.Loading
+                user != null -> UiState.Authenticated
+                else -> {
+                  // `missing_requirements` and `missingFields` exist on the in-progress SignUp
+                  // (same object as `Clerk.auth.currentSignUp` in the Android SDK).
+                  when (Clerk.auth.currentSignUp?.status) {
+                    SignUp.Status.MISSING_REQUIREMENTS -> UiState.CollectMissingFields
+                    SignUp.Status.COMPLETE -> UiState.Authenticated
+                    else -> UiState.NotApplicable
+                  }
+                }
+              }
+          }
+          .launchIn(viewModelScope)
+      }
+
+      fun submitMissingFields(firstName: String, lastName: String) {
+        val signUp = Clerk.auth.currentSignUp ?: return
+        if (signUp.status != SignUp.Status.MISSING_REQUIREMENTS) return
+
+        viewModelScope.launch {
+          signUp
+            .update(
+              SignUp.SignUpUpdateParams.Standard(
+                firstName = firstName.trim(),
+                lastName = lastName.trim(),
+              ),
+            )
+            .onSuccess { updated ->
+              when (updated.status) {
+                SignUp.Status.COMPLETE -> {
+                  val sessionId = updated.createdSessionId
+                  if (sessionId != null) {
+                    Clerk.auth
+                      .setActive(sessionId = sessionId)
+                      .onSuccess {
+                        // If the session has pending tasks, handle them next.
+                        // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                      }
+                      .onFailure {
+                        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                        Log.e("OAuthContinueSignUp", it.errorMessage, it.throwable)
+                      }
+                  }
+                }
+                SignUp.Status.MISSING_REQUIREMENTS -> {
+                  Log.d(
+                    "OAuthContinueSignUp",
+                    "Still missing: ${updated.missingFields}",
+                  )
+                }
+                else -> {
+                  Log.e(
+                    "OAuthContinueSignUp",
+                    "Sign-up not complete: ${updated.status}",
+                  )
+                }
+              }
+            }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              Log.e("OAuthContinueSignUp", it.errorMessage, it.throwable)
+            }
+        }
+      }
+
+      sealed interface UiState {
+        data object Loading : UiState
+
+        data object Authenticated : UiState
+
+        /** Show this screen only while `currentSignUp.status == MISSING_REQUIREMENTS`. */
+        data object CollectMissingFields : UiState
+
+        /** No in-progress sign-up or status is not missing requirements—navigate elsewhere. */
+        data object NotApplicable : UiState
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'OAuthContinueSignUpActivity.kt', collapsible: true }}
+    package com.clerk.customflows.oauth
+
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Arrangement
+    import androidx.compose.foundation.layout.Column
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.foundation.layout.fillMaxWidth
+    import androidx.compose.foundation.layout.padding
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.material3.TextField
+    import androidx.compose.runtime.Composable
+    import androidx.compose.runtime.getValue
+    import androidx.compose.runtime.mutableStateOf
+    import androidx.compose.runtime.remember
+    import androidx.compose.runtime.setValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.unit.dp
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+    class OAuthContinueSignUpActivity : ComponentActivity() {
+      private val viewModel: OAuthContinueSignUpViewModel by viewModels()
+
+      override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+          val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+          OAuthContinueSignUpScreen(
+            uiState = uiState,
+            onSubmit = viewModel::submitMissingFields,
+          )
+        }
+      }
+    }
+
+    @Composable
+    private fun OAuthContinueSignUpScreen(
+      uiState: OAuthContinueSignUpViewModel.UiState,
+      onSubmit: (String, String) -> Unit,
+    ) {
+      var firstName by remember { mutableStateOf("") }
+      var lastName by remember { mutableStateOf("") }
+
+      Column(
+        modifier =
+          Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        when (uiState) {
+          OAuthContinueSignUpViewModel.UiState.Loading -> {
+            CircularProgressIndicator()
+          }
+          OAuthContinueSignUpViewModel.UiState.Authenticated -> {
+            Text("Signed in")
+          }
+          OAuthContinueSignUpViewModel.UiState.NotApplicable -> {
+            Text("Nothing to continue.")
+          }
+          OAuthContinueSignUpViewModel.UiState.CollectMissingFields -> {
+            Text("Continue sign-up")
+            Text("Add your name to finish creating your account.")
+            TextField(
+              value = firstName,
+              onValueChange = { firstName = it },
+              modifier = Modifier.fillMaxWidth(),
+              label = { Text("First name") },
+              singleLine = true,
+            )
+            TextField(
+              value = lastName,
+              onValueChange = { lastName = it },
+              modifier = Modifier.fillMaxWidth(),
+              label = { Text("Last name") },
+              singleLine = true,
+            )
+            val canSubmit = firstName.isNotBlank() && lastName.isNotBlank()
+            Button(
+              onClick = { onSubmit(firstName, lastName) },
+              enabled = canSubmit,
+            ) {
+              Text("Continue")
+            }
+          }
+        }
+      }
+    }
+    ```
+  </CodeBlockTabs>
 </If>

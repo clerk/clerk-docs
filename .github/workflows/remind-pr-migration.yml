@@ -1,0 +1,41 @@
+name: Remind PR migration
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  remind_migration:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      REMINDER_MARKER: "<!-- migrate-to-clerk-reminder -->"
+      REMINDER_BODY: |
+        <!-- migrate-to-clerk-reminder -->
+        Friendly reminder: please migrate this PR over to `clerk/clerk` from this branch by running:
+
+        ```bash
+        pnpm migrate:clerk
+        ```
+
+        Run it locally from the root of this branch and open the corresponding PR in `clerk/clerk`.
+    steps:
+      - name: Find existing reminder comment
+        id: find_comment
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: ${{ env.REMINDER_MARKER }}
+
+      - name: Create or update reminder comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find_comment.outputs.comment-id }}
+          body: ${{ env.REMINDER_BODY }}
+          edit-mode: replace

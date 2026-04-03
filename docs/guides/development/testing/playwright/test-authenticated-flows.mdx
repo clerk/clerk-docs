@@ -1,6 +1,6 @@
 ---
-title: Test authenticated flows
-description: Learn how to test authenticated flows with Playwright.
+title: Reuse auth state across tests
+description: Learn how to save and reuse authenticated state across Playwright tests.
 ---
 
 Playwright executes tests in isolated environments called browser contexts. Because each test case runs in a new browser context, the user session is not shared between test cases by default. However, tests can load existing authenticated state.
@@ -8,7 +8,7 @@ Playwright executes tests in isolated environments called browser contexts. Beca
 This guide demonstrates how to save the auth state globally and load it in your test cases, eliminating the need to authenticate in every test and speeding up test execution. Visit the [Playwright docs about authentication](https://playwright.dev/docs/auth) for more information.
 
 > [!IMPORTANT]
-> See the [demo repo](https://github.com/clerk/clerk-playwright-nextjs) that demonstrates testing a Clerk-powered application using [Testing Tokens](/docs/guides/development/testing/overview#testing-tokens). To run the tests, you'll need dev instance Clerk API keys, a test user with username and password, and have username and password authentication enabled in the Clerk Dashboard.
+> See the [demo repo](https://github.com/clerk/clerk-playwright-nextjs) that demonstrates testing a Clerk-powered application using [Testing Tokens](/docs/guides/development/testing/overview#testing-tokens). To run the tests, you'll need dev instance Clerk API keys and have `email` and `password` authentication enabled in the Clerk Dashboard. A test user is created automatically during setup.
 
 <Steps>
   ## Create a storage directory
@@ -28,7 +28,7 @@ This guide demonstrates how to save the auth state globally and load it in your 
 
   - Is executed before all projects.
   - Calls [`clerkSetup()`](/docs/guides/development/testing/playwright/overview#configure-playwright-with-clerk) to configure Playwright with Clerk.
-  - Calls `clerk.signIn()` to sign in a test user using credentials stored in environment variables. See the [reference](/docs/guides/development/testing/playwright/test-helpers#clerk-sign-in) for more information about the different parameters you can pass.
+  - Calls `clerk.signIn()` with the `emailAddress` parameter to sign in a test user. This approach uses a server-side token and works regardless of your instance's verification or MFA settings. See the [reference](/docs/guides/development/testing/playwright/test-helpers#clerk-sign-in) for more information about the different parameters you can pass.
   - Checks if the user can access a protected page to ensure the user is successfully authenticated.
   - Stores the auth state in the storage file.
 
@@ -36,6 +36,9 @@ This guide demonstrates how to save the auth state globally and load it in your 
   import { clerk, clerkSetup } from '@clerk/testing/playwright'
   import { test as setup } from '@playwright/test'
   import path from 'path'
+
+  // Setup must be run serially
+  setup.describe.configure({ mode: 'serial' })
 
   // Configure Playwright with Clerk
   setup('global setup', async ({}) => {
@@ -46,16 +49,12 @@ This guide demonstrates how to save the auth state globally and load it in your 
   const authFile = path.join(__dirname, '../playwright/.clerk/user.json')
 
   setup('authenticate and save state to storage', async ({ page }) => {
-    // Perform authentication steps.
-    // This example uses a Clerk helper to authenticate
+    // Sign in using the emailAddress parameter, which creates a
+    // server-side token and bypasses all verification steps
     await page.goto('/')
     await clerk.signIn({
       page,
-      signInParams: {
-        strategy: 'password',
-        identifier: process.env.E2E_CLERK_USER_USERNAME!,
-        password: process.env.E2E_CLERK_USER_PASSWORD!,
-      },
+      emailAddress: process.env.E2E_CLERK_USER_EMAIL!,
     })
     await page.goto('/protected')
     // Ensure the user has successfully accessed the protected page
@@ -65,6 +64,9 @@ This guide demonstrates how to save the auth state globally and load it in your 
     await page.context().storageState({ path: authFile })
   })
   ```
+
+  > [!TIP]
+  > Use a `+clerk_test` email address for your test user (e.g., `e2e+clerk_test@example.com`) so Clerk suppresses all email delivery, including verification codes and "new device" sign-in notifications. The [demo repo](https://github.com/clerk/clerk-playwright-nextjs) demonstrates auto-creating a test user with this pattern in global setup.
 
   ## Load the stored auth state in your tests
 

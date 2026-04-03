@@ -1447,7 +1447,6 @@ Available values for the `sdk` prop:
 | Vue                    | "vue"                  |
 | Ruby / Rails / Sinatra | "ruby"                 |
 | Python                 | "python"               |
-| JS Backend SDK         | "js-backend"           |
 | Community SDKs         | "community-sdk"        |
 
 To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).

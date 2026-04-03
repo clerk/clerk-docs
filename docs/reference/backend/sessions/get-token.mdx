@@ -1,12 +1,11 @@
 ---
 title: '`getToken()`'
-description: Use Clerk's JS Backend SDK to retrieve a token for a JWT template that is defined in the Clerk Dashboard.
-sdk: js-backend
+description: Use the getToken() method to retrieve a token for a JWT template that is defined in the Clerk Dashboard.
 ---
 
 {/* clerk/javascript file: https://github.com/clerk/javascript/blob/main/packages/backend/src/api/endpoints/SessionApi.ts/#L51 */}
 
-Retrieves a token for a JWT Template that is defined on the [**JWT templates**](https://dashboard.clerk.com/~/jwt-templates) page in the Clerk Dashboard.
+Retrieves a session token or generate a JWT using a specified template that is defined on the [**JWT templates**](https://dashboard.clerk.com/~/jwt-templates) page in the Clerk Dashboard.
 
 ```ts
 function getToken(sessionId: string, template: string): Promise<Token>
@@ -22,7 +21,14 @@ function getToken(sessionId: string, template: string): Promise<Token>
 
   ---
 
-  - `template`
+  - `expiresInSeconds?`
+  - `number`
+
+  The expiration time for the token in seconds. If not provided, uses the default expiration time for the JWT template.
+
+  ---
+
+  - `template?`
   - `string`
 
   The name of the JWT template from the [Clerk Dashboard](https://dashboard.clerk.com/~/jwt-templates) to generate a new token from. For example: 'firebase', 'grafbase', or your custom template's name.
@@ -46,7 +52,7 @@ The following examples demonstrate how to use `getToken()` with different framew
 
 1. Gets the current session ID using framework-specific auth helpers.
 1. Checks if there's an active session.
-1. Uses the JS Backend SDK's `getToken()` method to generate a token from a template.
+1. Uses the `getToken()` method to generate a token from a template.
 1. Returns the token in the response.
 
 The token resembles the following:
@@ -60,8 +66,36 @@ The token resembles the following:
 > [!NOTE]
 > For these examples to work, you must have a JWT template named "test" in the [Clerk Dashboard](https://dashboard.clerk.com/~/jwt-templates) before running the code.
 
-<Tabs items={["Next.js", "Express"]}>
-  <Tab>
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+  ```ts
+  import { createClerkClient } from '@clerk/backend'
+
+  // Initialize clerkClient
+  const clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+  })
+
+  export async function GET(req: Request) {
+    const { sessionId } = req.auth
+
+    // Protect the route from unauthenticated users
+    if (!sessionId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Set the template name (optional)
+    const template = 'test'
+
+    // Use the `getToken()` method to generate a token from a template
+    const token = await clerkClient.sessions.getToken(sessionId, template)
+
+    return Response.json({ token })
+  }
+  ```
+</If>
+
+<If sdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+  <If sdk="nextjs">
     <CodeBlockTabs options={["App Router", "Pages Router"]}>
       ```js {{ filename: 'app/api/get-token-example/route.ts' }}
       import { auth, clerkClient } from '@clerk/nextjs/server'
@@ -69,12 +103,18 @@ The token resembles the following:
       export async function GET() {
         const { sessionId } = await auth()
 
+        // Protect the route from unauthenticated users
         if (!sessionId) {
           return Response.json({ message: 'Unauthorized' }, { status: 401 })
         }
 
+        // Set the template name (optional)
         const template = 'test'
+
+        // Initialize clerkClient
         const client = await clerkClient()
+
+        // Use the `getToken()` method to generate a token from a template
         const token = await client.sessions.getToken(sessionId, template)
 
         return Response.json({ token })
@@ -88,41 +128,192 @@ The token resembles the following:
       export default async function handler(req: NextApiRequest, res: NextApiResponse) {
         const { sessionId } = getAuth(req)
 
+        // Protect the route from unauthenticated users
         if (!sessionId) {
           return res.status(401).json({ error: 'Unauthorized' })
         }
 
+        // Set the template name (optional)
         const template = 'test'
+
+        // Initialize clerkClient
         const client = await clerkClient()
+
+        // Use the `getToken()` method to generate a token from a template
         const token = await client.sessions.getToken(sessionId, template)
 
         return res.json({ token })
       }
       ```
     </CodeBlockTabs>
-  </Tab>
+  </If>
 
-  <Tab>
+  <If sdk="astro">
+    ```tsx {{ filename: 'src/api/example.ts' }}
+    import { clerkClient } from '@clerk/astro/server'
+    import type { APIRoute } from 'astro'
+
+    export const GET: APIRoute = async (context) => {
+      const { sessionId } = context.locals.auth()
+
+      // Protect the route from unauthenticated users
+      if (!sessionId) {
+        return Response.json({ status: 401 })
+      }
+
+      // Set the template name (optional)
+      const template = 'test'
+
+      // Initialize clerkClient
+      // Use the `getToken()` method to generate a token from a template
+      const token = await clerkClient(context).sessions.getToken(sessionId, template)
+
+      return Response.json({ token })
+    }
+    ```
+  </If>
+
+  <If sdk="expressjs">
     ```js {{ filename: 'getToken.ts' }}
     import { clerkClient } from '@clerk/express'
 
     app.get('/api/get-token', async (req, res) => {
       const sessionId = req.auth.sessionId
 
+      // Protect the route from unauthenticated users
       if (!sessionId) {
         res.status(401).json({ error: 'Unauthorized' })
         return
       }
 
+      // Set the template name (optional)
       const template = 'test'
+
+      // Initialize clerkClient
+      // Use the `getToken()` method to generate a token from a template
       const token = await clerkClient.sessions.getToken(sessionId, template)
 
       res.json({ token })
     })
     ```
-  </Tab>
-</Tabs>
+  </If>
+
+  <If sdk="fastify">
+    ```ts {{ filename: 'src/routes/example.ts' }}
+    import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+    import { clerkClient } from '@clerk/fastify'
+
+    export const exampleRoutes = (fastify: FastifyInstance) => {
+      fastify.get('/get-token', async (req: FastifyRequest, res: FastifyReply) => {
+        const { sessionId } = req.auth
+
+        // Protect the route from unauthenticated users
+        if (!sessionId) {
+          res.status(401).json({ error: 'User not authenticated' })
+        }
+
+        // Set the template name (optional)
+        const template = 'test'
+
+        // Initialize clerkClient
+        // Use the `getToken()` method to generate a token from a template
+        const token = await clerkClient.sessions.getToken(sessionId, template)
+
+        res.json({ token })
+      })
+    }
+    ```
+  </If>
+
+  <If sdk="nuxt">
+    ```ts {{ filename: 'server/api/example.ts' }}
+    import { clerkClient } from '@clerk/nuxt/server'
+
+    export default defineEventHandler(async (event) => {
+      const sessionId = event.context.auth().sessionId
+
+      // Protect the route from unauthenticated users
+      if (!sessionId) {
+        throw createError({ statusCode: 401, statusMessage: 'User not authenticated' })
+      }
+
+      // Set the template name (optional)
+      const template = 'test'
+
+      // Initialize clerkClient
+      // Use the `getToken()` method to generate a token from a template
+      const token = await clerkClient.sessions.getToken(sessionId, template)
+
+      return token
+    })
+    ```
+  </If>
+
+  <If sdk="react-router">
+    ```tsx {{ filename: 'app/routes/example.tsx' }}
+    import { getAuth } from '@clerk/react-router/ssr.server'
+    import { createClerkClient } from '@clerk/react-router/server'
+    import type { Route } from './+types/example'
+
+    // Initialize clerkClient
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+
+    export async function loader(args: Route.LoaderArgs) {
+      const sessionId = await getAuth(args).sessionId
+
+      // Protect the route from unauthenticated users
+      if (!sessionId) {
+        return new Response('User not authenticated', {
+          status: 401,
+        })
+      }
+
+      // Set the template name (optional)
+      const template = 'test'
+
+      // Initialize clerkClient
+      // Use the `getToken()` method to generate a token from a template
+      const token = await clerkClient.sessions.getToken(sessionId, template)
+
+      return json({ token })
+    }
+    ```
+  </If>
+
+  <If sdk="tanstack-react-start">
+    ```tsx {{ filename: 'app/routes/api/example.tsx' }}
+    import { json } from '@tanstack/react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+
+    export const ServerRoute = createFileRoute('/api/example')({
+      server: {
+        handlers: {
+          GET: async () => {
+            const { sessionId } = await auth()
+
+            // Protect the route from unauthenticated users
+            if (!sessionId) {
+              return new Response('User not authenticated', {
+                status: 401,
+              })
+            }
+
+            // Set the template name (optional)
+            const template = 'test'
+
+            // Use the `getToken()` method to generate a token from a template
+            const token = await clerkClient().sessions.getToken(sessionId, template)
+
+            return json({ token })
+          },
+        },
+      },
+    })
+    ```
+  </If>
+</If>
 
 ## Backend API (BAPI) endpoint
 
-This method in the SDK is a wrapper around the BAPI endpoint `POST/sessions/{session_id}/tokens/{template_name}`. See the [BAPI reference](/docs/reference/backend-api/tag/sessions/post/sessions/\{session_id}/tokens/\{template_name}){{ target: '_blank' }} for more information.
+This method in the SDK is a wrapper around the BAPI endpoint `POST/sessions/{session_id}/tokens/{template_name}`. See the [BAPI reference](/docs/reference/backend-api/2025-11-10/tag/sessions/POST/sessions/%7Bsession_id%7D/tokens/%7Btemplate_name%7D){{ target: '_blank' }} for more information.

@@ -43,11 +43,11 @@ To blend a sign-up and sign-in flow into a single flow, you must **treat it as a
 > [!NOTE]
 > This approach reveals whether an account exists before verification. If you need to protect against user enumeration attacks, use the [`signUpIfMissing` flow](#sign-in-or-up-with-sign-up-if-missing) instead.
 
-<If notSdk="expo">
-  <If notSdk="nextjs">
-    <Include src="_partials/sdk-examples-not-available-callout" />
-  </If>
+<If notSdk={["nextjs", "expo", "ios", "android"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
+<If sdk="nextjs">
   ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
   'use client'
 
@@ -685,6 +685,546 @@ To blend a sign-up and sign-in flow into a single flow, you must **treat it as a
   ```
 </If>
 
+<If sdk="ios">
+  ```swift {{ filename: 'SignInOrSignUpView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct SignInOrSignUpView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var emailAddress = ""
+    @State private var password = ""
+    @State private var code = ""
+    @State private var legalAccepted = false
+    @State private var isVerifying = false
+    @State private var showMissingRequirements = false
+
+    var body: some View {
+      VStack(spacing: 16) {
+        if showMissingRequirements {
+          Text("Complete your account")
+
+          if clerk.auth.currentSignUp?.missingFields.contains(.legalAccepted) == true {
+            Toggle(
+              "I agree to the Terms of Service and Privacy Policy",
+              isOn: $legalAccepted
+            )
+
+            Button("Continue") {
+              Task { await submitMissingRequirements() }
+            }
+          } else {
+            Text("Handle any remaining fields based on `currentSignUp?.missingFields`.")
+          }
+        } else if isVerifying {
+          TextField("Enter your verification code", text: $code)
+
+          Button("Verify") {
+            Task { await verify(code: code) }
+          }
+        } else {
+          TextField("Enter email address", text: $emailAddress)
+          SecureField("Enter password", text: $password)
+
+          Button("Continue") {
+            Task { await submit(emailAddress: emailAddress, password: password) }
+          }
+        }
+      }
+      .padding()
+    }
+  }
+
+  extension SignInOrSignUpView {
+    @MainActor
+    func submit(emailAddress: String, password: String) async {
+      do {
+        // Start the sign-in process using the provided email and password.
+        let signIn = try await clerk.auth.signInWithPassword(
+          identifier: emailAddress,
+          password: password
+        )
+
+        try await handle(signIn: signIn)
+      } catch {
+        // If the identifier is not found, the user is not signed up yet.
+        // So swap to the sign-up flow.
+        if let clerkApiError = error as? ClerkAPIError,
+           clerkApiError.code == "form_identifier_not_found"
+        {
+          do {
+            let signUp = try await clerk.auth.signUp(
+              emailAddress: emailAddress,
+              password: password
+            )
+
+            // Send the user an email with the verification code.
+            let updatedSignUp = try await signUp.sendEmailCode()
+            handle(signUp: updatedSignUp)
+          } catch {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling.
+            dump(error)
+          }
+        } else {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling.
+          dump(error)
+        }
+      }
+    }
+
+    @MainActor
+    func submitMissingRequirements() async {
+      guard let signUp = clerk.auth.currentSignUp else { return }
+
+      do {
+        let updatedSignUp = try await signUp.update(legalAccepted: legalAccepted)
+        handle(signUp: updatedSignUp)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+
+    @MainActor
+    func verify(code: String) async {
+      do {
+        // Flow for signing up a new user.
+        if let signUp = clerk.auth.currentSignUp {
+          let updatedSignUp = try await signUp.verifyEmailCode(code)
+          handle(signUp: updatedSignUp)
+          return
+        }
+
+        // Flow for signing in an existing user.
+        if var signIn = clerk.auth.currentSignIn {
+          signIn = try await signIn.verifyMfaCode(code, type: .emailCode)
+          try await handle(signIn: signIn)
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+
+    @MainActor
+    func handle(signUp: SignUp) {
+      switch signUp.status {
+      case .complete:
+        dump(clerk.session)
+      case .missingRequirements:
+        // Match the web example by only showing code verification once email is the
+        // remaining unverified field. Otherwise, collect the missing fields first.
+        if signUp.unverifiedFields.contains(.emailAddress) && signUp.missingFields.isEmpty {
+          isVerifying = true
+          showMissingRequirements = false
+        } else if !signUp.missingFields.isEmpty {
+          isVerifying = false
+          showMissingRequirements = true
+        } else {
+          dump(signUp.status)
+        }
+      default:
+        dump(signUp.status)
+      }
+    }
+
+    @MainActor
+    func handle(signIn: SignIn) async throws {
+      switch signIn.status {
+      case .complete:
+        // If sign-in completed successfully, the created session is
+        // available on `clerk.session`.
+        dump(clerk.session)
+      case .needsSecondFactor:
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+        dump(signIn.status)
+      case .needsClientTrust:
+        // This is required when Client Trust is enabled and the user
+        // is signing in from a new device.
+        // See https://clerk.com/docs/guides/secure/client-trust
+        let emailCodeFactor = signIn.supportedSecondFactors?.first(where: { $0.strategy == .emailCode })
+
+        if emailCodeFactor != nil {
+          try await signIn.sendMfaEmailCode()
+          isVerifying = true
+          showMissingRequirements = false
+        }
+      default:
+        // If the status is not complete, check why. User may need to
+        // complete further steps.
+        dump(signIn.status)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  <CodeBlockTabs options={['SignInOrSignUpViewModel.kt', 'SignInOrSignUpActivity.kt']}>
+    ```kotlin {{ filename: 'SignInOrSignUpViewModel.kt', collapsible: true }}
+    package com.clerk.customflows.signinorup
+
+    import android.util.Log
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.api.Clerk
+    import com.clerk.api.auth.signInWithPassword
+    import com.clerk.api.auth.signUp
+    import com.clerk.api.auth.types.VerificationType
+    import com.clerk.api.network.serialization.errorMessage
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+    import com.clerk.api.signin.SignIn
+    import com.clerk.api.signin.attemptSecondFactor
+    import com.clerk.api.signin.prepareSecondFactor
+    import com.clerk.api.signup.SignUp
+    import com.clerk.api.signup.sendEmailCode
+    import com.clerk.api.signup.update
+    import com.clerk.api.signup.verifyCode
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.flow.launchIn
+    import kotlinx.coroutines.launch
+
+    class SignInOrSignUpViewModel : ViewModel() {
+      private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+      val uiState = _uiState.asStateFlow()
+
+      init {
+        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+            _uiState.value =
+              when {
+                !isInitialized -> UiState.Loading
+                user != null -> UiState.SignedIn
+                else -> currentFlowState()
+              }
+          }
+          .launchIn(viewModelScope)
+      }
+
+      fun submit(emailAddress: String, password: String) {
+        viewModelScope.launch {
+          Clerk.auth
+            .signInWithPassword {
+              identifier = emailAddress
+              this.password = password
+            }
+            .onSuccess { handleSignInStatus(it) }
+            .onFailure { error ->
+              if (error.errors.firstOrNull()?.code == "form_identifier_not_found") {
+                startSignUp(emailAddress, password)
+              } else {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling.
+                Log.e("SignInOrSignUp", error.errorMessage, error.throwable)
+              }
+            }
+        }
+      }
+
+      fun submitMissingRequirements(legalAccepted: Boolean) {
+        val signUp = Clerk.auth.currentSignUp ?: return
+        if (signUp.status != SignUp.Status.MISSING_REQUIREMENTS) return
+
+        viewModelScope.launch {
+          signUp
+            .update(SignUp.SignUpUpdateParams.Standard(legalAccepted = legalAccepted))
+            .onSuccess { handleSignUpState(it) }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling.
+              Log.e("SignInOrSignUp", it.errorMessage, it.throwable)
+            }
+        }
+      }
+
+      fun verify(code: String) {
+        Clerk.auth.currentSignUp?.let { signUp ->
+          viewModelScope.launch {
+            signUp
+              .verifyCode(code, VerificationType.EMAIL)
+              .onSuccess { handleSignUpState(it) }
+              .onFailure {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling.
+                Log.e("SignInOrSignUp", it.errorMessage, it.throwable)
+              }
+          }
+          return
+        }
+
+        Clerk.auth.currentSignIn?.let { signIn ->
+          viewModelScope.launch {
+            signIn
+              .attemptSecondFactor(SignIn.AttemptSecondFactorParams.EmailCode(code))
+              .onSuccess { handleSignInStatus(it) }
+              .onFailure {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling.
+                Log.e("SignInOrSignUp", it.errorMessage, it.throwable)
+              }
+          }
+        }
+      }
+
+      private suspend fun startSignUp(emailAddress: String, password: String) {
+        Clerk.auth
+          .signUp {
+            email = emailAddress
+            this.password = password
+          }
+          .onSuccess { signUp ->
+            signUp
+              .sendEmailCode()
+              .onSuccess { handleSignUpState(it) }
+              .onFailure {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling.
+                Log.e("SignInOrSignUp", it.errorMessage, it.throwable)
+              }
+          }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling.
+            Log.e("SignInOrSignUp", it.errorMessage, it.throwable)
+          }
+      }
+
+      private suspend fun handleSignInStatus(signIn: SignIn) {
+        when (signIn.status) {
+          SignIn.Status.COMPLETE -> setActiveSession(signIn.createdSessionId)
+          SignIn.Status.NEEDS_SECOND_FACTOR -> {
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+            Log.d("SignInOrSignUp", "Additional MFA is required.")
+          }
+          SignIn.Status.NEEDS_CLIENT_TRUST -> {
+            signIn
+              .prepareSecondFactor(SignIn.PrepareSecondFactorStrategy.EmailCode())
+              .onSuccess { _uiState.value = UiState.VerifyCode }
+              .onFailure {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling.
+                Log.e("SignInOrSignUp", it.errorMessage, it.throwable)
+              }
+          }
+          else -> {
+            Log.d("SignInOrSignUp", "Sign-in not complete: ${signIn.status}")
+          }
+        }
+      }
+
+      private suspend fun handleSignUpState(signUp: SignUp) {
+        when {
+          signUp.status == SignUp.Status.COMPLETE -> setActiveSession(signUp.createdSessionId)
+          signUp.status == SignUp.Status.MISSING_REQUIREMENTS &&
+            signUp.unverifiedFields.contains("email_address") &&
+            signUp.missingFields.isEmpty() -> {
+            _uiState.value = UiState.VerifyCode
+          }
+          signUp.status == SignUp.Status.MISSING_REQUIREMENTS -> {
+            _uiState.value = UiState.CollectMissingRequirements
+          }
+          else -> {
+            Log.d("SignInOrSignUp", "Sign-up not complete: ${signUp.status}")
+          }
+        }
+      }
+
+      private suspend fun setActiveSession(sessionId: String?) {
+        if (sessionId == null) return
+
+        Clerk.auth
+          .setActive(sessionId = sessionId)
+          .onSuccess {
+            _uiState.value = UiState.SignedIn
+          }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling.
+            Log.e("SignInOrSignUp", it.errorMessage, it.throwable)
+          }
+      }
+
+      private fun currentFlowState(): UiState {
+        val signUp = Clerk.auth.currentSignUp
+        if (
+          signUp?.status == SignUp.Status.MISSING_REQUIREMENTS &&
+          signUp.unverifiedFields.contains("email_address") &&
+          signUp.missingFields.isEmpty()
+        ) {
+          return UiState.VerifyCode
+        }
+        if (signUp?.status == SignUp.Status.MISSING_REQUIREMENTS) {
+          return UiState.CollectMissingRequirements
+        }
+        if (Clerk.auth.currentSignIn?.status == SignIn.Status.NEEDS_CLIENT_TRUST) {
+          return UiState.VerifyCode
+        }
+        return UiState.CollectCredentials
+      }
+
+      sealed interface UiState {
+        data object Loading : UiState
+
+        data object CollectCredentials : UiState
+
+        data object CollectMissingRequirements : UiState
+
+        data object VerifyCode : UiState
+
+        data object SignedIn : UiState
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'SignInOrSignUpActivity.kt', collapsible: true }}
+    package com.clerk.customflows.signinorup
+
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Arrangement
+    import androidx.compose.foundation.layout.Column
+    import androidx.compose.foundation.layout.Row
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.foundation.layout.fillMaxWidth
+    import androidx.compose.foundation.layout.padding
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.Checkbox
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.material3.TextField
+    import androidx.compose.runtime.Composable
+    import androidx.compose.runtime.getValue
+    import androidx.compose.runtime.mutableStateOf
+    import androidx.compose.runtime.remember
+    import androidx.compose.runtime.setValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.text.input.PasswordVisualTransformation
+    import androidx.compose.ui.unit.dp
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+    class SignInOrSignUpActivity : ComponentActivity() {
+      private val viewModel: SignInOrSignUpViewModel by viewModels()
+
+      override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+          val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+          SignInOrSignUpScreen(
+            uiState = uiState,
+            onSubmit = viewModel::submit,
+            onSubmitMissingRequirements = viewModel::submitMissingRequirements,
+            onVerify = viewModel::verify,
+          )
+        }
+      }
+    }
+
+    @Composable
+    private fun SignInOrSignUpScreen(
+      uiState: SignInOrSignUpViewModel.UiState,
+      onSubmit: (String, String) -> Unit,
+      onSubmitMissingRequirements: (Boolean) -> Unit,
+      onVerify: (String) -> Unit,
+    ) {
+      var emailAddress by remember { mutableStateOf("") }
+      var password by remember { mutableStateOf("") }
+      var code by remember { mutableStateOf("") }
+      var legalAccepted by remember { mutableStateOf(false) }
+
+      Column(
+        modifier =
+          Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        when (uiState) {
+          SignInOrSignUpViewModel.UiState.Loading -> {
+            CircularProgressIndicator()
+          }
+          SignInOrSignUpViewModel.UiState.CollectCredentials -> {
+            Text("Sign in or sign up")
+            TextField(
+              value = emailAddress,
+              onValueChange = { emailAddress = it },
+              modifier = Modifier.fillMaxWidth(),
+              label = { Text("Email address") },
+              singleLine = true,
+            )
+            TextField(
+              value = password,
+              onValueChange = { password = it },
+              modifier = Modifier.fillMaxWidth(),
+              label = { Text("Password") },
+              visualTransformation = PasswordVisualTransformation(),
+              singleLine = true,
+            )
+            Button(
+              onClick = { onSubmit(emailAddress, password) },
+              enabled = emailAddress.isNotBlank() && password.isNotBlank(),
+            ) {
+              Text("Continue")
+            }
+          }
+          SignInOrSignUpViewModel.UiState.CollectMissingRequirements -> {
+            Text("Complete your account")
+            if (Clerk.auth.currentSignUp?.missingFields?.contains("legal_accepted") == true) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Checkbox(
+                  checked = legalAccepted,
+                  onCheckedChange = { legalAccepted = it },
+                )
+                Text("I agree to the Terms of Service and Privacy Policy")
+              }
+              Button(
+                onClick = { onSubmitMissingRequirements(legalAccepted) },
+                enabled = legalAccepted,
+              ) {
+                Text("Continue")
+              }
+            } else {
+              Text("Handle any remaining fields based on Clerk.auth.currentSignUp?.missingFields.")
+            }
+          }
+          SignInOrSignUpViewModel.UiState.VerifyCode -> {
+            Text("Verify your email")
+            TextField(
+              value = code,
+              onValueChange = { code = it },
+              modifier = Modifier.fillMaxWidth(),
+              label = { Text("Verification code") },
+              singleLine = true,
+            )
+            Button(
+              onClick = { onVerify(code) },
+              enabled = code.isNotBlank(),
+            ) {
+              Text("Verify")
+            }
+          }
+          SignInOrSignUpViewModel.UiState.SignedIn -> {
+            Text("Signed in")
+          }
+        }
+      }
+    }
+    ```
+  </CodeBlockTabs>
+</If>
+
 ## Sign-in-or-up with `signUpIfMissing`
 
 The `signUpIfMissing` option offers a privacy-preserving alternative to the standard sign-in-or-up flow. Unlike the standard flow, which discloses whether an account exists from the outset, this option proceeds to the verification step regardless of if the account exists. Only after the user has successfully completed the verification step does the flow reveal if an account already exists or if one needs to be created. Although it is **recommended** to pair the `signUpIfMissing` flow with [strict user enumeration protections](/docs/guides/secure/user-enumeration-protection) in the Clerk Dashboard for maximum security, **this option doesn't require that setting.**
@@ -715,11 +1255,11 @@ The `signUpIfMissing` option offers a privacy-preserving alternative to the stan
 
 ### Build the flow
 
-<If notSdk="expo">
-  <If notSdk="nextjs">
-    <Include src="_partials/sdk-examples-not-available-callout" />
-  </If>
+<If notSdk={["nextjs", "expo", "ios", "android"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
+<If sdk="nextjs">
   ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
   'use client'
 
@@ -1386,4 +1926,12 @@ The `signUpIfMissing` option offers a privacy-preserving alternative to the stan
     },
   })
   ```
+</If>
+
+<If sdk="ios">
+  The public iOS SDK currently supports the standard sign-in-or-up flow shown above, but it doesn't yet expose a public `signUpIfMissing` or `transfer` API for identifier-based email code flows. Until ClerkKit adds public support for that transfer path, use the standard iOS flow for native apps.
+</If>
+
+<If sdk="android">
+  The Android SDK doesn't yet expose a typed `signUpIfMissing` API for identifier-based email code flows. Until the SDK adds public support for that flow, use the [standard Android flow](#standard-sign-in-or-up-flow) for native apps.
 </If>

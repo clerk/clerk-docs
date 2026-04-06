@@ -9,9 +9,17 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import readline from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
+import { z } from 'zod'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'step'
 type Json = Record<string, unknown>
+
+/** Owner and repository name from a validated `owner/repo` slug. */
+type RepoSlug = readonly [owner: string, name: string]
+
+function formatRepoSlug(slug: RepoSlug): string {
+  return `${slug[0]}/${slug[1]}`
+}
 
 interface CliConfig {
   /** If set, use this existing clone instead of cloning clerk to a temp directory */
@@ -29,8 +37,8 @@ interface CliConfig {
   /** Skip preflight refusal when clerk-docs has local uncommitted changes */
   allowDirtyClerkDocs: boolean
   debug: boolean
-  clerkRepo: string
-  clerkDocsRepo: string
+  clerkRepo: RepoSlug
+  clerkDocsRepo: RepoSlug
   /** When several open PRs share the same head, use this PR number (required if stdin is not a TTY) */
   prNumber?: number
 }
@@ -213,6 +221,50 @@ function stdinSupportsInteractivePrompts(): boolean {
   return Boolean(input.isTTY)
 }
 
+/** Parses `owner/repo` into a two-element tuple (same rules as `parseRepoSlug`). */
+const repoSlugSchema = z
+  .string()
+  .refine(
+    (s) => {
+      const p = s.split('/')
+      return p.length === 2 && Boolean(p[0]) && Boolean(p[1])
+    },
+    (slug) => ({ message: `Invalid repo slug: ${slug} (expected owner/repo)` }),
+  )
+  .transform((s): RepoSlug => {
+    const [owner, name] = s.split('/')
+    return [owner, name]
+  })
+
+const PR_NUMBER_INVALID = '--pr must be a positive integer (GitHub PR number)'
+
+const githubPrNumberSchema = z
+  .number({
+    errorMap: (issue, ctx) => {
+      if (issue.code === z.ZodIssueCode.invalid_type && issue.received === 'nan') {
+        return { message: PR_NUMBER_INVALID }
+      }
+      return { message: ctx.defaultError }
+    },
+  })
+  .int({ message: PR_NUMBER_INVALID })
+  .positive({ message: PR_NUMBER_INVALID })
+
+const migrateCliSchema = z.object({
+  clerkPath: z.string().optional(),
+  clerkDocsPath: z.string().min(1),
+  clerkDocsBaseBranch: z.string().min(1).optional(),
+  clerkBaseBranch: z.string().min(1),
+  localOnly: z.boolean(),
+  dryRun: z.boolean(),
+  allowDirtyClerk: z.boolean(),
+  allowDirtyClerkDocs: z.boolean(),
+  debug: z.boolean(),
+  clerkRepo: repoSlugSchema,
+  clerkDocsRepo: repoSlugSchema,
+  prNumber: z.coerce.number().catch(() => NaN).pipe(githubPrNumberSchema).optional(),
+})
+
 /** Avoid slashes in temp directory names (branch names like foo/bar are common). */
 function sanitizeBranchForPath(branch: string): string {
   return branch.replace(/[/\\]/g, '-')
@@ -264,17 +316,10 @@ function parseConfig(): CliConfig {
   }
 
   const clerkPathArg = getArg('--clerk-path')
-  const prArg = getArg('--pr')
-  const cwd = process.cwd()
-  let prNumber: number | undefined
-  if (prArg !== undefined) {
-    const n = Number.parseInt(prArg, 10)
-    if (!Number.isFinite(n) || n < 1) throw new Error('--pr must be a positive integer (GitHub PR number)')
-    prNumber = n
-  }
-  return {
+
+  const parsed = migrateCliSchema.safeParse({
     clerkPath: clerkPathArg ? path.resolve(expandHome(clerkPathArg)) : undefined,
-    clerkDocsPath: path.resolve(expandHome(getArgAliases(['--docs-path', '--clerk-docs-path']) ?? cwd)),
+    clerkDocsPath: path.resolve(expandHome(getArgAliases(['--docs-path', '--clerk-docs-path']) ?? process.cwd())),
     clerkDocsBaseBranch: getArgAliases(['--docs-base', '--clerk-docs-base']),
     clerkBaseBranch: getArg('--clerk-base') ?? 'main',
     localOnly: hasFlag('--local-only'),
@@ -284,8 +329,13 @@ function parseConfig(): CliConfig {
     debug: hasFlag('--debug') || hasFlag('--verbose'),
     clerkRepo: getArg('--clerk-repo') ?? 'clerk/clerk',
     clerkDocsRepo: getArgAliases(['--docs-repo', '--clerk-docs-repo']) ?? 'clerk/clerk-docs',
-    prNumber,
+    prNumber: getArg('--pr'),
+  })
+  if (!parsed.success) {
+    const first = parsed.error.errors[0]
+    throw new Error(first?.message ?? parsed.error.message)
   }
+  return parsed.data
 }
 
 async function checkpoint(
@@ -428,7 +478,7 @@ async function createClerkPullRequestWithPeople(
       'pr',
       'create',
       '--repo',
-      config.clerkRepo,
+      formatRepoSlug(config.clerkRepo),
       '--base',
       baseRef,
       '--head',
@@ -710,12 +760,8 @@ interface RepoPermissions {
   pull?: boolean
 }
 
-function parseRepoSlug(slug: string): [string, string] {
-  const parts = slug.split('/')
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(`Invalid repo slug: ${slug} (expected owner/repo)`)
-  }
-  return [parts[0], parts[1]]
+function parseRepoSlug(slug: string): RepoSlug {
+  return repoSlugSchema.parse(slug)
 }
 
 function canPushToRepo(p: RepoPermissions): boolean {
@@ -732,21 +778,22 @@ function canCommentOnPrInRepo(p: RepoPermissions): boolean {
 
 async function fetchRepoPermissionsForUser(
   logger: Logger,
-  slug: string,
+  slug: RepoSlug,
 ): Promise<{ full_name: string; permissions: RepoPermissions }> {
-  const [owner, repo] = parseRepoSlug(slug)
+  const [owner, repo] = slug
+  const slugStr = formatRepoSlug(slug)
   const apiPath = `repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
   const result = await runCommand(logger, 'gh', ['api', apiPath], process.cwd(), { allowFailure: true })
   if (result.code !== 0) {
     const err = (result.stderr + result.stdout).trim()
     throw new Error(
-      `Cannot access ${slug} via GitHub API (need to see the repo). ${err}\n` +
+      `Cannot access ${slugStr} via GitHub API (need to see the repo). ${err}\n` +
         `If this org uses SAML SSO, authorize the org for GitHub CLI (GitHub → Settings → Applications → Authorized OAuth apps → GitHub CLI → Configure SSO).`,
     )
   }
   const data = JSON.parse(result.stdout) as { full_name: string; permissions?: RepoPermissions }
   if (!data.permissions) {
-    throw new Error(`GitHub API did not return permissions for ${slug}. Re-authenticate or authorize SSO for the org.`)
+    throw new Error(`GitHub API did not return permissions for ${slugStr}. Re-authenticate or authorize SSO for the org.`)
   }
   return { full_name: data.full_name, permissions: data.permissions }
 }
@@ -760,13 +807,13 @@ async function assertGithubRepoMigrationAccess(logger: Logger, config: CliConfig
   if (config.localOnly) {
     if (!canReadRepo(clerk.permissions)) {
       throw new Error(
-        `Insufficient access to ${config.clerkRepo}: need at least pull access to clone and prepare a local branch. ` +
+        `Insufficient access to ${formatRepoSlug(config.clerkRepo)}: need at least pull access to clone and prepare a local branch. ` +
           `Your permissions: ${JSON.stringify(clerk.permissions)}`,
       )
     }
   } else if (!canPushToRepo(clerk.permissions)) {
     throw new Error(
-      `Insufficient access to ${config.clerkRepo}: need push (or maintain/admin) to push a branch and open a PR. ` +
+      `Insufficient access to ${formatRepoSlug(config.clerkRepo)}: need push (or maintain/admin) to push a branch and open a PR. ` +
         `Your permissions: ${JSON.stringify(clerk.permissions)}`,
     )
   }
@@ -775,7 +822,7 @@ async function assertGithubRepoMigrationAccess(logger: Logger, config: CliConfig
   const docs = await fetchRepoPermissionsForUser(logger, config.clerkDocsRepo)
   if (!canReadRepo(docs.permissions)) {
     throw new Error(
-      `Insufficient access to ${config.clerkDocsRepo}: need at least pull to list PRs. ` +
+      `Insufficient access to ${formatRepoSlug(config.clerkDocsRepo)}: need at least pull to list PRs. ` +
         `Your permissions: ${JSON.stringify(docs.permissions)}`,
     )
   }
@@ -865,14 +912,14 @@ async function prepareClerkWorkspace(logger: Logger, config: CliConfig, baseRef:
   }
 
   if (config.dryRun) {
-    logger.info('Dry-run: would clone clerk into a temp directory', { repo: config.clerkRepo, baseRef })
+    logger.info('Dry-run: would clone clerk into a temp directory', { repo: formatRepoSlug(config.clerkRepo), baseRef })
     return { path: '', isTemporary: true }
   }
 
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-migrate-'))
   logger.step('Cloning clerk into temp workspace', {
     path: tmpRoot,
-    repo: config.clerkRepo,
+    repo: formatRepoSlug(config.clerkRepo),
     branch: baseRef,
     depth: CLERK_TEMP_CLONE_DEPTH,
     filterBlobNone: CLERK_TEMP_CLONE_FILTER_BLOB_NONE,
@@ -889,7 +936,7 @@ async function prepareClerkWorkspace(logger: Logger, config: CliConfig, baseRef:
   await runCommand(
     logger,
     'gh',
-    ['repo', 'clone', config.clerkRepo, tmpRoot, '--', ...gitClonePassthrough],
+    ['repo', 'clone', formatRepoSlug(config.clerkRepo), tmpRoot, '--', ...gitClonePassthrough],
     process.cwd(),
   )
   const clerkNow = (await getCurrentBranch(logger, tmpRoot)).trim()
@@ -931,7 +978,7 @@ async function resolveSourcePr(logger: Logger, config: CliConfig, headBranch: st
       'pr',
       'list',
       '--repo',
-      config.clerkDocsRepo,
+      formatRepoSlug(config.clerkDocsRepo),
       '--head',
       headBranch,
       '--state',
@@ -1096,7 +1143,9 @@ async function migrateCurrentBranch(
   }
 
   const sourceMeta =
-    sourcePr !== null ? await fetchSourcePrMigrationMetadata(logger, config.clerkDocsRepo, sourcePr.number) : null
+    sourcePr !== null
+      ? await fetchSourcePrMigrationMetadata(logger, formatRepoSlug(config.clerkDocsRepo), sourcePr.number)
+      : null
   let body = bodyBase
   if (sourceMeta) {
     body += formatSourcePrMigrationAppendix(sourceMeta)
@@ -1165,7 +1214,7 @@ async function migrateCurrentBranch(
     const existing = await commandJson<Array<{ url: string }>>(
       logger,
       'gh',
-      ['pr', 'list', '--repo', config.clerkRepo, '--state', 'open', '--head', newBranch, '--json', 'url'],
+      ['pr', 'list', '--repo', formatRepoSlug(config.clerkRepo), '--state', 'open', '--head', newBranch, '--json', 'url'],
       process.cwd(),
     )
     let clerkPrUrl: string
@@ -1198,7 +1247,7 @@ async function migrateCurrentBranch(
         logger,
         config,
         sourcePr.number,
-        config.clerkDocsRepo,
+        formatRepoSlug(config.clerkDocsRepo),
         `${MIGRATION_NOTICE_MARKER}\nThis work was migrated to: ${clerkPrUrl}`,
       )
     }
@@ -1229,8 +1278,8 @@ function printRunIntro(config: CliConfig): void {
     `- clerk-docs path: ${config.clerkDocsPath}`,
     `- desired clerk-docs branch: ${config.clerkDocsBaseBranch ?? '(current branch)'}`,
     `- clerk path: ${config.clerkPath ?? '(temp clone via gh repo clone)'}`,
-    `- clerk repo: ${config.clerkRepo}`,
-    `- clerk-docs repo: ${config.clerkDocsRepo}`,
+    `- clerk repo: ${formatRepoSlug(config.clerkRepo)}`,
+    `- clerk-docs repo: ${formatRepoSlug(config.clerkDocsRepo)}`,
     `- clerk base branch: ${config.clerkBaseBranch}`,
     `- local-only (skip push/PR): ${config.localOnly ? 'yes' : 'no'}`,
     `- allow dirty clerk: ${config.allowDirtyClerk ? 'yes' : 'no'}`,
@@ -1397,7 +1446,7 @@ async function main(): Promise<void> {
     }
 
     const baseRef = config.clerkBaseBranch
-    logger.info('Clerk PR will target base branch', { repo: config.clerkRepo, baseRef })
+    logger.info('Clerk PR will target base branch', { repo: formatRepoSlug(config.clerkRepo), baseRef })
     const sourcePr = await resolveSourcePr(logger, config, clerkDocsBranch)
     if (sourcePr && sourcePr.baseRefName !== baseRef) {
       logger.warn(

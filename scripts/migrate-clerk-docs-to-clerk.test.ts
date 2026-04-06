@@ -164,7 +164,7 @@ describe('command wrappers', () => {
     const json = await commandJson<{ value: number }>(
       logger,
       'node',
-      ['-e', "process.stdout.write(JSON.stringify({value: 42}))"],
+      ['-e', 'process.stdout.write(JSON.stringify({value: 42}))'],
       process.cwd(),
     )
     expect(json.value).toBe(42)

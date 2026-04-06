@@ -86,7 +86,7 @@ const CLERK_TEMP_CLONE_DEPTH = 1
  * Merge + push still require the full tree at `baseRef` eventually, so blobs may stream in during merge.
  */
 const CLERK_TEMP_CLONE_FILTER_BLOB_NONE = true
-const MIGRATION_NOTICE_MARKER = '[clerk-docs-migration-notice]'
+const MIGRATION_NOTICE_MARKER = '<!-- clerk-docs-migration-notice -->'
 const MIN_TOOL_VERSIONS = {
   git: '2.39.0',
   gh: '2.40.0',
@@ -863,17 +863,13 @@ async function reconcileClerkDocsTargetPath(logger: Logger, clerkPath: string, d
   return target
 }
 
-function failFastRerunMessage(reason: string): string {
-  return [
-    `Detected leftover state from a previous run: ${reason}`,
-    'Stop and fix manually (remove stale remote, revert repos), then retry.',
-  ].join('\n')
-}
-
 async function assertNoStaleImportRemote(logger: Logger, clerkPath: string): Promise<void> {
   const remotes = await runCommand(logger, 'git', ['remote'], clerkPath)
   if (remotes.stdout.split('\n').some((name) => name.trim().startsWith('clerk-docs-migrate-'))) {
-    throw new Error(failFastRerunMessage('temporary migrate remote is still configured in clerk'))
+    throw new Error(
+      `Detected leftover state from a previous run: temporary migrate remote is still configured in clerk
+Stop and fix manually (remove stale remote, revert repos), then retry.`,
+    )
   }
 }
 
@@ -887,22 +883,21 @@ interface ClerkWorkspace {
  */
 async function prepareClerkWorkspace(logger: Logger, config: CliConfig, baseRef: string): Promise<ClerkWorkspace> {
   if (config.clerkPath) {
-    const p = config.clerkPath
-    await assertNoStaleImportRemote(logger, p)
-    await assertGitRepo(logger, p, 'clerk')
+    await assertNoStaleImportRemote(logger, config.clerkPath)
+    await assertGitRepo(logger, config.clerkPath, 'clerk')
     if (config.allowDirtyClerk) {
       logger.warn('Bypassing clean-working-tree check for clerk due to --allow-dirty-clerk.')
     } else {
-      await assertCleanWorkingTree(logger, p, 'clerk')
+      await assertCleanWorkingTree(logger, config.clerkPath, 'clerk')
     }
-    await ensureClerkOnBranch(logger, config, p, baseRef)
-    const clerkNow = await getCurrentBranch(logger, p)
+    await ensureClerkOnBranch(logger, config, config.clerkPath, baseRef)
+    const clerkNow = await getCurrentBranch(logger, config.clerkPath)
     if (!config.dryRun && clerkNow !== baseRef) {
       throw new Error(`clerk must be on branch "${baseRef}" (matching PR base). Current: ${clerkNow}`)
     }
-    await reconcileClerkDocsTargetPath(logger, p, config.dryRun)
-    logger.info('Using local clerk workspace', { path: p })
-    return { path: p, isTemporary: false }
+    await reconcileClerkDocsTargetPath(logger, config.clerkPath, config.dryRun)
+    logger.info('Using local clerk workspace', { path: config.clerkPath })
+    return { path: config.clerkPath, isTemporary: false }
   }
 
   if (config.dryRun) {
@@ -1253,7 +1248,7 @@ async function migrateCurrentBranch(
         config,
         sourcePr.number,
         formatRepoSlug(config.clerkDocsRepo),
-        `${MIGRATION_NOTICE_MARKER}\nThis work was migrated to: ${clerkPrUrl}`,
+        `${MIGRATION_NOTICE_MARKER}\nThis branch and pr were migrated to: ${clerkPrUrl}`,
       )
     }
 

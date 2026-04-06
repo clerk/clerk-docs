@@ -1,214 +1,214 @@
 ---
 title: Embeddable email links with sign-in tokens
 description: Learn how to build custom embeddable email link sign-in flows to increase user engagement and reduce drop off in transactional emails, SMS's, and more.
+sdk: nextjs, react, nuxt, expressjs, go, ruby, vue, astro, fastify, react-router, js-frontend, chrome-extension, tanstack-react-start, js-backend
 ---
 
-<If sdk="expo">
-  > [!WARNING]
-  > Expo does not support email links. You can request this feature on [Clerk's roadmap](https://feedback.clerk.com/).
-</If>
+{/* Not currently supported by Expo, iOS, and Android */}
 
-An "email link" is a link that, when visited, will automatically authenticate your user so that they can perform some action on your site with less friction than if they had to sign in manually. You can create email links with Clerk by generating a sign-in token.
+<If notSdk="expo">
+  An "email link" is a link that, when visited, will automatically authenticate your user so that they can perform some action on your site with less friction than if they had to sign in manually. You can create email links with Clerk by generating a sign-in token.
 
-Common use cases include:
+  Common use cases include:
 
-- Welcome emails when users are added off a waitlist
-- Promotional emails for users
-- Recovering abandoned carts
-- Surveys or questionnaires
+  - Welcome emails when users are added off a waitlist
+  - Promotional emails for users
+  - Recovering abandoned carts
+  - Surveys or questionnaires
 
-This guide will demonstrate how to generate a sign-in token and use it to sign in a user.
+  This guide will demonstrate how to generate a sign-in token and use it to sign in a user.
 
-<Steps>
-  ## Generate a sign-in token
+  <Steps>
+    ## Generate a sign-in token
 
-  [Sign-in tokens](/docs/reference/backend-api/tag/sign-in-tokens/post/sign_in_tokens){{ target: '_blank' }} are JWTs that can be used to sign in to an application without specifying any credentials. A sign-in token can be used **once**, and can be consumed from the Frontend API using the [`ticket`](/docs/reference/javascript/sign-in#sign-in-create-params) strategy, which is demonstrated in the following example.
+    [Sign-in tokens](/docs/reference/backend-api/tag/sign-in-tokens/post/sign_in_tokens){{ target: '_blank' }} are JWTs that can be used to sign in to an application without specifying any credentials. A sign-in token can be used **once**, and can be consumed from the Frontend API using the [`ticket`](/docs/reference/objects/sign-in#sign-in-create-params) strategy, which is demonstrated in the following example.
 
-  > [!NOTE]
-  > By default, sign-in tokens expire in 30 days. You can optionally specify a different duration in seconds using the `expires_in_seconds` property.
+    > [!NOTE]
+    > By default, sign-in tokens expire in 30 days. You can optionally specify a different duration in seconds using the `expires_in_seconds` property.
 
-  The following example demonstrates a cURL request that creates a valid sign-in token:
+    The following example demonstrates a cURL request that creates a valid sign-in token:
 
-  ```bash
-  curl 'https://api.clerk.com/v1/sign_in_tokens' \
-    -X POST \
-    -H 'Authorization: Bearer {{secret}}' \
-    -H 'Content-Type: application/json' \
-    -d '{ "user_id": "user_123" }'
-  ```
+    ```bash
+    curl 'https://api.clerk.com/v1/sign_in_tokens' \
+      -X POST \
+      -H 'Authorization: Bearer {{secret}}' \
+      -H 'Content-Type: application/json' \
+      -d '{ "user_id": "user_123" }'
+    ```
 
-  This will return a `url` property, which can be used as your email link. Keep in mind that this link will use the [Account Portal sign-in page](/docs/guides/account-portal/overview#sign-in) to sign in the user.
+    This will return a `url` property, which can be used as your email link. Keep in mind that this link will use the [Account Portal sign-in page](/docs/guides/account-portal/overview#sign-in) to sign in the user.
 
-  If you would rather use your own sign-in page, you can use the `token` property that is returned. Add the `token` as a query param in any link, such as the following example:
+    If you would rather use your own sign-in page, you can use the `token` property that is returned. Add the `token` as a query param in any link, such as the following example:
 
-  `https://your-site.com/accept-token?token=<INSERT_TOKEN_HERE>`
+    `https://your-site.com/accept-token?token=<INSERT_TOKEN_HERE>`
 
-  Then, you can embed this link anywhere, such as an email.
+    Then, you can embed this link anywhere, such as an email.
 
-  ## Build a custom flow for signing in with a sign-in token
+    ## Build a custom flow for signing in with a sign-in token
 
-  To handle email links with sign-in tokens, you must set up a page in your frontend that detects the token, signs the user in, and performs any additional actions you need.
+    To handle email links with sign-in tokens, you must set up a page in your frontend that detects the token, signs the user in, and performs any additional actions you need.
 
-  The following example demonstrates basic code that detects a token in the URL query params and uses it to initiate a sign-in with Clerk:
+    The following example demonstrates basic code that detects a token in the URL query params and uses it to initiate a sign-in with Clerk:
 
-  <If notSdk={["ios", "android"]}>
-    <If notSdk="nextjs">
-      <Include src="_partials/sdk-examples-not-available-callout" />
+    <If notSdk={["ios", "android"]}>
+      <If notSdk="nextjs">
+        <Include src="_partials/sdk-examples-not-available-callout" />
+      </If>
+
+      ```tsx {{ filename: 'app/accept-token/page.tsx' }}
+      'use client'
+      import { useUser, useSignIn } from '@clerk/nextjs'
+      import { useEffect, useState } from 'react'
+      import { useSearchParams } from 'next/navigation'
+
+      export default function Page() {
+        const [loading, setLoading] = useState<boolean>(false)
+        const { signIn, errors, fetchStatus } = useSignIn()
+        const { isSignedIn, user } = useUser()
+
+        // Get the token from the query params
+        const signInToken = useSearchParams().get('token')
+
+        useEffect(() => {
+          if (!signInToken || user || loading) {
+            return
+          }
+
+          const createSignIn = async () => {
+            setLoading(true)
+            try {
+              // Create the `SignIn` with the token
+              const { error } = await signIn.ticket({
+                ticket: signInToken as string,
+              })
+              if (error) {
+                console.error(JSON.stringify(error, null, 2))
+                return
+              }
+
+              // If the sign-in was successful, set the session to active
+              if (signIn.status === 'complete') {
+                signIn.finalize({
+                  navigate: async ({ session, decorateUrl }) => {
+                    if (session?.currentTask) {
+                      console.log(session?.currentTask)
+                      return
+                    }
+
+                    const url = decorateUrl('/')
+                    if (url.startsWith('http')) {
+                      window.location.href = url
+                    } else {
+                      router.push(url)
+                    }
+                  },
+                })
+              } else {
+                // Check why the sign-in is not complete
+                console.error(JSON.stringify(signIn, null, 2))
+              }
+            } catch (err) {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              console.error('Error:', JSON.stringify(err, null, 2))
+            } finally {
+              setLoading(false)
+            }
+          }
+
+          createSignIn()
+        }, [signIn, setActive, signInToken, user, loading])
+
+        if (!signInToken) {
+          return <div>No token provided.</div>
+        }
+
+        if (!isSignedIn) {
+          // Handle signed out state
+          return null
+        }
+
+        if (loading) {
+          return <div>Signing you in...</div>
+        }
+
+        return <div>Signed in as {user.id}</div>
+      }
+      ```
     </If>
 
-    ```tsx {{ filename: 'app/accept-token/page.tsx' }}
-    'use client'
-    import { useUser, useSignIn } from '@clerk/nextjs'
-    import { useEffect, useState } from 'react'
-    import { useSearchParams } from 'next/navigation'
+    <If sdk="ios">
+      ```swift {{ filename: 'EmbeddedEmailLinkSignInView.swift', collapsible: true }}
+      import SwiftUI
+      import ClerkKit
 
-    export default function Page() {
-      const [loading, setLoading] = useState<boolean>(false)
-      const { signIn, errors, fetchStatus } = useSignIn()
-      const { isSignedIn, user } = useUser()
+      struct EmbeddedEmailLinkSignInView: View {
+        @Environment(Clerk.self) private var clerk
+        // In your implementation, extract this token from your incoming deep link URL.
+        let token = "ticket_example_from_deep_link"
 
-      // Get the token from the query params
-      const signInToken = useSearchParams().get('token')
-
-      useEffect(() => {
-        if (!signInToken || user || loading) {
-          return
+        var body: some View {
+          VStack {
+            Text("Sign in")
+            ProgressView()
+          }
+          .task { await handleSignInToken(token: token) }
         }
+      }
 
-        const createSignIn = async () => {
-          setLoading(true)
-          try {
-            // Create the `SignIn` with the token
-            const { error } = await signIn.ticket({
-              ticket: signInToken as string,
-            })
-            if (error) {
-              console.error(JSON.stringify(error, null, 2))
-              return
-            }
+      extension EmbeddedEmailLinkSignInView {
 
-            // If the sign-in was successful, set the session to active
-            if (signIn.status === 'complete') {
-              signIn.finalize({
-                navigate: async ({ session, decorateUrl }) => {
-                  if (session?.currentTask) {
-                    console.log(session?.currentTask)
-                    return
-                  }
+        func handleSignInToken(token: String) async {
+          do {
+            let signIn = try await clerk.auth.signInWithTicket(token)
 
-                  const url = decorateUrl('/')
-                  if (url.startsWith('http')) {
-                    window.location.href = url
-                  } else {
-                    router.push(url)
-                  }
-                },
-              })
+            if signIn.status == .complete {
+              dump(clerk.session)
             } else {
-              // Check why the sign-in is not complete
-              console.error(JSON.stringify(signIn, null, 2))
+              dump(signIn.status)
             }
-          } catch (err) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            console.error('Error:', JSON.stringify(err, null, 2))
-          } finally {
-            setLoading(false)
-          }
-        }
-
-        createSignIn()
-      }, [signIn, setActive, signInToken, user, loading])
-
-      if (!signInToken) {
-        return <div>No token provided.</div>
-      }
-
-      if (!isSignedIn) {
-        // Handle signed out state
-        return null
-      }
-
-      if (loading) {
-        return <div>Signing you in...</div>
-      }
-
-      return <div>Signed in as {user.id}</div>
-    }
-    ```
-  </If>
-
-  <If sdk="ios">
-    ```swift {{ filename: 'EmbeddedEmailLinkSignInView.swift', collapsible: true }}
-    import SwiftUI
-    import ClerkKit
-
-    struct EmbeddedEmailLinkSignInView: View {
-      @Environment(Clerk.self) private var clerk
-      // In your implementation, extract this token from your incoming deep link URL.
-      let token = "ticket_example_from_deep_link"
-
-      var body: some View {
-        VStack {
-          Text("Sign in")
-          ProgressView()
-        }
-        .task { await handleSignInToken(token: token) }
-      }
-    }
-
-    extension EmbeddedEmailLinkSignInView {
-
-      func handleSignInToken(token: String) async {
-        do {
-          let signIn = try await clerk.auth.signInWithTicket(token)
-
-          if signIn.status == .complete {
-            dump(clerk.session)
-          } else {
-            dump(signIn.status)
-          }
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          dump(error)
-        }
-      }
-    }
-    ```
-  </If>
-
-  <If sdk="android">
-    ```kotlin
-    import android.net.Uri
-    import com.clerk.api.Clerk
-    import com.clerk.api.network.serialization.onFailure
-    import com.clerk.api.network.serialization.onSuccess
-    import com.clerk.api.signin.SignIn
-    import kotlinx.coroutines.CoroutineScope
-    import kotlinx.coroutines.launch
-
-    fun handleSignInToken(uri: Uri, scope: CoroutineScope) {
-      val token = uri.getQueryParameter("token") ?: return
-
-      scope.launch {
-        Clerk.auth
-          .signInWithTicket(token)
-          .onSuccess { signIn ->
-            if (signIn.status == SignIn.Status.COMPLETE && signIn.createdSessionId != null) {
-              Clerk.auth
-                .setActive(sessionId = signIn.createdSessionId)
-                .onFailure {
-                  // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                  // for more info on error handling
-                }
-            }
-          }
-          .onFailure {
+          } catch {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
+            dump(error)
           }
+        }
       }
-    }
-    ```
-  </If>
-</Steps>
+      ```
+    </If>
+
+    <If sdk="android">
+      ```kotlin
+      import android.net.Uri
+      import com.clerk.api.Clerk
+      import com.clerk.api.network.serialization.onFailure
+      import com.clerk.api.network.serialization.onSuccess
+      import com.clerk.api.signin.SignIn
+      import kotlinx.coroutines.CoroutineScope
+      import kotlinx.coroutines.launch
+
+      fun handleSignInToken(uri: Uri, scope: CoroutineScope) {
+        val token = uri.getQueryParameter("token") ?: return
+
+        scope.launch {
+          Clerk.auth
+            .signInWithTicket(token)
+            .onSuccess { signIn ->
+              if (signIn.status == SignIn.Status.COMPLETE && signIn.createdSessionId != null) {
+                Clerk.auth
+                  .setActive(sessionId = signIn.createdSessionId)
+                  .onFailure {
+                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                    // for more info on error handling
+                  }
+              }
+            }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+      }
+      ```
+    </If>
+  </Steps>
+</If>

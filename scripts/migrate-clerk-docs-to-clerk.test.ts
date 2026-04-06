@@ -89,6 +89,7 @@ describe('semver utilities', () => {
     expect(isSemverAtLeast([2, 40, 1], [2, 40, 0])).toBe(true)
     expect(isSemverAtLeast([2, 40, 0], [2, 40, 0])).toBe(true)
     expect(isSemverAtLeast([2, 39, 9], [2, 40, 0])).toBe(false)
+    expect(isSemverAtLeast([3, 20, 9], [2, 40, 0])).toBe(true)
   })
 
   test('assertSemverAtLeast throws for old versions', () => {
@@ -211,8 +212,8 @@ describe('parseConfig', () => {
     expect(config.dryRun).toBe(true)
     expect(config.allowDirtyClerkDocs).toBe(true)
     expect(config.debug).toBe(true)
-    expect(config.clerkRepo).toBe('acme/clerk')
-    expect(config.clerkDocsRepo).toBe('acme/clerk-docs')
+    expect(config.clerkRepo).toEqual(['acme', 'clerk'])
+    expect(config.clerkDocsRepo).toEqual(['acme', 'clerk-docs'])
     expect(config.prNumber).toBe(9)
   })
 
@@ -241,7 +242,7 @@ describe('parseConfig', () => {
     ]
     const config = parseConfig()
     expect(config.clerkDocsBaseBranch).toBe('legacy-branch')
-    expect(config.clerkDocsRepo).toBe('legacy/docs')
+    expect(config.clerkDocsRepo).toEqual(['legacy', 'docs'])
     expect(config.allowDirtyClerkDocs).toBe(true)
   })
 })

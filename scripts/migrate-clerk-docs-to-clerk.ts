@@ -86,7 +86,6 @@ const CLERK_TEMP_CLONE_DEPTH = 1
  * Merge + push still require the full tree at `baseRef` eventually, so blobs may stream in during merge.
  */
 const CLERK_TEMP_CLONE_FILTER_BLOB_NONE = true
-const SYNC_BOT_HINT = 'sync'
 const MIGRATION_NOTICE_MARKER = '[clerk-docs-migration-notice]'
 const MIN_TOOL_VERSIONS = {
   git: '2.39.0',
@@ -262,7 +261,11 @@ const migrateCliSchema = z.object({
   debug: z.boolean(),
   clerkRepo: repoSlugSchema,
   clerkDocsRepo: repoSlugSchema,
-  prNumber: z.coerce.number().catch(() => NaN).pipe(githubPrNumberSchema).optional(),
+  prNumber: z.coerce
+    .number()
+    .catch(() => NaN)
+    .pipe(githubPrNumberSchema)
+    .optional(),
 })
 
 /** Avoid slashes in temp directory names (branch names like foo/bar are common). */
@@ -760,10 +763,6 @@ interface RepoPermissions {
   pull?: boolean
 }
 
-function parseRepoSlug(slug: string): RepoSlug {
-  return repoSlugSchema.parse(slug)
-}
-
 function canPushToRepo(p: RepoPermissions): boolean {
   return !!(p.admin || p.maintain || p.push)
 }
@@ -793,7 +792,9 @@ async function fetchRepoPermissionsForUser(
   }
   const data = JSON.parse(result.stdout) as { full_name: string; permissions?: RepoPermissions }
   if (!data.permissions) {
-    throw new Error(`GitHub API did not return permissions for ${slugStr}. Re-authenticate or authorize SSO for the org.`)
+    throw new Error(
+      `GitHub API did not return permissions for ${slugStr}. Re-authenticate or authorize SSO for the org.`,
+    )
   }
   return { full_name: data.full_name, permissions: data.permissions }
 }
@@ -834,12 +835,6 @@ async function assertGithubRepoMigrationAccess(logger: Logger, config: CliConfig
   } else {
     logger.info('clerk-docs repo access OK for PR comment', { repo: docs.full_name, permissions: docs.permissions })
   }
-}
-
-async function maybeWarnAboutSyncBotCommit(logger: Logger, repoPath: string): Promise<void> {
-  const author = (await runCommand(logger, 'git', ['log', '-1', '--pretty=%an <%ae>'], repoPath)).stdout.trim()
-  if (author.toLowerCase().includes(SYNC_BOT_HINT))
-    logger.warn('Latest commit author appears to be sync/bot-like.', { author })
 }
 
 async function reconcileClerkDocsTargetPath(logger: Logger, clerkPath: string, dryRun: boolean): Promise<string> {
@@ -905,7 +900,6 @@ async function prepareClerkWorkspace(logger: Logger, config: CliConfig, baseRef:
     if (!config.dryRun && clerkNow !== baseRef) {
       throw new Error(`clerk must be on branch "${baseRef}" (matching PR base). Current: ${clerkNow}`)
     }
-    await maybeWarnAboutSyncBotCommit(logger, p)
     await reconcileClerkDocsTargetPath(logger, p, config.dryRun)
     logger.info('Using local clerk workspace', { path: p })
     return { path: p, isTemporary: false }
@@ -1214,7 +1208,18 @@ async function migrateCurrentBranch(
     const existing = await commandJson<Array<{ url: string }>>(
       logger,
       'gh',
-      ['pr', 'list', '--repo', formatRepoSlug(config.clerkRepo), '--state', 'open', '--head', newBranch, '--json', 'url'],
+      [
+        'pr',
+        'list',
+        '--repo',
+        formatRepoSlug(config.clerkRepo),
+        '--state',
+        'open',
+        '--head',
+        newBranch,
+        '--json',
+        'url',
+      ],
       process.cwd(),
     )
     let clerkPrUrl: string
@@ -1554,7 +1559,6 @@ export {
   parseSemverLoose,
   isSemverAtLeast,
   assertSemverAtLeast,
-  parseRepoSlug,
   canPushToRepo,
   canReadRepo,
   canCommentOnPrInRepo,

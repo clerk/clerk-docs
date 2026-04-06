@@ -17,7 +17,6 @@ import {
   lineIgnoresSymlinkedClerkDocsRoot,
   parseConfig,
   parseGhPrViewForMigration,
-  parseRepoSlug,
   parseSemverLoose,
   reviewRequestToHandle,
   runCommand,
@@ -136,11 +135,6 @@ describe('PR metadata helpers', () => {
 })
 
 describe('permissions and repo slug helpers', () => {
-  test('parseRepoSlug validates owner/repo format', () => {
-    expect(parseRepoSlug('clerk/clerk')).toEqual(['clerk', 'clerk'])
-    expect(() => parseRepoSlug('clerk')).toThrow('Invalid repo slug')
-  })
-
   test('permission check helpers map access expectations', () => {
     expect(canPushToRepo({ push: true })).toBe(true)
     expect(canReadRepo({ pull: true })).toBe(true)

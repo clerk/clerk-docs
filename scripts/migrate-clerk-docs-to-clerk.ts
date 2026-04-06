@@ -93,6 +93,131 @@ const MIN_TOOL_VERSIONS = {
   gitFilterRepo: '2.38.0',
 } as const
 
+const MIGRATION_GIT_FILTER_REPO_INSTALL_HINT = [
+  'git-filter-repo is not installed or not on your PATH.',
+  'Install it, then re-run:',
+  '  macOS:   brew install git-filter-repo',
+  '  pip:    pip install git-filter-repo   (or pipx install git-filter-repo)',
+  'Docs:    https://github.com/newren/git-filter-repo/blob/main/INSTALL.md',
+].join('\n')
+
+/**
+ * Central migration failures: message + hints per key (same idea as `scripts/lib/error-messages.ts`, plus hints).
+ * `message` and `hints` share the same parameter list for each key so `throwMigrationError` can infer args from the key.
+ */
+const migrationErrorDefinitions = {
+  'gh-not-authenticated': {
+    message: (): string => 'GitHub CLI is not authenticated. Run: gh auth login',
+    hints: (): readonly string[] => ['Run `gh auth login` and verify with `gh auth status`, then rerun.'],
+  },
+  'merge-main-conflict': {
+    message: (): string => 'Merge conflict while merging origin/main. Resolve conflicts, commit, then rerun.',
+    hints: (): readonly string[] => [
+      'Resolve conflicts in clerk-docs, create a commit, then rerun the migration.',
+      'If you want to postpone migration, abort and rebase/merge your branch first.',
+    ],
+  },
+  'stale-migrate-remote': {
+    message: (): string =>
+      [
+        'Detected leftover state from a previous run: temporary migrate remote is still configured in clerk',
+        'Stop and fix manually (remove stale remote, revert repos), then retry.',
+      ].join('\n'),
+    hints: (): readonly string[] => [
+      'In your clerk repo, remove stale remotes matching `clerk-docs-migrate-*`.',
+      'Ensure no partial migration branch/merge is in progress before rerunning.',
+    ],
+  },
+  'refuse-clerk-docs-main': {
+    message: (): string =>
+      'Refusing to run on clerk-docs/main. Use a feature branch for your PR, or migrate main separately by hand.',
+    hints: (): readonly string[] => ['Checkout your feature branch in clerk-docs and rerun from there.'],
+  },
+  'insufficient-repo-access': {
+    message: (detail: string): string => detail,
+    hints: (_detail: string): readonly string[] => [
+      'Verify your GitHub account has the required repo permissions.',
+      'If your org uses SSO, authorize GitHub CLI for the org and rerun.',
+    ],
+  },
+  'git-filter-repo-missing': {
+    message: (): string => MIGRATION_GIT_FILTER_REPO_INSTALL_HINT,
+    hints: (): readonly string[] => ['Install git-filter-repo (`brew install git-filter-repo`), then rerun.'],
+  },
+  'json-parse-failed': {
+    message: (command: string, argsLine: string): string => `Failed parsing JSON from ${command} ${argsLine}`,
+    hints: (_command: string, _argsLine: string): readonly string[] => [
+      'Re-run with --verbose to capture command output and identify malformed JSON response.',
+    ],
+  },
+  'uncommitted-changes': {
+    message: (label: 'clerk' | 'clerk-docs'): string => {
+      const suffix = label === 'clerk-docs' ? ' or rerun with --allow-dirty-docs.' : '.'
+      return `${label} has uncommitted changes. Commit or stash your local changes first${suffix}`
+    },
+    hints: (label: 'clerk' | 'clerk-docs'): readonly string[] => [
+      'Commit or stash changes in the mentioned repo, then rerun.',
+      ...(label === 'clerk'
+        ? ['If intentional, rerun with --allow-dirty-clerk to bypass the local clerk clean check.']
+        : []),
+      ...(label === 'clerk-docs' ? ['If intentional, rerun with --allow-dirty-docs to bypass this check.'] : []),
+    ],
+  },
+  'github-api-repo-inaccessible': {
+    message: (detail: string): string => detail,
+    hints: (_detail: string): readonly string[] => [
+      'Verify the repo exists and you can access it with `gh`.',
+      'If this org uses SAML SSO, authorize the org for GitHub CLI (GitHub → Settings → Applications → Authorized OAuth apps → GitHub CLI → Configure SSO).',
+    ],
+  },
+  'github-api-no-permissions': {
+    message: (detail: string): string => detail,
+    hints: (_detail: string): readonly string[] => [
+      'Re-authenticate with `gh auth login` or refresh SSO authorization for the org.',
+    ],
+  },
+  'clerk-path-not-found': {
+    message: (resolvedPath: string): string =>
+      `Clerk path does not exist (from --clerk-path): ${resolvedPath}`,
+    hints: (_resolvedPath: string): readonly string[] => [
+      'Fix the path to your local clerk clone (typo, wrong folder, or repo not checked out yet).',
+      'Use an absolute path or resolve `../` from clerk-docs root if unsure.',
+    ],
+  },
+  'clerk-path-not-a-directory': {
+    message: (resolvedPath: string): string => `Clerk path is not a directory (from --clerk-path): ${resolvedPath}`,
+    hints: (_resolvedPath: string): readonly string[] => [
+      'Pass the root directory of the clerk git checkout, not a file.',
+    ],
+  },
+} as const
+
+type MigrationErrorCode = keyof typeof migrationErrorDefinitions
+
+class MigrationError extends Error {
+  public readonly code: MigrationErrorCode
+  public readonly hints: readonly string[]
+
+  constructor(code: MigrationErrorCode, message: string, hints: readonly string[]) {
+    super(message)
+    this.name = 'MigrationError'
+    this.code = code
+    this.hints = hints
+  }
+}
+
+function throwMigrationError<K extends MigrationErrorCode>(
+  code: K,
+  ...args: Parameters<(typeof migrationErrorDefinitions)[K]['message']>
+): never {
+  const def = migrationErrorDefinitions[code]
+  // @ts-expect-error -- per-key `message`/`hints` share the same args tuple; TypeScript cannot prove the spread
+  const message: string = def.message(...args)
+  // @ts-expect-error -- same
+  const hints: readonly string[] = def.hints(...args)
+  throw new MigrationError(code, message, [...hints])
+}
+
 class Logger {
   private readonly debugEnabled: boolean
   private readonly useColor: boolean
@@ -599,7 +724,7 @@ async function commandJson<T>(logger: Logger, command: string, args: string[], c
   try {
     return JSON.parse(result.stdout) as T
   } catch {
-    throw new Error(`Failed parsing JSON from ${command} ${args.join(' ')}`)
+    throwMigrationError('json-parse-failed', command, args.join(' '))
   }
 }
 
@@ -649,14 +774,6 @@ function assertSemverAtLeast(logger: Logger, label: string, rawOutput: string, m
     minimumVersion,
   })
 }
-
-const GIT_FILTER_REPO_INSTALL_HINT = [
-  'git-filter-repo is not installed or not on your PATH.',
-  'Install it, then re-run:',
-  '  macOS:   brew install git-filter-repo',
-  '  pip:    pip install git-filter-repo   (or pipx install git-filter-repo)',
-  'Docs:    https://github.com/newren/git-filter-repo/blob/main/INSTALL.md',
-].join('\n')
 
 /** How to invoke filter-repo: either `git filter-repo ...` or standalone `git-filter-repo ...`. */
 interface GitFilterRepoInvoker {
@@ -728,7 +845,7 @@ async function resolveGitFilterRepoInvoker(logger: Logger): Promise<GitFilterRep
     )
     return { command: 'git-filter-repo', argsPrefix: [] }
   }
-  throw new Error(GIT_FILTER_REPO_INSTALL_HINT)
+  throwMigrationError('git-filter-repo-missing')
 }
 
 async function assertGitRepo(logger: Logger, repoPath: string, label: string): Promise<void> {
@@ -744,14 +861,13 @@ async function getCurrentBranch(logger: Logger, repoPath: string): Promise<strin
 async function assertCleanWorkingTree(logger: Logger, repoPath: string, label: string): Promise<void> {
   const status = await runCommand(logger, 'git', ['status', '--porcelain'], repoPath)
   if (status.stdout.trim().length > 0) {
-    const suffix = label === 'clerk-docs' ? ' or rerun with --allow-dirty-docs.' : '.'
-    throw new Error(`${label} has uncommitted changes. Commit or stash your local changes first${suffix}`)
+    throwMigrationError('uncommitted-changes', label === 'clerk-docs' ? 'clerk-docs' : 'clerk')
   }
 }
 
 async function assertGhAuthenticated(logger: Logger): Promise<void> {
   const status = await runCommand(logger, 'gh', ['auth', 'status'], process.cwd(), { allowFailure: true })
-  if (status.code !== 0) throw new Error('GitHub CLI is not authenticated. Run: gh auth login')
+  if (status.code !== 0) throwMigrationError('gh-not-authenticated')
 }
 
 /** `permissions` from GET /repos/{owner}/{repo} for the authenticated user */
@@ -785,14 +901,16 @@ async function fetchRepoPermissionsForUser(
   const result = await runCommand(logger, 'gh', ['api', apiPath], process.cwd(), { allowFailure: true })
   if (result.code !== 0) {
     const err = (result.stderr + result.stdout).trim()
-    throw new Error(
+    throwMigrationError(
+      'github-api-repo-inaccessible',
       `Cannot access ${slugStr} via GitHub API (need to see the repo). ${err}\n` +
         `If this org uses SAML SSO, authorize the org for GitHub CLI (GitHub → Settings → Applications → Authorized OAuth apps → GitHub CLI → Configure SSO).`,
     )
   }
   const data = JSON.parse(result.stdout) as { full_name: string; permissions?: RepoPermissions }
   if (!data.permissions) {
-    throw new Error(
+    throwMigrationError(
+      'github-api-no-permissions',
       `GitHub API did not return permissions for ${slugStr}. Re-authenticate or authorize SSO for the org.`,
     )
   }
@@ -807,13 +925,15 @@ async function assertGithubRepoMigrationAccess(logger: Logger, config: CliConfig
   const clerk = await fetchRepoPermissionsForUser(logger, config.clerkRepo)
   if (config.localOnly) {
     if (!canReadRepo(clerk.permissions)) {
-      throw new Error(
+      throwMigrationError(
+        'insufficient-repo-access',
         `Insufficient access to ${formatRepoSlug(config.clerkRepo)}: need at least pull access to clone and prepare a local branch. ` +
           `Your permissions: ${JSON.stringify(clerk.permissions)}`,
       )
     }
   } else if (!canPushToRepo(clerk.permissions)) {
-    throw new Error(
+    throwMigrationError(
+      'insufficient-repo-access',
       `Insufficient access to ${formatRepoSlug(config.clerkRepo)}: need push (or maintain/admin) to push a branch and open a PR. ` +
         `Your permissions: ${JSON.stringify(clerk.permissions)}`,
     )
@@ -822,7 +942,8 @@ async function assertGithubRepoMigrationAccess(logger: Logger, config: CliConfig
 
   const docs = await fetchRepoPermissionsForUser(logger, config.clerkDocsRepo)
   if (!canReadRepo(docs.permissions)) {
-    throw new Error(
+    throwMigrationError(
+      'insufficient-repo-access',
       `Insufficient access to ${formatRepoSlug(config.clerkDocsRepo)}: need at least pull to list PRs. ` +
         `Your permissions: ${JSON.stringify(docs.permissions)}`,
     )
@@ -863,13 +984,20 @@ async function reconcileClerkDocsTargetPath(logger: Logger, clerkPath: string, d
   return target
 }
 
+/** Fail before spawning `git` in `clerkPath` (bad cwd yields opaque `spawn git ENOENT`). */
+function assertClerkPathResolvable(clerkPath: string): void {
+  if (!existsSync(clerkPath)) {
+    throwMigrationError('clerk-path-not-found', clerkPath)
+  }
+  if (!lstatSync(clerkPath).isDirectory()) {
+    throwMigrationError('clerk-path-not-a-directory', clerkPath)
+  }
+}
+
 async function assertNoStaleImportRemote(logger: Logger, clerkPath: string): Promise<void> {
   const remotes = await runCommand(logger, 'git', ['remote'], clerkPath)
   if (remotes.stdout.split('\n').some((name) => name.trim().startsWith('clerk-docs-migrate-'))) {
-    throw new Error(
-      `Detected leftover state from a previous run: temporary migrate remote is still configured in clerk
-Stop and fix manually (remove stale remote, revert repos), then retry.`,
-    )
+    throwMigrationError('stale-migrate-remote')
   }
 }
 
@@ -1039,7 +1167,7 @@ async function mergeMainIntoCurrentBranch(logger: Logger, config: CliConfig): Pr
   await runCommand(logger, 'git', ['fetch', 'origin', 'main'], config.clerkDocsPath)
   const merge = await runCommand(logger, 'git', ['merge', 'origin/main'], config.clerkDocsPath, { allowFailure: true })
   if (merge.code !== 0) {
-    throw new Error('Merge conflict while merging origin/main. Resolve conflicts, commit, then rerun.')
+    throwMigrationError('merge-main-conflict')
   }
 }
 
@@ -1331,74 +1459,28 @@ function toErrorMessage(error: unknown): string {
 }
 
 function describeFailure(error: unknown, config: CliConfig): ActionableFailure {
+  if (error instanceof MigrationError) {
+    const raw = error.message.trim()
+    return {
+      summary: raw.split('\n')[0] ?? raw,
+      hints: [...error.hints],
+    }
+  }
+
   const raw = toErrorMessage(error).trim()
   const summary = raw.split('\n')[0] ?? raw
 
-  if (summary.includes('uncommitted changes')) {
+  // Non-existent --clerk-path cwd often surfaces as spawn ENOENT before we could run git; same text if `git` is missing.
+  if (summary.includes('spawn git ENOENT')) {
     return {
       summary,
       hints: [
-        'Commit or stash changes in the mentioned repo, then rerun.',
-        ...(summary.includes('clerk has uncommitted changes')
-          ? ['If intentional, rerun with --allow-dirty-clerk to bypass the local clerk clean check.']
-          : []),
-        ...(summary.includes('clerk-docs')
-          ? ['If intentional, rerun with --allow-dirty-docs to bypass this check.']
-          : []),
+        'If you passed --clerk-path: confirm that folder exists and is the clerk repo root (typos cause this error).',
+        'Otherwise ensure `git` is installed and on your PATH (`which git`).',
       ],
     }
   }
-  if (summary.includes('GitHub CLI is not authenticated')) {
-    return {
-      summary,
-      hints: ['Run `gh auth login` and verify with `gh auth status`, then rerun.'],
-    }
-  }
-  if (summary.includes('Merge conflict while merging origin/main')) {
-    return {
-      summary,
-      hints: [
-        'Resolve conflicts in clerk-docs, create a commit, then rerun the migration.',
-        'If you want to postpone migration, abort and rebase/merge your branch first.',
-      ],
-    }
-  }
-  if (summary.includes('temporary migrate remote is still configured')) {
-    return {
-      summary,
-      hints: [
-        'In your clerk repo, remove stale remotes matching `clerk-docs-migrate-*`.',
-        'Ensure no partial migration branch/merge is in progress before rerunning.',
-      ],
-    }
-  }
-  if (summary.includes('Refusing to run on clerk-docs/main')) {
-    return {
-      summary,
-      hints: ['Checkout your feature branch in clerk-docs and rerun from there.'],
-    }
-  }
-  if (summary.includes('Insufficient access to')) {
-    return {
-      summary,
-      hints: [
-        'Verify your GitHub account has the required repo permissions.',
-        'If your org uses SSO, authorize GitHub CLI for the org and rerun.',
-      ],
-    }
-  }
-  if (summary.includes('git-filter-repo is not installed')) {
-    return {
-      summary,
-      hints: ['Install git-filter-repo (`brew install git-filter-repo`), then rerun.'],
-    }
-  }
-  if (summary.includes('Failed parsing JSON from')) {
-    return {
-      summary,
-      hints: ['Re-run with --verbose to capture command output and identify malformed JSON response.'],
-    }
-  }
+
   return {
     summary,
     hints: config.debug ? [] : ['Re-run with --verbose for additional diagnostics.'],
@@ -1419,6 +1501,7 @@ async function main(): Promise<void> {
     currentPhase = 'preflight'
     logger.step('Running preflight checks')
     if (config.clerkPath) {
+      assertClerkPathResolvable(config.clerkPath)
       await assertNoStaleImportRemote(logger, config.clerkPath)
     }
     await assertCommandAvailable(logger, 'git')
@@ -1440,9 +1523,7 @@ async function main(): Promise<void> {
     let clerkDocsBranch = await getCurrentBranch(logger, config.clerkDocsPath)
     clerkDocsBranch = await maybeAlignClerkDocsBranch(logger, config, clerkDocsBranch)
     if (clerkDocsBranch === 'main') {
-      throw new Error(
-        'Refusing to run on clerk-docs/main. Use a feature branch for your PR, or migrate main separately by hand.',
-      )
+      throwMigrationError('refuse-clerk-docs-main')
     }
 
     const baseRef = config.clerkBaseBranch

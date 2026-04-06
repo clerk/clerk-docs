@@ -1,7 +1,6 @@
 /**
  * PR / branch migration only: run from your clerk-docs feature branch (not main).
  * Merges origin/main, rewrites clerk-docs history under clerk/clerk-docs/, merges that history into a clerk branch (preserving authors per imported commit), pushes and opens a PR only if an open clerk-docs PR exists, then comments that source PR.
- * No repo-wide bootstrap or multi-branch orchestration.
  */
 import { existsSync, lstatSync } from 'node:fs'
 import fs from 'node:fs/promises'
@@ -29,11 +28,10 @@ interface CliConfig {
   allowDirtyClerk: boolean
   /** Skip preflight refusal when clerk-docs has local uncommitted changes */
   allowDirtyClerkDocs: boolean
-  autoApprove: boolean
   debug: boolean
   clerkRepo: string
   clerkDocsRepo: string
-  /** When several open PRs share the same head, use this PR number (required with --yes if ambiguous) */
+  /** When several open PRs share the same head, use this PR number (required if stdin is not a TTY) */
   prNumber?: number
 }
 
@@ -181,8 +179,7 @@ Optional:
 
   --local-only                Create branch locally only (skip push, PR creation, and source-PR comment)
   --dry-run                   Print actions only
-  --yes                       Non-interactive mode (with multiple PRs for this head, pass --pr)
-  --pr <number>               Open clerk-docs PR to use for title/body/comment when several match this branch
+  --pr <number>               Open clerk-docs PR to use when several match this branch (required if stdin is not a TTY)
   --debug, --verbose          Verbose logs (includes JSON metadata)
   --help
 `)
@@ -210,6 +207,12 @@ function getArgAliases(flags: string[]): string | undefined {
 function hasFlagAliases(flags: string[]): boolean {
   return flags.some((flag) => hasFlag(flag))
 }
+
+/** When false, readline prompts cannot run; caller must pass flags (e.g. --pr) or fix branch state instead. */
+function stdinSupportsInteractivePrompts(): boolean {
+  return Boolean(input.isTTY)
+}
+
 /** Avoid slashes in temp directory names (branch names like foo/bar are common). */
 function sanitizeBranchForPath(branch: string): string {
   return branch.replace(/[/\\]/g, '-')
@@ -278,7 +281,6 @@ function parseConfig(): CliConfig {
     dryRun: hasFlag('--dry-run'),
     allowDirtyClerk: hasFlag('--allow-dirty-clerk'),
     allowDirtyClerkDocs: hasFlagAliases(['--allow-dirty-docs', '--allow-dirty-clerk-docs']),
-    autoApprove: hasFlag('--yes'),
     debug: hasFlag('--debug') || hasFlag('--verbose'),
     clerkRepo: getArg('--clerk-repo') ?? 'clerk/clerk',
     clerkDocsRepo: getArgAliases(['--docs-repo', '--clerk-docs-repo']) ?? 'clerk/clerk-docs',
@@ -294,7 +296,6 @@ async function checkpoint(
   logger.step(`Checkpoint: ${details.title}`)
   logger.info('Completed in this phase', { completed: details.completed })
   logger.info('Next planned action', { next: details.next })
-  if (config.autoApprove) logger.debug('Auto mode enabled (--yes).')
 }
 
 async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Promise<PullRequestView> {
@@ -962,9 +963,9 @@ async function resolveSourcePr(logger: Logger, config: CliConfig, headBranch: st
       logger.info('Using clerk-docs PR from --pr', { number: picked.number, isDraft: picked.isDraft })
       return picked
     }
-    if (config.autoApprove) {
+    if (!stdinSupportsInteractivePrompts()) {
       throw new Error(
-        `Multiple open PRs for head "${headBranch}": ${list.map((p) => `#${p.number}`).join(', ')}. Re-run with --pr <number> or drop --yes.`,
+        `Multiple open PRs for head "${headBranch}": ${list.map((p) => `#${p.number}`).join(', ')}. Re-run with --pr <number> (stdin is not a TTY).`,
       )
     }
     return await promptPickSourcePr(logger, list)
@@ -1009,10 +1010,10 @@ async function mergeMainIntoCurrentBranch(logger: Logger, config: CliConfig): Pr
 async function maybeAlignClerkDocsBranch(logger: Logger, config: CliConfig, currentBranch: string): Promise<string> {
   const desired = config.clerkDocsBaseBranch
   if (!desired || desired === currentBranch) return currentBranch
-  if (config.autoApprove) {
+  if (!stdinSupportsInteractivePrompts()) {
     throw new Error(
       `Current clerk-docs branch is "${currentBranch}", but --docs-base is "${desired}". ` +
-        'In --yes mode this prompt is skipped. Checkout manually, or rerun without --yes.',
+        'Non-interactive environment (stdin is not a TTY): checkout that branch manually, or run from an interactive terminal.',
     )
   }
 
@@ -1234,7 +1235,7 @@ function printRunIntro(config: CliConfig): void {
     `- local-only (skip push/PR): ${config.localOnly ? 'yes' : 'no'}`,
     `- allow dirty clerk: ${config.allowDirtyClerk ? 'yes' : 'no'}`,
     `- allow dirty clerk-docs: ${config.allowDirtyClerkDocs ? 'yes' : 'no'}`,
-    `- non-interactive: ${config.autoApprove ? 'yes (--yes)' : 'no'}`,
+    `- interactive prompts (stdin TTY): ${stdinSupportsInteractivePrompts() ? 'yes' : 'no'}`,
     `- verbose logging: ${config.debug ? 'yes' : 'no (use --verbose)'}`,
     '',
   ]

@@ -192,7 +192,6 @@ describe('parseConfig', () => {
       'release',
       '--local-only',
       '--allow-dirty-clerk',
-      '--yes',
       '--dry-run',
       '--allow-dirty-docs',
       '--debug',
@@ -209,7 +208,6 @@ describe('parseConfig', () => {
     expect(config.clerkDocsBaseBranch).toBe('docs-feature')
     expect(config.localOnly).toBe(true)
     expect(config.allowDirtyClerk).toBe(true)
-    expect(config.autoApprove).toBe(true)
     expect(config.dryRun).toBe(true)
     expect(config.allowDirtyClerkDocs).toBe(true)
     expect(config.debug).toBe(true)

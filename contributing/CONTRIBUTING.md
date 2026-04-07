@@ -290,7 +290,7 @@ To update the SDK selector, the files you need are in `clerk/clerk`:
 - https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDKSelector.tsx
   - This is the logic behind how the SDK selector works and sets an SDK as active for the Docs. It's unlikely you'll touch this file, unless you are changing the logic behind how the SDK selector works.
 - https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDK.tsx
-  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most used SDKs at the top (Next.js, React, JavaScript), and then the rest are alphabetized.
+  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most popular SDKs at the top (Next.js, React, JavaScript, Expo, TanStack React Start, React Router, Express), and then the rest are alphabetized.
 
 #### Add a new SDK
 

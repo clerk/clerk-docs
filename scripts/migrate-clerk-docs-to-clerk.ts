@@ -177,8 +177,7 @@ const migrationErrorDefinitions = {
     ],
   },
   'clerk-path-not-found': {
-    message: (resolvedPath: string): string =>
-      `Clerk path does not exist (from --clerk-path): ${resolvedPath}`,
+    message: (resolvedPath: string): string => `Clerk path does not exist (from --clerk-path): ${resolvedPath}`,
     hints: (_resolvedPath: string): readonly string[] => [
       'Fix the path to your local clerk clone (typo, wrong folder, or repo not checked out yet).',
       'Use an absolute path or resolve `../` from clerk-docs root if unsure.',

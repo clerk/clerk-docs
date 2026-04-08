@@ -959,6 +959,620 @@ This guide will walk you through how to build a custom flow that allows users to
       </Tab>
     </Tabs>
   </If>
+
+  <If sdk="android">
+    This example consists of two Android screens:
+
+    - A screen where users can manage SMS-based MFA and regenerate backup codes
+    - A screen where users can add and verify a phone number
+
+    Use the following tabs to view the code necessary for each screen.
+
+    <Tabs items={["Manage SMS MFA screen", "Add phone screen"]}>
+      <Tab>
+        The [`phoneNumbersReservedForMfa()`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.user/phone-numbers-reserved-for-mfa.html) and [`phoneNumbersAvailableForMfa()`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.user/phone-numbers-available-for-mfa.html) helpers keep the screen aligned with Clerk's MFA rules, including avoiding the user's last remaining first-factor phone number.
+
+        ```kotlin {{ filename: 'ManageSmsMfaViewModel.kt', collapsible: true }}
+        import android.util.Log
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.errorMessage
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.phonenumber.PhoneNumber
+        import com.clerk.api.phonenumber.delete
+        import com.clerk.api.phonenumber.makeDefaultSecondFactor
+        import com.clerk.api.phonenumber.setReservedForSecondFactor
+        import com.clerk.api.session.hasMfaRequiredTask
+        import com.clerk.api.user.createBackupCodes
+        import com.clerk.api.user.phoneNumbersAvailableForMfa
+        import com.clerk.api.user.phoneNumbersReservedForMfa
+        import com.clerk.api.user.reload
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.flow.combine
+        import kotlinx.coroutines.flow.launchIn
+        import kotlinx.coroutines.flow.onEach
+        import kotlinx.coroutines.launch
+
+        class ManageSmsMfaViewModel : ViewModel() {
+          private val _generatedBackupCodes = MutableStateFlow<List<String>>(emptyList())
+          private val _isWorking = MutableStateFlow(false)
+          private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+          val uiState = _uiState.asStateFlow()
+
+          init {
+            combine(
+              Clerk.isInitialized,
+              Clerk.userFlow,
+              Clerk.sessionFlow,
+              _generatedBackupCodes,
+              _isWorking,
+            ) { isInitialized, user, session, generatedBackupCodes, isWorking ->
+              when {
+                !isInitialized -> UiState.Loading
+                user == null && session?.hasMfaRequiredTask != true -> UiState.SignedOut
+                else ->
+                  UiState.Ready(
+                    reservedPhoneNumbers =
+                      user
+                        ?.phoneNumbersReservedForMfa()
+                        ?.sortedWith(
+                          compareByDescending<PhoneNumber> { it.defaultSecondFactor }.thenBy {
+                            it.createdAt
+                          },
+                        ) ?: emptyList(),
+                    availablePhoneNumbers = user?.phoneNumbersAvailableForMfa() ?: emptyList(),
+                    generatedBackupCodes = generatedBackupCodes,
+                    totpEnabled = user?.totpEnabled == true,
+                    twoFactorEnabled = user?.twoFactorEnabled == true,
+                    isWorking = isWorking,
+                  )
+              }
+            }.onEach { _uiState.value = it }.launchIn(viewModelScope)
+          }
+
+          fun reserveForSecondFactor(phoneNumber: PhoneNumber) {
+            _isWorking.value = true
+            viewModelScope.launch {
+              phoneNumber
+                .setReservedForSecondFactor(true)
+                .onSuccess {
+                  if (it.backupCodes.orEmpty().isNotEmpty()) {
+                    _generatedBackupCodes.value = it.backupCodes.orEmpty()
+                  }
+                  completeSetupTaskIfNeeded()
+                  refreshUser()
+                }
+                .onFailure {
+                  Log.e("ManageSmsMfa", "Failed to reserve phone number for MFA: ${it.errorMessage}")
+                }
+              _isWorking.value = false
+            }
+          }
+
+          fun disableForMfa(phoneNumber: PhoneNumber) {
+            _isWorking.value = true
+            viewModelScope.launch {
+              phoneNumber
+                .setReservedForSecondFactor(false)
+                .onSuccess { refreshUser() }
+                .onFailure {
+                  Log.e("ManageSmsMfa", "Failed to disable MFA for phone number: ${it.errorMessage}")
+                }
+              _isWorking.value = false
+            }
+          }
+
+          fun makeDefault(phoneNumber: PhoneNumber) {
+            _isWorking.value = true
+            viewModelScope.launch {
+              phoneNumber
+                .makeDefaultSecondFactor()
+                .onSuccess { refreshUser() }
+                .onFailure {
+                  Log.e(
+                    "ManageSmsMfa",
+                    "Failed to make phone number the default second factor: ${it.errorMessage}",
+                  )
+                }
+              _isWorking.value = false
+            }
+          }
+
+          fun removePhoneNumber(phoneNumber: PhoneNumber) {
+            _isWorking.value = true
+            viewModelScope.launch {
+              phoneNumber
+                .delete()
+                .onSuccess { refreshUser() }
+                .onFailure {
+                  Log.e("ManageSmsMfa", "Failed to remove phone number: ${it.errorMessage}")
+                }
+              _isWorking.value = false
+            }
+          }
+
+          fun regenerateBackupCodes() {
+            _isWorking.value = true
+            viewModelScope.launch {
+              val user = Clerk.user ?: run {
+                _isWorking.value = false
+                return@launch
+              }
+
+              user
+                .createBackupCodes()
+                .onSuccess { _generatedBackupCodes.value = it.codes }
+                .onFailure {
+                  Log.e("ManageSmsMfa", "Failed to generate backup codes: ${it.errorMessage}")
+                }
+              _isWorking.value = false
+            }
+          }
+
+          fun clearBackupCodes() {
+            _generatedBackupCodes.value = emptyList()
+          }
+
+          private suspend fun refreshUser() {
+            Clerk.user?.reload()?.onFailure {
+              Log.e("ManageSmsMfa", "Failed to reload user: ${it.errorMessage}")
+            }
+          }
+
+          private suspend fun completeSetupTaskIfNeeded() {
+            val session = Clerk.session ?: return
+            if (!session.hasMfaRequiredTask) return
+
+            Clerk.auth.setActive(sessionId = session.id).onFailure {
+              Log.e("ManageSmsMfa", "Failed to complete setup-mfa task: ${it.errorMessage}")
+            }
+          }
+
+          sealed interface UiState {
+            data object Loading : UiState
+
+            data object SignedOut : UiState
+
+            data class Ready(
+              val reservedPhoneNumbers: List<PhoneNumber>,
+              val availablePhoneNumbers: List<PhoneNumber>,
+              val generatedBackupCodes: List<String>,
+              val totpEnabled: Boolean,
+              val twoFactorEnabled: Boolean,
+              val isWorking: Boolean,
+            ) : UiState
+          }
+        }
+        ```
+
+        ```kotlin {{ filename: 'ManageSmsMfaActivity.kt', collapsible: true }}
+        import android.content.Intent
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.activity.viewModels
+        import androidx.compose.foundation.layout.Arrangement
+        import androidx.compose.foundation.layout.Column
+        import androidx.compose.foundation.layout.fillMaxSize
+        import androidx.compose.foundation.layout.fillMaxWidth
+        import androidx.compose.foundation.layout.padding
+        import androidx.compose.foundation.rememberScrollState
+        import androidx.compose.foundation.verticalScroll
+        import androidx.compose.material3.Button
+        import androidx.compose.material3.CircularProgressIndicator
+        import androidx.compose.material3.MaterialTheme
+        import androidx.compose.material3.OutlinedButton
+        import androidx.compose.material3.Surface
+        import androidx.compose.material3.Text
+        import androidx.compose.material3.TextButton
+        import androidx.compose.runtime.Composable
+        import androidx.compose.runtime.getValue
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.unit.dp
+        import androidx.lifecycle.compose.collectAsStateWithLifecycle
+        import com.clerk.api.phonenumber.PhoneNumber
+
+        class ManageSmsMfaActivity : ComponentActivity() {
+          private val viewModel: ManageSmsMfaViewModel by viewModels()
+
+          override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent {
+              val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+              MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                  when (val uiState = state) {
+                    ManageSmsMfaViewModel.UiState.Loading -> LoadingState()
+                    ManageSmsMfaViewModel.UiState.SignedOut -> SignedOutState()
+                    is ManageSmsMfaViewModel.UiState.Ready ->
+                      ManageSmsMfaScreen(
+                        state = uiState,
+                        onReserveForSecondFactor = viewModel::reserveForSecondFactor,
+                        onDisableForMfa = viewModel::disableForMfa,
+                        onMakeDefault = viewModel::makeDefault,
+                        onRemovePhoneNumber = viewModel::removePhoneNumber,
+                        onGenerateBackupCodes = viewModel::regenerateBackupCodes,
+                        onClearBackupCodes = viewModel::clearBackupCodes,
+                        onAddPhoneNumber = {
+                          startActivity(Intent(this, AddPhoneActivity::class.java))
+                        },
+                      )
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        @Composable
+        private fun ManageSmsMfaScreen(
+          state: ManageSmsMfaViewModel.UiState.Ready,
+          onReserveForSecondFactor: (PhoneNumber) -> Unit,
+          onDisableForMfa: (PhoneNumber) -> Unit,
+          onMakeDefault: (PhoneNumber) -> Unit,
+          onRemovePhoneNumber: (PhoneNumber) -> Unit,
+          onGenerateBackupCodes: () -> Unit,
+          onClearBackupCodes: () -> Unit,
+          onAddPhoneNumber: () -> Unit,
+        ) {
+          Column(
+            modifier =
+              Modifier.fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+          ) {
+            Text("Manage SMS MFA", style = MaterialTheme.typography.headlineMedium)
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              Text(
+                "Phone numbers reserved for MFA",
+                style = MaterialTheme.typography.titleMedium,
+              )
+
+              if (state.reservedPhoneNumbers.isEmpty()) {
+                Text("There are currently no phone numbers reserved for MFA.")
+              } else {
+                state.reservedPhoneNumbers.forEach { phoneNumber ->
+                  Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    tonalElevation = 2.dp,
+                    shape = MaterialTheme.shapes.medium,
+                  ) {
+                    Column(
+                      modifier = Modifier.fillMaxWidth().padding(16.dp),
+                      verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                      val label =
+                        buildString {
+                          append(phoneNumber.phoneNumber)
+                          if (phoneNumber.defaultSecondFactor) {
+                            append(" (Default)")
+                          }
+                        }
+                      Text(label, style = MaterialTheme.typography.bodyLarge)
+
+                      OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onDisableForMfa(phoneNumber) },
+                        enabled = !state.isWorking,
+                      ) {
+                        Text("Disable for MFA")
+                      }
+
+                      if (!state.totpEnabled && !phoneNumber.defaultSecondFactor) {
+                        Button(
+                          modifier = Modifier.fillMaxWidth(),
+                          onClick = { onMakeDefault(phoneNumber) },
+                          enabled = !state.isWorking,
+                        ) {
+                          Text("Make default")
+                        }
+                      }
+
+                      TextButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onRemovePhoneNumber(phoneNumber) },
+                        enabled = !state.isWorking,
+                      ) {
+                        Text("Remove from account")
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              Text(
+                "Verified phone numbers available for MFA",
+                style = MaterialTheme.typography.titleMedium,
+              )
+
+              if (state.availablePhoneNumbers.isEmpty()) {
+                Text("There are currently no verified phone numbers available to reserve for MFA.")
+              } else {
+                state.availablePhoneNumbers.forEach { phoneNumber ->
+                  Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    tonalElevation = 2.dp,
+                    shape = MaterialTheme.shapes.medium,
+                  ) {
+                    Column(
+                      modifier = Modifier.fillMaxWidth().padding(16.dp),
+                      verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                      Text(phoneNumber.phoneNumber, style = MaterialTheme.typography.bodyLarge)
+
+                      Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onReserveForSecondFactor(phoneNumber) },
+                        enabled = !state.isWorking,
+                      ) {
+                        Text("Use for MFA")
+                      }
+
+                      TextButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onRemovePhoneNumber(phoneNumber) },
+                        enabled = !state.isWorking,
+                      ) {
+                        Text("Remove from account")
+                      }
+                    }
+                  }
+                }
+              }
+
+              OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onAddPhoneNumber,
+                enabled = !state.isWorking,
+              ) {
+                Text("Add a phone number")
+              }
+            }
+
+            if (state.twoFactorEnabled) {
+              Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Backup codes", style = MaterialTheme.typography.titleMedium)
+
+                if (state.generatedBackupCodes.isEmpty()) {
+                  Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onGenerateBackupCodes,
+                    enabled = !state.isWorking,
+                  ) {
+                    Text("Generate new backup codes")
+                  }
+                } else {
+                  state.generatedBackupCodes.forEach { code ->
+                    Text(code, style = MaterialTheme.typography.bodyLarge)
+                  }
+
+                  TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onClearBackupCodes,
+                    enabled = !state.isWorking,
+                  ) {
+                    Text("Done")
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        @Composable
+        private fun LoadingState() {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+          ) {
+            CircularProgressIndicator()
+          }
+        }
+
+        @Composable
+        private fun SignedOutState() {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+          ) {
+            Text("You must be signed in to manage MFA settings.")
+          }
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```kotlin {{ filename: 'AddPhoneViewModel.kt', collapsible: true }}
+        import android.util.Log
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.errorMessage
+        import com.clerk.api.network.serialization.flatMap
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.phonenumber.PhoneNumber
+        import com.clerk.api.phonenumber.attemptVerification
+        import com.clerk.api.phonenumber.prepareVerification
+        import com.clerk.api.user.createPhoneNumber
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.flow.combine
+        import kotlinx.coroutines.flow.launchIn
+        import kotlinx.coroutines.flow.onEach
+        import kotlinx.coroutines.launch
+
+        class AddPhoneViewModel : ViewModel() {
+          private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+          val uiState = _uiState.asStateFlow()
+
+          init {
+            combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+              when {
+                !isInitialized -> UiState.Loading
+                user == null -> UiState.SignedOut
+                else -> UiState.NeedsVerification
+              }
+            }.onEach { state ->
+              if (_uiState.value !is UiState.Verifying && _uiState.value !is UiState.Verified) {
+                _uiState.value = state
+              }
+            }.launchIn(viewModelScope)
+          }
+
+          fun createPhoneNumber(phoneNumber: String) {
+            val user = requireNotNull(Clerk.userFlow.value)
+
+            viewModelScope.launch {
+              user
+                .createPhoneNumber(phoneNumber)
+                .flatMap { it.prepareVerification() }
+                .onSuccess {
+                  _uiState.value = UiState.Verifying(it)
+                }
+                .onFailure {
+                  Log.e(
+                    "AddPhoneViewModel",
+                    "Failed to create phone number and prepare verification: ${it.errorMessage}",
+                  )
+                }
+            }
+          }
+
+          fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
+            viewModelScope.launch {
+              newPhoneNumber
+                .attemptVerification(code)
+                .onSuccess {
+                  _uiState.value = UiState.Verified
+                }
+                .onFailure {
+                  Log.e("AddPhoneViewModel", "Failed to verify phone number: ${it.errorMessage}")
+                }
+            }
+          }
+
+          sealed interface UiState {
+            data object Loading : UiState
+
+            data object NeedsVerification : UiState
+
+            data class Verifying(val phoneNumber: PhoneNumber) : UiState
+
+            data object Verified : UiState
+
+            data object SignedOut : UiState
+          }
+        }
+        ```
+
+        ```kotlin {{ filename: 'AddPhoneActivity.kt', collapsible: true }}
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.activity.viewModels
+        import androidx.compose.foundation.layout.Box
+        import androidx.compose.foundation.layout.Column
+        import androidx.compose.foundation.layout.fillMaxSize
+        import androidx.compose.foundation.layout.padding
+        import androidx.compose.material3.Button
+        import androidx.compose.material3.CircularProgressIndicator
+        import androidx.compose.material3.MaterialTheme
+        import androidx.compose.material3.Surface
+        import androidx.compose.material3.Text
+        import androidx.compose.material3.TextField
+        import androidx.compose.runtime.Composable
+        import androidx.compose.runtime.getValue
+        import androidx.compose.runtime.mutableStateOf
+        import androidx.compose.runtime.remember
+        import androidx.compose.runtime.setValue
+        import androidx.compose.ui.Alignment
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.unit.dp
+        import androidx.lifecycle.compose.collectAsStateWithLifecycle
+        import com.clerk.api.phonenumber.PhoneNumber
+
+        class AddPhoneActivity : ComponentActivity() {
+          private val viewModel: AddPhoneViewModel by viewModels()
+
+          override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent {
+              val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+              MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                  AddPhoneView(
+                    state = state,
+                    onCreatePhoneNumber = viewModel::createPhoneNumber,
+                    onVerifyCode = viewModel::verifyCode,
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        @Composable
+        fun AddPhoneView(
+          state: AddPhoneViewModel.UiState,
+          onCreatePhoneNumber: (String) -> Unit,
+          onVerifyCode: (String, PhoneNumber) -> Unit,
+        ) {
+          Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            when (state) {
+              AddPhoneViewModel.UiState.NeedsVerification -> {
+                InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
+                  onCreatePhoneNumber(it)
+                }
+              }
+              AddPhoneViewModel.UiState.Verified -> Text("Phone added.")
+              is AddPhoneViewModel.UiState.Verifying -> {
+                InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+                  onVerifyCode(it, state.phoneNumber)
+                }
+              }
+              AddPhoneViewModel.UiState.Loading -> CircularProgressIndicator()
+              AddPhoneViewModel.UiState.SignedOut -> {
+                Text("You must be signed in to add a phone number.")
+              }
+            }
+          }
+        }
+
+        @Composable
+        private fun InputContentView(
+          buttonText: String,
+          placeholder: String,
+          modifier: Modifier = Modifier,
+          onClick: (String) -> Unit,
+        ) {
+          var input by remember { mutableStateOf("") }
+
+          Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+            TextField(
+              modifier = Modifier.padding(bottom = 16.dp),
+              value = input,
+              onValueChange = { input = it },
+              placeholder = { Text(placeholder) },
+            )
+            Button(onClick = { onClick(input) }, enabled = input.isNotBlank()) {
+              Text(buttonText)
+            }
+          }
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </If>
 </Steps>
 
 ## Authenticator application (TOTP)
@@ -2478,6 +3092,510 @@ This guide will walk you through how to build a custom flow that allows users to
               // for more info on error handling
               dump(error)
             }
+          }
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </If>
+
+  <If sdk="android">
+    This example consists of two Android screens:
+
+    - A screen where users can enable or disable authenticator-app MFA and regenerate backup codes
+    - A screen where users can create a TOTP secret, verify it, and display the generated backup codes
+
+    This example uses the shared secret returned by Clerk directly, so you don't need to install an additional QR-code dependency.
+
+    Use the following tabs to view the code necessary for each screen.
+
+    <Tabs items={["Manage TOTP screen", "Add TOTP screen"]}>
+      <Tab>
+        ```kotlin {{ filename: 'ManageTotpMfaViewModel.kt', collapsible: true }}
+        import android.util.Log
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.errorMessage
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.user.createBackupCodes
+        import com.clerk.api.user.disableTotp
+        import com.clerk.api.user.reload
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.flow.combine
+        import kotlinx.coroutines.flow.launchIn
+        import kotlinx.coroutines.flow.onEach
+        import kotlinx.coroutines.launch
+
+        class ManageTotpMfaViewModel : ViewModel() {
+          private val _generatedBackupCodes = MutableStateFlow<List<String>>(emptyList())
+          private val _isWorking = MutableStateFlow(false)
+          private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+          val uiState = _uiState.asStateFlow()
+
+          init {
+            combine(
+              Clerk.isInitialized,
+              Clerk.userFlow,
+              _generatedBackupCodes,
+              _isWorking,
+            ) { isInitialized, user, generatedBackupCodes, isWorking ->
+              when {
+                !isInitialized -> UiState.Loading
+                user == null -> UiState.SignedOut
+                else ->
+                  UiState.Ready(
+                    totpEnabled = user.totpEnabled,
+                    canRegenerateBackupCodes = user.backupCodeEnabled == true && user.twoFactorEnabled,
+                    generatedBackupCodes = generatedBackupCodes,
+                    isWorking = isWorking,
+                  )
+              }
+            }.onEach { _uiState.value = it }.launchIn(viewModelScope)
+          }
+
+          fun disableTotp() {
+            _isWorking.value = true
+            viewModelScope.launch {
+              val user = Clerk.user ?: run {
+                _isWorking.value = false
+                return@launch
+              }
+
+              user
+                .disableTotp()
+                .onSuccess { refreshUser() }
+                .onFailure {
+                  Log.e("ManageTotpMfa", "Failed to disable TOTP: ${it.errorMessage}")
+                }
+              _isWorking.value = false
+            }
+          }
+
+          fun regenerateBackupCodes() {
+            _isWorking.value = true
+            viewModelScope.launch {
+              val user = Clerk.user ?: run {
+                _isWorking.value = false
+                return@launch
+              }
+
+              user
+                .createBackupCodes()
+                .onSuccess { _generatedBackupCodes.value = it.codes }
+                .onFailure {
+                  Log.e("ManageTotpMfa", "Failed to create backup codes: ${it.errorMessage}")
+                }
+              _isWorking.value = false
+            }
+          }
+
+          fun clearBackupCodes() {
+            _generatedBackupCodes.value = emptyList()
+          }
+
+          private suspend fun refreshUser() {
+            Clerk.user?.reload()?.onFailure {
+              Log.e("ManageTotpMfa", "Failed to reload user: ${it.errorMessage}")
+            }
+          }
+
+          sealed interface UiState {
+            data object Loading : UiState
+
+            data object SignedOut : UiState
+
+            data class Ready(
+              val totpEnabled: Boolean,
+              val canRegenerateBackupCodes: Boolean,
+              val generatedBackupCodes: List<String>,
+              val isWorking: Boolean,
+            ) : UiState
+          }
+        }
+        ```
+
+        ```kotlin {{ filename: 'ManageTotpMfaActivity.kt', collapsible: true }}
+        import android.content.Intent
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.activity.viewModels
+        import androidx.compose.foundation.layout.Arrangement
+        import androidx.compose.foundation.layout.Column
+        import androidx.compose.foundation.layout.fillMaxSize
+        import androidx.compose.foundation.layout.fillMaxWidth
+        import androidx.compose.foundation.layout.padding
+        import androidx.compose.material3.Button
+        import androidx.compose.material3.CircularProgressIndicator
+        import androidx.compose.material3.MaterialTheme
+        import androidx.compose.material3.Surface
+        import androidx.compose.material3.Text
+        import androidx.compose.material3.TextButton
+        import androidx.compose.runtime.Composable
+        import androidx.compose.runtime.getValue
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.unit.dp
+        import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+        class ManageTotpMfaActivity : ComponentActivity() {
+          private val viewModel: ManageTotpMfaViewModel by viewModels()
+
+          override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent {
+              val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+              MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                  when (val uiState = state) {
+                    ManageTotpMfaViewModel.UiState.Loading -> LoadingState()
+                    ManageTotpMfaViewModel.UiState.SignedOut -> SignedOutState()
+                    is ManageTotpMfaViewModel.UiState.Ready ->
+                      ManageTotpMfaScreen(
+                        state = uiState,
+                        onDisableTotp = viewModel::disableTotp,
+                        onGenerateBackupCodes = viewModel::regenerateBackupCodes,
+                        onClearBackupCodes = viewModel::clearBackupCodes,
+                        onAddTotp = {
+                          startActivity(Intent(this, AddTotpActivity::class.java))
+                        },
+                      )
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        @Composable
+        private fun ManageTotpMfaScreen(
+          state: ManageTotpMfaViewModel.UiState.Ready,
+          onDisableTotp: () -> Unit,
+          onGenerateBackupCodes: () -> Unit,
+          onClearBackupCodes: () -> Unit,
+          onAddTotp: () -> Unit,
+        ) {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+          ) {
+            Text("Manage authenticator app MFA", style = MaterialTheme.typography.headlineMedium)
+
+            if (state.totpEnabled) {
+              Text("Authenticator app MFA is enabled.")
+              Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onDisableTotp,
+                enabled = !state.isWorking,
+              ) {
+                Text("Remove authenticator app")
+              }
+            } else {
+              Text("Authenticator app MFA is not enabled.")
+              Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onAddTotp,
+                enabled = !state.isWorking,
+              ) {
+                Text("Add authenticator app")
+              }
+            }
+
+            if (state.canRegenerateBackupCodes) {
+              if (state.generatedBackupCodes.isEmpty()) {
+                Button(
+                  modifier = Modifier.fillMaxWidth(),
+                  onClick = onGenerateBackupCodes,
+                  enabled = !state.isWorking,
+                ) {
+                  Text("Generate new backup codes")
+                }
+              } else {
+                Text("Save these backup codes somewhere safe:")
+                state.generatedBackupCodes.forEach { code ->
+                  Text(code, style = MaterialTheme.typography.bodyLarge)
+                }
+                TextButton(
+                  modifier = Modifier.fillMaxWidth(),
+                  onClick = onClearBackupCodes,
+                  enabled = !state.isWorking,
+                ) {
+                  Text("Done")
+                }
+              }
+            }
+          }
+        }
+
+        @Composable
+        private fun LoadingState() {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+          ) {
+            CircularProgressIndicator()
+          }
+        }
+
+        @Composable
+        private fun SignedOutState() {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+          ) {
+            Text("You must be signed in to manage authenticator app MFA.")
+          }
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```kotlin {{ filename: 'AddTotpViewModel.kt', collapsible: true }}
+        import android.util.Log
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.errorMessage
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.session.hasMfaRequiredTask
+        import com.clerk.api.user.attemptTotpVerification
+        import com.clerk.api.user.createTotp
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.flow.combine
+        import kotlinx.coroutines.flow.launchIn
+        import kotlinx.coroutines.flow.onEach
+        import kotlinx.coroutines.launch
+
+        class AddTotpViewModel : ViewModel() {
+          private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+          val uiState = _uiState.asStateFlow()
+
+          private var didCreateTotp = false
+
+          init {
+            combine(Clerk.isInitialized, Clerk.userFlow, Clerk.sessionFlow) { isInitialized, user, session ->
+              Triple(isInitialized, user != null, session?.hasMfaRequiredTask == true)
+            }.onEach { (isInitialized, hasUser, hasSetupMfaTask) ->
+              when {
+                !isInitialized -> _uiState.value = UiState.Loading
+                !hasUser && !hasSetupMfaTask -> _uiState.value = UiState.SignedOut
+                hasUser && !didCreateTotp -> {
+                  didCreateTotp = true
+                  createTotp()
+                }
+              }
+            }.launchIn(viewModelScope)
+          }
+
+          fun updateCode(code: String) {
+            val state = _uiState.value
+            if (state is UiState.NeedsVerification) {
+              _uiState.value = state.copy(code = code)
+            }
+          }
+
+          fun verifyCode() {
+            val state = _uiState.value as? UiState.NeedsVerification ?: return
+            val user = Clerk.user ?: return
+
+            viewModelScope.launch {
+              user
+                .attemptTotpVerification(state.code)
+                .onSuccess {
+                  val backupCodes = it.backupCodes.orEmpty()
+                  if (backupCodes.isEmpty()) {
+                    completeSetupTaskIfNeeded()
+                    _uiState.value = UiState.Success
+                  } else {
+                    _uiState.value = UiState.NeedsBackupCodes(backupCodes)
+                  }
+                }
+                .onFailure {
+                  Log.e("AddTotpViewModel", "Failed to verify TOTP: ${it.errorMessage}")
+                }
+            }
+          }
+
+          fun finish() {
+            viewModelScope.launch {
+              completeSetupTaskIfNeeded()
+              _uiState.value = UiState.Success
+            }
+          }
+
+          private fun createTotp() {
+            val user = Clerk.user ?: return
+
+            viewModelScope.launch {
+              user
+                .createTotp()
+                .onSuccess {
+                  _uiState.value =
+                    UiState.NeedsVerification(secret = it.secret.orEmpty(), code = "")
+                }
+                .onFailure {
+                  Log.e("AddTotpViewModel", "Failed to create TOTP secret: ${it.errorMessage}")
+                }
+            }
+          }
+
+          private suspend fun completeSetupTaskIfNeeded() {
+            val session = Clerk.session ?: return
+            if (!session.hasMfaRequiredTask) return
+
+            Clerk.auth.setActive(sessionId = session.id).onFailure {
+              Log.e("AddTotpViewModel", "Failed to complete setup-mfa task: ${it.errorMessage}")
+            }
+          }
+
+          sealed interface UiState {
+            data object Loading : UiState
+
+            data object SignedOut : UiState
+
+            data class NeedsVerification(
+              val secret: String,
+              val code: String,
+            ) : UiState
+
+            data class NeedsBackupCodes(val codes: List<String>) : UiState
+
+            data object Success : UiState
+          }
+        }
+        ```
+
+        ```kotlin {{ filename: 'AddTotpActivity.kt', collapsible: true }}
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.activity.viewModels
+        import androidx.compose.foundation.layout.Arrangement
+        import androidx.compose.foundation.layout.Column
+        import androidx.compose.foundation.layout.fillMaxSize
+        import androidx.compose.foundation.layout.fillMaxWidth
+        import androidx.compose.foundation.layout.padding
+        import androidx.compose.material3.Button
+        import androidx.compose.material3.CircularProgressIndicator
+        import androidx.compose.material3.MaterialTheme
+        import androidx.compose.material3.Surface
+        import androidx.compose.material3.Text
+        import androidx.compose.material3.TextField
+        import androidx.compose.runtime.Composable
+        import androidx.compose.runtime.getValue
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.unit.dp
+        import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+        class AddTotpActivity : ComponentActivity() {
+          private val viewModel: AddTotpViewModel by viewModels()
+
+          override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent {
+              val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+              MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                  when (val uiState = state) {
+                    AddTotpViewModel.UiState.Loading -> LoadingState()
+                    AddTotpViewModel.UiState.SignedOut -> SignedOutState()
+                    is AddTotpViewModel.UiState.NeedsVerification ->
+                      VerifyTotpScreen(
+                        state = uiState,
+                        onCodeChanged = viewModel::updateCode,
+                        onVerify = viewModel::verifyCode,
+                      )
+                    is AddTotpViewModel.UiState.NeedsBackupCodes ->
+                      BackupCodesScreen(
+                        codes = uiState.codes,
+                        onFinish = viewModel::finish,
+                      )
+                    AddTotpViewModel.UiState.Success -> SuccessScreen()
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        @Composable
+        private fun VerifyTotpScreen(
+          state: AddTotpViewModel.UiState.NeedsVerification,
+          onCodeChanged: (String) -> Unit,
+          onVerify: () -> Unit,
+        ) {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+          ) {
+            Text("Add authenticator app MFA", style = MaterialTheme.typography.headlineMedium)
+            Text("Enter this key in your authenticator app:")
+            Text(state.secret, style = MaterialTheme.typography.bodyLarge)
+            TextField(
+              modifier = Modifier.fillMaxWidth(),
+              value = state.code,
+              onValueChange = onCodeChanged,
+              label = { Text("Verification code") },
+            )
+            Button(
+              modifier = Modifier.fillMaxWidth(),
+              onClick = onVerify,
+              enabled = state.code.isNotBlank(),
+            ) {
+              Text("Verify code")
+            }
+          }
+        }
+
+        @Composable
+        private fun BackupCodesScreen(codes: List<String>, onFinish: () -> Unit) {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+          ) {
+            Text("Save these backup codes somewhere safe:")
+            codes.forEach { code ->
+              Text(code, style = MaterialTheme.typography.bodyLarge)
+            }
+            Button(modifier = Modifier.fillMaxWidth(), onClick = onFinish) {
+              Text("Finish")
+            }
+          }
+        }
+
+        @Composable
+        private fun SuccessScreen() {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+          ) {
+            Text("You have successfully added authenticator app MFA.")
+          }
+        }
+
+        @Composable
+        private fun LoadingState() {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+          ) {
+            CircularProgressIndicator()
+          }
+        }
+
+        @Composable
+        private fun SignedOutState() {
+          Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+          ) {
+            Text("You must be signed in to add authenticator app MFA.")
           }
         }
         ```

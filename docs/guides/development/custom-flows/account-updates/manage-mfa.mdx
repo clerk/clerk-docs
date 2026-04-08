@@ -779,6 +779,186 @@ This guide will walk you through how to build a custom flow that allows users to
       </Tabs>
     </If>
   </If>
+
+  <If sdk="ios">
+    This example consists of two SwiftUI views:
+
+    - A view where users can manage SMS-based MFA and regenerate backup codes
+    - A view where users can add and verify a phone number
+
+    Use the following tabs to view the code necessary for each view.
+
+    <Tabs items={["Manage SMS MFA view", "Add phone view"]}>
+      <Tab>
+        ```swift {{ filename: 'ManageSMSMFAView.swift', collapsible: true }}
+        import SwiftUI
+        import ClerkKit
+
+        struct ManageSMSMFAView: View {
+          @Environment(Clerk.self) private var clerk
+
+          @State private var generatedBackupCodes = [String]()
+
+          private var mfaPhoneNumbers: [PhoneNumber] {
+            (clerk.user?.phoneNumbers ?? [])
+              .filter { $0.verification?.status == .verified && $0.reservedForSecondFactor }
+              .sorted { lhs, rhs in
+                if lhs.defaultSecondFactor == rhs.defaultSecondFactor {
+                  return lhs.createdAt < rhs.createdAt
+                }
+
+                return lhs.defaultSecondFactor && !rhs.defaultSecondFactor
+              }
+          }
+
+          private var availablePhoneNumbers: [PhoneNumber] {
+            (clerk.user?.phoneNumbers ?? [])
+              .filter { $0.verification?.status == .verified && !$0.reservedForSecondFactor }
+          }
+
+          var body: some View {
+            List {
+              Section("Phone numbers reserved for MFA") {
+                if mfaPhoneNumbers.isEmpty {
+                  Text("There are currently no phone numbers reserved for MFA.")
+                } else {
+                  ForEach(mfaPhoneNumbers) { phoneNumber in
+                    VStack(alignment: .leading, spacing: 8) {
+                      Text(phoneNumber.phoneNumber)
+
+                      if phoneNumber.defaultSecondFactor {
+                        Text("Default")
+                      }
+
+                      HStack {
+                        Button("Disable for MFA") {
+                          Task { await disableMfa(for: phoneNumber) }
+                        }
+
+                        if clerk.user?.totpEnabled != true && !phoneNumber.defaultSecondFactor {
+                          Button("Make default") {
+                            Task { await makeDefaultSecondFactor(phoneNumber) }
+                          }
+                        }
+
+                        Button("Remove from account", role: .destructive) {
+                          Task { await removePhoneNumber(phoneNumber) }
+                        }
+                      }
+                      .buttonStyle(.borderless)
+                    }
+                  }
+                }
+              }
+
+              Section("Verified phone numbers available for MFA") {
+                if availablePhoneNumbers.isEmpty {
+                  Text("There are currently no verified phone numbers available to reserve for MFA.")
+                } else {
+                  ForEach(availablePhoneNumbers) { phoneNumber in
+                    VStack(alignment: .leading, spacing: 8) {
+                      Text(phoneNumber.phoneNumber)
+
+                      HStack {
+                        Button("Use for MFA") {
+                          Task { await reserveForSecondFactor(phoneNumber) }
+                        }
+
+                        Button("Remove from account", role: .destructive) {
+                          Task { await removePhoneNumber(phoneNumber) }
+                        }
+                      }
+                      .buttonStyle(.borderless)
+                    }
+                  }
+                }
+
+                NavigationLink("Add a phone number") {
+                  AddPhoneView()
+                }
+              }
+
+              if clerk.user?.twoFactorEnabled == true {
+                Section("Backup codes") {
+                  if generatedBackupCodes.isEmpty {
+                    Button("Generate new backup codes") {
+                      Task { await regenerateBackupCodes() }
+                    }
+                  } else {
+                    ForEach(generatedBackupCodes, id: \.self) { code in
+                      Text(code)
+                    }
+
+                    Button("Done") {
+                      generatedBackupCodes = []
+                    }
+                  }
+                }
+              }
+            }
+            .navigationTitle("Manage SMS MFA")
+          }
+
+          private func reserveForSecondFactor(_ phoneNumber: PhoneNumber) async {
+            do {
+              let reservedPhoneNumber = try await phoneNumber.setReservedForSecondFactor()
+              generatedBackupCodes = reservedPhoneNumber.backupCodes ?? []
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+
+          private func disableMfa(for phoneNumber: PhoneNumber) async {
+            do {
+              try await phoneNumber.setReservedForSecondFactor(reserved: false)
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+
+          private func makeDefaultSecondFactor(_ phoneNumber: PhoneNumber) async {
+            do {
+              try await phoneNumber.makeDefaultSecondFactor()
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+
+          private func removePhoneNumber(_ phoneNumber: PhoneNumber) async {
+            do {
+              try await phoneNumber.delete()
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+
+          private func regenerateBackupCodes() async {
+            do {
+              guard let user = clerk.user else { return }
+              generatedBackupCodes = try await user.createBackupCodes().codes
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        <Include src="_partials/custom-flows/add-phone" />
+      </Tab>
+    </Tabs>
+  </If>
 </Steps>
 
 ## Authenticator application (TOTP)
@@ -2133,5 +2313,175 @@ This guide will walk you through how to build a custom flow that allows users to
         </Tab>
       </Tabs>
     </If>
+  </If>
+
+  <If sdk="ios">
+    This example consists of two SwiftUI views:
+
+    - A view where users can enable, disable, and regenerate backup codes for authenticator-app MFA
+    - A view where users can create a TOTP secret, verify it, and show any generated backup codes
+
+    Use the following tabs to view the code necessary for each view.
+
+    <Tabs items={["Manage TOTP view", "Add TOTP view"]}>
+      <Tab>
+        ```swift {{ filename: 'ManageTOTPView.swift', collapsible: true }}
+        import SwiftUI
+        import ClerkKit
+
+        struct ManageTOTPView: View {
+          @Environment(Clerk.self) private var clerk
+
+          @State private var generatedBackupCodes = [String]()
+
+          var body: some View {
+            List {
+              Section("Authenticator application") {
+                if clerk.user?.totpEnabled == true {
+                  Text("Authenticator app MFA is enabled.")
+
+                  Button("Remove", role: .destructive) {
+                    Task { await disableTOTP() }
+                  }
+                } else {
+                  NavigationLink("Add authenticator app MFA") {
+                    AddTOTPView()
+                  }
+                }
+              }
+
+              if clerk.user?.backupCodeEnabled == true && clerk.user?.twoFactorEnabled == true {
+                Section("Backup codes") {
+                  if generatedBackupCodes.isEmpty {
+                    Button("Generate new backup codes") {
+                      Task { await regenerateBackupCodes() }
+                    }
+                  } else {
+                    ForEach(generatedBackupCodes, id: \.self) { code in
+                      Text(code)
+                    }
+
+                    Button("Done") {
+                      generatedBackupCodes = []
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          private func disableTOTP() async {
+            do {
+              guard let user = clerk.user else { return }
+              try await user.disableTOTP()
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+
+          private func regenerateBackupCodes() async {
+            do {
+              guard let user = clerk.user else { return }
+              generatedBackupCodes = try await user.createBackupCodes().codes
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```swift {{ filename: 'AddTOTPView.swift', collapsible: true }}
+        import SwiftUI
+        import ClerkKit
+
+        struct AddTOTPView: View {
+          @Environment(Clerk.self) private var clerk
+
+          @State private var totp: TOTPResource?
+          @State private var code = ""
+          @State private var backupCodes = [String]()
+          @State private var step: Step = .create
+
+          enum Step {
+            case create
+            case verify
+            case backupCodes
+            case success
+          }
+
+          var body: some View {
+            VStack(alignment: .leading, spacing: 16) {
+              switch step {
+              case .create:
+                if let secret = totp?.secret {
+                  Text("Enter this key in your authenticator app:")
+                  Text(secret)
+                    .textSelection(.enabled)
+
+                  Button("Continue to verification") {
+                    step = .verify
+                  }
+                } else {
+                  ProgressView()
+                }
+
+              case .verify:
+                Text("Verify the authenticator app")
+                TextField("Enter code", text: $code)
+                Button("Verify") {
+                  Task { await verifyTOTP() }
+                }
+
+              case .backupCodes:
+                Text("Save these backup codes somewhere safe:")
+
+                ForEach(backupCodes, id: \.self) { code in
+                  Text(code)
+                }
+
+                Button("Finish") {
+                  step = .success
+                }
+
+              case .success:
+                Text("You have successfully added TOTP MFA.")
+              }
+            }
+            .navigationTitle("Add TOTP")
+            .task { await createTOTP() }
+          }
+
+          private func createTOTP() async {
+            do {
+              guard let user = clerk.user else { return }
+              totp = try await user.createTOTP()
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+
+          private func verifyTOTP() async {
+            do {
+              guard let user = clerk.user else { return }
+              backupCodes = try await user.verifyTOTP(code: code).backupCodes ?? []
+              step = backupCodes.isEmpty ? .success : .backupCodes
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+        }
+        ```
+      </Tab>
+    </Tabs>
   </If>
 </Steps>

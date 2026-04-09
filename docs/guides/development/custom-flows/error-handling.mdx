@@ -15,9 +15,144 @@ The individual methods of [`signIn`](/docs/reference/objects/sign-in-future) and
 
 ## Example
 
-The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to handle errors returned during the sign-in process. This example is written for Next.js App Router, but the same approach applies to any React-based framework.
+<If notSdk="ios">
+  The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to handle errors returned during the sign-in process. This example is written for Next.js App Router, but the same approach applies to any React-based framework.
 
-<Include src="_partials/custom-flows/email-password-sign-in" />
+  <Include src="_partials/custom-flows/email-password-sign-in" />
+</If>
+
+<If sdk="ios">
+  The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to handle errors returned during the sign-in process on iOS.
+
+  ```swift {{ filename: 'ErrorHandlingSignInView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct ErrorHandlingSignInView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var email = ""
+    @State private var password = ""
+    @State private var code = ""
+    @State private var showEmailCode = false
+    @State private var validationErrors = [String: String]()
+    @State private var clerkError: ClerkAPIError?
+    @State private var showErrorAlert = false
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 16) {
+        if showEmailCode {
+          Text("Verify your email")
+          TextField("Enter verification code", text: $code)
+          if let codeError = validationErrors["code"] {
+            Text(codeError)
+              .foregroundStyle(.red)
+          }
+          Button("Verify") {
+            Task { await verify(code: code) }
+          }
+        } else {
+          TextField("Enter email address", text: $email)
+          if let identifierError = validationErrors["identifier"] {
+            Text(identifierError)
+              .foregroundStyle(.red)
+          }
+          SecureField("Enter password", text: $password)
+          if let passwordError = validationErrors["password"] {
+            Text(passwordError)
+              .foregroundStyle(.red)
+          }
+          Button("Sign in") {
+            Task { await submit(email: email, password: password) }
+          }
+        }
+      }
+      .alert("Error", isPresented: $showErrorAlert, presenting: clerkError) { _ in
+        Button("OK", role: .cancel) {}
+      } message: { clerkError in
+        Text(clerkError.longMessage ?? clerkError.message ?? "An unknown error occurred.")
+      }
+    }
+
+    private func submit(email: String, password: String) async {
+      do {
+        clearErrors()
+
+        // Start the sign-in process using the email and password provided
+        var signIn = try await clerk.auth.signInWithPassword(
+          identifier: email,
+          password: password
+        )
+
+        switch signIn.status {
+        case .complete:
+          // If sign-in process is complete, the created session is available on `clerk.session`
+          dump(clerk.session)
+        case .needsSecondFactor:
+          // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+          dump(signIn.status)
+        case .needsClientTrust:
+          // Send an MFA email code when client trust verification is required
+          signIn = try await signIn.sendMfaEmailCode()
+          showEmailCode = true
+        default:
+          // If the status is not complete, check why. User may need to
+          // complete further steps
+          dump(signIn.status)
+        }
+      } catch let clerkError as ClerkAPIError {
+        // Display validation errors inline and other Clerk API errors in an alert
+        handle(clerkError)
+      } catch {
+        // Handle non-Clerk errors as needed.
+        dump(error)
+      }
+    }
+
+    private func verify(code: String) async {
+      do {
+        clearErrors()
+
+        // Verify the email code
+        guard var signIn = clerk.auth.currentSignIn else { return }
+        signIn = try await signIn.verifyMfaCode(code, type: .emailCode)
+
+        switch signIn.status {
+        case .complete:
+          // If sign-in process is complete, the created session is available on `clerk.session`
+          dump(clerk.session)
+        default:
+          // If the status is not complete, check why. User may need to
+          // complete further steps
+          dump(signIn.status)
+        }
+      } catch let clerkError as ClerkAPIError {
+        // Display validation errors inline and other Clerk API errors in an alert
+        handle(clerkError)
+      } catch {
+        // Handle non-Clerk errors as needed.
+        dump(error)
+      }
+    }
+
+    private func clearErrors() {
+      validationErrors = [:]
+      clerkError = nil
+      showErrorAlert = false
+    }
+
+    private func handle(_ clerkError: ClerkAPIError) {
+      let message = clerkError.longMessage ?? clerkError.message ?? "An unknown error occurred."
+
+      if let paramName = clerkError.meta?["param_name"]?.stringValue {
+        validationErrors[paramName] = message
+      } else {
+        self.clerkError = clerkError
+        showErrorAlert = true
+      }
+    }
+  }
+  ```
+</If>
 
 ## Special error cases
 
@@ -48,25 +183,43 @@ You can opt to render the error message returned as-is or format the supplied `l
 
 For instance, if you wish to inform a user at which absolute time they will be able to try again, you could add the remaining seconds to the current time and format the resulting timestamp.
 
-<Tabs items={["Next.js"]}>
-  <Tab>
-    ```js {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
-    if (error?.code === 'user_locked') {
-      // Get the current date and time
-      let currentDate = new Date()
+<If notSdk="ios">
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      ```js {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+      if (error?.code === 'user_locked') {
+        // Get the current date and time
+        let currentDate = new Date()
 
-      // Add the remaining seconds until lockout expires
-      currentDate.setSeconds(currentDate.getSeconds() + errors[0].meta.lockout_expires_in_seconds)
+        // Add the remaining seconds until lockout expires
+        currentDate.setSeconds(currentDate.getSeconds() + errors[0].meta.lockout_expires_in_seconds)
 
-      // Format the resulting date and time into a human-readable string
-      const lockoutExpiresAt = currentDate.toLocaleString()
+        // Format the resulting date and time into a human-readable string
+        const lockoutExpiresAt = currentDate.toLocaleString()
 
-      // Do something with lockoutExpiresAt
-      console.log('Your account is locked, you will be able to try again at ' + lockoutExpiresAt)
-    }
-    ```
-  </Tab>
-</Tabs>
+        // Do something with lockoutExpiresAt
+        console.log('Your account is locked, you will be able to try again at ' + lockoutExpiresAt)
+      }
+      ```
+    </Tab>
+  </Tabs>
+</If>
+
+<If sdk="ios">
+  ```swift {{ filename: 'UserLockedExample.swift' }}
+  import ClerkKit
+
+  do {
+    try await clerk.auth.signInWithPassword(identifier: email, password: password)
+  } catch let clerkError as ClerkAPIError where clerkError.code == "user_locked" {
+    let remainingSeconds = clerkError.meta?["lockout_expires_in_seconds"]?.doubleValue ?? 0
+    let lockoutExpiresAt = Date().addingTimeInterval(remainingSeconds)
+    let formattedDate = lockoutExpiresAt.formatted(date: .abbreviated, time: .shortened)
+
+    print("Your account is locked, you will be able to try again at \(formattedDate)")
+  }
+  ```
+</If>
 
 ### Password compromised
 
@@ -89,129 +242,258 @@ When a user password is marked as compromised, they will not be able to sign in 
 > [!WARNING]
 > If your instance is older than December 18, 2025, you will need to [update your instance](!update) to the **Reset password session task** update.
 
-<Tabs items={["Next.js"]}>
-  <Tab>
-    This example is written for Next.js App Router but it can be adapted for any React-based framework.
+<If notSdk="ios">
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      This example is written for Next.js App Router but it can be adapted for any React-based framework.
 
-    ```tsx {{ filename: 'app/sign-in/page.tsx' }}
-    'use client'
+      ```tsx {{ filename: 'app/sign-in/page.tsx' }}
+      'use client'
 
-    import * as React from 'react'
-    import { useSignIn } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
+      import * as React from 'react'
+      import { useSignIn } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
 
-    export default function SignInForm() {
-      const { signIn, errors, fetchStatus } = useSignIn()
-      const [email, setEmail] = React.useState('')
-      const [password, setPassword] = React.useState('')
-      const [code, setCode] = React.useState('')
+      export default function SignInForm() {
+        const { signIn, errors, fetchStatus } = useSignIn()
+        const [email, setEmail] = React.useState('')
+        const [password, setPassword] = React.useState('')
+        const [code, setCode] = React.useState('')
 
-      const router = useRouter()
+        const router = useRouter()
 
-      // Handle the submission of the sign-in form
-      const handleSignInWithPassword = async (e: React.FormEvent) => {
-        e.preventDefault()
+        // Handle the submission of the sign-in form
+        const handleSignInWithPassword = async (e: React.FormEvent) => {
+          e.preventDefault()
 
-        // Start the sign-in process using the email and password provided
-        const { error } = await signIn.password({
-          identifier: email,
-          password,
-        })
-
-        // If sign-in process is complete, set the created session as active
-        // and redirect the user
-        if (signIn.status === 'complete') {
-          await signIn.finalize({
-            navigate: async ({ session, decorateUrl }) => {
-              if (session?.currentTask) {
-                //  Handle pending session tasks
-                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-                console.log(session?.currentTask)
-                return
-              }
-
-              const url = decorateUrl('/')
-              if (url.startsWith('http')) {
-                window.location.href = url
-              } else {
-                router.push(url)
-              }
-            },
+          // Start the sign-in process using the email and password provided
+          const { error } = await signIn.password({
+            identifier: email,
+            password,
           })
-        } else if (error?.code === 'form_password_compromised') {
-          const { error } = await signIn.emailCode.sendCode()
+
+          // If sign-in process is complete, set the created session as active
+          // and redirect the user
+          if (signIn.status === 'complete') {
+            await signIn.finalize({
+              navigate: async ({ session, decorateUrl }) => {
+                if (session?.currentTask) {
+                  //  Handle pending session tasks
+                  // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
+          } else if (error?.code === 'form_password_compromised') {
+            const { error } = await signIn.emailCode.sendCode()
+            if (error) {
+              console.error(JSON.stringify(error, null, 2))
+              return
+            }
+          }
+        }
+
+        const handleVerification = async (e: React.FormEvent) => {
+          e.preventDefault()
+
+          const { error } = await signIn.emailCode.verifyCode({ code })
           if (error) {
             console.error(JSON.stringify(error, null, 2))
             return
           }
         }
-      }
 
-      const handleVerification = async (e: React.FormEvent) => {
-        e.preventDefault()
-
-        const { error } = await signIn.emailCode.verifyCode({ code })
-        if (error) {
-          console.error(JSON.stringify(error, null, 2))
-          return
+        if (signIn.status === 'needs_first_factor') {
+          return (
+            <>
+              <h1>Check your email</h1>
+              <form onSubmit={(e) => handleVerification(e)}>
+                <label htmlFor="code">Enter your verification code</label>
+                <input onChange={(e) => setCode(e.target.value)} id="code" name="code" type="text" />
+                {errors.fields.code && <p>{errors.fields.code.message}</p>}
+                <button type="submit" disabled={fetchStatus === 'fetching'}>
+                  Verify
+                </button>
+              </form>
+            </>
+          )
         }
-      }
 
-      if (signIn.status === 'needs_first_factor') {
+        // Display a form to capture the user's email and password
         return (
           <>
-            <h1>Check your email</h1>
-            <form onSubmit={(e) => handleVerification(e)}>
-              <label htmlFor="code">Enter your verification code</label>
-              <input onChange={(e) => setCode(e.target.value)} id="code" name="code" type="text" />
-              {errors.fields.code && <p>{errors.fields.code.message}</p>}
-              <button type="submit" disabled={fetchStatus === 'fetching'}>
-                Verify
-              </button>
+            <h1>Sign in</h1>
+
+            <form onSubmit={(e) => handleSignInWithPassword(e)}>
+              <div>
+                <label htmlFor="email">Enter email address</label>
+                <input
+                  onChange={(e) => setEmail(e.target.value)}
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={email}
+                />
+              </div>
+              <div>
+                <label htmlFor="password">Enter password</label>
+                <input
+                  onChange={(e) => setPassword(e.target.value)}
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={password}
+                />
+              </div>
+              <button type="submit">Sign in</button>
             </form>
+
+            {errors && (
+              <ul>
+                {errors.map((el, index) => (
+                  <li key={index}>{el.longMessage}</li>
+                ))}
+              </ul>
+            )}
           </>
         )
       }
+      ```
+    </Tab>
+  </Tabs>
+</If>
 
-      // Display a form to capture the user's email and password
-      return (
-        <>
-          <h1>Sign in</h1>
+<If sdk="ios">
+  ```swift {{ filename: 'CompromisedPasswordSignInView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-          <form onSubmit={(e) => handleSignInWithPassword(e)}>
-            <div>
-              <label htmlFor="email">Enter email address</label>
-              <input
-                onChange={(e) => setEmail(e.target.value)}
-                id="email"
-                name="email"
-                type="email"
-                value={email}
-              />
-            </div>
-            <div>
-              <label htmlFor="password">Enter password</label>
-              <input
-                onChange={(e) => setPassword(e.target.value)}
-                id="password"
-                name="password"
-                type="password"
-                value={password}
-              />
-            </div>
-            <button type="submit">Sign in</button>
-          </form>
+  struct CompromisedPasswordSignInView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var email = ""
+    @State private var password = ""
+    @State private var code = ""
+    @State private var needsEmailCode = false
+    @State private var validationErrors = [String: String]()
+    @State private var clerkError: ClerkAPIError?
+    @State private var showErrorAlert = false
 
-          {errors && (
-            <ul>
-              {errors.map((el, index) => (
-                <li key={index}>{el.longMessage}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      )
+    var body: some View {
+      VStack(alignment: .leading, spacing: 16) {
+        if needsEmailCode {
+          Text("Check your email")
+          TextField("Enter your verification code", text: $code)
+          if let codeError = validationErrors["code"] {
+            Text(codeError)
+              .foregroundStyle(.red)
+          }
+          Button("Verify") {
+            Task { await verifyCode() }
+          }
+        } else {
+          TextField("Enter email address", text: $email)
+          if let identifierError = validationErrors["identifier"] {
+            Text(identifierError)
+              .foregroundStyle(.red)
+          }
+          SecureField("Enter password", text: $password)
+          if let passwordError = validationErrors["password"] {
+            Text(passwordError)
+              .foregroundStyle(.red)
+          }
+          Button("Sign in") {
+            Task { await signInWithPassword() }
+          }
+        }
+      }
+      .alert("Error", isPresented: $showErrorAlert, presenting: clerkError) { _ in
+        Button("OK", role: .cancel) {}
+      } message: { clerkError in
+        Text(clerkError.longMessage ?? clerkError.message ?? "An unknown error occurred.")
+      }
     }
-    ```
-  </Tab>
-</Tabs>
+
+    private func signInWithPassword() async {
+      do {
+        clearErrors()
+
+        // Start the sign-in process using the email and password provided
+        let signIn = try await clerk.auth.signInWithPassword(identifier: email, password: password)
+
+        // If sign-in process is complete, the created session is available on `clerk.session`
+        if signIn.status == .complete {
+          dump(clerk.session)
+        }
+      } catch let clerkError as ClerkAPIError where clerkError.code == "form_password_compromised" {
+        do {
+          // Send a first-factor email code so the user can continue with another sign-in method
+          guard var signIn = clerk.auth.currentSignIn else { return }
+          signIn = try await signIn.sendEmailCode()
+          needsEmailCode = true
+        } catch let clerkError as ClerkAPIError {
+          // Display validation errors inline and other Clerk API errors in an alert
+          handle(clerkError)
+        } catch {
+          // Handle non-Clerk errors as needed.
+          dump(error)
+        }
+      } catch let clerkError as ClerkAPIError {
+        // Display validation errors inline and other Clerk API errors in an alert
+        handle(clerkError)
+      } catch {
+        // Handle non-Clerk errors as needed.
+        dump(error)
+      }
+    }
+
+    private func verifyCode() async {
+      do {
+        clearErrors()
+
+        // Verify that the provided code matches the code sent to the user
+        guard var signIn = clerk.auth.currentSignIn else { return }
+        signIn = try await signIn.verifyCode(code)
+
+        if signIn.status == .complete {
+          dump(clerk.session)
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps
+          dump(signIn.status)
+        }
+      } catch let clerkError as ClerkAPIError {
+        // Display validation errors inline and other Clerk API errors in an alert
+        handle(clerkError)
+      } catch {
+        // Handle non-Clerk errors as needed.
+        dump(error)
+      }
+    }
+
+    private func clearErrors() {
+      validationErrors = [:]
+      clerkError = nil
+      showErrorAlert = false
+    }
+
+    private func handle(_ clerkError: ClerkAPIError) {
+      let message = clerkError.longMessage ?? clerkError.message ?? "An unknown error occurred."
+
+      if let paramName = clerkError.meta?["param_name"]?.stringValue {
+        validationErrors[paramName] = message
+      } else {
+        self.clerkError = clerkError
+        showErrorAlert = true
+      }
+    }
+  }
+  ```
+</If>

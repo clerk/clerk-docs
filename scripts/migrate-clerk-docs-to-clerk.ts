@@ -1594,6 +1594,16 @@ async function main(): Promise<void> {
       completed: [`Pushed ${newBranch}`, `Clerk PR: ${clerkPrUrl}`],
     })
 
+    if (!workspace.isTemporary) {
+      const clerkDocsInClerk = path.join(workspace.path, TARGET_DIR_IN_CLERK)
+      if (config.dryRun) {
+        logger.info('Dry-run: would run pnpm install in clerk-docs inside clerk workspace', { path: clerkDocsInClerk })
+      } else if (existsSync(clerkDocsInClerk)) {
+        logger.step('Installing clerk-docs dependencies in clerk workspace')
+        await runCommand(logger, 'pnpm', ['install'], clerkDocsInClerk, { inheritStdio: true })
+      }
+    }
+
     if (workspace.isTemporary && workspace.path && !config.dryRun) {
       await fs.rm(workspace.path, { recursive: true, force: true })
       temporaryWorkspaceRemoved = true

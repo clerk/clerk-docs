@@ -260,7 +260,7 @@ class Logger {
   }
 
   public log(level: LogLevel, message: string, meta?: Json): void {
-    if ((level === 'debug' || level === 'info') && !this.debugEnabled) return
+    if (level === 'debug' && !this.debugEnabled) return
     const badge = this.levelBadge(level)
     if (level === 'step') {
       this.stepCounter += 1
@@ -404,7 +404,8 @@ function sanitizeBranchForPath(branch: string): string {
 function lineIgnoresSymlinkedClerkDocsRoot(line: string): boolean {
   const beforeComment = line.split('#')[0]?.trim() ?? ''
   if (!beforeComment) return false
-  return beforeComment === '/clerk-docs' || beforeComment === 'clerk-docs' || beforeComment === 'clerk-docs/'
+  const normalized = beforeComment.replace(/^\//, '').replace(/\/$/, '')
+  return normalized === 'clerk-docs'
 }
 
 async function stripClerkDocsRootGitignoreEntries(logger: Logger, clerkWorkPath: string): Promise<boolean> {
@@ -425,7 +426,7 @@ async function stripClerkDocsRootGitignoreEntries(logger: Logger, clerkWorkPath:
     kept.push(line)
   }
   if (removed === 0) return false
-  const out = kept.join('\n') + (raw.endsWith('\n') ? '\n' : '')
+  const out = kept.join('\n')
   await fs.writeFile(gitignorePath, out, 'utf8')
   logger.info('Removed symlink-era clerk-docs rules from root .gitignore', { linesRemoved: removed })
   return true
@@ -467,7 +468,6 @@ function parseConfig(): CliConfig {
 
 async function checkpoint(
   logger: Logger,
-  config: CliConfig,
   details: { title: string; completed: string[]; next: string },
 ): Promise<void> {
   logger.step(`Checkpoint: ${details.title}`)
@@ -503,15 +503,20 @@ async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Prom
   }
 }
 
-function reviewRequestToHandle(req: { __typename?: string; login?: string; slug?: string }): string | null {
+function reviewRequestToHandle(
+  req: { __typename?: string; login?: string; slug?: string },
+  org?: string,
+): string | null {
   if (req.__typename === 'User' && req.login) return req.login
-  if (req.__typename === 'Team' && req.slug) return req.slug
+  if (req.__typename === 'Team' && req.slug) return org ? `${org}/${req.slug}` : req.slug
   return null
 }
 
-function parseGhPrViewForMigration(raw: GhPrViewForMigration): SourcePrMigrationMetadata {
+function parseGhPrViewForMigration(raw: GhPrViewForMigration, org?: string): SourcePrMigrationMetadata {
   const assigneeLogins = (raw.assignees ?? []).map((a) => a.login).filter((l): l is string => Boolean(l))
-  const reviewerHandles = (raw.reviewRequests ?? []).map(reviewRequestToHandle).filter((h): h is string => Boolean(h))
+  const reviewerHandles = (raw.reviewRequests ?? [])
+    .map((req) => reviewRequestToHandle(req, org))
+    .filter((h): h is string => Boolean(h))
   const latestReviewRows = (raw.latestReviews ?? []).map((r) => ({
     login: r.author?.login ?? '(unknown)',
     state: r.state ?? 'UNKNOWN',
@@ -530,6 +535,7 @@ async function fetchSourcePrMigrationMetadata(
   logger: Logger,
   clerkDocsRepo: string,
   prNumber: number,
+  targetOrg?: string,
 ): Promise<SourcePrMigrationMetadata | null> {
   try {
     const raw = await commandJson<GhPrViewForMigration>(
@@ -546,7 +552,7 @@ async function fetchSourcePrMigrationMetadata(
       ],
       process.cwd(),
     )
-    return parseGhPrViewForMigration(raw)
+    return parseGhPrViewForMigration(raw, targetOrg)
   } catch (error) {
     logger.warn('Could not load source PR metadata (assignees/reviewers/reviews)', {
       prNumber,
@@ -1059,6 +1065,7 @@ async function prepareClerkWorkspace(logger: Logger, config: CliConfig, baseRef:
   if (clerkNow !== baseRef) {
     throw new Error(`Expected clone to be on "${baseRef}"; got "${clerkNow}"`)
   }
+  await reconcileClerkDocsTargetPath(logger, tmpRoot, config.dryRun)
   logger.info('Temporary clerk workspace ready', { path: tmpRoot })
   return { path: tmpRoot, isTemporary: true }
 }
@@ -1260,7 +1267,12 @@ async function migrateCurrentBranch(
 
   const sourceMeta =
     sourcePr !== null
-      ? await fetchSourcePrMigrationMetadata(logger, formatRepoSlug(config.clerkDocsRepo), sourcePr.number)
+      ? await fetchSourcePrMigrationMetadata(
+          logger,
+          formatRepoSlug(config.clerkDocsRepo),
+          sourcePr.number,
+          config.clerkRepo[0],
+        )
       : null
   let body = bodyBase
   if (sourceMeta) {
@@ -1370,13 +1382,19 @@ async function migrateCurrentBranch(
     }
 
     if (sourcePr) {
-      await maybeCommentWithMarker(
-        logger,
-        config,
-        sourcePr.number,
-        formatRepoSlug(config.clerkDocsRepo),
-        `${MIGRATION_NOTICE_MARKER}\nThis branch and pr were migrated to: ${clerkPrUrl}`,
-      )
+      try {
+        await maybeCommentWithMarker(
+          logger,
+          config,
+          sourcePr.number,
+          formatRepoSlug(config.clerkDocsRepo),
+          `${MIGRATION_NOTICE_MARKER}\nThis branch and pr were migrated to: ${clerkPrUrl}`,
+        )
+      } catch (err) {
+        logger.warn('Could not comment on source PR (migration itself succeeded)', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
 
     return { newBranch, clerkPrUrl }
@@ -1545,7 +1563,7 @@ async function main(): Promise<void> {
       ],
     })
 
-    await checkpoint(logger, config, {
+    await checkpoint(logger, {
       title: 'Preflight complete',
       completed: phases.flatMap((p) => p.completed),
       next: 'Merge origin/main into this feature branch',
@@ -1555,7 +1573,7 @@ async function main(): Promise<void> {
     await mergeMainIntoCurrentBranch(logger, config)
     phases.push({ name: 'merge-main', completed: ['Merged origin/main into feature branch (or dry-run)'] })
 
-    await checkpoint(logger, config, {
+    await checkpoint(logger, {
       title: 'Merge main complete',
       completed: phases.flatMap((p) => p.completed),
       next: 'Rewrite history and push in clerk (opens a clerk PR only if an open clerk-docs PR exists)',
@@ -1640,7 +1658,7 @@ export {
   assertGitFilterRepoVersionOutput,
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
     console.error('[migration][FATAL]', error instanceof Error ? error.message : String(error))
     process.exit(1)

@@ -1,13 +1,83 @@
 ---
 title: Enterprise Single Sign-On (SSO)
-description: Clerk provides Enterprise SSO to authenticate users via federated Identity Providers such such as Azure AD, Okta, Google Workspace and more.
+description: Learn how Clerk's enterprise connections work — covering SAML, OIDC, and SCIM — and how to choose the right approach for your B2B app.
 ---
 
-Enterprise Single Sign-On (SSO) allows users to sign in seamlessly using their Identity Provider (IdP) credentials (e.g.,Azure AD, Okta, or Google Workspace) and have their user data synchronized with Clerk. Clerk supports multiple protocols for implementing Enterprise SSO, including SAML and OIDC. Learn more about the process in the guides on [authentication flows](/docs/guides/configure/auth-strategies/enterprise-connections/authentication-flows) and [account linking](/docs/guides/configure/auth-strategies/enterprise-connections/account-linking).
+Enterprise Single Sign-On (SSO) lets users authenticate using their company's Identity Provider (IdP) — such as Microsoft Entra ID, Okta, or Google Workspace — instead of managing separate credentials in your app. Clerk implements this through **enterprise connections**, which are per-domain or per-organization configurations that tie a Clerk application to a specific IdP.
+
+## How the pieces fit together
+
+An enterprise connection in Clerk has two independent but complementary layers:
+
+- **Authentication (SSO)** — _required_. Determines how users sign in. When a user with an email address matching a configured domain attempts to sign in, Clerk routes them to the connected IdP for authentication. Clerk supports two protocols: [SAML](#saml) and [OIDC](#oidc).
+
+- **Provisioning** — _optional_. Determines how user accounts are created, updated, and removed in Clerk. You can use [Just-in-Time (JIT) Provisioning](/docs/guides/configure/auth-strategies/enterprise-connections/jit-provisioning), which creates accounts automatically at first sign-in, or [Directory Sync (SCIM)](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync), which lets your IdP proactively push user lifecycle changes to Clerk.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                   Enterprise Connection                   │
+│                                                           │
+│  ┌───────────────────────┐   ┌────────────────────────┐  │
+│  │   Authentication      │   │      Provisioning      │  │
+│  │   (required)          │   │      (optional)        │  │
+│  │                       │   │                        │  │
+│  │   SAML  ·  OIDC       │   │  JIT  ·  SCIM          │  │
+│  │                       │   │                        │  │
+│  └───────────────────────┘   └────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+```
+
+The SSO protocol handles the sign-in flow. Provisioning is a separate concern — it defines the full lifecycle of a user account, not just whether they can authenticate.
+
+## Choosing an SSO protocol
+
+### SAML vs. OIDC
+
+SAML and OIDC are both widely supported enterprise SSO protocols. SAML is the more established standard in traditional enterprise IT environments; OIDC is a modern alternative built on OAuth 2.0.
+
+| | SAML | OIDC |
+| --- | --- | --- |
+| Token format | XML assertions | JSON (JWTs) |
+| Tenant model | Single-tenant (one IdP config per app) | Single-tenant or multi-tenant (EASIE) |
+| IdP-initiated SSO | Supported | Not supported |
+| Typical use case | Traditional enterprise environments | Modern cloud IdPs |
+
+For OIDC, Clerk offers two options:
+
+- **EASIE** — a simplified setup for Google Workspace and Microsoft Entra ID. Uses shared multi-tenant credentials in development, so no per-app registration is required in your IdP for development instances. The tradeoff is that multi-tenant providers carry a slightly higher risk of tenant crossover, which Clerk [mitigates automatically](https://easie.dev/#mitigating-tenant-crossover-vulnerabilities).
+- **Custom OIDC** — a single-tenant OIDC integration with any OIDC-compatible provider, offering more control and suitable for stricter enterprise requirements.
+
+If your customers require a dedicated, single-tenant IdP configuration, use SAML or custom OIDC. If you want a simpler setup with Google Workspace or Microsoft Entra, EASIE is the faster path.
+
+### JIT Provisioning vs. Directory Sync (SCIM)
+
+User provisioning determines how and when user accounts are created and removed in Clerk. Both approaches work on top of an existing SSO connection.
+
+| | JIT Provisioning | Directory Sync (SCIM) |
+| --- | --- | --- |
+| Account creation | On first sign-in | As soon as the IdP pushes the change |
+| Account deprovisioning | Requires a sign-in event | Immediate when IdP syncs (within minutes) |
+| Attribute sync | On each sign-in | Continuous, independent of sign-in |
+| Setup required | None — automatic | SCIM endpoint configured in your IdP |
+| Compatible with | SAML | SAML or OIDC |
+
+Use **Directory Sync** if your organization needs prompt deprovisioning — for example, revoking access immediately when an employee leaves. Use **JIT Provisioning** if simpler, sign-in-triggered provisioning is sufficient.
+
+## Supported identity providers
+
+| Protocol | Provider | Guide |
+| --- | --- | --- |
+| SAML | Microsoft Entra ID (Azure AD) | [Setup guide](/docs/guides/configure/auth-strategies/enterprise-connections/saml/azure) |
+| SAML | Google Workspace | [Setup guide](/docs/guides/configure/auth-strategies/enterprise-connections/saml/google) |
+| SAML | Okta Workforce | [Setup guide](/docs/guides/configure/auth-strategies/enterprise-connections/saml/okta) |
+| SAML | Any SAML-compatible IdP | [Setup guide](/docs/guides/configure/auth-strategies/enterprise-connections/saml/custom-provider) |
+| OIDC (EASIE) | Google Workspace | [Setup guide](/docs/guides/configure/auth-strategies/enterprise-connections/easie/google) |
+| OIDC (EASIE) | Microsoft Entra ID | [Setup guide](/docs/guides/configure/auth-strategies/enterprise-connections/easie/microsoft) |
+| OIDC | Any OIDC-compatible IdP | [Setup guide](/docs/guides/configure/auth-strategies/enterprise-connections/oidc/custom-provider) |
 
 ## SAML
 
-Clerk supports Enterprise SSO via the SAML protocol, enabling you to create authentication strategies for an IdP. The following IdPs are supported: [Microsoft Azure AD](/docs/guides/configure/auth-strategies/enterprise-connections/saml/azure), [Google Workspace](/docs/guides/configure/auth-strategies/enterprise-connections/saml/google), and [Okta Workforce](/docs/guides/configure/auth-strategies/enterprise-connections/saml/okta). However, you can also [integrate with any other IdP](/docs/guides/configure/auth-strategies/enterprise-connections/saml/custom-provider) that supports the SAML protocol.
+Clerk supports Enterprise SSO via the SAML protocol. You can configure connections for [Microsoft Azure AD](/docs/guides/configure/auth-strategies/enterprise-connections/saml/azure), [Google Workspace](/docs/guides/configure/auth-strategies/enterprise-connections/saml/google), and [Okta Workforce](/docs/guides/configure/auth-strategies/enterprise-connections/saml/okta), or [any other SAML-compatible IdP](/docs/guides/configure/auth-strategies/enterprise-connections/saml/custom-provider).
 
 ### Allow subdomains
 
@@ -55,6 +125,13 @@ The primary security difference between EASIE SSO and SAML SSO is that EASIE dep
 
 For more information, see the [EASIE docs](https://easie.dev#security).
 
+## Further reading
+
+- [Authentication flows](/docs/guides/configure/auth-strategies/enterprise-connections/authentication-flows) — SP-initiated and IdP-initiated SAML flows, and OIDC flows
+- [Account linking](/docs/guides/configure/auth-strategies/enterprise-connections/account-linking) — how Clerk connects IdP identities to existing user accounts
+- [JIT Provisioning](/docs/guides/configure/auth-strategies/enterprise-connections/jit-provisioning) — automatic account creation at first sign-in via SAML
+- [Directory Sync (SCIM)](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync) — proactive user lifecycle management via SCIM
+
 ## Frequently asked questions (FAQ)
 
 ### Can I use multiple identifiers or authentication methods with enterprise connections?
@@ -75,7 +152,7 @@ Yes, Enterprise SSO will work for your existing users as well! If you enable SAM
 
 ### What happens if I have multi-factor enabled at Clerk?
 
-Once the user returns from the IdP, they will need to complete additional authentication factors. This is useful if you want to add extra factors beyond what your IdP supports or if your IdP doesn’t support them. This feature is optional and can be disabled if not needed.
+Once the user returns from the IdP, they will need to complete additional authentication factors. This is useful if you want to add extra factors beyond what your IdP supports or if your IdP doesn't support them. This feature is optional and can be disabled if not needed.
 
 ### What happens if I delete the Enterprise Connection? Will my users be deleted?
 

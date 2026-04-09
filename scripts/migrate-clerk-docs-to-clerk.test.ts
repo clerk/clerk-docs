@@ -35,6 +35,7 @@ describe('migrate-clerk-docs-to-clerk core helpers', () => {
   test('lineIgnoresSymlinkedClerkDocsRoot only matches root ignore rules', () => {
     expect(lineIgnoresSymlinkedClerkDocsRoot('/clerk-docs')).toBe(true)
     expect(lineIgnoresSymlinkedClerkDocsRoot('clerk-docs/')).toBe(true)
+    expect(lineIgnoresSymlinkedClerkDocsRoot('/clerk-docs/')).toBe(true)
     expect(lineIgnoresSymlinkedClerkDocsRoot('clerk-docs # legacy sync')).toBe(true)
     expect(lineIgnoresSymlinkedClerkDocsRoot('docs/clerk-docs')).toBe(false)
     expect(lineIgnoresSymlinkedClerkDocsRoot('# clerk-docs')).toBe(false)
@@ -65,7 +66,8 @@ describe('gitignore cleanup', () => {
     const next = await fs.readFile(path.join(tempDir, '.gitignore'), 'utf8')
 
     expect(changed).toBe(true)
-    expect(next.trimEnd().split('\n')).toEqual(['node_modules', 'docs/clerk-docs'])
+    expect(next).toBe('node_modules\ndocs/clerk-docs\n')
+    expect(next.split('\n').filter(Boolean)).toEqual(['node_modules', 'docs/clerk-docs'])
   })
 
   test('stripClerkDocsRootGitignoreEntries returns false when nothing to remove', async () => {
@@ -107,6 +109,8 @@ describe('PR metadata helpers', () => {
   test('reviewRequestToHandle handles user and team requests', () => {
     expect(reviewRequestToHandle({ __typename: 'User', login: 'alice' })).toBe('alice')
     expect(reviewRequestToHandle({ __typename: 'Team', slug: 'docs-team' })).toBe('docs-team')
+    expect(reviewRequestToHandle({ __typename: 'Team', slug: 'docs-team' }, 'clerk')).toBe('clerk/docs-team')
+    expect(reviewRequestToHandle({ __typename: 'User', login: 'alice' }, 'clerk')).toBe('alice')
     expect(reviewRequestToHandle({ __typename: 'Unknown' })).toBeNull()
   })
 

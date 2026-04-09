@@ -8,6 +8,7 @@ import {
   Logger,
   assertGitFilterRepoVersionOutput,
   assertSemverAtLeast,
+  buildPrRefsRewriteCallback,
   canCommentOnPrInRepo,
   canPushToRepo,
   canReadRepo,
@@ -19,6 +20,7 @@ import {
   parseGhPrViewForMigration,
   parseSemverLoose,
   reviewRequestToHandle,
+  rewritePrRefsInCommitMessage,
   runCommand,
   sanitizeBranchForPath,
   stripClerkDocsRootGitignoreEntries,
@@ -242,5 +244,86 @@ describe('parseConfig', () => {
     expect(config.clerkDocsBaseBranch).toBe('legacy-branch')
     expect(config.clerkDocsRepo).toEqual(['legacy', 'docs'])
     expect(config.allowDirtyClerkDocs).toBe(true)
+  })
+})
+
+describe('rewritePrRefsInCommitMessage', () => {
+  const SLUG = 'clerk/clerk-docs'
+
+  test('rewrites a squash-merge PR ref like (#123)', () => {
+    expect(rewritePrRefsInCommitMessage('Fix typo (#123)', SLUG)).toBe('Fix typo (clerk/clerk-docs#123)')
+  })
+
+  test('rewrites standalone #NNN at the start of the message', () => {
+    expect(rewritePrRefsInCommitMessage('#42 is fixed', SLUG)).toBe('clerk/clerk-docs#42 is fixed')
+  })
+
+  test('rewrites keyword refs like Fixes #456', () => {
+    expect(rewritePrRefsInCommitMessage('Fixes #456', SLUG)).toBe('Fixes clerk/clerk-docs#456')
+  })
+
+  test('rewrites multiple refs in a single message', () => {
+    expect(rewritePrRefsInCommitMessage('Fixes #10, relates to #20 (#30)', SLUG)).toBe(
+      'Fixes clerk/clerk-docs#10, relates to clerk/clerk-docs#20 (clerk/clerk-docs#30)',
+    )
+  })
+
+  test('does not double-qualify an already qualified ref', () => {
+    expect(rewritePrRefsInCommitMessage('See clerk/clerk-docs#99', SLUG)).toBe('See clerk/clerk-docs#99')
+  })
+
+  test('does not rewrite refs inside a URL path', () => {
+    expect(rewritePrRefsInCommitMessage('https://github.com/clerk/clerk-docs/pull/123', SLUG)).toBe(
+      'https://github.com/clerk/clerk-docs/pull/123',
+    )
+  })
+
+  test('does not rewrite a number preceded by a word character', () => {
+    expect(rewritePrRefsInCommitMessage('foo#789', SLUG)).toBe('foo#789')
+  })
+
+  test('leaves messages with no refs unchanged', () => {
+    expect(rewritePrRefsInCommitMessage('Just a plain commit message', SLUG)).toBe('Just a plain commit message')
+  })
+
+  test('does not match markdown headings', () => {
+    expect(rewritePrRefsInCommitMessage('# Heading\n## Subheading', SLUG)).toBe('# Heading\n## Subheading')
+  })
+
+  test('handles multiline commit messages', () => {
+    const msg = 'feat: add feature (#7)\n\nCloses #8\nRelated to #9'
+    expect(rewritePrRefsInCommitMessage(msg, SLUG)).toBe(
+      'feat: add feature (clerk/clerk-docs#7)\n\nCloses clerk/clerk-docs#8\nRelated to clerk/clerk-docs#9',
+    )
+  })
+
+  test('works with a custom repo slug', () => {
+    expect(rewritePrRefsInCommitMessage('Fix (#1)', 'acme/docs')).toBe('Fix (acme/docs#1)')
+  })
+
+  test('rewrites ref at end of line with no trailing text', () => {
+    expect(rewritePrRefsInCommitMessage('done #55', SLUG)).toBe('done clerk/clerk-docs#55')
+  })
+
+  test('handles PR numbers of any length', () => {
+    expect(rewritePrRefsInCommitMessage('(#1)', SLUG)).toBe('(clerk/clerk-docs#1)')
+    expect(rewritePrRefsInCommitMessage('(#23)', SLUG)).toBe('(clerk/clerk-docs#23)')
+    expect(rewritePrRefsInCommitMessage('(#456)', SLUG)).toBe('(clerk/clerk-docs#456)')
+    expect(rewritePrRefsInCommitMessage('(#2234)', SLUG)).toBe('(clerk/clerk-docs#2234)')
+    expect(rewritePrRefsInCommitMessage('(#99999)', SLUG)).toBe('(clerk/clerk-docs#99999)')
+  })
+})
+
+describe('buildPrRefsRewriteCallback', () => {
+  test('returns a Python snippet with the repo slug embedded', () => {
+    const result = buildPrRefsRewriteCallback('clerk/clerk-docs')
+    expect(result).toContain('import re')
+    expect(result).toContain("clerk/clerk-docs#'")
+    expect(result).toContain('message')
+  })
+
+  test('uses the same lookbehind pattern as the TypeScript regex', () => {
+    const result = buildPrRefsRewriteCallback('clerk/clerk-docs')
+    expect(result).toContain('(?<![/\\w])#(\\d+)')
   })
 })

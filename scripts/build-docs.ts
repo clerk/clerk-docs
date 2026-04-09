@@ -101,6 +101,7 @@ import { checkTooltips } from './lib/plugins/checkTooltips'
 import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { getRoutableDocHref } from './lib/utils/getRoutableDocHref'
 import { existsSync } from 'node:fs'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
@@ -257,6 +258,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
+  const getRoutableHref = getRoutableDocHref(config)
 
   abortSignal?.throwIfAborted()
 
@@ -418,6 +420,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   })
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
+  // docsMap contains base hrefs AND variant keys (e.g. `/docs/quickstart.react`)
+  // needed for internal build lookups. routableDocsMap contains only URLs that
+  // are actually routable on the site, used for link validation.
+  const routableDocsMap: DocsMap = new Map()
+  docsArray.forEach((doc) => {
+    routableDocsMap.set(doc.file.href, docsMap.get(doc.file.href) ?? doc)
+  })
+
   abortSignal?.throwIfAborted()
 
   // Goes through and grabs the sdk scoping out of the manifest
@@ -501,7 +511,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const updatedDoc = docsMap.get(item.href)
 
       if (updatedDoc?.frontmatter?.sdk) {
-        for (const sdk of [...(updatedDoc.frontmatter?.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
+        const docSDKs = [...(updatedDoc.frontmatter?.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]
+
+        for (const sdk of docSDKs) {
           // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
           // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
 
@@ -513,7 +525,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             throw new Error(`Existing doc not found for ${item.href}.${sdk}`)
           }
 
-          docsMap.set(item.href.replace(config.baseDocsLink, `${config.baseDocsLink}${sdk}/`), {
+          routableDocsMap.set(getRoutableHref(item.href, docSDKs, sdk), {
             ...existingDoc,
             sdk: [sdk], // override this fake copy of the doc so links to it believe this is the correct sdk
           })
@@ -600,7 +612,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, partial.path, 'partials', (linkInPartial) => {
+            validateLinks(config, routableDocsMap, partial.path, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
             }),
           )
@@ -644,7 +656,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
+            validateLinks(config, routableDocsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
               links.add(linkInTooltip)
             }),
           )
@@ -685,7 +697,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           const vfile = await remark()
             .use(remarkMdx)
             .use(
-              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              validateLinks(config, routableDocsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
               }),
             )
@@ -823,7 +835,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             validateLinks(
               config,
-              docsMap,
+              routableDocsMap,
               doc.file.filePath,
               'docs',
               (link) => {
@@ -857,7 +869,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             embedLinks(
               config,
-              docsMap,
+              routableDocsMap,
               sdks,
               (link) => {
                 foundLinks.add(link)
@@ -1017,12 +1029,12 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(validateLinks(config, routableDocsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
+              .use(embedLinks(config, routableDocsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(

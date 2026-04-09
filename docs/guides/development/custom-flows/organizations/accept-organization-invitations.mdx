@@ -31,7 +31,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
 
 1. It extracts the token from the URL.
 1. It passes the token to either [`signUp.create()`](/docs/reference/objects/sign-up-future#create) or [`signIn.ticket()`](/docs/reference/objects/sign-in-future#ticket), depending on the `__clerk_status`.
-1. It demonstrates how to collect additional fields during sign-up, such as first and last names. You can modify or remove these fields as needed for your application. If you do not have **First and last name** enabled for your instance [in the Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/user-and-authentication?user_auth_tab=user-profile), remove these fields or `signUp.create()` will throw an error.
+1. It demonstrates how to collect additional fields during sign-up, such as first and last names. You can modify or remove these fields as needed for your application. If you do not have **First and last name** enabled for your instance [in the Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/user-and-authentication?user_auth_tab=user-profile), remove these fields or `signUp.create()` will return an error.
 
 <If notSdk={["expo", "ios", "android"]}>
   <If notSdk="nextjs">
@@ -43,12 +43,13 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
 
   import * as React from 'react'
   import { useOrganization, useSignIn, useSignUp } from '@clerk/nextjs'
-  import { useSearchParams } from 'next/navigation'
+  import { useRouter, useSearchParams } from 'next/navigation'
 
   export default function Page() {
-    const { signUp, errors: signUpErrors } = useSignUp()
-    const { signIn, errors: signInErrors } = useSignIn()
+    const { signUp } = useSignUp()
+    const { signIn } = useSignIn()
     const { organization } = useOrganization()
+    const router = useRouter()
     const [firstName, setFirstName] = React.useState('')
     const [lastName, setLastName] = React.useState('')
     const [password, setPassword] = React.useState('')
@@ -75,7 +76,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
         if (error) {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
+          console.error('Error:', JSON.stringify(error, null, 2))
           return
         }
 
@@ -107,7 +108,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
       }
 
       createSignIn()
-    }, [signIn])
+    }, [signIn, token, organization, accountStatus])
 
     // Handle submission of the sign-up form
     const handleSignUp = async (e: React.FormEvent) => {
@@ -129,7 +130,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
       if (error) {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
+        console.error(JSON.stringify(error, null, 2))
         return
       }
 
@@ -150,12 +151,12 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
             if (url.startsWith('http')) {
               window.location.href = url
             } else {
-              router.push(url as Href)
+              router.push(url)
             }
           },
         })
       } else {
-        // If the sign-in attempt is not complete, check why.
+        // Check why the sign-up is not complete.
         // User may need to complete further steps.
         console.error(JSON.stringify(signUp, null, 2))
       }
@@ -218,14 +219,15 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
   import { useOrganization, useSignIn, useSignUp } from '@clerk/expo'
-  import { useLocalSearchParams } from 'expo-router'
+  import { type Href, useLocalSearchParams, useRouter } from 'expo-router'
   import * as React from 'react'
   import { ActivityIndicator, Pressable, StyleSheet, TextInput } from 'react-native'
 
   export default function Page() {
-    const { isLoaded, signUp, setActive: setActiveSignUp } = useSignUp()
-    const { signIn, setActive: setActiveSignIn } = useSignIn()
+    const { signUp } = useSignUp()
+    const { signIn } = useSignIn()
     const { organization, isLoaded: orgIsLoaded } = useOrganization()
+    const router = useRouter()
     const [firstName, setFirstName] = React.useState('')
     const [lastName, setLastName] = React.useState('')
     const [password, setPassword] = React.useState('')
@@ -246,7 +248,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
 
     // Handle sign-in
     React.useEffect(() => {
-      if (!signIn || !setActiveSignIn || !token || organization || accountStatus !== 'sign_in') {
+      if (!token || organization || accountStatus !== 'sign_in') {
         return
       }
 
@@ -257,7 +259,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
         if (error) {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
+          console.error('Error:', JSON.stringify(error, null, 2))
           return
         }
 
@@ -289,7 +291,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
       }
 
       createSignIn()
-    }, [signIn, token, organization, accountStatus, setActiveSignIn])
+    }, [signIn, token, organization, accountStatus])
 
     // Handle submission of the sign-up form
     const handleSignUp = async () => {
@@ -309,7 +311,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
       if (error) {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
+        console.error(JSON.stringify(error, null, 2))
         return
       }
 
@@ -335,7 +337,7 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
           },
         })
       } else {
-        // If the sign-in attempt is not complete, check why.
+        // Check why the sign-up is not complete.
         // User may need to complete further steps.
         console.error(JSON.stringify(signUp, null, 2))
       }

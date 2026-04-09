@@ -989,6 +989,32 @@ async function reconcileClerkDocsTargetPath(logger: Logger, clerkPath: string, d
   return target
 }
 
+/**
+ * Matches bare `#123` PR/issue refs that are NOT already qualified with a repo slug.
+ * Negative lookbehind rejects `#` preceded by `/` or word chars (avoids URLs and `owner/repo#N`).
+ * Identical semantics in JavaScript and Python regex engines.
+ */
+const PR_REF_PATTERN = /(?<![/\w])#(\d+)/g
+
+/**
+ * Rewrites bare `#123` refs in a commit message to fully-qualified cross-repo refs
+ * (e.g. `clerk/clerk-docs#123`) so GitHub links resolve correctly after migration.
+ */
+function rewritePrRefsInCommitMessage(message: string, docsRepoSlug: string): string {
+  return message.replace(PR_REF_PATTERN, `${docsRepoSlug}#$1`)
+}
+
+/**
+ * Builds a Python snippet for `git filter-repo --message-callback` that applies
+ * the same rewrite as {@link rewritePrRefsInCommitMessage} on the bytes-level message.
+ */
+function buildPrRefsRewriteCallback(docsRepoSlug: string): string {
+  return [
+    'import re',
+    `return re.sub(rb'(?<![/\\w])#(\\d+)', lambda m: b'${docsRepoSlug}#' + m.group(1), message)`,
+  ].join('\n')
+}
+
 /** Fail before spawning `git` in `clerkPath` (bad cwd yields opaque `spawn git ENOENT`). */
 function assertClerkPathResolvable(clerkPath: string): void {
   if (!existsSync(clerkPath)) {
@@ -1257,6 +1283,7 @@ async function migrateCurrentBranch(
       clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
       gitignore:
         'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
+      commitMessages: `would rewrite #NNN refs in commit messages to ${formatRepoSlug(config.clerkDocsRepo)}#NNN`,
       clerkPrPeople:
         sourcePr !== null
           ? 'would match draft + assignees + requested reviewers from source PR where possible; review approvals cannot transfer (summarized in PR body)'
@@ -1298,10 +1325,18 @@ async function migrateCurrentBranch(
       ['clone', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
       process.cwd(),
     )
+    const messageCallback = buildPrRefsRewriteCallback(formatRepoSlug(config.clerkDocsRepo))
     await runCommand(
       logger,
       filterRepo.command,
-      [...filterRepo.argsPrefix, '--to-subdirectory-filter', TARGET_DIR_IN_CLERK, '--force'],
+      [
+        ...filterRepo.argsPrefix,
+        '--to-subdirectory-filter',
+        TARGET_DIR_IN_CLERK,
+        '--message-callback',
+        messageCallback,
+        '--force',
+      ],
       tempClonePath,
     )
     await runCommand(logger, 'git', ['remote', 'add', remoteName, tempClonePath], clerkWorkPath)
@@ -1666,6 +1701,8 @@ export {
   canReadRepo,
   canCommentOnPrInRepo,
   assertGitFilterRepoVersionOutput,
+  rewritePrRefsInCommitMessage,
+  buildPrRefsRewriteCallback,
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

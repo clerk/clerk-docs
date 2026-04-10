@@ -1635,14 +1635,29 @@ async function main(): Promise<void> {
         logger.info('Dry-run: would run pnpm install in clerk-docs inside clerk workspace', { path: clerkDocsInClerk })
       } else if (existsSync(clerkDocsInClerk)) {
         logger.step('Installing clerk-docs dependencies in clerk workspace')
-        await runCommand(logger, 'pnpm', ['install'], clerkDocsInClerk, { inheritStdio: true })
+        const pnpmResult = await runCommand(logger, 'pnpm', ['install'], clerkDocsInClerk, {
+          inheritStdio: true,
+          allowFailure: true,
+        })
+        if (pnpmResult.code !== 0) {
+          logger.warn('pnpm install failed (non-fatal; migration itself succeeded). You may need to run it manually.', {
+            exitCode: pnpmResult.code,
+          })
+        }
       }
     }
 
     if (workspace.isTemporary && workspace.path && !config.dryRun) {
-      await fs.rm(workspace.path, { recursive: true, force: true })
-      temporaryWorkspaceRemoved = true
-      logger.info('Removed temporary clerk clone', { path: workspace.path })
+      try {
+        await fs.rm(workspace.path, { recursive: true, force: true })
+        temporaryWorkspaceRemoved = true
+        logger.info('Removed temporary clerk clone', { path: workspace.path })
+      } catch (cleanupErr) {
+        logger.warn('Could not remove temporary clerk clone (non-fatal). Delete it manually if desired.', {
+          path: workspace.path,
+          error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+        })
+      }
     }
 
     logger.step('Migration completed')

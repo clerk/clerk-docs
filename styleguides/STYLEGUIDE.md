@@ -6,7 +6,7 @@ These are the guidelines we use to write our docs.
 
 ### Alphabetize
 
-Try to keep things in alphabetic order, except Next.js, React, and JavaScript are prioritized as these are our core SDKs. For example, our SDK selector prioritizes Next.js, React, and Javascript, and then alphabetizes the rest of the SDK's. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
+Try to keep things in alphabetic order, except our most popular SDKs are prioritized first: Next.js, React, JavaScript, Expo, TanStack React Start, React Router, and Express. For example, our SDK selector prioritizes these SDKs in this order, and then alphabetizes the rest. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
 
 ### De-dupe reference links and tooltips
 

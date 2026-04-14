@@ -47,6 +47,10 @@ function extractSDKsFromIfComponent(
   return undefined
 }
 
+/**
+ * Validates the SDKs in the <If /> component against the SDKs declared in the frontmatter and the manifest.
+ * Set `ignoreSdkWarning` on an `<If>` to skip these checks (e.g. shared partials embedded in a single-SDK guide).
+ */
 export const validateIfComponents =
   (
     config: BuildConfig,
@@ -54,51 +58,76 @@ export const validateIfComponents =
     doc: { file: { href: string }; sdk?: SDK[] },
     flatSDKScopedManifest: ManifestItem[],
   ) =>
-  () =>
-  (tree: Node, vfile: VFile) => {
-    mdastVisit(tree, (node) => {
-      const allowedSdks = extractSDKsFromIfComponent(
-        config,
-        node,
-        vfile,
-        filePath,
-        extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, 'docs', filePath, z.string()),
-        extractComponentPropValueFromNode(config, node, vfile, 'If', 'notSdk', false, 'docs', filePath, z.string()),
-      )
+    () =>
+      (tree: Node, vfile: VFile) => {
+        mdastVisit(tree, (node) => {
+          const sdk = extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, 'docs', filePath, z.string())
+          const notSdk = extractComponentPropValueFromNode(config, node, vfile, 'If', 'notSdk', false, 'docs', filePath, z.string())
+          const ignoreSdkWarning = extractComponentPropValueFromNode(
+            config,
+            node,
+            vfile,
+            'If',
+            'ignoreSdkWarning',
+            false,
+            'docs',
+            filePath,
+            z.boolean(),
+          )
 
-      if (allowedSdks === undefined) return
+          const allowedSdks = extractSDKsFromIfComponent(config, node, vfile, filePath, sdk, notSdk)
 
-      const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
+          if (allowedSdks === undefined) return
 
-      const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
+          // `notSdk` means "hide when these SDKs apply" — the doc does not need to be scoped to those SDKs, so we skip the frontmatter/manifest checks for them because they would be false positives
+          if (notSdk) return
 
-      // The doc doesn't exist in the manifest so we are skipping it
-      if (manifestItems.length === 0) return
+          // If the `ignoreSdkWarning` prop is true, skip the validation checks
+          if (ignoreSdkWarning === true) return
 
-      allowedSdks.forEach((sdk) => {
-        ;(() => {
-          if (doc.sdk === undefined) return
+          const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
 
-          const available = doc.sdk.includes(sdk)
+          const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
 
-          if (available === false) {
-            // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-            // Change back to `safeFail` when done.
-            console.warn(`⚠️  TEMPORARILY DISABLED: <If /> sdk "${sdk}" not in frontmatter for ${filePath}`)
-          }
-        })()
-        ;(() => {
-          // The doc is generic so we are skipping it
-          if (availableSDKs.length === 0) return
+          // The doc doesn't exist in the manifest so we are skipping it
+          if (manifestItems.length === 0) return
 
-          const available = availableSDKs.includes(sdk)
+          allowedSdks.forEach((sdk) => {
+            ; (() => {
+              if (doc.sdk === undefined) return
 
-          if (available === false) {
-            // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-            // Change back to `safeFail` when done.
-            console.warn(`⚠️  TEMPORARILY DISABLED: <If /> sdk "${sdk}" not in manifest for ${doc.file.href}`)
-          }
-        })()
-      })
-    })
-  }
+              const available = doc.sdk.includes(sdk)
+
+              if (available === false) {
+                safeFail(
+                  config,
+                  vfile,
+                  filePath,
+                  'docs',
+                  'if-component-sdk-not-in-frontmatter',
+                  [sdk, doc.sdk],
+                  node.position,
+                )
+              }
+            })()
+              ; (() => {
+                // The doc is generic so we are skipping it
+                if (availableSDKs.length === 0) return
+
+                const available = availableSDKs.includes(sdk)
+
+                if (available === false) {
+                  safeFail(
+                    config,
+                    vfile,
+                    filePath,
+                    'docs',
+                    'if-component-sdk-not-in-manifest',
+                    [sdk, doc.file.href],
+                    node.position,
+                  )
+                }
+              })()
+          })
+        })
+      }

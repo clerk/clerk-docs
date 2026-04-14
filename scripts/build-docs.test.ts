@@ -1241,10 +1241,7 @@ Testing with a simple page.`,
     expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
   })
 
-  // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-  // Change back when `safeFail` is restored in validateIfComponents.ts
-  console.warn('⚠️  TEMPORARILY DISABLED: <If> SDK not in frontmatter test skipped')
-  test.skip('<If> SDK not in frontmatter fails the build', async () => {
+  test('<If> SDK not in frontmatter fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -1282,10 +1279,7 @@ Testing with a simple page.`,
     )
   })
 
-  // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-  // Change back when `safeFail` is restored in validateIfComponents.ts
-  console.warn('⚠️  TEMPORARILY DISABLED: <If> SDK not in manifest test skipped')
-  test.skip('<If> SDK not in manifest fails the build', async () => {
+  test('<If> SDK not in manifest fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',

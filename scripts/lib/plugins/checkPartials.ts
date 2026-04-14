@@ -95,7 +95,7 @@ export const checkPartials =
       foundPartial?.(resolvedPartialPath)
 
       if (options.embed === true) {
-        return Object.assign(node, partial.node)
+        return Object.assign(node, partial.node, { data: { ...partial.node.data, fromPartial: true } })
       }
 
       return node

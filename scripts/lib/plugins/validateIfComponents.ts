@@ -1,5 +1,5 @@
 import { Node } from 'unist'
-import { visit as mdastVisit } from 'unist-util-visit'
+import { SKIP, visit as mdastVisit } from 'unist-util-visit'
 import type { VFile } from 'vfile'
 import { type BuildConfig } from '../config'
 import { safeFail } from '../error-messages'
@@ -33,8 +33,11 @@ function extractSDKsFromIfComponent(
   }
 
   if (notSdk) {
-    const notAllowedSdks = extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
-    return notAllowedSdks
+    // Still validate that the SDK names are valid, but don't return them
+    // for scope checking — notSdk exclusions don't require the excluded
+    // SDKs to be in the page's scope.
+    extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
+    return undefined
   }
 
   if (sdk) {
@@ -57,6 +60,11 @@ export const validateIfComponents =
   () =>
   (tree: Node, vfile: VFile) => {
     mdastVisit(tree, (node) => {
+      // Skip nodes embedded from partials — their <If> components are validated
+      // in the context of each including page, but partials are shared across
+      // pages with different SDK scopes, so per-page checks produce false positives.
+      if ((node as any).data?.fromPartial) return SKIP
+
       const allowedSdks = extractSDKsFromIfComponent(
         config,
         node,
@@ -82,8 +90,7 @@ export const validateIfComponents =
           const available = doc.sdk.includes(sdk)
 
           if (available === false) {
-            // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-            // Change back to `safeFail` when done.
+            // TODO: Re-enable after clerk/clerk-docs#3265 (mobile custom flows manifest) merges.
             console.warn(`⚠️  TEMPORARILY DISABLED: <If /> sdk "${sdk}" not in frontmatter for ${filePath}`)
           }
         })()
@@ -94,8 +101,7 @@ export const validateIfComponents =
           const available = availableSDKs.includes(sdk)
 
           if (available === false) {
-            // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-            // Change back to `safeFail` when done.
+            // TODO: Re-enable after clerk/clerk-docs#3265 (mobile custom flows manifest) merges.
             console.warn(`⚠️  TEMPORARILY DISABLED: <If /> sdk "${sdk}" not in manifest for ${doc.file.href}`)
           }
         })()

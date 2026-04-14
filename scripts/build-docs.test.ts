@@ -1241,7 +1241,8 @@ Testing with a simple page.`,
     expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
   })
 
-  test('<If> SDK not in frontmatter fails the build', async () => {
+  // TODO: Re-enable after clerk/clerk-docs#3265 (mobile custom flows manifest) merges and safeFail is restored in validateIfComponents.ts
+  test.skip('<If> SDK not in frontmatter fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -1279,7 +1280,8 @@ Testing with a simple page.`,
     )
   })
 
-  test('<If> SDK not in manifest fails the build', async () => {
+  // TODO: Re-enable after clerk/clerk-docs#3265 (mobile custom flows manifest) merges and safeFail is restored in validateIfComponents.ts
+  test.skip('<If> SDK not in manifest fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -1742,6 +1744,49 @@ sdk: nextjs, react
 
     expect(await readFile(pathJoin('./dist/nextjs/overview.mdx'))).toContain('This content is for Next.js users only.')
     expect(await readFile(pathJoin('./dist/react/overview.mdx'))).toContain('This content is for React users only.')
+  })
+
+  test('should not fail when <If notSdk /> excludes SDKs not in page scope', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+                sdk: ['nextjs', 'react'],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<If notSdk={["ios", "android"]}>
+  This content is for non-mobile users.
+</If>`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'ios', 'android'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/nextjs/overview.mdx'))).toContain('This content is for non-mobile users.')
+    expect(await readFile(pathJoin('./dist/react/overview.mdx'))).toContain('This content is for non-mobile users.')
   })
 
   test('should handle <If /> components with both `sdk` and `notSdk` props', async () => {

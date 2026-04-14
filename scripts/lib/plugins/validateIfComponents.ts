@@ -99,15 +99,9 @@ export const validateIfComponents =
               const available = doc.sdk.includes(sdk)
 
               if (available === false) {
-                safeFail(
-                  config,
-                  vfile,
-                  filePath,
-                  'docs',
-                  'if-component-sdk-not-in-frontmatter',
-                  [sdk, doc.sdk],
-                  node.position,
-                )
+                // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
+                // Change back to `safeFail` after clerk/clerk-docs#3265 (mobile custom flows manifest) merges
+                console.warn(`⚠️  TEMPORARILY DISABLED: <If /> sdk "${sdk}" not in frontmatter for ${filePath}`)
               }
             })()
               ; (() => {
@@ -117,15 +111,9 @@ export const validateIfComponents =
                 const available = availableSDKs.includes(sdk)
 
                 if (available === false) {
-                  safeFail(
-                    config,
-                    vfile,
-                    filePath,
-                    'docs',
-                    'if-component-sdk-not-in-manifest',
-                    [sdk, doc.file.href],
-                    node.position,
-                  )
+                  // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
+                  // Change back to `safeFail` after clerk/clerk-docs#3265 (mobile custom flows manifest) merges
+                  console.warn(`⚠️  TEMPORARILY DISABLED: <If /> sdk "${sdk}" not in manifest for ${doc.file.href}`)
                 }
               })()
           })

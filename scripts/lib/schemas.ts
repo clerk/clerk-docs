@@ -20,7 +20,6 @@ export const VALID_SDKS = [
   'nuxt',
   'vue',
   'ruby',
-  'js-backend',
 ] as const
 
 export type SDK = (typeof VALID_SDKS)[number]
@@ -92,12 +91,12 @@ export type Tag = z.infer<typeof tag>
 
 export const isValidSdk =
   (config: BuildConfig) =>
-  (sdk: string): sdk is SDK => {
-    return config.validSdks.includes(sdk as SDK)
-  }
+    (sdk: string): sdk is SDK => {
+      return config.validSdks.includes(sdk as SDK)
+    }
 
 export const isValidSdks =
   (config: BuildConfig) =>
-  (sdks: string[]): sdks is SDK[] => {
-    return sdks.every(isValidSdk(config))
-  }
+    (sdks: string[]): sdks is SDK[] => {
+      return sdks.every(isValidSdk(config))
+    }

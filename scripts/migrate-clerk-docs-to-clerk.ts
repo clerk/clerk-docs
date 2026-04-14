@@ -1109,7 +1109,7 @@ async function ensureBranchNameAvailable(logger: Logger, repoPath: string, desir
   let candidate = desired
   let i = 1
   while (await branchExists(logger, repoPath, candidate)) {
-    candidate = `${desired}-migrated-${i}`
+    candidate = `${desired}-docs-migration-${i}`
     i += 1
   }
   return candidate
@@ -1279,7 +1279,7 @@ async function migrateCurrentBranch(
   if (config.dryRun) {
     logger.info('Dry-run: would filter-repo, merge, push', {
       clerkWorkPath: clerkWorkPath || '(would clone clerk to temp)',
-      suggestedBranch: `${headRef}-migrated`,
+      suggestedBranch: `${headRef}-docs-migration`,
       clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
       gitignore:
         'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
@@ -1289,7 +1289,7 @@ async function migrateCurrentBranch(
           ? 'would match draft + assignees + requested reviewers from source PR where possible; review approvals cannot transfer (summarized in PR body)'
           : 'n/a',
     })
-    return { newBranch: `${headRef}-migrated`, clerkPrUrl: '(dry-run)' }
+    return { newBranch: `${headRef}-docs-migration`, clerkPrUrl: '(dry-run)' }
   }
 
   const sourceMeta =
@@ -1306,7 +1306,7 @@ async function migrateCurrentBranch(
     body += formatSourcePrMigrationAppendix(sourceMeta)
   }
 
-  const newBranch = await ensureBranchNameAvailable(logger, clerkWorkPath, `${headRef}-migrated`)
+  const newBranch = await ensureBranchNameAvailable(logger, clerkWorkPath, `${headRef}-docs-migration`)
   logger.step('Migrating current branch into clerk', { headRef, baseRef, newBranch, clerkWorkPath })
 
   const tempClonePath = path.join(os.tmpdir(), `clerk-docs-migrate-${sanitizeBranchForPath(headRef)}-${Date.now()}`)

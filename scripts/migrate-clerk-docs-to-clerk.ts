@@ -503,24 +503,37 @@ async function promptPickSourcePr(logger: Logger, list: PullRequestView[]): Prom
   }
 }
 
-function reviewRequestToHandle(
-  req: { __typename?: string; login?: string; slug?: string },
-  org?: string,
-): string | null {
+/**
+ * Extract a handle suitable for `gh pr create --reviewer` from a single review request node.
+ * `gh pr view --json reviewRequests` already returns team slugs in `org/team-slug` format
+ * (via its `LoginOrSlug()` helper), so we pass them through as-is.
+ */
+function reviewRequestToHandle(req: { __typename?: string; login?: string; slug?: string }): string | null {
   if (req.__typename === 'User' && req.login) return req.login
-  if (req.__typename === 'Team' && req.slug) return org ? `${org}/${req.slug}` : req.slug
+  if (req.__typename === 'Team' && req.slug) return req.slug
   return null
 }
 
-function parseGhPrViewForMigration(raw: GhPrViewForMigration, org?: string): SourcePrMigrationMetadata {
+function parseGhPrViewForMigration(raw: GhPrViewForMigration): SourcePrMigrationMetadata {
   const assigneeLogins = (raw.assignees ?? []).map((a) => a.login).filter((l): l is string => Boolean(l))
-  const reviewerHandles = (raw.reviewRequests ?? [])
-    .map((req) => reviewRequestToHandle(req, org))
+  const requestedHandles = (raw.reviewRequests ?? [])
+    .map((req) => reviewRequestToHandle(req))
     .filter((h): h is string => Boolean(h))
   const latestReviewRows = (raw.latestReviews ?? []).map((r) => ({
     login: r.author?.login ?? '(unknown)',
     state: r.state ?? 'UNKNOWN',
   }))
+  const reviewedLogins = latestReviewRows
+    .map((r) => r.login)
+    .filter((l) => l !== '(unknown)')
+  const seen = new Set(requestedHandles)
+  const reviewerHandles = [...requestedHandles]
+  for (const login of reviewedLogins) {
+    if (!seen.has(login)) {
+      seen.add(login)
+      reviewerHandles.push(login)
+    }
+  }
   return {
     url: raw.url,
     isDraft: Boolean(raw.isDraft),
@@ -535,7 +548,6 @@ async function fetchSourcePrMigrationMetadata(
   logger: Logger,
   clerkDocsRepo: string,
   prNumber: number,
-  targetOrg?: string,
 ): Promise<SourcePrMigrationMetadata | null> {
   try {
     const raw = await commandJson<GhPrViewForMigration>(
@@ -552,7 +564,7 @@ async function fetchSourcePrMigrationMetadata(
       ],
       process.cwd(),
     )
-    return parseGhPrViewForMigration(raw, targetOrg)
+    return parseGhPrViewForMigration(raw)
   } catch (error) {
     logger.warn('Could not load source PR metadata (assignees/reviewers/reviews)', {
       prNumber,
@@ -605,46 +617,34 @@ async function createClerkPullRequestWithPeople(
   },
 ): Promise<string> {
   const { baseRef, head, title, body, isDraft, assigneeLogins, reviewerHandles } = params
+  const repo = formatRepoSlug(config.clerkRepo)
 
-  const buildArgs = (includePeople: boolean): string[] => {
-    const args = [
-      'pr',
-      'create',
-      '--repo',
-      formatRepoSlug(config.clerkRepo),
-      '--base',
-      baseRef,
-      '--head',
-      head,
-      '--title',
-      title,
-      '--body',
-      body,
-    ]
-    if (isDraft) args.push('--draft')
-    if (includePeople) {
-      for (const login of assigneeLogins) {
-        args.push('--assignee', login)
-      }
-      for (const handle of reviewerHandles) {
-        args.push('--reviewer', handle)
-      }
+  const createArgs = ['pr', 'create', '--repo', repo, '--base', baseRef, '--head', head, '--title', title, '--body', body]
+  if (isDraft) createArgs.push('--draft')
+
+  const prUrl = (await runCommand(logger, 'gh', createArgs, process.cwd())).stdout.trim()
+
+  const editArgs = ['pr', 'edit', prUrl, '--repo', repo]
+  for (const handle of reviewerHandles) {
+    editArgs.push('--add-reviewer', handle)
+  }
+  for (const login of assigneeLogins) {
+    editArgs.push('--add-assignee', login)
+  }
+
+  if (editArgs.length > 5) {
+    const result = await runCommand(logger, 'gh', editArgs, process.cwd(), { allowFailure: true })
+    if (result.code !== 0) {
+      logger.warn('Could not add reviewers/assignees to clerk PR (metadata still in PR body)', {
+        url: prUrl,
+        reviewers: reviewerHandles,
+        assignees: assigneeLogins,
+        stderr: result.stderr.trim(),
+      })
     }
-    return args
   }
 
-  const hasPeople = assigneeLogins.length > 0 || reviewerHandles.length > 0
-  if (!hasPeople) {
-    return (await runCommand(logger, 'gh', buildArgs(false), process.cwd())).stdout.trim()
-  }
-
-  const withPeople = await runCommand(logger, 'gh', buildArgs(true), process.cwd(), { allowFailure: true })
-  if (withPeople.code === 0) return withPeople.stdout.trim()
-
-  logger.warn('gh pr create with assignees/reviewers failed; retrying without (metadata still in PR body)', {
-    stderr: (withPeople.stderr + withPeople.stdout).trim(),
-  })
-  return (await runCommand(logger, 'gh', buildArgs(false), process.cwd())).stdout.trim()
+  return prUrl
 }
 
 type RunCommandOptions = { allowFailure?: boolean; inheritStdio?: boolean }
@@ -1294,12 +1294,7 @@ async function migrateCurrentBranch(
 
   const sourceMeta =
     sourcePr !== null
-      ? await fetchSourcePrMigrationMetadata(
-          logger,
-          formatRepoSlug(config.clerkDocsRepo),
-          sourcePr.number,
-          config.clerkRepo[0],
-        )
+      ? await fetchSourcePrMigrationMetadata(logger, formatRepoSlug(config.clerkDocsRepo), sourcePr.number)
       : null
   let body = bodyBase
   if (sourceMeta) {

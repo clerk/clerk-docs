@@ -4,7 +4,7 @@ description: Learn how to use Directory Sync (SCIM) to automatically provision a
 ---
 
 > [!NOTE]
-> Directory Sync is in **public beta** and is enabled for all users. Clerk's implementation follows the SCIM 2.0 protocol. However, by nature, your identity provider (and how you configure it) may not match Clerk's implementation completely. If you run into any compatibility issues, please report them to [team-orgs@clerk.dev](mailto:team-orgs@clerk.dev). Clerk has a team standing by and will work to get compatibility resolved quickly.
+> Directory Sync is generally available and enabled for all users. Clerk's implementation follows the SCIM 2.0 protocol. However, by nature, your identity provider (and how you configure it) may not match Clerk's implementation completely. If you run into any compatibility issues, please report them to [team-orgs@clerk.dev](mailto:team-orgs@clerk.dev). Clerk has a team standing by and will work to get compatibility resolved quickly.
 
 Directory Sync allows you to automatically provision and deprovision users in your Clerk application by connecting it to your organization's directory service via the SCIM protocol. When Directory Sync is enabled, changes made in your identity provider (IdP) — such as creating, updating, or removing users — are automatically reflected in Clerk.
 
@@ -49,8 +49,8 @@ Once Directory Sync is enabled in Clerk, configure your IdP to point to Clerk's 
 1. Set the **Unique identifier field for users** to `userName`.
 1. Enter the **Bearer token** from Clerk into the **API Token** field.
 1. Select **Test API Credentials** to verify the connection, then select **Save**.
-1. Under **To App**, enable the operations you want Okta to push to Clerk: **Create Users**, **Update User Attributes**, **Push Groups**, and **Deactivate Users**.
-1. Select **Save**.
+1. Under **To App**, enable the operations you want Okta to push to Clerk: **Create Users**, **Update User Attributes**, and **Deactivate Users**. Select **Save**.
+1. To sync groups for [role mapping](#role-mapping), switch to the **Push Groups** tab on the app's Provisioning section and enable **Push Groups**. Select the groups you want to push to Clerk and select **Save**.
 
 ### Microsoft Entra ID
 
@@ -100,15 +100,18 @@ For example, you might map the shared `department` attribute to `urn:ietf:params
 
 ## Role mapping
 
+> [!NOTE]
+> Role mapping is in public beta.
+
 Role mapping lets you automatically assign Clerk roles to users based on their IdP group memberships. This eliminates manual role management in Clerk and lets your IdP serve as the single source of truth for access levels.
 
 You must link the enterprise connection to an organization to use Directory Sync role mapping. The role mapping uses the linked organization's [role set](/docs/guides/organizations/control-access/role-sets). If you delete a role that's associated with a role map, Clerk will [remap the organization member roles](/docs/guides/organizations/control-access/role-sets#remapping-flow).
 
-When SCIM is enabled, roles managed through SCIM cannot be manually modified in Clerk. They are controlled entirely by group membership in your IdP. Roles become manually editable again when SCIM is disabled.
+When a member's role is assigned through a group-to-role mapping, that role assignment cannot be manually overridden in the Clerk Dashboard — it's controlled entirely by the member's IdP group memberships and is re-resolved on the next sync. Members whose roles are not sourced from a mapping remain manually editable, and all members become manually editable again when Directory Sync is disabled. Role definitions themselves (names, permissions) are always managed in Clerk.
 
 ### How it works
 
-When your IdP pushes group data to Clerk via SCIM, Clerk stores the groups and their memberships. You then configure a mapping in the Clerk Dashboard from each IdP group to a Clerk role. When a user is added to a group in the IdP, Clerk assigns the mapped role. When a user is removed from a group, Clerk reverts them to the organization's default role.
+When your IdP pushes group data to Clerk via SCIM, Clerk stores the groups and their memberships. You then configure a mapping in the Clerk Dashboard from each IdP group to a Clerk role. When a user is added to a group in the IdP, Clerk assigns the mapped role. When a user is removed from a mapped group, Clerk re-resolves their role from the remaining mapped groups in precedence order. They only fall back to the organization's default role if no mapped groups remain.
 
 ### Configure role mapping
 
@@ -123,11 +126,11 @@ When your IdP pushes group data to Clerk via SCIM, Clerk stores the groups and t
 
 ### Multi-group precedence
 
-If a user belongs to multiple groups that each map to different Clerk roles, Clerk applies the role according to a configurable **precedence order**. The role with the highest precedence is applied. You can configure the precedence order in the Clerk Dashboard under **Role mapping** → **Precedence**.
+If a user belongs to multiple groups that each map to different Clerk roles, Clerk applies the role according to the order of the mappings in the Dashboard. In the Clerk Dashboard, under **Role mapping**, drag the mappings to reorder them — the mapping highest in the list takes precedence when a user belongs to multiple mapped groups.
 
 ### Group deletion behavior
 
-When a group is deleted in your IdP, Clerk removes the group and reverts all affected users to the organization's default role. When a role mapping changes, a background job queues role reassignment for all affected group members.
+When a group is deleted in your IdP, Clerk removes the group and re-resolves each affected user's role from their remaining mapped groups in precedence order. Users only fall back to the organization's default role if they have no mapped groups left. When a role mapping changes, a background job queues role reassignment for all affected group members.
 
 ## View directory users
 

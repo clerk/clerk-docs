@@ -523,9 +523,7 @@ function parseGhPrViewForMigration(raw: GhPrViewForMigration): SourcePrMigration
     login: r.author?.login ?? '(unknown)',
     state: r.state ?? 'UNKNOWN',
   }))
-  const reviewedLogins = latestReviewRows
-    .map((r) => r.login)
-    .filter((l) => l !== '(unknown)')
+  const reviewedLogins = latestReviewRows.map((r) => r.login).filter((l) => l !== '(unknown)')
   const seen = new Set(requestedHandles)
   const reviewerHandles = [...requestedHandles]
   for (const login of reviewedLogins) {
@@ -619,7 +617,20 @@ async function createClerkPullRequestWithPeople(
   const { baseRef, head, title, body, isDraft, assigneeLogins, reviewerHandles } = params
   const repo = formatRepoSlug(config.clerkRepo)
 
-  const createArgs = ['pr', 'create', '--repo', repo, '--base', baseRef, '--head', head, '--title', title, '--body', body]
+  const createArgs = [
+    'pr',
+    'create',
+    '--repo',
+    repo,
+    '--base',
+    baseRef,
+    '--head',
+    head,
+    '--title',
+    title,
+    '--body',
+    body,
+  ]
   if (isDraft) createArgs.push('--draft')
 
   const prUrl = (await runCommand(logger, 'gh', createArgs, process.cwd())).stdout.trim()

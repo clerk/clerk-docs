@@ -110,10 +110,10 @@ describe('semver utilities', () => {
 describe('PR metadata helpers', () => {
   test('reviewRequestToHandle handles user and team requests', () => {
     expect(reviewRequestToHandle({ __typename: 'User', login: 'alice' })).toBe('alice')
-    expect(reviewRequestToHandle({ __typename: 'Team', slug: 'docs-team' })).toBe('docs-team')
-    expect(reviewRequestToHandle({ __typename: 'Team', slug: 'docs-team' }, 'clerk')).toBe('clerk/docs-team')
-    expect(reviewRequestToHandle({ __typename: 'User', login: 'alice' }, 'clerk')).toBe('alice')
+    // gh CLI returns team slugs already org-qualified (e.g. "clerk/docs-team")
+    expect(reviewRequestToHandle({ __typename: 'Team', slug: 'clerk/docs-team' })).toBe('clerk/docs-team')
     expect(reviewRequestToHandle({ __typename: 'Unknown' })).toBeNull()
+    expect(reviewRequestToHandle({})).toBeNull()
   })
 
   test('parseGhPrViewForMigration and appendix formatting include migration fields', () => {
@@ -123,20 +123,50 @@ describe('PR metadata helpers', () => {
       assignees: [{ login: 'octocat' }, {}],
       reviewRequests: [
         { __typename: 'User', login: 'reviewer-user' },
-        { __typename: 'Team', slug: 'docs-team' },
+        { __typename: 'Team', slug: 'clerk/docs-team' },
       ],
       latestReviews: [{ author: { login: 'reviewer-user' }, state: 'APPROVED' }],
       reviewDecision: 'REVIEW_REQUIRED',
     })
 
     expect(parsed.assigneeLogins).toEqual(['octocat'])
-    expect(parsed.reviewerHandles).toEqual(['reviewer-user', 'docs-team'])
+    expect(parsed.reviewerHandles).toEqual(['reviewer-user', 'clerk/docs-team'])
     expect(parsed.latestReviewRows).toEqual([{ login: 'reviewer-user', state: 'APPROVED' }])
 
     const appendix = formatSourcePrMigrationAppendix(parsed)
     expect(appendix).toContain('Source PR: https://github.com/clerk/clerk-docs/pull/123')
     expect(appendix).toContain('**Review decision (source):** REVIEW_REQUIRED')
     expect(appendix).toContain('@reviewer-user')
+  })
+
+  test('parseGhPrViewForMigration includes reviewers who already reviewed but are no longer in reviewRequests', () => {
+    const parsed = parseGhPrViewForMigration({
+      url: 'https://github.com/clerk/clerk-docs/pull/456',
+      isDraft: false,
+      assignees: [],
+      reviewRequests: [],
+      latestReviews: [{ author: { login: 'author' }, state: 'COMMENTED' }],
+      reviewDecision: 'REVIEW_REQUIRED',
+    })
+
+    expect(parsed.reviewerHandles).toEqual(['author'])
+    expect(parsed.latestReviewRows).toEqual([{ login: 'author', state: 'COMMENTED' }])
+  })
+
+  test('parseGhPrViewForMigration deduplicates reviewers present in both reviewRequests and latestReviews', () => {
+    const parsed = parseGhPrViewForMigration({
+      url: 'https://github.com/clerk/clerk-docs/pull/789',
+      isDraft: false,
+      assignees: [],
+      reviewRequests: [{ __typename: 'User', login: 'alice' }],
+      latestReviews: [
+        { author: { login: 'alice' }, state: 'CHANGES_REQUESTED' },
+        { author: { login: 'bob' }, state: 'APPROVED' },
+      ],
+      reviewDecision: 'CHANGES_REQUESTED',
+    })
+
+    expect(parsed.reviewerHandles).toEqual(['alice', 'bob'])
   })
 })
 

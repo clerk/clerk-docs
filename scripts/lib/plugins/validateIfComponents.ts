@@ -33,8 +33,11 @@ function extractSDKsFromIfComponent(
   }
 
   if (notSdk) {
-    const notAllowedSdks = extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
-    return notAllowedSdks
+    // Still validate that the SDK names are valid, but don't return them
+    // for scope checking — notSdk exclusions don't require the excluded
+    // SDKs to be in the page's scope.
+    extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
+    return undefined
   }
 
   if (sdk) {
@@ -99,8 +102,11 @@ export const validateIfComponents =
 
       if (allowedSdks === undefined) return
 
-      // `notSdk` means "hide when these SDKs apply" — the doc does not need to be scoped to those SDKs, so we skip the frontmatter/manifest checks for them because they would be false positives
-      if (notSdk) return
+      // Partials are shared across pages with different SDK scopes, so
+      // scope validation (frontmatter/manifest checks) at the embedding site
+      // would produce false positives. Prop parsing above still validates
+      // SDK names and catches sdk+notSdk misuse.
+      if ((node as any).data?.fromPartial) return
 
       // If the `ignoreSdkWarning` prop is true, skip the validation checks
       if (ignoreSdkWarning === true) return

@@ -5,7 +5,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import {
-  Logger,
   assertGitFilterRepoVersionOutput,
   assertSemverAtLeast,
   buildPrRefsRewriteCallback,
@@ -25,8 +24,6 @@ import {
   sanitizeBranchForPath,
   stripClerkDocsRootGitignoreEntries,
 } from './migrate-clerk-docs-to-clerk'
-
-const logger = new Logger(false)
 
 describe('migrate-clerk-docs-to-clerk core helpers', () => {
   test('sanitizeBranchForPath replaces separators', () => {
@@ -64,7 +61,7 @@ describe('gitignore cleanup', () => {
       'utf8',
     )
 
-    const changed = await stripClerkDocsRootGitignoreEntries(logger, tempDir)
+    const changed = await stripClerkDocsRootGitignoreEntries(tempDir)
     const next = await fs.readFile(path.join(tempDir, '.gitignore'), 'utf8')
 
     expect(changed).toBe(true)
@@ -75,7 +72,7 @@ describe('gitignore cleanup', () => {
   test('stripClerkDocsRootGitignoreEntries returns false when nothing to remove', async () => {
     await fs.writeFile(path.join(tempDir, '.gitignore'), 'node_modules\n', 'utf8')
 
-    const changed = await stripClerkDocsRootGitignoreEntries(logger, tempDir)
+    const changed = await stripClerkDocsRootGitignoreEntries(tempDir)
 
     expect(changed).toBe(false)
   })
@@ -96,14 +93,14 @@ describe('semver utilities', () => {
   })
 
   test('assertSemverAtLeast throws for old versions', () => {
-    expect(() => assertSemverAtLeast(logger, 'git', 'git version 2.38.0', '2.39.0')).toThrow(
+    expect(() => assertSemverAtLeast('git', 'git version 2.38.0', '2.39.0')).toThrow(
       'Minimum supported is 2.39.0',
     )
   })
 
   test('assertGitFilterRepoVersionOutput accepts semver and hash outputs', () => {
-    expect(() => assertGitFilterRepoVersionOutput(logger, 'git-filter-repo', '2.38.0', '2.38.0')).not.toThrow()
-    expect(() => assertGitFilterRepoVersionOutput(logger, 'git-filter-repo', '1a2b3c4d5e', '2.38.0')).not.toThrow()
+    expect(() => assertGitFilterRepoVersionOutput('git-filter-repo', '2.38.0', '2.38.0')).not.toThrow()
+    expect(() => assertGitFilterRepoVersionOutput('git-filter-repo', '1a2b3c4d5e', '2.38.0')).not.toThrow()
   })
 })
 
@@ -181,19 +178,18 @@ describe('permissions and repo slug helpers', () => {
 
 describe('command wrappers', () => {
   test('runCommand captures stdout for successful commands', async () => {
-    const result = await runCommand(logger, 'node', ['-e', "process.stdout.write('ok')"], process.cwd())
+    const result = await runCommand('node', ['-e', "process.stdout.write('ok')"], process.cwd())
     expect(result.code).toBe(0)
     expect(result.stdout).toBe('ok')
   })
 
   test('runCommand returns non-zero code when allowFailure is true', async () => {
-    const result = await runCommand(logger, 'node', ['-e', 'process.exit(2)'], process.cwd(), { allowFailure: true })
+    const result = await runCommand('node', ['-e', 'process.exit(2)'], process.cwd(), { allowFailure: true })
     expect(result.code).toBe(2)
   })
 
   test('commandJson parses JSON stdout', async () => {
     const json = await commandJson<{ value: number }>(
-      logger,
       'node',
       ['-e', 'process.stdout.write(JSON.stringify({value: 42}))'],
       process.cwd(),

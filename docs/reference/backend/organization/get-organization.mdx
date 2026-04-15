@@ -73,86 +73,115 @@ To use the `getOrganization()` method, you first need to initialize the [`clerkC
   ```
 </If>
 
-<If sdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
-  <If sdk="nextjs">
-    ```tsx {{ filename: 'app/page.tsx' }}
-    import { useOrganization, useOrganizationList } from '@clerk/nextjs'
-    import { auth, clerkClient } from '@clerk/nextjs/server'
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/page.tsx' }}
+  import { useOrganization, useOrganizationList } from '@clerk/nextjs'
+  import { auth, clerkClient } from '@clerk/nextjs/server'
 
-    export default async function Home() {
-      // Accessing the `Auth` object differs depending on the SDK you're using
-      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-      const { isAuthenticated, orgId, orgRole } = await auth()
+  export default async function Home() {
+    // Accessing the `Auth` object differs depending on the SDK you're using
+    // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+    const { isAuthenticated, orgId, orgRole } = await auth()
 
-      // Check if user is authenticated
-      if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
+    // Check if user is authenticated
+    if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
 
-      // Check if there is an Active Organization
-      if (!orgId) return <p>Set an Active Organization to access this page.</p>
+    // Check if there is an Active Organization
+    if (!orgId) return <p>Set an Active Organization to access this page.</p>
 
-      // Initialize clerkClient
-      const client = await clerkClient()
-
-      // Use the `getOrganization()` method to get the Backend `Organization` object
-      const organization = await client.organizations.getOrganization({ organizationId: orgId })
-
-      return (
-        <div>
-          <h1>Welcome to the {organization.name} organization</h1>
-          <p>Your role in this organization: {orgRole}</p>
-        </div>
-      )
-    }
-    ```
-  </If>
-
-  <If sdk="astro">
-    ```astro {{ filename: 'src/pages/index.astro' }}
-    ---
-    import Layout from '../layouts/Layout.astro'
-    import { Show } from '@clerk/astro/components'
-    import { clerkClient } from '@clerk/astro/server'
-
-    const { isAuthenticated, orgId, orgRole } = Astro.locals.auth()
-
-    let organization = null
-    if (isAuthenticated && orgId) {
-      organization = await clerkClient(Astro).organizations.getOrganization({ organizationId: orgId })
-    }
-    ---
-
-    <Layout title="Clerk + Astro">
-      <Show when="signed-out">
-        <p>Sign in to try Clerk out!</p>
-      </Show>
-      <Show when="signed-in">
-        {
-          organization && (
-            <div class="p-8">
-              <h1 class="text-2xl font-bold mb-4">
-                Welcome to the <strong>{organization.name}</strong> organization
-              </h1>
-              <p class="mb-6">
-                Your role in this organization: <strong>{orgRole}</strong>
-              </p>
-            </div>
-          )
-        }
-      </Show>
-    </Layout>
-    ```
-  </If>
-
-  <If sdk="expressjs">
-    ```js {{ filename: 'index.js' }}
-    import { createClerkClient, getAuth } from '@clerk/express'
-    import express from 'express'
-
-    const app = express()
     // Initialize clerkClient
-    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+    const client = await clerkClient()
 
-    app.get('/user', async (req, res) => {
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const organization = await client.organizations.getOrganization({ organizationId: orgId })
+
+    return (
+      <div>
+        <h1>Welcome to the {organization.name} organization</h1>
+        <p>Your role in this organization: {orgRole}</p>
+      </div>
+    )
+  }
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro {{ filename: 'src/pages/index.astro' }}
+  ---
+  import Layout from '../layouts/Layout.astro'
+  import { Show } from '@clerk/astro/components'
+  import { clerkClient } from '@clerk/astro/server'
+
+  const { isAuthenticated, orgId, orgRole } = Astro.locals.auth()
+
+  let organization = null
+  if (isAuthenticated && orgId) {
+    organization = await clerkClient(Astro).organizations.getOrganization({ organizationId: orgId })
+  }
+  ---
+
+  <Layout title="Clerk + Astro">
+    <Show when="signed-out">
+      <p>Sign in to try Clerk out!</p>
+    </Show>
+    <Show when="signed-in">
+      {
+        organization && (
+          <div class="p-8">
+            <h1 class="text-2xl font-bold mb-4">
+              Welcome to the <strong>{organization.name}</strong> organization
+            </h1>
+            <p class="mb-6">
+              Your role in this organization: <strong>{orgRole}</strong>
+            </p>
+          </div>
+        )
+      }
+    </Show>
+  </Layout>
+  ```
+</If>
+
+<If sdk="expressjs">
+  ```js {{ filename: 'index.js' }}
+  import { createClerkClient, getAuth } from '@clerk/express'
+  import express from 'express'
+
+  const app = express()
+  // Initialize clerkClient
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+
+  app.get('/user', async (req, res) => {
+    // Accessing the `Auth` object differs depending on the SDK you're using
+    // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+    const { isAuthenticated, orgId } = getAuth(req)
+
+    // Protect the route from unauthenticated users
+    if (!isAuthenticated) {
+      res.status(401).json({ error: 'User not authenticated' })
+    }
+
+    // Check if there is an Active Organization
+    if (!orgId) {
+      res.status(404).json({ error: 'Set an Active Organization to access this page.' })
+    }
+
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const organization = await clerkClient.organizations.getOrganization({ organizationId: orgId })
+
+    // Return the `Organization` object
+    res.json(organization)
+  })
+  ```
+</If>
+
+<If sdk="fastify">
+  ```ts {{ filename: 'src/routes/example.ts' }}
+  import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+  import { getAuth, clerkClient } from '@clerk/fastify'
+
+  export const exampleRoutes = (fastify: FastifyInstance) => {
+    fastify.get('/user', async (req: FastifyRequest, res: FastifyReply) => {
       // Accessing the `Auth` object differs depending on the SDK you're using
       // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
       const { isAuthenticated, orgId } = getAuth(req)
@@ -173,149 +202,118 @@ To use the `getOrganization()` method, you first need to initialize the [`clerkC
       // Return the `Organization` object
       res.json(organization)
     })
-    ```
-  </If>
+  }
+  ```
+</If>
 
-  <If sdk="fastify">
-    ```ts {{ filename: 'src/routes/example.ts' }}
-    import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-    import { getAuth, clerkClient } from '@clerk/fastify'
+<If sdk="nuxt">
+  ```ts {{ filename: 'server/api/example.ts' }}
+  import { clerkClient } from '@clerk/nuxt/server'
 
-    export const exampleRoutes = (fastify: FastifyInstance) => {
-      fastify.get('/user', async (req: FastifyRequest, res: FastifyReply) => {
-        // Accessing the `Auth` object differs depending on the SDK you're using
-        // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-        const { isAuthenticated, orgId } = getAuth(req)
+  export default defineEventHandler(async (event) => {
+    // Accessing the `Auth` object differs depending on the SDK you're using
+    // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+    const { isAuthenticated, orgId } = event.context.auth()
 
-        // Protect the route from unauthenticated users
-        if (!isAuthenticated) {
-          res.status(401).json({ error: 'User not authenticated' })
-        }
+    // Check if the user is authenticated
+    if (!isAuthenticated) {
+      throw createError({ statusCode: 401, statusMessage: 'User not authenticated' })
+    }
 
-        // Check if there is an Active Organization
-        if (!orgId) {
-          res.status(404).json({ error: 'Set an Active Organization to access this page.' })
-        }
-
-        // Use the `getOrganization()` method to get the Backend `Organization` object
-        const organization = await clerkClient.organizations.getOrganization({ organizationId: orgId })
-
-        // Return the `Organization` object
-        res.json(organization)
+    // Check if there is an Active Organization
+    if (!orgId) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Set an Active Organization to access this page.',
       })
     }
-    ```
-  </If>
 
-  <If sdk="nuxt">
-    ```ts {{ filename: 'server/api/example.ts' }}
-    import { clerkClient } from '@clerk/nuxt/server'
-
-    export default defineEventHandler(async (event) => {
-      // Accessing the `Auth` object differs depending on the SDK you're using
-      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-      const { isAuthenticated, orgId } = event.context.auth()
-
-      // Check if the user is authenticated
-      if (!isAuthenticated) {
-        throw createError({ statusCode: 401, statusMessage: 'User not authenticated' })
-      }
-
-      // Check if there is an Active Organization
-      if (!orgId) {
-        throw createError({
-          statusCode: 404,
-          statusMessage: 'Set an Active Organization to access this page.',
-        })
-      }
-
-      // Use the `getOrganization()` method to get the Backend `Organization` object
-      const organization = await clerkClient(event).organizations.getOrganization({
-        organizationId: orgId,
-      })
-
-      // Return the `Organization` object
-      return organization
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const organization = await clerkClient(event).organizations.getOrganization({
+      organizationId: orgId,
     })
-    ```
-  </If>
 
-  <If sdk="react-router">
-    ```tsx {{ filename: 'app/routes/organization.tsx' }}
-    import { clerkClient, getAuth } from '@clerk/react-router/server'
-    import type { Route } from './+types/organization'
+    // Return the `Organization` object
+    return organization
+  })
+  ```
+</If>
 
-    export async function loader(args: Route.LoaderArgs) {
-      // Accessing the `Auth` object differs depending on the SDK you're using
-      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-      const { isAuthenticated, orgId } = await getAuth(args)
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/organization.tsx' }}
+  import { clerkClient, getAuth } from '@clerk/react-router/server'
+  import type { Route } from './+types/organization'
 
-      // Protect the route from unauthenticated users
-      if (!isAuthenticated) {
-        return new Response('User not authenticated', {
-          status: 401,
-        })
-      }
+  export async function loader(args: Route.LoaderArgs) {
+    // Accessing the `Auth` object differs depending on the SDK you're using
+    // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+    const { isAuthenticated, orgId } = await getAuth(args)
 
-      // Check if there is an Active Organization
-      if (!orgId) {
-        return new Response('Set an Active Organization to access this page.', {
-          status: 404,
-        })
-      }
-
-      // Use the `getOrganization()` method to get the Backend `Organization` object
-      const organization = await clerkClient(args).organizations.getOrganization({
-        organizationId: orgId,
+    // Protect the route from unauthenticated users
+    if (!isAuthenticated) {
+      return new Response('User not authenticated', {
+        status: 401,
       })
-
-      // Return the `Organization` object
-      return json({ organization })
     }
-    ```
-  </If>
 
-  <If sdk="tanstack-react-start">
-    ```tsx {{ filename: 'app/routes/api/organization.tsx' }}
-    import { json } from '@tanstack/react-start'
-    import { createFileRoute } from '@tanstack/react-router'
-    import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+    // Check if there is an Active Organization
+    if (!orgId) {
+      return new Response('Set an Active Organization to access this page.', {
+        status: 404,
+      })
+    }
 
-    export const ServerRoute = createFileRoute('/api/organization')({
-      server: {
-        handlers: {
-          GET: async () => {
-            // Accessing the `Auth` object differs depending on the SDK you're using
-            // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-            const { isAuthenticated, orgId } = await auth()
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const organization = await clerkClient(args).organizations.getOrganization({
+      organizationId: orgId,
+    })
 
-            // Protect the route from unauthenticated users
-            if (!isAuthenticated) {
-              return new Response('User not authenticated', {
-                status: 401,
-              })
-            }
+    // Return the `Organization` object
+    return json({ organization })
+  }
+  ```
+</If>
 
-            // Check if there is an Active Organization
-            if (!orgId) {
-              return new Response('Set an Active Organization to access this page.', {
-                status: 404,
-              })
-            }
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/api/organization.tsx' }}
+  import { json } from '@tanstack/react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+  import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
 
-            // Use the `getOrganization()` method to get the Backend `Organization` object
-            const organization = await clerkClient().organizations.getOrganization({
-              organizationId: orgId,
+  export const ServerRoute = createFileRoute('/api/organization')({
+    server: {
+      handlers: {
+        GET: async () => {
+          // Accessing the `Auth` object differs depending on the SDK you're using
+          // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+          const { isAuthenticated, orgId } = await auth()
+
+          // Protect the route from unauthenticated users
+          if (!isAuthenticated) {
+            return new Response('User not authenticated', {
+              status: 401,
             })
+          }
 
-            // Return the `Organization` object
-            return json(organization)
-          },
+          // Check if there is an Active Organization
+          if (!orgId) {
+            return new Response('Set an Active Organization to access this page.', {
+              status: 404,
+            })
+          }
+
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await clerkClient().organizations.getOrganization({
+            organizationId: orgId,
+          })
+
+          // Return the `Organization` object
+          return json(organization)
         },
       },
-    })
-    ```
-  </If>
+    },
+  })
+  ```
 </If>
 
 ## Backend API (BAPI) endpoint

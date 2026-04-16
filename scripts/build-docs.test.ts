@@ -6606,7 +6606,7 @@ description: The page being linked to
                       {
                         title: 'SDK Doc',
                         href: '/docs/sdk-doc',
-                        sdk: ['react', 'js-backend'], // js-backend not in parent
+                        sdk: ['react', 'expo'], // expo not in parent
                       },
                     ],
                   ],
@@ -6619,7 +6619,7 @@ description: The page being linked to
           path: './docs/sdk-doc.mdx',
           content: `---
 title: SDK Doc
-sdk: react, js-backend
+sdk: react, expo
 description: This page has a description
 ---
 
@@ -6632,7 +6632,7 @@ description: This page has a description
         await createConfig({
           ...baseConfig,
           basePath: tempDir,
-          validSdks: ['react', 'js-backend'],
+          validSdks: ['react', 'expo'],
           ignoreWarnings: {
             docs: {
               'sdk-doc.mdx': ['doc-sdk-filtered-by-parent'],

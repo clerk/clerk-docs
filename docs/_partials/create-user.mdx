@@ -1,93 +1,152 @@
-<Tabs items={["Next.js", "Astro", "Express", "React Router", "TanStack React Start"]}>
-  <Tab>
-    ```ts {{ filename: 'app/api/example/route.ts' }}
-    import { auth, clerkClient } from '@clerk/nextjs/server'
-    import { NextResponse } from 'next/server'
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+  ```js {{ filename: 'example.js' }}
+  import { createClerkClient } from '@clerk/backend'
 
-    export async function POST() {
-      const client = await clerkClient()
-      const user = await client.users.createUser({
-        emailAddress: ['test@example.com'],
-        password: 'password',
-      })
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
-      return NextResponse.json({ message: 'User created', user })
+  async function createUser(request) {
+    // Use the `request.auth` object to access `isAuthenticated` and the user's ID
+    const { isAuthenticated, userId } = request.auth
+
+    // Protect the route from unauthenticated users
+    if (!isAuthenticated) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    ```
-  </Tab>
 
-  <Tab>
-    ```tsx {{ filename: 'src/api/example.ts' }}
-    import type { APIRoute } from 'astro'
-    import { clerkClient } from '@clerk/astro/server'
-
-    export const POST: APIRoute = async (context) => {
-      await clerkClient(context).users.createUser({
-        emailAddress: ['test@example.com'],
-        password: 'password',
-      })
-
-      return new Response(JSON.stringify({ success: true }), { status: 200 })
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    ```ts {{ filename: 'public.ts' }}
-    import { getAuth, clerkClient } from '@clerk/express'
-
-    app.post('/createUser', async (req, res) => {
-      await clerkClient.users.createUser({
-        emailAddress: ['test@example.com'],
-        password: 'password',
-      })
-
-      res.status(200).json({ success: true })
+    // Use the `createUser()` method to create the user
+    const user = await clerkClient.users.createUser({
+      emailAddress: ['test@example.com'],
+      password: 'password',
     })
-    ```
-  </Tab>
 
-  <Tab>
-    ```tsx {{ filename: 'app/routes/example.tsx' }}
-    import { clerkClient } from '@clerk/react-router/server'
-    import type { Route } from './+types/example'
-    import { json } from 'react-router-dom'
+    // Return the Backend User object
+    return user
+  }
+  ```
+</If>
 
-    export async function action({ request }: Route.ActionArgs) {
-      const formData = await request.formData()
-      const emailAddress = formData.get('emailAddress')
-      const password = formData.get('password')
+<If sdk="nextjs">
+  ```ts {{ filename: 'app/api/example/route.ts' }}
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { NextResponse } from 'next/server'
 
-      await clerkClient.users.createUser({
-        emailAddress: [emailAddress],
-        password: password,
+  export async function POST() {
+    const client = await clerkClient()
+
+    const user = await client.users.createUser({
+      emailAddress: ['test@example.com'],
+      password: 'password',
+    })
+
+    return NextResponse.json({ message: 'User created', user })
+  }
+  ```
+</If>
+
+<If sdk="astro">
+  ```tsx {{ filename: 'src/api/example.ts' }}
+  import type { APIRoute } from 'astro'
+  import { clerkClient } from '@clerk/astro/server'
+
+  export const POST: APIRoute = async (context) => {
+    await clerkClient(context).users.createUser({
+      emailAddress: ['test@example.com'],
+      password: 'password',
+    })
+
+    return new Response(JSON.stringify({ success: true }), { status: 200 })
+  }
+  ```
+</If>
+
+<If sdk="expressjs">
+  ```ts {{ filename: 'public.ts' }}
+  import { getAuth, clerkClient } from '@clerk/express'
+
+  app.post('/createUser', async (req, res) => {
+    await clerkClient.users.createUser({
+      emailAddress: ['test@example.com'],
+      password: 'password',
+    })
+
+    res.status(200).json({ success: true })
+  })
+  ```
+</If>
+
+<If sdk="fastify">
+  ```ts {{ filename: 'src/routes/example.ts' }}
+  import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+  import { clerkClient } from '@clerk/fastify'
+
+  export const exampleRoutes = (fastify: FastifyInstance) => {
+    fastify.post('/createUser', async (req: FastifyRequest, res: FastifyReply) => {
+      const user = await clerkClient.users.createUser({
+        emailAddress: ['test@example.com'],
+        password: 'password',
       })
 
-      return json({ success: true })
-    }
-    ```
-  </Tab>
+      res.status(200).json(user)
+    })
+  }
+  ```
+</If>
 
-  <Tab>
-    ```tsx {{ filename: 'app/routes/api/example.tsx' }}
-    import { json } from '@tanstack/react-start'
-    import { createFileRoute } from '@tanstack/react-router'
-    import { clerkClient } from '@clerk/tanstack-react-start/server'
+<If sdk="nuxt">
+  ```ts {{ filename: 'server/api/example.ts' }}
+  import { clerkClient } from '@clerk/nuxt/server'
 
-    export const ServerRoute = createFileRoute('/api/example')({
-      server: {
-        handlers: {
-          POST: async () => {
-            await clerkClient().users.createUser({
-              emailAddress: ['test@example.com'],
-              password: 'my-secure-password',
-            })
+  export default defineEventHandler(async () => {
+    const user = await clerkClient.users.createUser({
+      emailAddress: ['test@example.com'],
+      password: 'password',
+    })
 
-            return json({ success: true })
-          },
+    return { user }
+  })
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/example.tsx' }}
+  import { clerkClient } from '@clerk/react-router/server'
+  import type { Route } from './+types/example'
+  import { json } from 'react-router-dom'
+
+  export async function action({ request }: Route.ActionArgs) {
+    const formData = await request.formData()
+    const emailAddress = formData.get('emailAddress')
+    const password = formData.get('password')
+
+    await clerkClient.users.createUser({
+      emailAddress: [emailAddress],
+      password: password,
+    })
+
+    return json({ success: true })
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/api/example.tsx' }}
+  import { json } from '@tanstack/react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+  import { clerkClient } from '@clerk/tanstack-react-start/server'
+
+  export const ServerRoute = createFileRoute('/api/example')({
+    server: {
+      handlers: {
+        POST: async () => {
+          await clerkClient().users.createUser({
+            emailAddress: ['test@example.com'],
+            password: 'my-secure-password',
+          })
+
+          return json({ success: true })
         },
       },
-    })
-    ```
-  </Tab>
-</Tabs>
+    },
+  })
+  ```
+</If>

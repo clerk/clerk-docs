@@ -333,43 +333,41 @@
     import ClerkKit
 
     struct AddPhoneView: View {
+      @Environment(Clerk.self) private var clerk
+
       @State private var phone = ""
       @State private var code = ""
-      @State private var isVerifying = false
       @State private var newPhoneNumber: PhoneNumber?
+      @State private var isVerified = false
 
       var body: some View {
-        if newPhoneNumber?.verification?.status == .verified {
-          Text("Phone added!")
-        }
-
-        if isVerifying {
-          TextField("Enter code", text: $code)
-          Button("Verify") {
-            Task { await verifyCode(code) }
-          }
-        } else {
-          TextField("Enter phone number", text: $phone)
-          Button("Continue") {
-            Task { await createPhone(phone) }
+        VStack(alignment: .leading, spacing: 16) {
+          if isVerified {
+            Text("Phone added!")
+          } else if let newPhoneNumber {
+            TextField("Enter code", text: $code)
+            Button("Verify") {
+              Task { await verifyCode(code, for: newPhoneNumber) }
+            }
+          } else {
+            TextField("Enter phone number", text: $phone)
+            Button("Continue") {
+              Task { await createPhone() }
+            }
+            .disabled(phone.isEmpty)
           }
         }
       }
     }
 
     extension AddPhoneView {
-
-      func createPhone(_ phone: String) async {
+      private func createPhone() async {
         do {
-          guard let user = Clerk.shared.user else { return }
-
+          guard let user = clerk.user else { return }
           // Create the phone number
           let phoneNumber = try await user.createPhoneNumber(phone)
-
           // Send the user an SMS with the verification code
-          self.newPhoneNumber = try await phoneNumber.sendCode()
-
-          isVerifying = true
+          newPhoneNumber = try await phoneNumber.sendCode()
         } catch {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling
@@ -377,14 +375,11 @@
         }
       }
 
-      func verifyCode(_ code: String) async {
+      private func verifyCode(_ code: String, for phoneNumber: PhoneNumber) async {
         do {
-          guard let newPhoneNumber else { return }
-
           // Verify that the provided code matches the code sent to the user
-          self.newPhoneNumber = try await newPhoneNumber.verifyCode(code)
-
-          dump(self.newPhoneNumber?.verification?.status)
+          newPhoneNumber = try await phoneNumber.verifyCode(code)
+          isVerified = true
         } catch {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling

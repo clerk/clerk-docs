@@ -1,76 +1,192 @@
-<Tabs items={["Next.js", "Astro", "Express", "React Router", "TanStack React Start"]}>
-  <Tab>
-    ```ts {{ filename: 'app/api/example/route.ts' }}
-    import { clerkClient } from '@clerk/nextjs/server'
-    import { NextResponse } from 'next/server'
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+  ```js {{ filename: 'example.js' }}
+  import { createClerkClient } from '@clerk/backend'
 
-    export async function POST() {
-      await clerkClient.users.deleteUser('user_123')
+  // Initialize clerkClient
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
-      return NextResponse.json({ success: true })
+  async function deleteUser(request) {
+    // Use the `request.auth` object to access `isAuthenticated` and the user's ID
+    const { isAuthenticated, userId } = request.auth
+
+    // Protect the route by checking if the user is signed in
+    if (!isAuthenticated) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    ```
-  </Tab>
 
-  <Tab>
-    ```tsx {{ filename: 'src/api/example.ts' }}
-    import type { APIRoute } from 'astro'
-    import { clerkClient } from '@clerk/astro/server'
+    // Use the `deleteUser()` method to delete the user
+    await clerkClient.users.deleteUser(userId)
 
-    export const POST: APIRoute = async (context) => {
-      await clerkClient(context).users.deleteUser('user_123')
+    // Return the success status
+    return Response.json({ success: true })
+  }
+  ```
+</If>
 
-      return new Response(JSON.stringify({ success: true }), { status: 200 })
+<If sdk="nextjs">
+  ```ts {{ filename: 'app/api/example/route.ts' }}
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { NextResponse } from 'next/server'
+
+  export async function POST() {
+    const { isAuthenticated, userId } = await auth()
+
+    // Protect the route by checking if the user is signed in
+    if (!isAuthenticated) {
+      return new NextResponse('Unauthorized', { status: 401 })
     }
-    ```
-  </Tab>
 
-  <Tab>
-    ```ts {{ filename: 'public.ts' }}
-    import { clerkClient } from '@clerk/express'
+    // Initialize clerkClient
+    const client = await clerkClient()
 
-    app.post('/deleteUser', async (req, res) => {
-      await clerkClient.users.deleteUser('user_123')
+    // Use the `deleteUser()` method to delete the user
+    await client.users.deleteUser(userId)
+
+    // Return the success status
+    return NextResponse.json({ success: true })
+  }
+  ```
+</If>
+
+<If sdk="astro">
+  ```tsx {{ filename: 'src/api/example.ts' }}
+  import type { APIRoute } from 'astro'
+  import { clerkClient } from '@clerk/astro/server'
+
+  export const POST: APIRoute = async (context) => {
+    const { isAuthenticated, userId } = context.locals.auth()
+
+    // Protect the route by checking if the user is signed in
+    if (!isAuthenticated) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    // Initialize clerkClient
+    // Use the `deleteUser()` method to delete the user
+    await clerkClient(context).users.deleteUser(userId)
+
+    // Return the success status
+    return new Response(JSON.stringify({ success: true }), { status: 200 })
+  }
+  ```
+</If>
+
+<If sdk="expressjs">
+  ```ts {{ filename: 'public.ts' }}
+  import { clerkClient, getAuth } from '@clerk/express'
+
+  app.post('/deleteUser', async (req, res) => {
+    const { isAuthenticated, userId } = getAuth(req)
+
+    // Protect the route by checking if the user is signed in
+    if (!isAuthenticated) {
+      res.status(401).json({ error: 'User not authenticated' })
+    }
+
+    // Initialize clerkClient
+    // Use the `deleteUser()` method to delete the user
+    await clerkClient.users.deleteUser(userId)
+
+    // Return the success status
+    res.status(200).json({ success: true })
+  })
+  ```
+</If>
+
+<If sdk="fastify">
+  ```ts {{ filename: 'src/routes/example.ts' }}
+  import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+  import { clerkClient, getAuth } from '@clerk/fastify'
+
+  export const exampleRoutes = (fastify: FastifyInstance) => {
+    fastify.post('/deleteUser', async (req: FastifyRequest, res: FastifyReply) => {
+      const { isAuthenticated, userId } = getAuth(req)
+
+      // Protect the route by checking if the user is signed in
+      if (!isAuthenticated) {
+        res.status(401).json({ error: 'User not authenticated' })
+      }
+
+      // Initialize clerkClient
+      // Use the `deleteUser()` method to delete the user
+      await clerkClient.users.deleteUser(userId)
 
       res.status(200).json({ success: true })
     })
-    ```
-  </Tab>
+  }
+  ```
+</If>
 
-  <Tab>
-    ```tsx {{ filename: 'app/routes/example.tsx' }}
-    import { clerkClient } from '@clerk/react-router/server'
-    import type { Route } from './+types/example'
-    import { json, redirect } from 'react-router-dom'
+<If sdk="nuxt">
+  ```ts {{ filename: 'server/api/example.ts' }}
+  import { clerkClient } from '@clerk/nuxt/server'
 
-    export async function action({ request }: Route.ActionArgs) {
-      const formData = await request.formData()
-      const userId = formData.get('userId')
+  export default defineEventHandler(async (event) => {
+    const { isAuthenticated, userId } = event.context.auth()
 
-      await clerkClient.users.deleteUser(userId)
-
-      return json({ success: true })
+    // Protect the route by checking if the user is signed in
+    if (!isAuthenticated) {
+      return createError({ statusCode: 401, statusMessage: 'User not authenticated' })
     }
-    ```
-  </Tab>
 
-  <Tab>
-    ```tsx {{ filename: 'app/routes/api/example.tsx' }}
-    import { json } from '@tanstack/react-start'
-    import { createFileRoute } from '@tanstack/react-router'
-    import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+    // Initialize clerkClient
+    // Use the `deleteUser()` method to delete the user
+    await clerkClient(event).users.deleteUser(userId)
 
-    export const ServerRoute = createFileRoute('/api/example')({
-      server: {
-        handlers: {
-          POST: async () => {
-            await clerkClient().users.deleteUser('user_123')
+    return { success: true }
+  })
+  ```
+</If>
 
-            return json({ success: true })
-          },
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/example.tsx' }}
+  import { clerkClient, getAuth } from '@clerk/react-router/server'
+  import type { Route } from './+types/example'
+  import { redirect } from 'react-router'
+
+  export async function action(args: Route.ActionArgs) {
+    const { isAuthenticated, userId } = await getAuth(args)
+
+    // Protect the route by checking if the user is signed in
+    if (!isAuthenticated) {
+      return redirect('/sign-in?redirect_url=' + args.request.url)
+    }
+
+    // Initialize clerkClient
+    // Use the `deleteUser()` method to delete the user
+    await clerkClient(args).users.deleteUser(userId)
+
+    // Return the success status
+    return Response.json({ success: true })
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/api/example.tsx' }}
+  import { json } from '@tanstack/react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+  import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+
+  export const ServerRoute = createFileRoute('/api/example')({
+    server: {
+      handlers: {
+        POST: async () => {
+          const { isAuthenticated, userId } = await auth()
+
+          // Protect the route by checking if the user is signed in
+          if (!isAuthenticated) {
+            return json({ error: 'Unauthorized' }, { status: 401 })
+          }
+
+          // Initialize clerkClient
+          // Use the `deleteUser()` method to delete the user
+          await clerkClient().users.deleteUser(userId)
+
+          return json({ success: true })
         },
       },
-    })
-    ```
-  </Tab>
-</Tabs>
+    },
+  })
+  ```
+</If>

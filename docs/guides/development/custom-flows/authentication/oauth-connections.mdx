@@ -624,290 +624,294 @@ You must configure your application instance through the Clerk Dashboard for the
 
 ## Handle missing requirements
 
-Depending on your instance settings, users might need to provide extra information before their sign-up can be completed, such as when a first and last name or accepting legal terms is required. In these cases, the `SignUp` object returns a `status` of `"missing_requirements"` along with a `missingFields` array. You can use this information to build a UI that handles the missing requirements. If the missing fields are first and last name or legal acceptance, you can pass them to the [`signUp.update()`](/docs/reference/objects/sign-up#update) method. If the missing fields are identifiers, see the appropriate custom flow guide. For example, if your app's settings require a phone number, see the [phone OTP custom flow guide](/docs/guides/development/custom-flows/authentication/email-sms-otp#sign-up-flow) to handle collecting and verifying the phone number.
+<If notSdk={["ios", "android"]}>
+  Depending on your instance settings, users might need to provide extra information before their sign-up can be completed, such as when a first and last name or accepting legal terms is required. In these cases, the `SignUp` object returns a `status` of `"missing_requirements"` along with a `missingFields` array. You can use this information to build a UI that handles the missing requirements. If the missing fields are first and last name or legal acceptance, you can pass them to the [`signUp.update()`](/docs/reference/objects/sign-up#update) method. If the missing fields are identifiers, see the appropriate custom flow guide. For example, if your app's settings require a phone number, see the [phone OTP custom flow guide](/docs/guides/development/custom-flows/authentication/email-sms-otp#sign-up-flow) to handle collecting and verifying the phone number.
 
-> [!QUIZ]
-> Why does the "Continue" page use the `useSignUp()` hook? What if a user is using this flow to sign in?
->
-> ---
->
-> With OAuth flows, it's common for users to try to _sign in_ with an OAuth provider, but they don't have a Clerk account for your app yet. Clerk automatically transfers the flow from the `SignIn` object to the `SignUp` object, which returns the `"missing_requirements"` status and `missingFields` array needed to handle the missing requirements flow. This is why for the OAuth flow, the "Continue" page uses the [`useSignUp()`](/docs/reference/hooks/use-sign-up) hook and treats the missing requirements flow as a sign-up flow.
+  > [!QUIZ]
+  > Why does the "Continue" page use the `useSignUp()` hook? What if a user is using this flow to sign in?
+  >
+  > ---
+  >
+  > With OAuth flows, it's common for users to try to _sign in_ with an OAuth provider, but they don't have a Clerk account for your app yet. Clerk automatically transfers the flow from the `SignIn` object to the `SignUp` object, which returns the `"missing_requirements"` status and `missingFields` array needed to handle the missing requirements flow. This is why for the OAuth flow, the "Continue" page uses the [`useSignUp()`](/docs/reference/hooks/use-sign-up) hook and treats the missing requirements flow as a sign-up flow.
 
-<If notSdk={["expo", "ios", "android"]}>
-  <If notSdk="nextjs">
-    <Include src="_partials/sdk-examples-not-available-callout" />
+  <If notSdk="expo">
+    <If notSdk="nextjs">
+      <Include src="_partials/sdk-examples-not-available-callout" />
+    </If>
+
+    ```tsx {{ filename: 'app/sign-in/continue/page.tsx' }}
+    'use client'
+
+    import { useSignUp } from '@clerk/nextjs'
+    import { useRouter } from 'next/navigation'
+
+    export default function Page() {
+      const router = useRouter()
+      // Use `useSignUp()` hook to access the `SignUp` object
+      // `missing_requirements` and `missingFields` are only available on the `SignUp` object
+      const { signUp } = useSignUp()
+
+      const handleSubmit = async (formData: FormData) => {
+        const firstName = formData.get('firstName') as string
+        const lastName = formData.get('lastName') as string
+
+        // Update the `SignUp` object with the missing fields
+        // This example collects first and last name and passes it to SignUp.update() but you can modify this example for whatever settings you have enabled in the Clerk Dashboard
+        await signUp.update({ firstName, lastName })
+
+        if (signUp.status === 'complete') {
+          await signUp.finalize({
+            navigate: async ({ session, decorateUrl }) => {
+              // Handle session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              if (session?.currentTask) {
+                console.log(session?.currentTask)
+                return
+              }
+
+              // If no session tasks, navigate the signed-in user to the home page
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else if (signUp.status !== 'missing_requirements') {
+          // Check why the sign-up is not complete
+          console.error('Sign-up attempt not complete:', signUp.status)
+        }
+      }
+
+      // If the sign-up is complete, the user shouldn't be on this page
+      if (signUp.status === 'complete') {
+        router.push('/')
+      }
+
+      return (
+        <div>
+          <h1>Continue sign-up</h1>
+          <form action={handleSubmit}>
+            <label htmlFor="firstName">First name</label>
+            <input type="text" name="firstName" id="firstName" />
+            <label htmlFor="lastName">Last name</label>
+            <input type="text" name="lastName" id="lastName" />
+
+            <button type="submit">Submit</button>
+          </form>
+
+          {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+          <div id="clerk-captcha" />
+        </div>
+      )
+    }
+    ```
   </If>
 
-  ```tsx {{ filename: 'app/sign-in/continue/page.tsx' }}
-  'use client'
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/(auth)/continue.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useSignIn, useSignUp } from '@clerk/expo'
+    import { type Href, Link, useRouter } from 'expo-router'
+    import * as React from 'react'
+    import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 
-  import { useSignUp } from '@clerk/nextjs'
-  import { useRouter } from 'next/navigation'
+    export default function Page() {
+      const router = useRouter()
+      // Use `useSignUp()` hook to access the `SignUp` object
+      // `missing_requirements` and `missingFields` are only available on the `SignUp` object
+      const { signUp, errors: signUpErrors, fetchStatus: signUpFetchStatus } = useSignUp()
+      const { signIn, errors: signInErrors, fetchStatus: signInFetchStatus } = useSignIn()
+      const [firstName, setFirstName] = React.useState('')
+      const [lastName, setLastName] = React.useState('')
 
-  export default function Page() {
-    const router = useRouter()
-    // Use `useSignUp()` hook to access the `SignUp` object
-    // `missing_requirements` and `missingFields` are only available on the `SignUp` object
-    const { signUp } = useSignUp()
-
-    const handleSubmit = async (formData: FormData) => {
-      const firstName = formData.get('firstName') as string
-      const lastName = formData.get('lastName') as string
-
-      // Update the `SignUp` object with the missing fields
-      // This example collects first and last name and passes it to SignUp.update() but you can modify this example for whatever settings you have enabled in the Clerk Dashboard
-      await signUp.update({ firstName, lastName })
-
-      if (signUp.status === 'complete') {
-        await signUp.finalize({
-          navigate: async ({ session, decorateUrl }) => {
-            // Handle session tasks
-            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-            if (session?.currentTask) {
-              console.log(session?.currentTask)
-              return
-            }
-
-            // If no session tasks, navigate the signed-in user to the home page
-            const url = decorateUrl('/')
-            if (url.startsWith('http')) {
-              window.location.href = url
-            } else {
-              router.push(url)
-            }
-          },
-        })
-      } else if (signUp.status !== 'missing_requirements') {
-        // Check why the sign-up is not complete
-        console.error('Sign-up attempt not complete:', signUp.status)
+      // If the sign-in or sign-up is complete, the user doesn't need to be on this page
+      if (signIn.status === 'complete' || signUp.status === 'complete') {
+        return router.push('/')
       }
-    }
 
-    // If the sign-up is complete, the user shouldn't be on this page
-    if (signUp.status === 'complete') {
-      router.push('/')
-    }
+      const handleSubmit = async () => {
+        // Update the `SignUp` object with the missing fields
+        // This example collects first and last name, but you can modify it for whatever settings you have enabled in the Clerk Dashboard
+        await signUp.update({ firstName, lastName })
 
-    return (
-      <div>
-        <h1>Continue sign-up</h1>
-        <form action={handleSubmit}>
-          <label htmlFor="firstName">First name</label>
-          <input type="text" name="firstName" id="firstName" />
-          <label htmlFor="lastName">Last name</label>
-          <input type="text" name="lastName" id="lastName" />
+        if (signUp.status === 'complete') {
+          await signUp.finalize({
+            navigate: ({ session, decorateUrl }) => {
+              // Handle session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              if (session?.currentTask) {
+                console.log(session?.currentTask)
+                return
+              }
 
-          <button type="submit">Submit</button>
-        </form>
-
-        {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
-        <div id="clerk-captcha" />
-      </div>
-    )
-  }
-  ```
-</If>
-
-<If sdk="expo">
-  ```tsx {{ filename: 'app/(auth)/continue.tsx' }}
-  import { ThemedText } from '@/components/themed-text'
-  import { ThemedView } from '@/components/themed-view'
-  import { useSignIn, useSignUp } from '@clerk/expo'
-  import { type Href, Link, useRouter } from 'expo-router'
-  import * as React from 'react'
-  import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
-
-  export default function Page() {
-    const router = useRouter()
-    // Use `useSignUp()` hook to access the `SignUp` object
-    // `missing_requirements` and `missingFields` are only available on the `SignUp` object
-    const { signUp, errors: signUpErrors, fetchStatus: signUpFetchStatus } = useSignUp()
-    const { signIn, errors: signInErrors, fetchStatus: signInFetchStatus } = useSignIn()
-    const [firstName, setFirstName] = React.useState('')
-    const [lastName, setLastName] = React.useState('')
-
-    // If the sign-in or sign-up is complete, the user doesn't need to be on this page
-    if (signIn.status === 'complete' || signUp.status === 'complete') {
-      return router.push('/')
-    }
-
-    const handleSubmit = async () => {
-      // Update the `SignUp` object with the missing fields
-      // This example collects first and last name, but you can modify it for whatever settings you have enabled in the Clerk Dashboard
-      await signUp.update({ firstName, lastName })
-
-      if (signUp.status === 'complete') {
-        await signUp.finalize({
-          navigate: ({ session, decorateUrl }) => {
-            // Handle session tasks
-            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-            if (session?.currentTask) {
-              console.log(session?.currentTask)
-              return
-            }
-
-            // If no session tasks, navigate the signed-in user to the home page
-            const url = decorateUrl('/')
-            if (url.startsWith('http')) {
-              window.location.href = url
-            } else {
-              router.push(url as Href)
-            }
-          },
-        })
-      } else {
-        // Check why the sign-up is not complete
-        console.error('Sign-up attempt not complete:', signUp.status, signUp.missingFields)
+              // If no session tasks, navigate the signed-in user to the home page
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url as Href)
+              }
+            },
+          })
+        } else {
+          // Check why the sign-up is not complete
+          console.error('Sign-up attempt not complete:', signUp.status, signUp.missingFields)
+        }
       }
-    }
 
-    if (signUp.status !== 'missing_requirements') {
-      // You can use this page to handle other statuses
-      // This example only handles the missing_requirements status
-      return null
-    }
+      if (signUp.status !== 'missing_requirements') {
+        // You can use this page to handle other statuses
+        // This example only handles the missing_requirements status
+        return null
+      }
 
-    const canSubmit =
-      firstName.trim().length > 0 && lastName.trim().length > 0 && signUpFetchStatus !== 'fetching'
+      const canSubmit =
+        firstName.trim().length > 0 && lastName.trim().length > 0 && signUpFetchStatus !== 'fetching'
 
-    return (
-      <ThemedView style={styles.flex}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-        >
-          <ThemedText type="title" style={styles.title}>
-            Continue sign-up
-          </ThemedText>
-          <ThemedText style={styles.hint}>Add your name to finish creating your account.</ThemedText>
-
-          <View style={styles.fieldBlock}>
-            <ThemedText style={styles.label}>First name</ThemedText>
-            <TextInput
-              style={styles.input}
-              value={firstName}
-              placeholder="First name"
-              placeholderTextColor="#666666"
-              onChangeText={setFirstName}
-              autoCapitalize="words"
-              autoCorrect
-            />
-            {signUpErrors.fields?.firstName ? (
-              <ThemedText style={styles.error}>{signUpErrors.fields.firstName.message}</ThemedText>
-            ) : null}
-          </View>
-
-          <View style={styles.fieldBlock}>
-            <ThemedText style={styles.label}>Last name</ThemedText>
-            <TextInput
-              style={styles.input}
-              value={lastName}
-              placeholder="Last name"
-              placeholderTextColor="#666666"
-              onChangeText={setLastName}
-              autoCapitalize="words"
-              autoCorrect
-            />
-            {signUpErrors.fields?.lastName ? (
-              <ThemedText style={styles.error}>{signUpErrors.fields.lastName.message}</ThemedText>
-            ) : null}
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              !canSubmit && styles.buttonDisabled,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
+      return (
+        <ThemedView style={styles.flex}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.container}
+            keyboardShouldPersistTaps="handled"
           >
-            <ThemedText style={styles.buttonText}>
-              {signUpFetchStatus === 'fetching' ? 'Submitting…' : 'Continue'}
+            <ThemedText type="title" style={styles.title}>
+              Continue sign-up
             </ThemedText>
-          </Pressable>
-          {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
-          {signUpErrors && (
-            <ThemedText style={styles.error}>{JSON.stringify(signUpErrors, null, 2)}</ThemedText>
-          )}
+            <ThemedText style={styles.hint}>Add your name to finish creating your account.</ThemedText>
 
-          {/*
-            Web Next.js flows use <div id="clerk-captcha" /> for bot protection.
-            On native, Clerk handles risk checks without that DOM mount; use Clerk docs if you need a WebView CAPTCHA.
-          */}
-        </ScrollView>
-      </ThemedView>
-    )
-  }
+            <View style={styles.fieldBlock}>
+              <ThemedText style={styles.label}>First name</ThemedText>
+              <TextInput
+                style={styles.input}
+                value={firstName}
+                placeholder="First name"
+                placeholderTextColor="#666666"
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+                autoCorrect
+              />
+              {signUpErrors.fields?.firstName ? (
+                <ThemedText style={styles.error}>{signUpErrors.fields.firstName.message}</ThemedText>
+              ) : null}
+            </View>
 
-  const styles = StyleSheet.create({
-    flex: {
-      flex: 1,
-    },
-    scroll: {
-      flex: 1,
-    },
-    container: {
-      flexGrow: 1,
-      padding: 20,
-      gap: 12,
-    },
-    title: {
-      marginBottom: 4,
-    },
-    hint: {
-      fontSize: 14,
-      marginBottom: 8,
-      opacity: 0.85,
-    },
-    fieldBlock: {
-      gap: 6,
-    },
-    label: {
-      fontWeight: '600',
-      fontSize: 14,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: '#ccc',
-      borderRadius: 8,
-      padding: 12,
-      fontSize: 16,
-      backgroundColor: '#fff',
-    },
-    button: {
-      backgroundColor: '#0a7ea4',
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    buttonPressed: {
-      opacity: 0.7,
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-    buttonText: {
-      color: '#fff',
-      fontWeight: '600',
-    },
-    linkContainer: {
-      marginTop: 12,
-      alignItems: 'flex-start',
-    },
-    error: {
-      color: '#d32f2f',
-      fontSize: 12,
-      marginTop: 4,
-    },
-  })
-  ```
+            <View style={styles.fieldBlock}>
+              <ThemedText style={styles.label}>Last name</ThemedText>
+              <TextInput
+                style={styles.input}
+                value={lastName}
+                placeholder="Last name"
+                placeholderTextColor="#666666"
+                onChangeText={setLastName}
+                autoCapitalize="words"
+                autoCorrect
+              />
+              {signUpErrors.fields?.lastName ? (
+                <ThemedText style={styles.error}>{signUpErrors.fields.lastName.message}</ThemedText>
+              ) : null}
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                !canSubmit && styles.buttonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+            >
+              <ThemedText style={styles.buttonText}>
+                {signUpFetchStatus === 'fetching' ? 'Submitting…' : 'Continue'}
+              </ThemedText>
+            </Pressable>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {signUpErrors && (
+              <ThemedText style={styles.error}>{JSON.stringify(signUpErrors, null, 2)}</ThemedText>
+            )}
+
+            {/*
+              Web Next.js flows use <div id="clerk-captcha" /> for bot protection.
+              On native, Clerk handles risk checks without that DOM mount; use Clerk docs if you need a WebView CAPTCHA.
+            */}
+          </ScrollView>
+        </ThemedView>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      flex: {
+        flex: 1,
+      },
+      scroll: {
+        flex: 1,
+      },
+      container: {
+        flexGrow: 1,
+        padding: 20,
+        gap: 12,
+      },
+      title: {
+        marginBottom: 4,
+      },
+      hint: {
+        fontSize: 14,
+        marginBottom: 8,
+        opacity: 0.85,
+      },
+      fieldBlock: {
+        gap: 6,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      linkContainer: {
+        marginTop: 12,
+        alignItems: 'flex-start',
+      },
+      error: {
+        color: '#d32f2f',
+        fontSize: 12,
+        marginTop: 4,
+      },
+    })
+    ```
+  </If>
 </If>
 
 <If sdk="ios">
+  Depending on your instance settings, users might need to provide extra information before their sign-up can be completed, such as when a first and last name or accepting legal terms is required. In these cases, the [`auth.currentSignUp`](/docs/reference/native-mobile/auth#current-sign-up) object returns a `status` of `"missingRequirements"` along with a `missingFields` array. You can use this information to build a UI that handles the missing requirements. If the missing fields are first and last name or legal acceptance, you can pass them to the [`auth.currentSignUp.update()`](https://clerk.github.io/clerk-ios/documentation/clerkkit/signup) method. If the missing fields are identifiers, see the appropriate custom flow guide. For example, if your app's settings require a phone number, see the [phone OTP custom flow guide](/docs/guides/development/custom-flows/authentication/email-sms-otp#sign-up-flow) to handle collecting and verifying the phone number.
+
   ```swift {{ filename: 'OAuthView.swift', collapsible: true }}
     import SwiftUI
     import ClerkKit
@@ -983,7 +987,7 @@ Depending on your instance settings, users might need to provide extra informati
 </If>
 
 <If sdk="android">
-  After OAuth, if Clerk transferred the attempt to a sign-up with missing fields, read [`Clerk.auth.currentSignUp`](/docs/reference/native-mobile/auth#current-sign-up) and check [`SignUp.status`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/-status/index.html) for `MISSING_REQUIREMENTS`. This example uses first and last name for the missing requirements, so pass these collected values through [`signUp.update()`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/update.html) ([`SignUp.SignUpUpdateParams.Standard`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/-sign-up-update-params/-standard/index.html)), then when the sign-up is `COMPLETE`, call [`Clerk.auth.setActive()`](/docs/reference/native-mobile/auth#set-current-session) with `createdSessionId`. Use [`missingFields`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/missing-fields.html) to decide which inputs to show beyond this example.
+  Depending on your instance settings, users might need to provide extra information before their sign-up can be completed, such as when a first and last name or accepting legal terms is required. In these cases, the [`auth.currentSignUp`](/docs/reference/native-mobile/auth#current-sign-up) object returns a [`status`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/-status/index.html) of `"MISSING_REQUIREMENTS"` along with a `missingFields` array. You can use this information to build a UI that handles the missing requirements. If the missing fields are first and last name or legal acceptance, you can pass them to the [`signUp.update()`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/update.html) ([`SignUp.SignUpUpdateParams.Standard`](https://clerk-android.clerkstage.dev/source/api/com.clerk.api.signup/-sign-up/-sign-up-update-params/-standard/index.html)) method. If the missing fields are identifiers, see the appropriate custom flow guide. For example, if your app's settings require a phone number, see the [phone OTP custom flow guide](/docs/guides/development/custom-flows/authentication/email-sms-otp#sign-up-flow) to handle collecting and verifying the phone number.
 
   <CodeBlockTabs options={['OAuthContinueSignUpViewModel.kt', 'OAuthContinueSignUpActivity.kt']}>
     ```kotlin {{ filename: 'OAuthContinueSignUpViewModel.kt', collapsible: true }}

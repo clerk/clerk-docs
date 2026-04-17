@@ -1,0 +1,334 @@
+---
+title: Error handling
+description: Provide your users with useful information about the errors being returned from sign-up and sign-in requests.
+sdk: ios
+---
+
+On iOS, Clerk auth methods throw errors that conform to `ClerkError`. Client-side failures are surfaced as `ClerkClientError`, while API failures are surfaced as `ClerkAPIError`, which exposes `code`, `message`, `longMessage`, `context`, and `meta` so you can render user-facing copy and branch on specific error cases when your flow needs to recover programmatically.
+
+> [!TIP]
+> To see a list of all possible errors, refer to the [Errors](/docs/guides/development/errors/overview) documentation.
+
+In most cases, use `clerkError.errorDescription` for the message you show to the user, use `clerkError.code` when you need to take a different action based on the specific error that occurred, use `clerkError.context?["paramName"]` for field-specific validation errors, and use `clerkError.meta` for additional response metadata such as `lockout_expires_in_seconds`. `ClerkAPIError.context` can also include `traceId`, which is useful when logging or sharing an API failure for debugging.
+
+## Example
+
+The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to capture Clerk errors in your SwiftUI view, render validation errors inline, and present non-field errors with SwiftUI's native `alert` modifier.
+
+```swift {{ filename: 'ErrorHandlingSignInView.swift', collapsible: true }}
+import SwiftUI
+import ClerkKit
+
+struct ErrorHandlingSignInView: View {
+  @Environment(Clerk.self) private var clerk
+  @State private var email = ""
+  @State private var password = ""
+  @State private var code = ""
+  @State private var showEmailCode = false
+  @State private var validationErrors = [String: String]()
+  @State private var clerkError: ClerkAPIError?
+  @State private var showErrorAlert = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      if showEmailCode {
+        Text("Verify your email")
+        TextField("Enter verification code", text: $code)
+        if let codeError = validationErrors["code"] {
+          Text(codeError)
+            .foregroundStyle(.red)
+        }
+        Button("Verify") {
+          Task { await verify(code: code) }
+        }
+      } else {
+        TextField("Enter email address", text: $email)
+        if let identifierError = validationErrors["identifier"] {
+          Text(identifierError)
+            .foregroundStyle(.red)
+        }
+        SecureField("Enter password", text: $password)
+        if let passwordError = validationErrors["password"] {
+          Text(passwordError)
+            .foregroundStyle(.red)
+        }
+        Button("Sign in") {
+          Task { await submit(email: email, password: password) }
+        }
+      }
+    }
+    .alert("Error", isPresented: $showErrorAlert, presenting: clerkError) { _ in
+      Button("OK", role: .cancel) {}
+    } message: { clerkError in
+      Text(clerkError.errorDescription ?? "An unknown error occurred.")
+    }
+  }
+
+  private func submit(email: String, password: String) async {
+    do {
+      clearErrors()
+
+      // Start the sign-in process using the email and password provided
+      var signIn = try await clerk.auth.signInWithPassword(
+        identifier: email,
+        password: password
+      )
+
+      switch signIn.status {
+      case .complete:
+        // If sign-in process is complete, the created session is available on `clerk.session`
+        dump(clerk.session)
+      case .needsSecondFactor:
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+        dump(signIn.status)
+      case .needsClientTrust:
+        // Send an MFA email code when client trust verification is required
+        signIn = try await signIn.sendMfaEmailCode()
+        showEmailCode = true
+      default:
+        // If the status is not complete, check why. User may need to
+        // complete further steps
+        dump(signIn.status)
+      }
+    } catch let clerkError as ClerkAPIError {
+      // Display validation errors inline and other Clerk API errors in an alert
+      handle(clerkError)
+    } catch {
+      // Handle non-Clerk errors as needed.
+      dump(error)
+    }
+  }
+
+  private func verify(code: String) async {
+    do {
+      clearErrors()
+
+      // Verify the email code
+      guard var signIn = clerk.auth.currentSignIn else { return }
+      signIn = try await signIn.verifyMfaCode(code, type: .emailCode)
+
+      switch signIn.status {
+      case .complete:
+        // If sign-in process is complete, the created session is available on `clerk.session`
+        dump(clerk.session)
+      default:
+        // If the status is not complete, check why. User may need to
+        // complete further steps
+        dump(signIn.status)
+      }
+    } catch let clerkError as ClerkAPIError {
+      // Display validation errors inline and other Clerk API errors in an alert
+      handle(clerkError)
+    } catch {
+      // Handle non-Clerk errors as needed.
+      dump(error)
+    }
+  }
+
+  private func clearErrors() {
+    validationErrors = [:]
+    clerkError = nil
+    showErrorAlert = false
+  }
+
+  private func handle(_ clerkError: ClerkAPIError) {
+    let message = clerkError.errorDescription ?? "An unknown error occurred."
+
+    if let paramName = clerkError.context?["paramName"] {
+      validationErrors[paramName] = message
+    } else {
+      self.clerkError = clerkError
+      showErrorAlert = true
+    }
+  }
+}
+```
+
+## Special error cases
+
+### User locked
+
+If you have [account lockout](/docs/guides/secure/user-lockout) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/guides/secure/user-lockout)), you will receive an HTTP status of `403 (Forbidden)` and the following error payload:
+
+```json
+{
+  "error": {
+    "message": "Account locked",
+    "long_message": "Your account is locked. You will be able to try again in 30 minutes. For more information, contact support.",
+    "code": "user_locked",
+    "meta": {
+      "lockout_expires_in_seconds": 1800
+    }
+  }
+}
+```
+
+`lockout_expires_in_seconds` represents the time remaining until the user is able to attempt authentication again.
+In the above example, 1800 seconds (or 30 minutes) are left until they are able to retry, as of the current moment.
+
+The admin might have [configured](/docs/guides/secure/user-lockout#customize-max-sign-in-attempts-and-lockout-duration) e.g. a 45-minute lockout duration.
+Thus, 15 minutes after one has been locked, 30 minutes will still remain until the lockout lapses.
+
+You can opt to render the error message returned as-is or format the supplied `lockout_expires_in_seconds` value as per your liking in your own custom error message.
+
+For instance, if you wish to inform a user at which absolute time they will be able to try again, you could add the remaining seconds to the current time and format the resulting timestamp.
+
+```swift {{ filename: 'UserLockedExample.swift' }}
+import ClerkKit
+
+do {
+  try await clerk.auth.signInWithPassword(identifier: email, password: password)
+} catch let clerkError as ClerkAPIError where clerkError.code == "user_locked" {
+  let remainingSeconds = clerkError.meta?["lockout_expires_in_seconds"]?.doubleValue ?? 0
+  let lockoutExpiresAt = Date().addingTimeInterval(remainingSeconds)
+  let formattedDate = lockoutExpiresAt.formatted(date: .abbreviated, time: .shortened)
+
+  print("Your account is locked, you will be able to try again at \(formattedDate)")
+}
+```
+
+### Password compromised
+
+If you have marked a user's password as compromised and the user has another way to identify themselves, such as an email address (so they can use email [OTP](!otp) or email link), or a phone number (so they can use an SMS [OTP](!otp)), you will receive an HTTP status of `422 (Unprocessable Entity)` and the following error payload:
+
+```json
+{
+  "error": {
+    "long_message": "Your password may be compromised. To protect your account, please continue with an alternative sign-in method. You will be required to reset your password after signing in.",
+    "code": "form_password_compromised",
+    "meta": {
+      "name": "param"
+    }
+  }
+}
+```
+
+When a user password is marked as compromised, they will not be able to sign in with their compromised password, so you should prompt them to sign in with another method. If they do not have any other identification methods to sign in, e.g. if they only have username and password, they will be signed in but they will be required to reset their password.
+
+> [!WARNING]
+> If your instance is older than December 18, 2025, you will need to [update your instance](!update) to the **Reset password session task** update.
+
+```swift {{ filename: 'CompromisedPasswordSignInView.swift', collapsible: true }}
+import SwiftUI
+import ClerkKit
+
+struct CompromisedPasswordSignInView: View {
+  @Environment(Clerk.self) private var clerk
+  @State private var email = ""
+  @State private var password = ""
+  @State private var code = ""
+  @State private var needsEmailCode = false
+  @State private var validationErrors = [String: String]()
+  @State private var clerkError: ClerkAPIError?
+  @State private var showErrorAlert = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      if needsEmailCode {
+        Text("Check your email")
+        TextField("Enter your verification code", text: $code)
+        if let codeError = validationErrors["code"] {
+          Text(codeError)
+            .foregroundStyle(.red)
+        }
+        Button("Verify") {
+          Task { await verifyCode() }
+        }
+      } else {
+        TextField("Enter email address", text: $email)
+        if let identifierError = validationErrors["identifier"] {
+          Text(identifierError)
+            .foregroundStyle(.red)
+        }
+        SecureField("Enter password", text: $password)
+        if let passwordError = validationErrors["password"] {
+          Text(passwordError)
+            .foregroundStyle(.red)
+        }
+        Button("Sign in") {
+          Task { await signInWithPassword() }
+        }
+      }
+    }
+    .alert("Error", isPresented: $showErrorAlert, presenting: clerkError) { _ in
+      Button("OK", role: .cancel) {}
+    } message: { clerkError in
+      Text(clerkError.errorDescription ?? "An unknown error occurred.")
+    }
+  }
+
+  private func signInWithPassword() async {
+    do {
+      clearErrors()
+
+      // Start the sign-in process using the email and password provided
+      let signIn = try await clerk.auth.signInWithPassword(identifier: email, password: password)
+
+      // If sign-in process is complete, the created session is available on `clerk.session`
+      if signIn.status == .complete {
+        dump(clerk.session)
+      }
+    } catch let clerkError as ClerkAPIError where clerkError.code == "form_password_compromised" {
+      do {
+        // Send a first-factor email code so the user can continue with another sign-in method
+        guard var signIn = clerk.auth.currentSignIn else { return }
+        signIn = try await signIn.sendEmailCode()
+        needsEmailCode = true
+      } catch let clerkError as ClerkAPIError {
+        // Display validation errors inline and other Clerk API errors in an alert
+        handle(clerkError)
+      } catch {
+        // Handle non-Clerk errors as needed.
+        dump(error)
+      }
+    } catch let clerkError as ClerkAPIError {
+      // Display validation errors inline and other Clerk API errors in an alert
+      handle(clerkError)
+    } catch {
+      // Handle non-Clerk errors as needed.
+      dump(error)
+    }
+  }
+
+  private func verifyCode() async {
+    do {
+      clearErrors()
+
+      // Verify that the provided code matches the code sent to the user
+      guard var signIn = clerk.auth.currentSignIn else { return }
+      signIn = try await signIn.verifyCode(code)
+
+      if signIn.status == .complete {
+        dump(clerk.session)
+      } else {
+        // If the status is not complete, check why. User may need to
+        // complete further steps
+        dump(signIn.status)
+      }
+    } catch let clerkError as ClerkAPIError {
+      // Display validation errors inline and other Clerk API errors in an alert
+      handle(clerkError)
+    } catch {
+      // Handle non-Clerk errors as needed.
+      dump(error)
+    }
+  }
+
+  private func clearErrors() {
+    validationErrors = [:]
+    clerkError = nil
+    showErrorAlert = false
+  }
+
+  private func handle(_ clerkError: ClerkAPIError) {
+    let message = clerkError.errorDescription ?? "An unknown error occurred."
+
+    if let paramName = clerkError.context?["paramName"] {
+      validationErrors[paramName] = message
+    } else {
+      self.clerkError = clerkError
+      showErrorAlert = true
+    }
+  }
+}
+```

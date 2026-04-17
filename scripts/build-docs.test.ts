@@ -1241,10 +1241,7 @@ Testing with a simple page.`,
     expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
   })
 
-  // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-  // Change back when `safeFail` is restored in validateIfComponents.ts
-  console.warn('⚠️  TEMPORARILY DISABLED: <If> SDK not in frontmatter test skipped')
-  test.skip('<If> SDK not in frontmatter fails the build', async () => {
+  test('<If> SDK not in frontmatter fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -1282,10 +1279,7 @@ Testing with a simple page.`,
     )
   })
 
-  // TODO: Temporarily disabled due to large-scale docs/SDK changes (Core 3, native mobile sidebar, and Development SDK-specificity.
-  // Change back when `safeFail` is restored in validateIfComponents.ts
-  console.warn('⚠️  TEMPORARILY DISABLED: <If> SDK not in manifest test skipped')
-  test.skip('<If> SDK not in manifest fails the build', async () => {
+  test('<If> SDK not in manifest fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -1792,6 +1786,145 @@ sdk: nextjs, react
     await expect(promise).rejects.toThrow(
       'Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.',
     )
+  })
+
+  test('should not fail when <If notSdk /> excludes SDKs not in page scope', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+                sdk: ['nextjs', 'react'],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<If notSdk={["ios", "android"]}>
+  This content is for non-mobile users.
+</If>`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'ios', 'android'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/nextjs/overview.mdx'))).toContain('This content is for non-mobile users.')
+    expect(await readFile(pathJoin('./dist/react/overview.mdx'))).toContain('This content is for non-mobile users.')
+  })
+
+  test('should not warn when a partial with out-of-scope <If> SDKs is embedded in a page', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+                sdk: ['nextjs', 'react'],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/multi-sdk-example.mdx',
+        content: `<If sdk="expo">
+  Expo content
+</If>
+
+<If sdk="nextjs">
+  Next.js content
+</If>`,
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<Include src="_partials/multi-sdk-example" />`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'expo'],
+      }),
+    )
+
+    const nextjsOutput = await readFile(pathJoin('./dist/nextjs/overview.mdx'))
+    expect(nextjsOutput).toContain('Next.js content')
+    expect(nextjsOutput).not.toContain('Expo content')
+  })
+
+  test('should not fail when <If /> uses ignoreSdkWarning with out-of-scope SDK', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+                sdk: ['nextjs', 'react'],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<If sdk="expo" ignoreSdkWarning>
+  This content is for Expo users.
+</If>`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'expo'],
+      }),
+    )
+
+    // Build should succeed without the validator failing on out-of-scope "expo"
+    expect(await readFile(pathJoin('./dist/nextjs/overview.mdx'))).not.toContain('This content is for Expo users.')
+    expect(await readFile(pathJoin('./dist/react/overview.mdx'))).not.toContain('This content is for Expo users.')
   })
 
   test('should embed canonical link in frontmatter', async () => {

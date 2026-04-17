@@ -8,7 +8,10 @@ To use these commands, import the `clerk` object from the `@clerk/testing/playwr
 
 ### `clerk.signIn()`
 
-The `clerk.signIn()` function is used to sign in a user using Clerk. This helper only supports the following [first factor](!first-factor-verification) strategies: password, phone code, and email code. [Multi-factor authentication](!second-factor-verification) is not supported.
+The `clerk.signIn()` function is used to sign in a user using Clerk. There are two ways to use it:
+
+- **`emailAddress` parameter** (recommended): Signs in by creating a server-side token via the Backend API. This bypasses all verification steps, including email verification and multi-factor authentication. Requires `CLERK_SECRET_KEY` to be set.
+- **`signInParams` parameter**: Signs in client-side using the specified strategy (password, phone code, or email code). Only handles [first factor](!first-factor-verification) verification — [multi-factor authentication](!second-factor-verification) is not supported with this approach.
 
 Before calling `clerk.signIn()`, it is required to call `page.goto()` and navigate to an unprotected page that loads Clerk. For example, the index (`/`) page.
 
@@ -89,7 +92,26 @@ The `SetupClerkTestingTokenOptions` type is used to define the object that is pa
 
 #### Example
 
-The following example demonstrates how to use `clerk.signIn()` in a test to sign in a user.
+The following example demonstrates the recommended way to use `clerk.signIn()` with the `emailAddress` parameter. This approach works regardless of your instance's verification or MFA settings.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { clerk } from '@clerk/testing/playwright'
+
+test('sign in', async ({ page }) => {
+  // Navigate to an unprotected page that loads Clerk
+  await page.goto('/')
+
+  await clerk.signIn({
+    page,
+    emailAddress: process.env.E2E_CLERK_USER_EMAIL,
+  })
+
+  // Navigate to a protected page
+  await page.goto('/protected')
+})
+```
+
+Alternatively, you can use the `signInParams` parameter to sign in using a specific strategy. This approach only handles first factor verification — if your instance has email verification or MFA enabled, use the `emailAddress` parameter instead.
 
 ```ts {{ filename: 'e2e/app.spec.ts' }}
 import { clerk } from '@clerk/testing/playwright'
@@ -104,24 +126,6 @@ test('sign in', async ({ page }) => {
   })
 
   // Navigate to a protected page
-  await page.goto('/protected')
-})
-```
-
-If you would prefer to sign a user in directly by email address, you can use the `emailAddress` parameter instead of the `signInParams` parameter.
-
-```ts {{ filename: 'e2e/app.spec.ts' }}
-import { clerk } from '@clerk/testing/playwright'
-
-test('sign in', async ({ page }) => {
-  // Navigate to an unprotected page that loads Clerk
-  await page.goto('/')
-
-  await clerk.signIn({
-    page,
-    emailAddress: process.env.TEST_USER_EMAIL,
-  })
-
   await page.goto('/protected')
 })
 ```

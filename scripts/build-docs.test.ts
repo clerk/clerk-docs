@@ -3281,6 +3281,86 @@ description: This is a test page
   })
 })
 
+describe('GFM Support', () => {
+  test('Checklist in a doc is preserved in the output', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Checklist Test', href: '/docs/checklist-test' }]],
+        }),
+      },
+      {
+        path: './docs/checklist-test.mdx',
+        content: `---
+title: Checklist Test
+description: Testing GFM task lists
+---
+
+# Checklist
+
+- [ ] First task
+- [x] Second task`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    const result = await readFile(pathJoin('./dist/checklist-test.mdx'))
+    expect(result).toContain('* [ ] First task')
+    expect(result).toContain('* [x] Second task')
+  })
+
+  test('Checklist inside a partial is preserved when embedded', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Checklist Test', href: '/docs/checklist-test' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/checklist.mdx',
+        content: `- [ ] Update DNS records
+- [x] Generate SSL certificates`,
+      },
+      {
+        path: './docs/checklist-test.mdx',
+        content: `---
+title: Checklist Test
+description: Testing GFM task lists inside partials
+---
+
+# Checklist
+
+<Include src="_partials/checklist" />`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    const result = await readFile(pathJoin('./dist/checklist-test.mdx'))
+    expect(result).toContain('* [ ] Update DNS records')
+    expect(result).toContain('* [x] Generate SSL certificates')
+  })
+})
+
 describe('Codeblock URL Validation', () => {
   test('Warn if clerk.com/docs URL in code block comment points to non-existent page', async () => {
     const { tempDir } = await createTempFiles([

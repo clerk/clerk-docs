@@ -1,0 +1,39 @@
+---
+title: Rotate your Clerk API keys
+description: Learn how to rotate your Clerk Secret Key to revoke access for a compromised key.
+---
+
+If one of your Clerk keys has been exposed — through a leaked `.env` file, a third-party security incident, or a departing team member — rotate the affected key to revoke its access. This page covers how to rotate your [Secret Key](!secret-key), and points to rotation instructions for other Clerk secrets.
+
+## Which keys to rotate
+
+Not every Clerk credential is a secret, and not all of them are rotated the same way:
+
+- **[Publishable Key](!publishable-key)** (`pk_live_*` / `pk_test_*`): Safe to expose on the frontend. You don't need to rotate it if it's committed to a repository or otherwise made public.
+- **[Secret Key](!secret-key)** (`sk_live_*` / `sk_test_*`): Must be kept private. If it's exposed, rotate it using the steps below.
+- **Webhook signing secret** (`whsec_*`): Rotated separately from Clerk's API keys. See the [webhooks guide](/docs/guides/development/webhooks/syncing) for details.
+
+## Rotate your Secret Key
+
+Clerk supports multiple active Secret Keys on the same instance, which lets you roll keys with zero downtime. The process is to add a new key, deploy your application with it, and then delete the old one.
+
+> [!WARNING]
+> Don't delete the old Secret Key until your application has been redeployed and verified with the new key. Removing a key that's still in use will break authentication in your app.
+
+1. At the top left of the Clerk Dashboard, select the app and environment (e.g., **Development** or **Production**) you want to rotate keys for.
+1. In the sidenav, navigate to the [**API keys**](https://dashboard.clerk.com/~/api-keys) page.
+1. Under **Secret keys**, select **+ Add new key**. Give the new key a descriptive name (e.g., `rotated-2026-04-19`) and create it.
+1. Copy the new key value.
+1. Update the <If notSdk={["nuxt"]}>`CLERK_SECRET_KEY`</If><If sdk="nuxt">`NUXT_CLERK_SECRET_KEY`</If> environment variable everywhere it's set — your local `.env` file, your hosting provider (Vercel, Netlify, AWS, etc.), your CI/CD pipelines, and anywhere else the key is referenced.
+1. Redeploy your app so the new key takes effect.
+1. Verify that your app works as expected with the new key. Exercise flows that call Clerk's Backend API, such as sign-in, user management, and webhook handlers.
+1. Return to the **API keys** page, find the old (compromised) key under **Secret keys**, and delete it.
+
+After you delete the old key, any request to Clerk's Backend API that still uses it will fail.
+
+## Rotate across environments and applications
+
+Each Clerk app and environment combination has its own set of API keys. If you need to rotate keys in more than one place, repeat the steps above for each one:
+
+- **Development and Production instances are independent.** Rotating your Production Secret Key doesn't affect your Development Secret Key, and vice versa. Use the app and environment selectors at the top left of the Clerk Dashboard to switch between them.
+- **Separate applications have separate keys.** If you maintain multiple Clerk applications, each has its own Secret Key and must be rotated independently.

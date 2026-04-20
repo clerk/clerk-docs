@@ -295,14 +295,14 @@ Optional:
   --clerk-path <path>         Path to the local clerk (default: clones into a temp directory)
   --clerk-repo <owner/repo>   Target PR repo (default: clerk/clerk)
   --clerk-base <branch>       Branch in clerk to base the new PR on (default: main)
-  --allow-dirty-clerk         Skip preflight error when local clerk has uncommitted changes
+  --allow-dirty-clerk         Skip clean-tree preflight for local clerk (only applies with --clerk-path); uncommitted changes stay in your working tree and are not included in the PR
 
   --docs-path <path>          Path to the clerk-docs repo (default: cwd)
   --docs-repo <owner/repo>    Source PR lookup (default: clerk/clerk-docs)
   --docs-base <branch>        Desired checked-out branch in clerk-docs before migration starts
-  --allow-dirty-docs          Skip preflight error when clerk-docs has local uncommitted changes
+  --allow-dirty-docs          Skip clean-tree preflight for clerk-docs; only committed history is migrated (filter-repo reads commits, not the working tree), though the merge of origin/main can still abort if local edits conflict
 
-  --local-only                Create branch locally only (skip push, PR creation, and source-PR comment)
+  --local-only                Create the migrated branch in the clerk workspace only (skip push, PR creation, and source-PR comment); pair with --clerk-path, otherwise the temp clerk clone is deleted at the end and the branch is lost
   --dry-run                   Print actions only
   --pr <number>               Open clerk-docs PR to use when several match this branch (required if stdin is not a TTY)
   --debug, --verbose          Verbose logs (includes JSON metadata)

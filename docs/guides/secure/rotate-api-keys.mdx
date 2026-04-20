@@ -1,17 +1,17 @@
 ---
 title: Rotate your Clerk API keys
-description: Learn how to rotate your Clerk Secret Key to revoke access for a compromised key.
+description: Learn how to rotate your Clerk Secret Key and webhook signing secrets to revoke access for compromised credentials.
 ---
 
-Common reasons to rotate a key include a leaked `.env` file, a security incident at a third-party service, or a departing team member. This page covers how to rotate your [Secret Key](!secret-key) and explains which other Clerk credentials do or don't need rotation.
+Common reasons to rotate a key include a leaked `.env` file, a security incident at a third-party service, or a departing team member. This page covers how to rotate your [Secret Key](!secret-key) and webhook signing secrets, and explains which Clerk credentials do or don't need rotation.
 
 ## Which keys to rotate
 
 Not every Clerk credential is a secret, and not all of them are rotated the same way:
 
 - **[Publishable Key](!publishable-key)** (`pk_live_*` / `pk_test_*`): Safe to expose on the frontend. You don't need to rotate it if it's committed to a repository or otherwise made public.
-- **[Secret Key](!secret-key)** (`sk_live_*` / `sk_test_*`): Must be kept private. If it's exposed, rotate it using the steps below.
-- **Webhook signing secret** (`whsec_*`): Managed separately from Clerk's API keys on the [**Webhooks**](https://dashboard.clerk.com/~/webhooks) page in the Clerk Dashboard.
+- **[Secret Key](!secret-key)** (`sk_live_*` / `sk_test_*`): Must be kept private. If it's exposed, rotate it using the steps in [Rotate your Secret Key](#rotate-your-secret-key).
+- **Webhook signing secret** (`whsec_*`): A shared secret between Clerk and your app. Anyone with it can forge requests to your webhook endpoint. If exposed, rotate it using the steps in [Rotate a webhook signing secret](#rotate-a-webhook-signing-secret).
 
 ## Rotate your Secret Key
 
@@ -42,3 +42,26 @@ Each Clerk app and environment combination has its own set of API keys. If you n
 
 - **Development and Production instances are independent.** Rotating your Production Secret Key doesn't affect your Development Secret Key, and vice versa. Use the app and environment selectors at the top left of the Clerk Dashboard to switch between them.
 - **Separate applications have separate keys.** If you maintain multiple Clerk applications, each has its own Secret Key and must be rotated independently.
+
+## Rotate a webhook signing secret
+
+Webhook signing secrets are issued per endpoint and managed on the [**Webhooks**](https://dashboard.clerk.com/~/webhooks) page. The process mirrors rotating a Secret Key: create a new endpoint alongside the compromised one, cut over to its signing secret, and then delete the old one.
+
+> [!WARNING]
+> Don't delete the old endpoint until your app has been redeployed and verified with the new signing secret. Deleting the old endpoint before the new one is live can result in dropped events.
+
+1. At the top left of the Clerk Dashboard, select the app and environment of the endpoint you want to rotate.
+1. In the sidenav, navigate to the [**Webhooks**](https://dashboard.clerk.com/~/webhooks) page.
+1. Select **+ Add Endpoint** and create a new endpoint with the same URL and subscribed events as the compromised one. Optionally give it a description (e.g., `rotated-2026-04-19`) so you can tell it apart from the old endpoint.
+1. On the new endpoint's settings page, reveal and copy the **Signing Secret**.
+1. Update the `CLERK_WEBHOOK_SIGNING_SECRET` environment variable everywhere it's set — your local `.env` file, your hosting provider, your CI/CD pipelines, and anywhere else the secret is referenced.
+1. Redeploy your app so the new secret takes effect.
+1. Verify the new endpoint is working — from its settings page, send a test event (or trigger a real one) and confirm your app verifies and processes it.
+1. On the old endpoint's settings page, open the `...` menu and select **Delete**.
+
+<If sdk="nuxt">
+  > [!IMPORTANT]
+  > Nuxt uses `NUXT_CLERK_WEBHOOK_SIGNING_SECRET` instead of `CLERK_WEBHOOK_SIGNING_SECRET`.
+</If>
+
+While both endpoints exist, Clerk delivers each event to both. Your app processes the delivery signed with the new secret, and the old endpoint's delivery fails verification as expected. Those failed deliveries stop once you delete the old endpoint.

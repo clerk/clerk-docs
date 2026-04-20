@@ -7,12 +7,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import {
   assertGitFilterRepoVersionOutput,
   assertSemverAtLeast,
+  buildMigrationBranchName,
   buildPrRefsRewriteCallback,
   canCommentOnPrInRepo,
   canPushToRepo,
   canReadRepo,
+  classifyExistingMigration,
   commandJson,
+  formatClosedPrAbortMessage,
   formatSourcePrMigrationAppendix,
+  formatUpdateMergeConflictHints,
   isSemverAtLeast,
   lineIgnoresSymlinkedClerkDocsRoot,
   parseConfig,
@@ -93,9 +97,7 @@ describe('semver utilities', () => {
   })
 
   test('assertSemverAtLeast throws for old versions', () => {
-    expect(() => assertSemverAtLeast('git', 'git version 2.38.0', '2.39.0')).toThrow(
-      'Minimum supported is 2.39.0',
-    )
+    expect(() => assertSemverAtLeast('git', 'git version 2.38.0', '2.39.0')).toThrow('Minimum supported is 2.39.0')
   })
 
   test('assertGitFilterRepoVersionOutput accepts semver and hash outputs', () => {
@@ -351,5 +353,115 @@ describe('buildPrRefsRewriteCallback', () => {
   test('uses the same lookbehind pattern as the TypeScript regex', () => {
     const result = buildPrRefsRewriteCallback('clerk/clerk-docs')
     expect(result).toContain('(?<![/\\w])#(\\d+)')
+  })
+})
+
+describe('buildMigrationBranchName', () => {
+  test('appends the canonical suffix to the clerk-docs branch name', () => {
+    expect(buildMigrationBranchName('feat/foo')).toBe('feat/foo-docs-migration')
+    expect(buildMigrationBranchName('bug-1234')).toBe('bug-1234-docs-migration')
+  })
+
+  test('is a pure function of its input (no hidden state)', () => {
+    const name = 'any-branch'
+    expect(buildMigrationBranchName(name)).toBe(buildMigrationBranchName(name))
+  })
+})
+
+describe('classifyExistingMigration', () => {
+  test('returns "create" when no migration branch exists yet', () => {
+    expect(classifyExistingMigration(null)).toBe('create')
+  })
+
+  test('returns "update" when a branch exists but no PR has been opened yet', () => {
+    expect(classifyExistingMigration({ pr: null })).toBe('update')
+  })
+
+  test('returns "update" when the existing PR is open', () => {
+    expect(classifyExistingMigration({ pr: { state: 'OPEN' } })).toBe('update')
+  })
+
+  test('returns "abort-closed" when the existing PR is closed', () => {
+    expect(classifyExistingMigration({ pr: { state: 'CLOSED' } })).toBe('abort-closed')
+  })
+
+  test('returns "abort-closed" when the existing PR is merged', () => {
+    expect(classifyExistingMigration({ pr: { state: 'MERGED' } })).toBe('abort-closed')
+  })
+
+  test('treats unknown PR states as safe-to-update (forward compat)', () => {
+    expect(classifyExistingMigration({ pr: { state: 'DRAFT' } })).toBe('update')
+  })
+})
+
+describe('formatClosedPrAbortMessage', () => {
+  test('includes the branch, state, and PR URL in lower-case', () => {
+    const msg = formatClosedPrAbortMessage({
+      branch: 'feat/foo-docs-migration',
+      prUrl: 'https://github.com/clerk/clerk/pull/42',
+      state: 'MERGED',
+    })
+    expect(msg).toContain('feat/foo-docs-migration')
+    expect(msg).toContain('merged')
+    expect(msg).toContain('https://github.com/clerk/clerk/pull/42')
+  })
+
+  test('handles CLOSED state', () => {
+    const msg = formatClosedPrAbortMessage({
+      branch: 'any-branch-docs-migration',
+      prUrl: 'https://example.invalid/pr/1',
+      state: 'CLOSED',
+    })
+    expect(msg).toContain('closed')
+  })
+})
+
+describe('formatUpdateMergeConflictHints', () => {
+  test('temp workspaces direct the user to re-run with --clerk-path', () => {
+    const hints = formatUpdateMergeConflictHints({
+      branch: 'feat/foo-docs-migration',
+      workspacePath: '/tmp/clerk-migrate-abc',
+      isTemporary: true,
+      remoteName: 'clerk-docs-migrate-123',
+    })
+    expect(hints.join('\n')).toContain('temporary clone')
+    expect(hints.join('\n')).toContain('--clerk-path')
+    expect(hints.join('\n')).toContain('/tmp/clerk-migrate-abc')
+  })
+
+  test('temp workspaces still document the manual resolve/push path', () => {
+    const hints = formatUpdateMergeConflictHints({
+      branch: 'feat/foo-docs-migration',
+      workspacePath: '/tmp/clerk-migrate-abc',
+      isTemporary: true,
+      remoteName: 'clerk-docs-migrate-123',
+    })
+    const joined = hints.join('\n')
+    expect(joined).toContain('git push origin feat/foo-docs-migration')
+    expect(joined).toContain('git remote remove clerk-docs-migrate-123')
+  })
+
+  test('local (--clerk-path) workspaces describe the IDE resolve-then-push flow', () => {
+    const hints = formatUpdateMergeConflictHints({
+      branch: 'feat/foo-docs-migration',
+      workspacePath: '/Users/me/dev/clerk',
+      isTemporary: false,
+      remoteName: 'clerk-docs-migrate-789',
+    })
+    const joined = hints.join('\n')
+    expect(joined).toContain('/Users/me/dev/clerk')
+    expect(joined).toContain('git push origin feat/foo-docs-migration')
+    expect(joined).toContain('git remote remove clerk-docs-migrate-789')
+    expect(joined).toContain('git merge --abort')
+  })
+
+  test('local workspaces do NOT suggest --clerk-path (already using it)', () => {
+    const hints = formatUpdateMergeConflictHints({
+      branch: 'feat/foo-docs-migration',
+      workspacePath: '/Users/me/dev/clerk',
+      isTemporary: false,
+      remoteName: 'clerk-docs-migrate-789',
+    })
+    expect(hints.join('\n')).not.toContain('--clerk-path')
   })
 })

@@ -1515,7 +1515,7 @@ async function main(): Promise<void> {
     await assertGitRepo(config.clerkDocsPath, 'clerk-docs')
     if (config.allowDirtyClerkDocs) {
       warnLog(
-        'Bypassing clean-working-tree check for clerk-docs due to --allow-dirty-docs. Local edits may affect migration output.',
+        'Bypassing clean-working-tree check for clerk-docs due to --allow-dirty-docs. Only committed history is migrated (filter-repo reads commits, not the working tree), but the upcoming `git merge origin/main` can still abort if your local edits conflict with incoming changes.',
       )
     } else {
       await assertCleanWorkingTree(config.clerkDocsPath, 'clerk-docs')

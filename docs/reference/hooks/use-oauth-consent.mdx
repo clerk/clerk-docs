@@ -1,0 +1,268 @@
+---
+title: useOAuthConsent()
+description: Load OAuth consent metadata for a signed-in user with Clerk's useOAuthConsent() hook.
+sdk: nextjs, react, react-router, tanstack-react-start
+---
+
+The `useOAuthConsent()` hook loads OAuth consent metadata for a signed-in user. You can use it to build a custom OAuth consent page that fetches the OAuth application's name, logo, URL, requested scopes, and related loading state.
+
+Unlike the [`<OAuthConsent />`](/docs/reference/components/authentication/oauth-consent) component, this hook doesn't read values from the current URL. Pass the `oauthClientId` explicitly, and optionally pass `scope` if you want Clerk to scope the request to a specific space-delimited scope string.
+
+## Parameters
+
+`useOAuthConsent()` accepts a single optional object with the following properties:
+
+<Properties>
+  - `oauthClientId`
+  - `string`
+
+  The OAuth `client_id` from the authorize request. The hook is disabled when this value is empty or omitted.
+
+  ---
+
+  - `scope`
+  - `string`
+
+  An optional space-delimited scope string from the authorize request.
+
+  ---
+
+  - `enabled`
+  - `boolean`
+
+  If `true`, a request will be triggered when the hook is mounted and the user is signed in. Defaults to `true`.
+
+  ---
+
+  - `keepPreviousData`
+  - `boolean`
+
+  If `true`, the previous data will be kept in the cache until new data is fetched. Defaults to `true`.
+</Properties>
+
+## Returns
+
+<Properties>
+  - `data`
+  - `OAuthConsentInfo | undefined`
+
+  The OAuth consent screen metadata returned by Clerk, or `undefined` before the first successful fetch.
+
+  ---
+
+  - `error`
+  - `ClerkAPIResponseError | null`
+
+  Any error that occurred during the data fetch, or `null` if no error occurred.
+
+  ---
+
+  - `isLoading`
+  - `boolean`
+
+  Whether the initial consent metadata fetch is still in progress.
+
+  ---
+
+  - `isFetching`
+  - `boolean`
+
+  Whether any request is still in flight, including background updates.
+</Properties>
+
+## Example
+
+The following examples demonstrate how to fetch OAuth consent metadata and build a custom consent form. In each example, the `client_id` is read from the current URL and passed to `useOAuthConsent()`, and the form submits to the URL returned by `clerk.oauthApplication.buildConsentActionUrl()`.
+
+<If sdk="react">
+  ```tsx {{ filename: 'src/pages/OAuthConsentPage.tsx' }}
+  import { useClerk, useOAuthConsent } from '@clerk/react'
+
+  export default function OAuthConsentPage() {
+    const clerk = useClerk()
+    const params = new URLSearchParams(window.location.search)
+    const clientId = params.get('client_id') ?? ''
+    const scope = params.get('scope') ?? undefined
+
+    const { data, isLoading, error } = useOAuthConsent({
+      oauthClientId: clientId,
+      scope,
+    })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
+
+    if (isLoading) return <div>Loading...</div>
+    if (error) return <div>Something went wrong.</div>
+
+    return (
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
+        <ul>
+          {data.scopes.map((scope) => (
+            <li key={scope.scope}>{scope.description || scope.scope}</li>
+          ))}
+        </ul>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Array.from(params.entries()).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
+    )
+  }
+  ```
+</If>
+
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/oauth-consent/page.tsx' }}
+  'use client'
+
+  import { useClerk, useOAuthConsent } from '@clerk/nextjs'
+  import { useSearchParams } from 'next/navigation'
+
+  export default function Page() {
+    const clerk = useClerk()
+    const params = useSearchParams()
+    const clientId = params.get('client_id') ?? ''
+    const scope = params.get('scope') ?? undefined
+
+    const { data, isLoading, error } = useOAuthConsent({
+      oauthClientId: clientId,
+      scope,
+    })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
+
+    if (isLoading) return <div>Loading...</div>
+    if (error) return <div>Something went wrong.</div>
+
+    return (
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
+        <ul>
+          {data.scopes.map((scope) => (
+            <li key={scope.scope}>{scope.description ?? scope.scope}</li>
+          ))}
+        </ul>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Array.from(params.entries()).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/oauth-consent.tsx' }}
+  import { useClerk, useOAuthConsent } from '@clerk/react-router'
+  import { useSearchParams } from 'react-router'
+
+  export default function OAuthConsentPage() {
+    const clerk = useClerk()
+    const [params] = useSearchParams()
+    const clientId = params.get('client_id') ?? ''
+    const scope = params.get('scope') ?? undefined
+
+    const { data, isLoading, error } = useOAuthConsent({
+      oauthClientId: clientId,
+      scope,
+    })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
+
+    if (isLoading) return <div>Loading...</div>
+    if (error) return <div>Something went wrong.</div>
+
+    return (
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
+        <ul>
+          {data.scopes.map((scope) => (
+            <li key={scope.scope}>{scope.description || scope.scope}</li>
+          ))}
+        </ul>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Array.from(params.entries()).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
+    )
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/oauth-consent.tsx' }}
+  import { useClerk, useOAuthConsent } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/oauth-consent')({
+    validateSearch: (search: Record<string, unknown>) => ({
+      client_id: typeof search.client_id === 'string' ? search.client_id : '',
+      scope: typeof search.scope === 'string' ? search.scope : undefined,
+    }),
+    component: OAuthConsentPage,
+  })
+
+  function OAuthConsentPage() {
+    const clerk = useClerk()
+    const params = Route.useSearch()
+    const clientId = params.client_id
+    const scope = params.scope
+
+    const { data, isLoading, error } = useOAuthConsent({
+      oauthClientId: clientId,
+      scope,
+    })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
+
+    if (isLoading) return <div>Loading...</div>
+    if (error) return <div>Something went wrong.</div>
+
+    return (
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
+        <ul>
+          {data.scopes.map((scope) => (
+            <li key={scope.scope}>{scope.description || scope.scope}</li>
+          ))}
+        </ul>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Object.entries(params).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
+    )
+  }
+  ```
+</If>

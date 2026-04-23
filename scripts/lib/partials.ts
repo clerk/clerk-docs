@@ -7,6 +7,7 @@ import path from 'node:path'
 import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
+import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
 import type { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
@@ -62,6 +63,7 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
     const vfile = await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
+      .use(remarkGfm)
       .use(() => (tree) => {
         partialNode = tree
       })

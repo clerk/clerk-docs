@@ -72,31 +72,47 @@ Unlike the [`<OAuthConsent />`](/docs/reference/components/authentication/oauth-
 
 ## Example
 
-The following example demonstrates how to fetch OAuth consent metadata and render a custom consent screen.
+The following examples demonstrate how to fetch OAuth consent metadata and build a custom consent form. In each example, the `client_id` is read from the current URL and passed to `useOAuthConsent()`, and the form submits to the URL returned by `clerk.oauthApplication.buildConsentActionUrl()`.
 
 <If sdk="react">
   ```tsx {{ filename: 'src/pages/OAuthConsentPage.tsx' }}
-  import { useOAuthConsent } from '@clerk/react'
+  import { useClerk, useOAuthConsent } from '@clerk/react'
 
   export default function OAuthConsentPage() {
+    const clerk = useClerk()
+    const params = new URLSearchParams(window.location.search)
+    const clientId = params.get('client_id') ?? ''
+
     const { data, isLoading, error } = useOAuthConsent({
-      oauthClientId: 'client_123',
-      scope: 'openid email profile',
+      oauthClientId: clientId,
     })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>{error.message}</div>
     if (!data) return null
 
     return (
-      <div>
-        <h1>{data.oauthApplicationName}</h1>
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
         <ul>
           {data.scopes.map((scope) => (
             <li key={scope.scope}>{scope.description || scope.scope}</li>
           ))}
         </ul>
-      </div>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Array.from(params.entries()).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
     )
   }
   ```
@@ -106,27 +122,44 @@ The following example demonstrates how to fetch OAuth consent metadata and rende
   ```tsx {{ filename: 'app/oauth-consent/page.tsx' }}
   'use client'
 
-  import { useOAuthConsent } from '@clerk/nextjs'
+  import { useClerk, useOAuthConsent } from '@clerk/nextjs'
+  import { useSearchParams } from 'next/navigation'
 
   export default function Page() {
+    const clerk = useClerk()
+    const params = useSearchParams()
+    const clientId = params.get('client_id') ?? ''
+
     const { data, isLoading, error } = useOAuthConsent({
-      oauthClientId: 'client_123',
-      scope: 'openid email profile',
+      oauthClientId: clientId,
     })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>{error.message}</div>
     if (!data) return null
 
     return (
-      <div>
-        <h1>{data.oauthApplicationName}</h1>
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
         <ul>
           {data.scopes.map((scope) => (
-            <li key={scope.scope}>{scope.description || scope.scope}</li>
+            <li key={scope.scope}>{scope.description ?? scope.scope}</li>
           ))}
         </ul>
-      </div>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Array.from(params.entries()).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
     )
   }
   ```
@@ -134,27 +167,44 @@ The following example demonstrates how to fetch OAuth consent metadata and rende
 
 <If sdk="react-router">
   ```tsx {{ filename: 'app/routes/oauth-consent.tsx' }}
-  import { useOAuthConsent } from '@clerk/react-router'
+  import { useClerk, useOAuthConsent } from '@clerk/react-router'
+  import { useSearchParams } from 'react-router'
 
   export default function OAuthConsentPage() {
+    const clerk = useClerk()
+    const [params] = useSearchParams()
+    const clientId = params.get('client_id') ?? ''
+
     const { data, isLoading, error } = useOAuthConsent({
-      oauthClientId: 'client_123',
-      scope: 'openid email profile',
+      oauthClientId: clientId,
     })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>{error.message}</div>
     if (!data) return null
 
     return (
-      <div>
-        <h1>{data.oauthApplicationName}</h1>
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
         <ul>
           {data.scopes.map((scope) => (
             <li key={scope.scope}>{scope.description || scope.scope}</li>
           ))}
         </ul>
-      </div>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Array.from(params.entries()).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
     )
   }
   ```
@@ -162,7 +212,7 @@ The following example demonstrates how to fetch OAuth consent metadata and rende
 
 <If sdk="tanstack-react-start">
   ```tsx {{ filename: 'app/routes/oauth-consent.tsx' }}
-  import { useOAuthConsent } from '@clerk/tanstack-react-start'
+  import { useClerk, useOAuthConsent } from '@clerk/tanstack-react-start'
   import { createFileRoute } from '@tanstack/react-router'
 
   export const Route = createFileRoute('/oauth-consent')({
@@ -170,24 +220,40 @@ The following example demonstrates how to fetch OAuth consent metadata and rende
   })
 
   function OAuthConsentPage() {
+    const clerk = useClerk()
+    const params = new URLSearchParams(window.location.search)
+    const clientId = params.get('client_id') ?? ''
+
     const { data, isLoading, error } = useOAuthConsent({
-      oauthClientId: 'client_123',
-      scope: 'openid email profile',
+      oauthClientId: clientId,
     })
+
+    const actionUrl = clerk.oauthApplication.buildConsentActionUrl({ clientId })
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>{error.message}</div>
     if (!data) return null
 
     return (
-      <div>
-        <h1>{data.oauthApplicationName}</h1>
+      <form method="POST" action={actionUrl}>
+        <h1>{data.oauthApplicationName} wants access to your account</h1>
         <ul>
           {data.scopes.map((scope) => (
             <li key={scope.scope}>{scope.description || scope.scope}</li>
           ))}
         </ul>
-      </div>
+
+        <button type="submit" name="consented" value="false">
+          Deny
+        </button>
+        <button type="submit" name="consented" value="true">
+          Allow
+        </button>
+
+        {Array.from(params.entries()).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
     )
   }
   ```

@@ -1,0 +1,74 @@
+---
+title: Agent Tasks
+description: Use Agent Tasks to create authenticated sessions on behalf of users in your tests and AI agent workflows.
+---
+
+Agent Tasks provide a way to create authenticated sessions on behalf of users without going through the standard sign-in flow. When you create an agent task, Clerk returns a URL that, when visited, creates a session for the specified user and redirects to the URL of your choice.
+
+This is useful for:
+
+- Automated end-to-end testing where you need a signed-in user
+- AI agent workflows that act on behalf of a user
+
+## Create an agent task
+
+Use the [Backend SDK](/docs/reference/backend/agent-tasks/create) to create an agent task. The returned `url` can then be visited to establish the session.
+
+```ts
+import { createClerkClient } from '@clerk/backend'
+
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+})
+
+const agentTask = await clerkClient.agentTasks.create({
+  onBehalfOf: {
+    userId: 'user_xxx',
+    // or { identifier: 'test@example.com' }
+  },
+  permissions: '*',
+  agentName: 'my-agent',
+  taskDescription: 'Automated test login',
+  redirectUrl: 'http://localhost:3000/dashboard',
+})
+
+// Visit this URL to create a session for the user
+console.log(agentTask.url)
+```
+
+## Use with Playwright
+
+The following example shows how to use an agent task in a Playwright test to authenticate a user.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { createClerkClient } from '@clerk/backend'
+import { test, expect } from '@playwright/test'
+
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+})
+
+test('authenticated user flow', async ({ page }) => {
+  const agentTask = await clerkClient.agentTasks.create({
+    onBehalfOf: {
+      userId: 'user_xxx',
+      // or { identifier: 'test@example.com' }
+    },
+    permissions: '*',
+    agentName: 'test-agent',
+    taskDescription: 'test-login',
+    redirectUrl: 'http://localhost:3000/dashboard',
+  })
+
+  await page.goto(agentTask.url)
+  await expect(page.locator('header')).toContainText('Welcome')
+})
+```
+
+## Revoke an agent task
+
+If you need to invalidate an agent task before it's used, you can [revoke it](/docs/reference/backend/agent-tasks/revoke).
+
+```ts
+await clerkClient.agentTasks.revoke('agtask_xxx')
+```

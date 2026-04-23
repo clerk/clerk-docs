@@ -290,7 +290,7 @@ To update the SDK selector, the files you need are in `clerk/clerk`:
 - https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDKSelector.tsx
   - This is the logic behind how the SDK selector works and sets an SDK as active for the Docs. It's unlikely you'll touch this file, unless you are changing the logic behind how the SDK selector works.
 - https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDK.tsx
-  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most used SDKs at the top (Next.js, React, JavaScript), and then the rest are alphabetized.
+  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most popular SDKs at the top (Next.js, React, JavaScript, Expo, TanStack React Start, React Router, Express), and then the rest are alphabetized.
 
 #### Add a new SDK
 
@@ -1419,12 +1419,13 @@ If you'd like to add support for a new SDK in a guide, but using the `<If />` co
 > [!IMPORTANT]
 > This component cannot be used within code blocks.
 
-| Props                   | Type                 | Comment                                                                                                                                                                                                                                  |
-| ----------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                                                         |
-| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                                                |
-| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React.                              |
-| `notSdk?` (optional)    | `string \| string[]` | Filter the content to only display based on the SDK(s) that were **NOT** passed. For example, if the `notSdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is **NOT** Next.js or React. |
+| Props                          | Type                 | Comment                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `children`                     | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                                                                                                                                                                                         |
+| `condition?` (optional)        | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                                                                                                                                                                                |
+| `sdk?` (optional)              | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React.                                                                                                                                                              |
+| `notSdk?` (optional)           | `string \| string[]` | Filter the content to only display based on the SDK(s) that were **NOT** passed. For example, if the `notSdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is **NOT** Next.js or React.                                                                                                                                 |
+| `ignoreSdkWarning?` (optional) | `boolean`            | Build-time directive that suppresses SDK scope validation for this `<If>` block. Use on direct (non-partial) pages when an `<If>` intentionally references SDKs outside the page's frontmatter/manifest scope — e.g., showing a callout to mobile SDK users on a generic page. **Do not use in partials** — partials are automatically handled by `fromPartial` marking. |
 
 Available values for the `sdk` prop:
 
@@ -1440,7 +1441,6 @@ Available values for the `sdk` prop:
 | Express                | "expressjs"            |
 | Fastify                | "fastify"              |
 | React Router           | "react-router"         |
-| Remix                  | "remix"                |
 | Tanstack React Start   | "tanstack-react-start" |
 | Go                     | "go"                   |
 | Astro                  | "astro"                |
@@ -1448,7 +1448,6 @@ Available values for the `sdk` prop:
 | Vue                    | "vue"                  |
 | Ruby / Rails / Sinatra | "ruby"                 |
 | Python                 | "python"               |
-| JS Backend SDK         | "js-backend"           |
 | Community SDKs         | "community-sdk"        |
 
 To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).
@@ -1477,8 +1476,8 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 <summary>Filter within a filter</summary>
 
 ```mdx
-<If sdk={['nextjs', 'remix']}>
-  This content will only be rendered if the active SDK is Next.js or Remix.
+<If sdk={['nextjs', 'react']}>
+  This content will only be rendered if the active SDK is Next.js or React.
   <If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
 </If>
 ```

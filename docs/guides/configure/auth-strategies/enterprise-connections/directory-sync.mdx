@@ -1,10 +1,10 @@
 ---
 title: Directory Sync (SCIM)
-description: Learn how to use Directory Sync (SCIM) to automatically provision and deprovision users from your identity provider.
+description: Learn how to use Directory Sync (SCIM) to automatically provision and deprovision users, sync custom attributes, and map IdP groups to Clerk roles.
 ---
 
-> [!WARNING]
-> Directory Sync is currently in beta. Please email [team-orgs@clerk.dev](mailto:team-orgs@clerk.dev) to enroll in the beta.
+> [!NOTE]
+> Directory Sync is generally available and enabled for all users. Clerk's implementation follows the SCIM 2.0 protocol. However, by nature, your identity provider (and how you configure it) may not match Clerk's implementation completely. If you run into any compatibility issues, please report them to [team-orgs@clerk.dev](mailto:team-orgs@clerk.dev). Clerk has a team standing by and will work to get compatibility resolved quickly.
 
 Directory Sync allows you to automatically provision and deprovision users in your Clerk application by connecting it to your organization's directory service via the SCIM protocol. When Directory Sync is enabled, changes made in your identity provider (IdP) — such as creating, updating, or removing users — are automatically reflected in Clerk.
 
@@ -15,15 +15,10 @@ This is especially useful for organizations that manage large user bases through
 Once configured, your IdP pushes user changes to Clerk using the SCIM 2.0 protocol. Clerk acts as the SCIM service provider and handles the following operations:
 
 - **Create**: When a user is assigned to the app in your IdP, Clerk automatically creates a corresponding user account. A `user.created` webhook event is fired.
-- **Update**: When common user attributes (such as name or email) are updated in the IdP, Clerk syncs those changes automatically. A `user.updated` webhook event is fired.
+- **Update**: When user attributes (such as name, email, or custom attributes) are updated in the IdP, Clerk syncs those changes automatically. A `user.updated` webhook event is fired.
 - **Delete / Disable**: When a user is removed or deactivated in the IdP, Clerk deactivates the corresponding Clerk user and immediately revokes all of their active sessions. A `user.updated` webhook event is fired.
 
-These webhook events are separate from the [Directory Sync events](#debug-with-directory-events) logged in the Dashboard, which provide more detailed SCIM-specific debugging information. Webhook payloads for SCIM-triggered events aren't finalized yet.
-
 Directory Sync works in conjunction with your existing enterprise SSO connection. You must have a SAML or OIDC enterprise connection set up before enabling Directory Sync.
-
-> [!NOTE]
-> Directory Sync currently supports user provisioning and deprovisioning, and common user attribute syncing. Group syncing and custom attribute mapping are not yet supported.
 
 ### Directory Sync vs. JIT Provisioning
 
@@ -44,6 +39,9 @@ Directory Sync is configured per enterprise connection. To set it up:
 
 Once Directory Sync is enabled in Clerk, configure your IdP to point to Clerk's SCIM endpoint.
 
+> [!IMPORTANT]
+> Clerk requires an email (contained in the `emails` attribute) to be sent for every user. Even if your `userName` attribute contains an email address, you must also configure your IdP to send the email in the SCIM `emails` attribute — Clerk will not fall back to `userName` for email. Users whose SCIM payloads omit an email will fail to provision.
+
 ### Okta
 
 1. In the Okta admin dashboard, navigate to your enterprise app's **Provisioning** tab.
@@ -52,8 +50,9 @@ Once Directory Sync is enabled in Clerk, configure your IdP to point to Clerk's 
 1. Set the **Unique identifier field for users** to `userName`.
 1. Enter the **Bearer token** from Clerk into the **API Token** field.
 1. Select **Test API Credentials** to verify the connection, then select **Save**.
-1. Under **To App**, enable the operations you want Okta to push to Clerk: **Create Users**, **Update User Attributes**, and **Deactivate Users**.
-1. Select **Save**.
+1. Under **To App**, enable the operations you want Okta to push to Clerk: **Create Users**, **Update User Attributes**, and **Deactivate Users**. Select **Save**.
+1. Under **Attribute Mappings**, confirm that `email` (`user.email`) is mapped and sent to Clerk. If `userName` is the user's email, you still need a separate mapping to `email` — Clerk requires both.
+1. To sync groups for [role mapping](#role-mapping), switch to the **Push Groups** tab on the app's Provisioning section and enable **Push Groups**. Select the groups you want to push to Clerk and select **Save**.
 
 ### Microsoft Entra ID
 
@@ -67,7 +66,7 @@ Once Directory Sync is enabled in Clerk, configure your IdP to point to Clerk's 
 
 ## Synced user attributes
 
-The following user attributes are synced from your IdP to Clerk via SCIM. The exact SCIM attribute values depend on your IdP. Clerk automatically maps these common attributes for you.
+The following common user attributes are synced from your IdP to Clerk via SCIM. The exact SCIM attribute values depend on your IdP. Clerk automatically maps these for you.
 
 | Clerk field | SCIM attribute |
 | - | - |
@@ -81,19 +80,65 @@ The following user attributes are synced from your IdP to Clerk via SCIM. The ex
 > [!NOTE]
 > Attributes managed by Directory Sync are read-only in Clerk — they cannot be edited from the Clerk Dashboard or by the user in `<UserProfile />`. Changes must be made in the IdP and will sync automatically.
 
+### Custom attribute mapping
+
+> [!NOTE]
+> Custom attribute mapping is in public beta.
+
+Custom attributes let you sync additional user data from your IdP (such as `department`, `employee_id`, or `cost_center`) into Clerk's `publicMetadata`. When Directory Sync is enabled, SCIM becomes the exclusive source for these values, and they become read-only in Clerk until Directory Sync is disabled.
+
+Attribute definitions are configured at the enterprise connection level and shared between your SSO and SCIM connections. For a full overview of how the shared attribute pool works and how to configure it, refer to [Custom Attribute Mapping](/docs/guides/configure/auth-strategies/enterprise-connections/custom-attribute-mapping).
+
+#### How SCIM attribute mapping works
+
+Clerk exposes a `/Schemas` endpoint that your IdP queries to discover what attributes Clerk accepts. In addition to the standard User schema, Clerk advertises a custom extension schema (`urn:clerk:scim:schemas:extension:custom:2.0:User`) that accepts any attribute name and maps it directly to the corresponding `publicMetadata` key.
+
+To configure SCIM attribute mapping for a custom attribute:
+
+1. First, [define your custom attributes](/docs/guides/configure/auth-strategies/enterprise-connections/custom-attribute-mapping#define-custom-attributes) at the enterprise connection level.
+1. In the Clerk Dashboard, navigate to the **Directory Sync** tab on your connection.
+1. Under **Attribute mapping**, select **Map custom attribute**. Select the SCIM attribute from the dropdown (populated from the SCIM `/Schemas` endpoint) to map to your Clerk user `publicMetadata` attribute.
+1. In your IdP, ensure the attribute is configured to be pushed via SCIM.
+1. Select **Save**.
+
+For example, you might map the shared `department` attribute to `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department` in Okta.
+
+## Role mapping
+
+> [!NOTE]
+> Role mapping is in public beta.
+
+Role mapping lets you automatically assign Clerk roles to users based on their IdP group memberships. This eliminates manual role management in Clerk and lets your IdP serve as the single source of truth for access levels.
+
+You must link the enterprise connection to an organization to use Directory Sync role mapping. The role mapping uses the linked organization's [role set](/docs/guides/organizations/control-access/role-sets). If you delete a role that's associated with a role map, Clerk will [remap the organization member roles](/docs/guides/organizations/control-access/role-sets#remapping-flow).
+
+When a member's role is assigned through a group-to-role mapping, that role assignment cannot be manually overridden in the Clerk Dashboard — it's controlled entirely by the member's IdP group memberships and is re-resolved on the next sync. Members whose roles are not sourced from a mapping remain manually editable, and all members become manually editable again when Directory Sync is disabled. Role definitions themselves (names, permissions) are always managed in Clerk.
+
+### How it works
+
+When your IdP pushes group data to Clerk via SCIM, Clerk stores the groups and their memberships. You then configure a mapping in the Clerk Dashboard from each IdP group to a Clerk role. When a user is added to a group in the IdP, Clerk assigns the mapped role. When a user is removed from a mapped group, Clerk re-resolves their role from the remaining mapped groups in precedence order. They only fall back to the organization's default role if no mapped groups remain.
+
+### Configure role mapping
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+1. Select the enterprise connection with Directory Sync enabled.
+1. Select the **Directory Sync** tab and navigate to **Role mapping**.
+1. For each IdP group that has been synced, select the Clerk role it should map to.
+1. Select **Save**.
+
+> [!TIP]
+> IdP groups are only available to map after they've been pushed to Clerk at least once. If you don't see a group, make sure **Push Groups** is enabled in your IdP and that at least one sync has occurred.
+
+### Multi-group precedence
+
+If a user belongs to multiple groups that each map to different Clerk roles, Clerk applies the role according to the order of the mappings in the Dashboard. In the Clerk Dashboard, under **Role mapping**, drag the mappings to reorder them — the mapping highest in the list takes precedence when a user belongs to multiple mapped groups.
+
+### Group deletion behavior
+
+When a group is deleted in your IdP, Clerk removes the group and re-resolves each affected user's role from their remaining mapped groups in precedence order. Users only fall back to the organization's default role if they have no mapped groups left. When a role mapping changes, a background job queues role reassignment for all affected group members.
+
 ## View directory users
 
 The **Directory users** tab on your connection shows every user that has been provisioned through Directory Sync. For each user you can see their current status (**Active** or **Deactivated**) and when they were last synced from the IdP. Selecting a user takes you to their user page.
 
 This is useful as a first debugging step. If a user isn't appearing in your app after being assigned in the IdP, check here to confirm they were actually provisioned and that their status is **Active**.
-
-## Debug with directory events
-
-For more detailed debugging, SCIM activity is logged in the **Directory Events** section of the **Debug** tab. The following are the event types associated with Directory Sync activity:
-
-- `scim.user.created` — a user was provisioned from the IdP
-- `scim.user.patched` — a user's attributes were updated from the IdP
-- `scim.user.deleted` — a user was deprovisioned from the IdP
-- `scim.provisioning_failed` - SCIM provisioning failed
-
-Selecting an event shows its full details: event\_id, timestamp, and the complete event payload including the data received from the IdP. This is helpful for verifying exactly what your IdP sent. For example, confirming that the right attributes were included in a `scim.user.patched` event or investigating why a user wasn't created as expected.

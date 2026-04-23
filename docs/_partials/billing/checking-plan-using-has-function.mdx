@@ -1,3 +1,58 @@
+<If
+  notSdk={["nextjs", "astro", "expo", "expressjs", "fastify", "js-frontend", "nuxt", "react", "react-router", "tanstack-react-start", "vue"]}
+>
+  ```ts {{ filename: 'src/routes/bronze-content.ts' }}
+  import { createClerkClient } from '@clerk/backend'
+
+  // Initialize clerkClient
+  const clerkClient = createClerkClient({
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+    secretKey: process.env.CLERK_SECRET_KEY,
+  })
+
+  const domain =
+    process.env.NODE_ENV === 'production' ? 'https://example.com' : 'http://localhost:3000'
+
+  export async function GET(request: Request) {
+    const authenticatedRequest = await clerkClient.authenticateRequest(request, {
+      authorizedParties: [domain],
+    })
+
+    const user = authenticatedRequest.toAuth()
+
+    if (user === null || user.userId === null) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const hasBronzePlan = user.has({ plan: 'bronze' })
+
+    if (!hasBronzePlan) {
+      return Response.json({ error: 'For Bronze subscribers only' }, { status: 403 })
+    }
+
+    return Response.json({
+      message: 'Only subscribers to the Bronze plan can access this content.',
+    })
+  }
+  ```
+</If>
+
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/bronze-content/page.tsx' }}
+  import { auth } from '@clerk/nextjs/server'
+
+  export default async function BronzeContentPage() {
+    const { has } = await auth()
+
+    const hasBronzePlan = has({ plan: 'bronze' })
+
+    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
+
+    return <h1>For Bronze subscribers only</h1>
+  }
+  ```
+</If>
+
 <If sdk="astro">
   ```tsx {{ filename: 'src/components/bronze-content.tsx' }}
   import { useAuth } from '@clerk/astro/react'
@@ -26,189 +81,6 @@
       <BronzeContent client:load />
     </body>
   </html>
-  ```
-</If>
-
-<If sdk="js-frontend">
-  ```js {{ filename: 'main.js' }}
-  import { Clerk } from '@clerk/clerk-js'
-
-  const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-  const clerk = new Clerk(clerkPubKey)
-  await clerk.load()
-
-  document.getElementById('app').innerHTML = `
-    <div id="bronze-content"></div>
-  `
-
-  const bronzeContentDiv = document.getElementById('bronze-content')
-
-  const hasBronzePlan = clerk.session.checkAuthorization({ plan: 'bronze' })
-
-  if (!hasBronzePlan) {
-    bronzeContentDiv.innerHTML = `
-      <h1>Only subscribers to the Bronze plan can access this content.</h1>
-    `
-  } else {
-    bronzeContentDiv.innerHTML = `
-      <h1>For Bronze subscribers only</h1>
-    `
-  }
-  ```
-</If>
-
-<If sdk="nextjs">
-  ```tsx {{ filename: 'app/bronze-content/page.tsx' }}
-  import { auth } from '@clerk/nextjs/server'
-
-  export default async function BronzeContentPage() {
-    const { has } = await auth()
-
-    const hasBronzePlan = has({ plan: 'bronze' })
-
-    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
-
-    return <h1>For Bronze subscribers only</h1>
-  }
-  ```
-</If>
-
-<If sdk="nuxt">
-  ```vue {{ filename: 'pages/bronze-content.vue' }}
-  <script setup lang="ts">
-  import { computed } from 'vue'
-  import { useAuth } from '@clerk/nuxt/composables'
-
-  const { isLoaded, has } = useAuth()
-  const hasBronzePlan = computed(() => has.value?.({ plan: 'bronze' }))
-  </script>
-
-  <template>
-    <main>
-      <div v-if="!isLoaded">Loading...</div>
-      <h1 v-else-if="!hasBronzePlan">Only subscribers to the Bronze plan can access this content.</h1>
-      <h1 v-else>For Bronze subscribers only</h1>
-    </main>
-  </template>
-  ```
-</If>
-
-<If sdk="vue">
-  ```vue {{ filename: 'src/bronze-content.vue' }}
-  <script setup lang="ts">
-  import { useAuth } from '@clerk/vue'
-  import { computed } from 'vue'
-
-  const { isLoaded, has } = useAuth()
-  const hasBronzePlan = computed(() => has.value?.({ plan: 'bronze' }))
-  </script>
-
-  <template>
-    <main>
-      <div v-if="!isLoaded">Loading...</div>
-      <h1 v-else-if="!hasBronzePlan">Only subscribers to the Bronze plan can access this content.</h1>
-      <h1 v-else>For Bronze subscribers only</h1>
-    </main>
-  </template>
-  ```
-</If>
-
-<If sdk="react">
-  ```tsx {{ filename: 'src/pages/bronze-content.tsx' }}
-  import { useAuth } from '@clerk/react'
-
-  export default function BronzeContentPage() {
-    const { has, isLoaded } = useAuth()
-
-    if (!isLoaded) return <div>Loading...</div>
-
-    const hasBronzePlan = has({ plan: 'bronze' })
-
-    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
-
-    return <h1>For Bronze subscribers only</h1>
-  }
-  ```
-</If>
-
-<If sdk="react-router">
-  ```tsx {{ filename: 'app/routes/bronze-content.tsx' }}
-  import type { Route } from './+types/bronze-content'
-  import { useAuth } from '@clerk/react-router'
-
-  export function meta({}: Route.MetaArgs) {
-    return [{ title: 'Bronze Content' }]
-  }
-
-  export default function BronzeContentPage() {
-    const { has, isLoaded } = useAuth()
-
-    if (!isLoaded) return <div>Loading...</div>
-
-    const hasBronzePlan = has({ plan: 'bronze' })
-
-    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
-
-    return <h1>For Bronze subscribers only</h1>
-  }
-  ```
-</If>
-
-<If sdk="remix">
-  ```tsx {{ filename: 'app/routes/bronze-content.tsx' }}
-  import { getAuth } from '@clerk/remix/ssr.server'
-  import { useLoaderData } from '@remix-run/react'
-  import type { LoaderFunctionArgs } from '@remix-run/node'
-
-  export const loader = async (args: LoaderFunctionArgs) => {
-    const { has } = await getAuth(args)
-    return { hasBronzePlan: has({ plan: 'bronze' }) }
-  }
-
-  export default function BronzeContentPage() {
-    const { hasBronzePlan } = useLoaderData<typeof loader>()
-
-    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
-
-    return <h1>For Bronze subscribers only</h1>
-  }
-  ```
-</If>
-
-<If sdk="tanstack-react-start">
-  ```tsx {{ filename: 'app/routes/bronze-content.tsx' }}
-  import { createFileRoute } from '@tanstack/react-router'
-  import { createServerFn } from '@tanstack/react-start'
-  import { auth } from '@clerk/tanstack-react-start/server'
-
-  export const authStateFn = createServerFn().handler(async () => {
-    const { has, userId } = await auth()
-
-    return {
-      userId,
-      hasBronzePlan: has({ plan: 'bronze' }),
-    }
-  })
-
-  export const Route = createFileRoute('/bronze-content')({
-    component: BronzeContentPage,
-    beforeLoad: async () => {
-      const authObject = await authStateFn()
-      return {
-        userId: authObject.userId,
-        hasBronzePlan: authObject.hasBronzePlan,
-      }
-    },
-  })
-
-  function BronzeContentPage() {
-    const { hasBronzePlan } = Route.useRouteContext()
-
-    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
-
-    return <h1>For Bronze subscribers only</h1>
-  }
   ```
 </If>
 
@@ -276,36 +148,148 @@
   ```
 </If>
 
-<If sdk="js-backend">
-  ```ts {{ filename: 'src/routes/bronze-content.ts' }}
-  import { createClerkClient } from '@clerk/backend'
+<If sdk="js-frontend">
+  ```js {{ filename: 'main.js' }}
+  import { Clerk } from '@clerk/clerk-js'
 
-  const clerkClient = createClerkClient({
-    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-    secretKey: process.env.CLERK_SECRET_KEY,
+  const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+  const clerk = new Clerk(clerkPubKey)
+  await clerk.load()
+
+  document.getElementById('app').innerHTML = `
+    <div id="bronze-content"></div>
+  `
+
+  const bronzeContentDiv = document.getElementById('bronze-content')
+
+  const hasBronzePlan = clerk.session.checkAuthorization({ plan: 'bronze' })
+
+  if (!hasBronzePlan) {
+    bronzeContentDiv.innerHTML = `
+      <h1>Only subscribers to the Bronze plan can access this content.</h1>
+    `
+  } else {
+    bronzeContentDiv.innerHTML = `
+      <h1>For Bronze subscribers only</h1>
+    `
+  }
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```vue {{ filename: 'pages/bronze-content.vue' }}
+  <script setup lang="ts">
+  import { computed } from 'vue'
+  import { useAuth } from '@clerk/nuxt/composables'
+
+  const { isLoaded, has } = useAuth()
+  const hasBronzePlan = computed(() => has.value?.({ plan: 'bronze' }))
+  </script>
+
+  <template>
+    <main>
+      <div v-if="!isLoaded">Loading...</div>
+      <h1 v-else-if="!hasBronzePlan">Only subscribers to the Bronze plan can access this content.</h1>
+      <h1 v-else>For Bronze subscribers only</h1>
+    </main>
+  </template>
+  ```
+</If>
+
+<If sdk="react">
+  ```tsx {{ filename: 'src/pages/bronze-content.tsx' }}
+  import { useAuth } from '@clerk/react'
+
+  export default function BronzeContentPage() {
+    const { has, isLoaded } = useAuth()
+
+    if (!isLoaded) return <div>Loading...</div>
+
+    const hasBronzePlan = has({ plan: 'bronze' })
+
+    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
+
+    return <h1>For Bronze subscribers only</h1>
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/bronze-content.tsx' }}
+  import type { Route } from './+types/bronze-content'
+  import { useAuth } from '@clerk/react-router'
+
+  export function meta({}: Route.MetaArgs) {
+    return [{ title: 'Bronze Content' }]
+  }
+
+  export default function BronzeContentPage() {
+    const { has, isLoaded } = useAuth()
+
+    if (!isLoaded) return <div>Loading...</div>
+
+    const hasBronzePlan = has({ plan: 'bronze' })
+
+    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
+
+    return <h1>For Bronze subscribers only</h1>
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/bronze-content.tsx' }}
+  import { createFileRoute } from '@tanstack/react-router'
+  import { createServerFn } from '@tanstack/react-start'
+  import { auth } from '@clerk/tanstack-react-start/server'
+
+  export const authStateFn = createServerFn().handler(async () => {
+    const { has, userId } = await auth()
+
+    return {
+      userId,
+      hasBronzePlan: has({ plan: 'bronze' }),
+    }
   })
 
-  const domain =
-    process.env.NODE_ENV === 'production' ? 'https://example.com' : 'http://localhost:3000'
+  export const Route = createFileRoute('/bronze-content')({
+    component: BronzeContentPage,
+    beforeLoad: async () => {
+      const authObject = await authStateFn()
+      return {
+        userId: authObject.userId,
+        hasBronzePlan: authObject.hasBronzePlan,
+      }
+    },
+  })
 
-  export async function GET(request: Request) {
-    const authenticatedRequest = await clerkClient.authenticateRequest(request, {
-      authorizedParties: [domain],
-    })
+  function BronzeContentPage() {
+    const { hasBronzePlan } = Route.useRouteContext()
 
-    const user = authenticatedRequest.toAuth()
+    if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
 
-    if (user === null || user.userId === null) {
-      return new Response('Unauthorized', { status: 401 })
-    }
-
-    const hasBronzePlan = user.has({ plan: 'bronze' })
-
-    if (!hasBronzePlan) {
-      return new Response('For Bronze subscribers only')
-    }
-
-    return new Response('Only subscribers to the Bronze plan can access this content.')
+    return <h1>For Bronze subscribers only</h1>
   }
+  ```
+</If>
+
+<If sdk="vue">
+  ```vue {{ filename: 'src/bronze-content.vue' }}
+  <script setup lang="ts">
+  import { useAuth } from '@clerk/vue'
+  import { computed } from 'vue'
+
+  const { isLoaded, has } = useAuth()
+  const hasBronzePlan = computed(() => has.value?.({ plan: 'bronze' }))
+  </script>
+
+  <template>
+    <main>
+      <div v-if="!isLoaded">Loading...</div>
+      <h1 v-else-if="!hasBronzePlan">Only subscribers to the Bronze plan can access this content.</h1>
+      <h1 v-else>For Bronze subscribers only</h1>
+    </main>
+  </template>
   ```
 </If>

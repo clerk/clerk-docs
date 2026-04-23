@@ -14,14 +14,12 @@ export const VALID_SDKS = [
   'expressjs',
   'fastify',
   'react-router',
-  'remix',
   'tanstack-react-start',
   'go',
   'astro',
   'nuxt',
   'vue',
   'ruby',
-  'js-backend',
 ] as const
 
 export type SDK = (typeof VALID_SDKS)[number]
@@ -65,7 +63,6 @@ export const icon = z.enum([
   'plus-circle',
   'python',
   'react',
-  'remix',
   'react-router',
   'rocket',
   'route',

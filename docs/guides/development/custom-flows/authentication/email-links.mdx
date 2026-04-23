@@ -1,463 +1,459 @@
 ---
 title: Build a custom flow for handling email links
 description: Learn how to build a custom flow using Clerk's API to handle email links for sign-up, sign-in, and email address verification.
+sdk: nextjs, react, nuxt, expressjs, go, ruby, vue, astro, fastify, react-router, js-frontend, chrome-extension, tanstack-react-start
 ---
 
-<If sdk={["expo", "ios", "android"]}>
-  > [!WARNING]
-  > This SDK doesn't currently support email link verification flows. Use [email code verification](/docs/guides/development/custom-flows/authentication/email-sms-otp) instead.
+{/* DOCS NOTE: Not currently supported by Expo, iOS, and Android */}
+
+<Include src="_partials/custom-flows-callout" />
+
+<If sdk={["nextjs", "react", "js-frontend", "react-router", "tanstack-react-start"]}>
+  > [!IMPORTANT]
+  > This guide applies to the following Clerk SDKs:
+  >
+  > - `@clerk/react` v6 or higher
+  > - `@clerk/nextjs` v7 or higher
+  > - `@clerk/react-router` v3 or higher
+  > - `@clerk/tanstack-react-start` v0.26.0 or higher
+  >
+  > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/email-links).
 </If>
 
-<If notSdk={["expo", "ios", "android"]}>
-  <Include src="_partials/custom-flows-callout" />
+[Email links](/docs/guides/configure/auth-strategies/sign-up-sign-in-options) can be used to sign up new users, sign in existing users, or allow existing users to verify newly added email addresses to their user profiles.
 
-  <If sdk={["nextjs", "react", "js-frontend", "react-router", "tanstack-react-start"]}>
-    > [!IMPORTANT]
-    > This guide applies to the following Clerk SDKs:
-    >
-    > - `@clerk/react` v6 or higher
-    > - `@clerk/nextjs` v7 or higher
-    > - `@clerk/react-router` v3 or higher
-    > - `@clerk/tanstack-react-start` v0.26.0 or higher
-    >
-    > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/email-links).
-  </If>
+The email link flow works as follows:
 
-  [Email links](/docs/guides/configure/auth-strategies/sign-up-sign-in-options) can be used to sign up new users, sign in existing users, or allow existing users to verify newly added email addresses to their user profiles.
+1. The user enters their email address and asks for an email link.
+1. Clerk sends an email to the user, containing a link to the verification URL.
+1. The user visits the email link, either on the same device where they entered their email address or on a different device, [depending on the application's settings in the Clerk Dashboard](!require-same-device-browser).
+1. Clerk verifies the user's identity and advances any sign-up or sign-in attempt that might be in progress.
+1. If the verification is successful, the user is authenticated or their email address is verified, depending on the reason for the email link.
 
-  The email link flow works as follows:
+This guide demonstrates how to use Clerk's API to build a custom flow for handling email links. It covers the following scenarios:
 
-  1. The user enters their email address and asks for an email link.
-  1. Clerk sends an email to the user, containing a link to the verification URL.
-  1. The user visits the email link, either on the same device where they entered their email address or on a different device, [depending on the application's settings in the Clerk Dashboard](!require-same-device-browser).
-  1. Clerk verifies the user's identity and advances any sign-up or sign-in attempt that might be in progress.
-  1. If the verification is successful, the user is authenticated or their email address is verified, depending on the reason for the email link.
+- [Sign up](#sign-up-flow)
+- [Sign in](#sign-in-flow)
+- [Verify a new email address](#add-new-email-flow)
 
-  This guide demonstrates how to use Clerk's API to build a custom flow for handling email links. It covers the following scenarios:
+## Enable email link authentication
 
-  - [Sign up](#sign-up-flow)
-  - [Sign in](#sign-in-flow)
-  - [Verify a new email address](#add-new-email-flow)
+To allow your users to sign up or sign in using email links, you must first configure the appropriate settings in the Clerk Dashboard. **For the examples in this guide to work, you must enable the following settings.** If your application requires more settings to be enabled, you'll need to combine this custom flow with the other appropriate custom flows.
 
-  ## Enable email link authentication
+1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+1. Enable **Sign-up with email**. Enable **Verify at sign-up** and enable **Email verification link**.
+1. Enable **Sign-in with email**. Enable **Email verification link**. By default, [**Require the same device and browser**](!require-same-device-browser) setting is enabled. This guide includes the code necessary to handle this setting, but you can remove it if you don't want to enforce this setting; there will be a comment in the code to indicate where to remove the code.
 
-  To allow your users to sign up or sign in using email links, you must first configure the appropriate settings in the Clerk Dashboard. **For the examples in this guide to work, you must enable the following settings.** If your application requires more settings to be enabled, you'll need to combine this custom flow with the other appropriate custom flows.
+## Sign-up flow
 
-  1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-  1. Enable **Sign-up with email**. Enable **Verify at sign-up** and enable **Email verification link**.
-  1. Enable **Sign-in with email**. Enable **Email verification link**. By default, [**Require the same device and browser**](!require-same-device-browser) setting is enabled. This guide includes the code necessary to handle this setting, but you can remove it if you don't want to enforce this setting; there will be a comment in the code to indicate where to remove the code.
+<If notSdk="nextjs">
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
-  ## Sign-up flow
+1. When the form is submitted, initiate the sign-up process by collecting the user's email address with the [`signUp.create()`](/docs/reference/objects/sign-up-future#create) method. This creates a new sign-up attempt.
+1. Call the [`signUp.verifications.sendEmailLink()`](/docs/reference/objects/sign-up-future#verifications-send-email-link) method to send a link to the provided email address so the user can verify their email address. This method requires specifying a `verificationUrl`, which is the destination that the link will redirect the user to.
+1. Call [`signUp.verifications.waitForEmailLinkVerification()`](/docs/reference/objects/sign-up-future#verifications-wait-for-email-link-verification) to await the result of the verification.
+1. On your verification page (the URL you set as the `verificationUrl` parameter), use the `signUp.verifications.emailLinkVerification` object to access the result of the verification. Use the `status` property to check the result of the verification and handle it accordingly.
 
-  <If notSdk="nextjs">
-    <Include src="_partials/sdk-examples-not-available-callout" />
-  </If>
+<CodeBlockTabs options={["Sign up page", "Verify page"]}>
+  ```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
+  'use client'
 
-  1. When the form is submitted, initiate the sign-up process by collecting the user's email address with the [`signUp.create()`](/docs/reference/objects/sign-up-future#create) method. This creates a new sign-up attempt.
-  1. Call the [`signUp.verifications.sendEmailLink()`](/docs/reference/objects/sign-up-future#verifications-send-email-link) method to send a link to the provided email address so the user can verify their email address. This method requires specifying a `verificationUrl`, which is the destination that the link will redirect the user to.
-  1. Call [`signUp.verifications.waitForEmailLinkVerification()`](/docs/reference/objects/sign-up-future#verifications-wait-for-email-link-verification) to await the result of the verification.
-  1. On your verification page (the URL you set as the `verificationUrl` parameter), use the `signUp.verifications.emailLinkVerification` object to access the result of the verification. Use the `status` property to check the result of the verification and handle it accordingly.
+  import * as React from 'react'
+  import { useSignUp } from '@clerk/nextjs'
+  import { useRouter } from 'next/navigation'
 
-  <CodeBlockTabs options={["Sign up page", "Verify page"]}>
-    ```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
-    'use client'
+  export default function SignUpPage() {
+    const { signUp, errors } = useSignUp()
+    const router = useRouter()
 
-    import * as React from 'react'
-    import { useSignUp } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [verifying, setVerifying] = React.useState(false)
 
-    export default function SignUpPage() {
-      const { signUp, errors } = useSignUp()
-      const router = useRouter()
+    async function handleSubmit(e: React.FormEvent) {
+      e.preventDefault()
 
-      const [emailAddress, setEmailAddress] = React.useState('')
-      const [verifying, setVerifying] = React.useState(false)
+      setVerifying(true)
 
-      async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-
-        setVerifying(true)
-
-        // Start the sign-up process by creating the sign-up attempt
-        const { error: createError } = await signUp.create({ emailAddress })
-        if (createError) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          console.error(JSON.stringify(createError, null, 2))
-          setVerifying(false)
-          return
-        }
-
-        // Dynamically set the host domain for dev and prod
-        // You could instead use an environment variable or other source for the host domain
-        const protocol = window.location.protocol
-        const host = window.location.host
-
-        // Send the user an email with the email link
-        const { error: sendLinkError } = await signUp.verifications.sendEmailLink({
-          // URL to navigate to after the user visits the link in their email
-          verificationUrl: `${protocol}//${host}/sign-up/verify`,
-        })
-        if (sendLinkError) {
-          console.error(JSON.stringify(sendLinkError, null, 2))
-          setVerifying(false)
-          return
-        }
-
-        // If email link sent successfully, wait for the user to visit the link in their email
-        const { error: waitForVerificationError } =
-          await signUp.verifications.waitForEmailLinkVerification()
-        if (waitForVerificationError) {
-          console.error(JSON.stringify(waitForVerificationError, null, 2))
-          setVerifying(false)
-          return
-        }
-
-        if (signUp.status === 'complete') {
-          const { error: finalizeError } = await signUp.finalize({
-            navigate: ({ session, decorateUrl }) => {
-              if (session?.currentTask) {
-                // Handle session tasks
-                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-                console.log(session.currentTask)
-                return
-              }
-
-              const url = decorateUrl('/')
-              if (url.startsWith('http')) {
-                window.location.href = url
-              } else {
-                router.push(url)
-              }
-            },
-          })
-          if (finalizeError) {
-            console.error(JSON.stringify(finalizeError, null, 2))
-          }
-        } else {
-          // Check why the sign-up is not complete
-          console.error('Sign-up attempt not complete:', signUp)
-        }
-      }
-
-      async function reset(e: React.FormEvent) {
-        e.preventDefault()
+      // Start the sign-up process by creating the sign-up attempt
+      const { error: createError } = await signUp.create({ emailAddress })
+      if (createError) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        console.error(JSON.stringify(createError, null, 2))
         setVerifying(false)
+        return
       }
 
-      if (verifying) {
-        return (
-          <div>
-            <p>Check your email and visit the link that was sent to you.</p>
-            <form onSubmit={reset}>
-              <button type="submit">Restart</button>
-            </form>
+      // Dynamically set the host domain for dev and prod
+      // You could instead use an environment variable or other source for the host domain
+      const protocol = window.location.protocol
+      const host = window.location.host
 
-            {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
-            <div id="clerk-captcha" />
-          </div>
-        )
+      // Send the user an email with the email link
+      const { error: sendLinkError } = await signUp.verifications.sendEmailLink({
+        // URL to navigate to after the user visits the link in their email
+        verificationUrl: `${protocol}//${host}/sign-up/verify`,
+      })
+      if (sendLinkError) {
+        console.error(JSON.stringify(sendLinkError, null, 2))
+        setVerifying(false)
+        return
       }
 
+      // If email link sent successfully, wait for the user to visit the link in their email
+      const { error: waitForVerificationError } =
+        await signUp.verifications.waitForEmailLinkVerification()
+      if (waitForVerificationError) {
+        console.error(JSON.stringify(waitForVerificationError, null, 2))
+        setVerifying(false)
+        return
+      }
+
+      if (signUp.status === 'complete') {
+        const { error: finalizeError } = await signUp.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              // Handle session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session.currentTask)
+              return
+            }
+
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url)
+            }
+          },
+        })
+        if (finalizeError) {
+          console.error(JSON.stringify(finalizeError, null, 2))
+        }
+      } else {
+        // Check why the sign-up is not complete
+        console.error('Sign-up attempt not complete:', signUp)
+      }
+    }
+
+    async function reset(e: React.FormEvent) {
+      e.preventDefault()
+      setVerifying(false)
+    }
+
+    if (verifying) {
       return (
         <div>
-          <h1>Sign up</h1>
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="emailAddress">Enter email address</label>
-            <input
-              id="emailAddress"
-              name="emailAddress"
-              type="email"
-              value={emailAddress}
-              onChange={(e) => setEmailAddress(e.target.value)}
-            />
-            {errors.fields.emailAddress && <p>{errors.fields.emailAddress.message}</p>}
-            <button type="submit">Continue</button>
+          <p>Check your email and visit the link that was sent to you.</p>
+          <form onSubmit={reset}>
+            <button type="submit">Restart</button>
           </form>
-          {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
-          {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
 
           {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
           <div id="clerk-captcha" />
         </div>
       )
     }
-    ```
 
-    ```tsx {{ filename: 'app/sign-up/verify/page.tsx', collapsible: true }}
-    'use client'
+    return (
+      <div>
+        <h1>Sign up</h1>
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="emailAddress">Enter email address</label>
+          <input
+            id="emailAddress"
+            name="emailAddress"
+            type="email"
+            value={emailAddress}
+            onChange={(e) => setEmailAddress(e.target.value)}
+          />
+          {errors.fields.emailAddress && <p>{errors.fields.emailAddress.message}</p>}
+          <button type="submit">Continue</button>
+        </form>
+        {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+        {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
 
-    import { useSignUp } from '@clerk/nextjs'
-    import Link from 'next/link'
+        {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+        <div id="clerk-captcha" />
+      </div>
+    )
+  }
+  ```
 
-    export default function VerifyEmailLink() {
-      const { signUp } = useSignUp()
+  ```tsx {{ filename: 'app/sign-up/verify/page.tsx', collapsible: true }}
+  'use client'
 
-      const verification = signUp.verifications.emailLinkVerification
+  import { useSignUp } from '@clerk/nextjs'
+  import Link from 'next/link'
 
-      if (!verification) {
-        return <div>Loading...</div>
-      }
+  export default function VerifyEmailLink() {
+    const { signUp } = useSignUp()
 
-      if (verification.status === 'failed') {
-        return (
-          <div>
-            <h1>Verify your email</h1>
-            <p>The email link verification failed.</p>
-            <Link href="/sign-up">Sign up</Link>
-          </div>
-        )
-      }
+    const verification = signUp.verifications.emailLinkVerification
 
-      if (verification.status === 'expired') {
-        return (
-          <div>
-            <h1>Verify your email</h1>
-            <p>The email link has expired.</p>
-            <Link href="/sign-up">Sign up</Link>
-          </div>
-        )
-      }
+    if (!verification) {
+      return <div>Loading...</div>
+    }
 
-      // OPTIONAL: This check is only required if you have
-      // the 'Require the same device and browser' setting
-      // enabled in the Clerk Dashboard
-      if (verification.status === 'client_mismatch') {
-        return (
-          <div>
-            <h1>Verify your email</h1>
-            <p>
-              You must complete the email link sign-up on the same device and browser that you started
-              it on.
-            </p>
-            <Link href="/sign-up">Sign up</Link>
-          </div>
-        )
-      }
-
+    if (verification.status === 'failed') {
       return (
         <div>
           <h1>Verify your email</h1>
-          <p>Successfully verified email. You can close this tab.</p>
+          <p>The email link verification failed.</p>
+          <Link href="/sign-up">Sign up</Link>
         </div>
       )
     }
-    ```
-  </CodeBlockTabs>
 
-  ## Sign-in flow
-
-  <If notSdk="nextjs">
-    <Include src="_partials/sdk-examples-not-available-callout" />
-  </If>
-
-  1. When the form is submitted, initiate the sign-in process by calling the [`signIn.emailLink.sendLink()`](/docs/reference/objects/sign-in-future#email-link-send-link) method to send a link to the provided email address so the user can use it to sign in. This method requires specifying a `verificationUrl`, which is the destination that the link will redirect the user to.
-  1. Call [`signIn.emailLink.waitForVerification()`](/docs/reference/objects/sign-in-future#email-link-wait-for-verification) to await the result of the verification.
-  1. On your verification page (the URL you set as the `verificationUrl` parameter), use the `signIn.emailLink.verification` object to access the result of the verification. Use the `status` property to check the result of the verification and handle it accordingly.
-
-  <CodeBlockTabs options={["Sign in page", "Verify page"]}>
-    ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
-    'use client'
-
-    import * as React from 'react'
-    import { useSignIn } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
-
-    export default function SignInPage() {
-      const { signIn, errors } = useSignIn()
-      const router = useRouter()
-
-      const [emailAddress, setEmailAddress] = React.useState('')
-      const [verified, setVerified] = React.useState(false)
-      const [verifying, setVerifying] = React.useState(false)
-
-      async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        // Reset states in case user resubmits form mid sign-in
-        setVerified(false)
-
-        // Dynamically set the host domain for dev and prod
-        // You could instead use an environment variable or other source for the host domain
-        const protocol = window.location.protocol
-        const host = window.location.host
-
-        // Start the sign-in process by sending the user an email with the email link
-        const { error } = await signIn.emailLink.sendLink({
-          emailAddress,
-          // URL to navigate to after the user visits the link in their email
-          verificationUrl: `${protocol}//${host}/sign-in/verify`,
-        })
-        if (error) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          console.error(JSON.stringify(error, null, 2))
-          return
-        }
-
-        setVerifying(true)
-
-        // If email link sent successfully, wait for the user to visit the link in their email
-        const { error: waitForVerificationError } = await signIn.emailLink.waitForVerification()
-        if (waitForVerificationError) {
-          console.error(JSON.stringify(waitForVerificationError, null, 2))
-          setVerifying(false)
-          return
-        }
-
-        // Check the verification result
-        const verification = signIn.firstFactorVerification
-
-        // Handle if verification expired
-        if (verification.status === 'expired') {
-          console.error('Verification expired')
-        }
-
-        if (signIn.status === 'complete') {
-          const { error: finalizeError } = await signIn.finalize({
-            navigate: ({ session, decorateUrl }) => {
-              if (session?.currentTask) {
-                console.log(session.currentTask)
-                return
-              }
-
-              const url = decorateUrl('/')
-              if (url.startsWith('http')) {
-                window.location.href = url
-              } else {
-                router.push(url)
-              }
-            },
-          })
-          if (finalizeError) {
-            console.error(JSON.stringify(finalizeError, null, 2))
-          }
-        } else {
-          // Check why the sign-in is not complete
-          console.error('Sign-in attempt not complete:', signIn)
-        }
-      }
-
-      async function reset(e: React.FormEvent) {
-        e.preventDefault()
-        setVerifying(false)
-      }
-
-      const verification = signIn.firstFactorVerification
-
-      if (verification.status === 'expired') {
-        return (
-          <div>
-            <p>The email link has expired.</p>
-            <form onSubmit={reset}>
-              <button type="submit">Restart</button>
-            </form>
-            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
-            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
-          </div>
-        )
-      }
-
-      if (verifying) {
-        return (
-          <div>
-            <p>Check your email and visit the link that was sent to you.</p>
-            <form onSubmit={reset}>
-              <button type="submit">Restart</button>
-            </form>
-            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
-            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
-          </div>
-        )
-      }
-
-      if (verified) {
-        return <div>Signed in successfully!</div>
-      }
-
+    if (verification.status === 'expired') {
       return (
         <div>
-          <h1>Sign in</h1>
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="emailAddress">Enter email address</label>
-            <input
-              id="emailAddress"
-              name="emailAddress"
-              type="email"
-              value={emailAddress}
-              onChange={(e) => setEmailAddress(e.target.value)}
-            />
-            {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
-            <button type="submit">Continue</button>
+          <h1>Verify your email</h1>
+          <p>The email link has expired.</p>
+          <Link href="/sign-up">Sign up</Link>
+        </div>
+      )
+    }
+
+    // OPTIONAL: This check is only required if you have
+    // the 'Require the same device and browser' setting
+    // enabled in the Clerk Dashboard
+    if (verification.status === 'client_mismatch') {
+      return (
+        <div>
+          <h1>Verify your email</h1>
+          <p>
+            You must complete the email link sign-up on the same device and browser that you started
+            it on.
+          </p>
+          <Link href="/sign-up">Sign up</Link>
+        </div>
+      )
+    }
+
+    return (
+      <div>
+        <h1>Verify your email</h1>
+        <p>Successfully verified email. You can close this tab.</p>
+      </div>
+    )
+  }
+  ```
+</CodeBlockTabs>
+
+## Sign-in flow
+
+1. When the form is submitted, initiate the sign-in process by calling the [`signIn.emailLink.sendLink()`](/docs/reference/objects/sign-in-future#email-link-send-link) method to send a link to the provided email address so the user can use it to sign in. This method requires specifying a `verificationUrl`, which is the destination that the link will redirect the user to.
+1. Call [`signIn.emailLink.waitForVerification()`](/docs/reference/objects/sign-in-future#email-link-wait-for-verification) to await the result of the verification.
+1. On your verification page (the URL you set as the `verificationUrl` parameter), use the `signIn.emailLink.verification` object to access the result of the verification. Use the `status` property to check the result of the verification and handle it accordingly.
+
+<If notSdk="nextjs">
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
+
+<CodeBlockTabs options={["Sign in page", "Verify page"]}>
+  ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+  'use client'
+
+  import * as React from 'react'
+  import { useSignIn } from '@clerk/nextjs'
+  import { useRouter } from 'next/navigation'
+
+  export default function SignInPage() {
+    const { signIn, errors } = useSignIn()
+    const router = useRouter()
+
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [verified, setVerified] = React.useState(false)
+    const [verifying, setVerifying] = React.useState(false)
+
+    async function handleSubmit(e: React.FormEvent) {
+      e.preventDefault()
+      // Reset states in case user resubmits form mid sign-in
+      setVerified(false)
+
+      // Dynamically set the host domain for dev and prod
+      // You could instead use an environment variable or other source for the host domain
+      const protocol = window.location.protocol
+      const host = window.location.host
+
+      // Start the sign-in process by sending the user an email with the email link
+      const { error } = await signIn.emailLink.sendLink({
+        emailAddress,
+        // URL to navigate to after the user visits the link in their email
+        verificationUrl: `${protocol}//${host}/sign-in/verify`,
+      })
+      if (error) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        console.error(JSON.stringify(error, null, 2))
+        return
+      }
+
+      setVerifying(true)
+
+      // If email link sent successfully, wait for the user to visit the link in their email
+      const { error: waitForVerificationError } = await signIn.emailLink.waitForVerification()
+      if (waitForVerificationError) {
+        console.error(JSON.stringify(waitForVerificationError, null, 2))
+        setVerifying(false)
+        return
+      }
+
+      // Check the verification result
+      const verification = signIn.firstFactorVerification
+
+      // Handle if verification expired
+      if (verification.status === 'expired') {
+        console.error('Verification expired')
+      }
+
+      if (signIn.status === 'complete') {
+        const { error: finalizeError } = await signIn.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              console.log(session.currentTask)
+              return
+            }
+
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url)
+            }
+          },
+        })
+        if (finalizeError) {
+          console.error(JSON.stringify(finalizeError, null, 2))
+        }
+      } else {
+        // Check why the sign-in is not complete
+        console.error('Sign-in attempt not complete:', signIn)
+      }
+    }
+
+    async function reset(e: React.FormEvent) {
+      e.preventDefault()
+      setVerifying(false)
+    }
+
+    const verification = signIn.firstFactorVerification
+
+    if (verification.status === 'expired') {
+      return (
+        <div>
+          <p>The email link has expired.</p>
+          <form onSubmit={reset}>
+            <button type="submit">Restart</button>
           </form>
           {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
           {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
         </div>
       )
     }
-    ```
 
-    ```tsx {{ filename: 'app/sign-in/verify/page.tsx', collapsible: true }}
-    'use client'
-
-    import { useSignIn } from '@clerk/nextjs'
-    import Link from 'next/link'
-
-    export default function VerifyEmailLink() {
-      const { signIn } = useSignIn()
-
-      const verification = signIn.emailLink.verification
-
-      if (!verification) {
-        return <div>Loading...</div>
-      }
-
-      if (verification.status === 'failed') {
-        return (
-          <div>
-            <h1>Verify your email</h1>
-            <p>The email link verification failed.</p>
-            <Link href="/sign-in">Sign in</Link>
-          </div>
-        )
-      }
-
-      if (verification.status === 'expired') {
-        return (
-          <div>
-            <h1>Verify your email</h1>
-            <p>The email link has expired.</p>
-            <Link href="/sign-in">Sign in</Link>
-          </div>
-        )
-      }
-
-      // OPTIONAL: This check is only required if you have
-      // the 'Require the same device and browser' setting
-      // enabled in the Clerk Dashboard
-      if (verification.status === 'client_mismatch') {
-        return (
-          <div>
-            <h1>Verify your email</h1>
-            <p>
-              You must complete the email link sign-in on the same device and browser that you started
-              it on.
-            </p>
-            <Link href="/sign-in">Sign in</Link>
-          </div>
-        )
-      }
-
+    if (verifying) {
       return (
         <div>
-          <h1>Verify your email</h1>
-          <p>Successfully verified email. You can close this tab.</p>
+          <p>Check your email and visit the link that was sent to you.</p>
+          <form onSubmit={reset}>
+            <button type="submit">Restart</button>
+          </form>
+          {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+          {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
         </div>
       )
     }
-    ```
-  </CodeBlockTabs>
 
-  ## Add new email flow
+    if (verified) {
+      return <div>Signed in successfully!</div>
+    }
 
-  When a user adds an email address to their account, you can use email links to verify the email address.
+    return (
+      <div>
+        <h1>Sign in</h1>
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="emailAddress">Enter email address</label>
+          <input
+            id="emailAddress"
+            name="emailAddress"
+            type="email"
+            value={emailAddress}
+            onChange={(e) => setEmailAddress(e.target.value)}
+          />
+          {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+          <button type="submit">Continue</button>
+        </form>
+        {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+        {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+      </div>
+    )
+  }
+  ```
 
-  <Include src="_partials/custom-flows/email-link-verification" />
-</If>
+  ```tsx {{ filename: 'app/sign-in/verify/page.tsx', collapsible: true }}
+  'use client'
+
+  import { useSignIn } from '@clerk/nextjs'
+  import Link from 'next/link'
+
+  export default function VerifyEmailLink() {
+    const { signIn } = useSignIn()
+
+    const verification = signIn.emailLink.verification
+
+    if (!verification) {
+      return <div>Loading...</div>
+    }
+
+    if (verification.status === 'failed') {
+      return (
+        <div>
+          <h1>Verify your email</h1>
+          <p>The email link verification failed.</p>
+          <Link href="/sign-in">Sign in</Link>
+        </div>
+      )
+    }
+
+    if (verification.status === 'expired') {
+      return (
+        <div>
+          <h1>Verify your email</h1>
+          <p>The email link has expired.</p>
+          <Link href="/sign-in">Sign in</Link>
+        </div>
+      )
+    }
+
+    // OPTIONAL: This check is only required if you have
+    // the 'Require the same device and browser' setting
+    // enabled in the Clerk Dashboard
+    if (verification.status === 'client_mismatch') {
+      return (
+        <div>
+          <h1>Verify your email</h1>
+          <p>
+            You must complete the email link sign-in on the same device and browser that you started
+            it on.
+          </p>
+          <Link href="/sign-in">Sign in</Link>
+        </div>
+      )
+    }
+
+    return (
+      <div>
+        <h1>Verify your email</h1>
+        <p>Successfully verified email. You can close this tab.</p>
+      </div>
+    )
+  }
+  ```
+</CodeBlockTabs>
+
+## Add new email flow
+
+When a user adds an email address to their account, you can use email links to verify the email address.
+
+<Include src="_partials/custom-flows/email-link-verification" />

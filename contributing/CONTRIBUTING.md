@@ -195,8 +195,9 @@ type LinkItem = {
   /**
    * Muted text to display next to the item text
    *
-   * @example 'Community'
-   * @example 'Beta'
+   * @example 'beta'
+   * @example 'community'
+   * @example 'deprecated'
    */
   tag?: string
   /**
@@ -239,8 +240,9 @@ type SubNavItem = {
   /**
    * Muted text to display next to the item text
    *
-   * @example 'Community'
-   * @example 'Beta'
+   * @example 'beta'
+   * @example 'community'
+   * @example 'deprecated'
    */
   tag?: string
   /**
@@ -377,6 +379,7 @@ description: Some brief, but effective description of the page's content.
 
 - **`title`** - The title of the page. Used to populate the HTML `<title>` tag and the h1 of the page. Supports markdown e.g. ``title: '`<SignUp>`'``
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
+- **`tag`** - Optional. One of `beta`, `community`, `deprecated`. Renders a status pill next to the page title (in the h1 and sidenav) and adds a parenthesized suffix in the `.md` output. Prefer this over inline `(beta)` / `(deprecated)` in the title itself.
 
 These fields should be present on every documentation page.
 
@@ -942,6 +945,12 @@ Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/
 
 > [!QUIZ]
 > An opportunity for users to check their understanding.
+
+> [!BETA]
+> Marks content as in beta. If the blockquote has no body, a canonical message about instability and a support link is rendered automatically. Provide a body only when the default message doesn't fit.
+
+> [!DEPRECATED]
+> Marks content as deprecated. The body is REQUIRED and must name or link to the replacement API. The build fails if a `[!DEPRECATED]` callout has no body.
 ```
 
 The image below shows what this example looks like once rendered.
@@ -967,6 +976,16 @@ You can create a collapsible section within a callout by using a thematic break 
 ```
 
 ![An example of a collapsible section inside a quiz callout](/.github/media/callout-details.png)
+
+#### Inline status tags in headings
+
+For markdown headings that apply to a subset of the page (not the whole page), append an inline tag component instead of using frontmatter `tag`:
+
+```mdx
+#### Map custom attributes <BetaTag />
+```
+
+Available components: `<BetaTag />`, `<CommunityTag />`, `<DeprecatedTag />`. Use page-level frontmatter `tag` for whole-page status; these components are for section-level status within a page.
 
 ### `<CodeBlockTabs />`
 

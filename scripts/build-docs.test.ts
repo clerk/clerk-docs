@@ -8135,7 +8135,9 @@ tag: wip
       }),
     )
 
-    await expect(promise).rejects.toThrow('Invalid tag "wip" in frontmatter. Must be one of: beta, community, deprecated.')
+    await expect(promise).rejects.toThrow(
+      'Invalid tag "wip" in frontmatter. Must be one of: beta, community, deprecated.',
+    )
   })
 })
 

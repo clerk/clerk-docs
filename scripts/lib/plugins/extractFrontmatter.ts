@@ -34,7 +34,9 @@ export const extractFrontmatter =
         if (!('value' in node)) return
         if (typeof node.value !== 'string') return
 
-        const frontmatterYaml: Record<'title' | 'description' | 'sdk' | 'tag', string | undefined> = yaml.parse(node.value)
+        const frontmatterYaml: Record<'title' | 'description' | 'sdk' | 'tag', string | undefined> = yaml.parse(
+          node.value,
+        )
 
         if (frontmatterYaml === null) {
           safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
@@ -70,7 +72,15 @@ export const extractFrontmatter =
         if (frontmatterYaml.tag !== undefined) {
           const parsed = tagSchema.safeParse(frontmatterYaml.tag)
           if (!parsed.success) {
-            safeFail(config, vfile, filePath, section, 'invalid-tag-in-frontmatter', [frontmatterYaml.tag], node.position)
+            safeFail(
+              config,
+              vfile,
+              filePath,
+              section,
+              'invalid-tag-in-frontmatter',
+              [frontmatterYaml.tag],
+              node.position,
+            )
             return
           }
           tagValue = parsed.data

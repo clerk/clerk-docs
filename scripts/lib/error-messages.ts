@@ -56,8 +56,7 @@ export const errorMessages = {
     `Doc "${href}" is attempting to write out a doc to ${path} but the first part of the path is a valid SDK, this causes a file path conflict.`,
   'duplicate-heading-id': (href: string, id: string): string =>
     `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
-  'deprecated-callout-missing-body': (): string =>
-    `[!DEPRECATED] callouts require a body explaining the replacement.`,
+  'deprecated-callout-missing-body': (): string => `[!DEPRECATED] callouts require a body explaining the replacement.`,
 
   // Include component errors
   'include-src-not-partials': (): string =>

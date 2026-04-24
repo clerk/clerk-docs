@@ -4,12 +4,13 @@ import type { VFile } from 'vfile'
 import yaml from 'yaml'
 import { type BuildConfig } from '../config'
 import { safeFail, safeMessage, WarningsSection } from '../error-messages'
-import { isValidSdk, isValidSdks, type SDK } from '../schemas'
+import { isValidSdk, isValidSdks, tag as tagSchema, type SDK } from '../schemas'
 
 export type Frontmatter = {
   title: string
   description?: string
   sdk?: SDK[]
+  tag?: 'beta' | 'community' | 'deprecated'
 }
 
 export const extractFrontmatter =
@@ -33,7 +34,7 @@ export const extractFrontmatter =
         if (!('value' in node)) return
         if (typeof node.value !== 'string') return
 
-        const frontmatterYaml: Record<'title' | 'description' | 'sdk', string | undefined> = yaml.parse(node.value)
+        const frontmatterYaml: Record<'title' | 'description' | 'sdk' | 'tag', string | undefined> = yaml.parse(node.value)
 
         if (frontmatterYaml === null) {
           safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
@@ -65,10 +66,21 @@ export const extractFrontmatter =
           return
         }
 
+        let tagValue: Frontmatter['tag']
+        if (frontmatterYaml.tag !== undefined) {
+          const parsed = tagSchema.safeParse(frontmatterYaml.tag)
+          if (!parsed.success) {
+            safeFail(config, vfile, filePath, section, 'invalid-tag-in-frontmatter', [frontmatterYaml.tag], node.position)
+            return
+          }
+          tagValue = parsed.data
+        }
+
         frontmatter = {
           title: frontmatterYaml.title,
           description: frontmatterYaml.description,
           sdk: frontmatterSDKs,
+          tag: tagValue,
         }
       },
     )

@@ -29,7 +29,7 @@ import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 import { checkTooltips } from './plugins/checkTooltips'
 
-const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
+const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ|BETA|DEPRECATED)(\s+[0-9a-z-]+)?\]$/)
 
 export const parseInMarkdownFile =
   (config: BuildConfig, store: Store) =>
@@ -157,6 +157,28 @@ export const parseInMarkdownFile =
               }
 
               headingsHashes.add(slug)
+            }
+          },
+        )
+
+        mdastVisit(
+          tree,
+          (node) => node.type === 'blockquote',
+          (node) => {
+            const firstChild: any = (node as any).children?.[0]
+            if (firstChild?.type !== 'paragraph') return
+            const firstText = firstChild.children?.[0]
+            if (firstText?.type !== 'text') return
+
+            const markerMatch = firstText.value.match(/^\[!(BETA|DEPRECATED)(\s+[0-9a-z-]+)?\]/)
+            if (!markerMatch) return
+            if (markerMatch[1] !== 'DEPRECATED') return
+
+            // Trimmed text content after marker removal — empty means no body.
+            const rendered = toString(node)
+            const withoutMarker = rendered.replace(/^\[!DEPRECATED(\s+[0-9a-z-]+)?\]/, '').trim()
+            if (withoutMarker === '') {
+              safeFail(config, vfile, file.filePath, section, 'deprecated-callout-missing-body', [], node.position)
             }
           },
         )

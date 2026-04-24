@@ -85,7 +85,7 @@ export const icon = z.enum([
 
 export type Icon = z.infer<typeof icon>
 
-export const tag = z.enum(['(Beta)', '(Community)'])
+export const tag = z.enum(['beta', 'community', 'deprecated'])
 
 export type Tag = z.infer<typeof tag>
 

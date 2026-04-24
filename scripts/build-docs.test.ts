@@ -8012,3 +8012,223 @@ description: x
     )
   })
 })
+
+describe('frontmatter tag field', () => {
+  test('accepts tag: beta', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Beta Page', href: '/docs/beta-page' }]],
+        }),
+      },
+      {
+        path: './docs/beta-page.mdx',
+        content: `---
+title: Beta Page
+description: A page tagged as beta
+tag: beta
+---
+
+# Beta Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('accepts tag: community', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Community Page', href: '/docs/community-page' }]],
+        }),
+      },
+      {
+        path: './docs/community-page.mdx',
+        content: `---
+title: Community Page
+description: A page tagged as community
+tag: community
+---
+
+# Community Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('accepts tag: deprecated', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Deprecated Page', href: '/docs/deprecated-page' }]],
+        }),
+      },
+      {
+        path: './docs/deprecated-page.mdx',
+        content: `---
+title: Deprecated Page
+description: A page tagged as deprecated
+tag: deprecated
+---
+
+# Deprecated Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('rejects invalid tag value', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Invalid Tag Page', href: '/docs/invalid-tag-page' }]],
+        }),
+      },
+      {
+        path: './docs/invalid-tag-page.mdx',
+        content: `---
+title: Invalid Tag Page
+description: A page with an unsupported tag value
+tag: wip
+---
+
+# Invalid Tag Page`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('Invalid tag "wip" in frontmatter. Must be one of: beta, community, deprecated.')
+  })
+})
+
+describe('status callouts', () => {
+  test('[!BETA] blockquote parses without error', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Beta Callout', href: '/docs/beta-callout' }]],
+        }),
+      },
+      {
+        path: './docs/beta-callout.mdx',
+        content: `---
+title: Beta Callout
+description: A page with a beta callout
+---
+
+> [!BETA]
+> This feature is in beta.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('[!DEPRECATED] with a body parses without error', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Deprecated Callout', href: '/docs/deprecated-callout' }]],
+        }),
+      },
+      {
+        path: './docs/deprecated-callout.mdx',
+        content: `---
+title: Deprecated Callout
+description: A page with a deprecated callout that has a body
+---
+
+> [!DEPRECATED]
+> Use the new API instead.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('[!DEPRECATED] with no body fails the build', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Empty Deprecated Callout', href: '/docs/empty-deprecated-callout' }]],
+        }),
+      },
+      {
+        path: './docs/empty-deprecated-callout.mdx',
+        content: `---
+title: Empty Deprecated Callout
+description: A page with a deprecated callout that has no body
+---
+
+> [!DEPRECATED]`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('[!DEPRECATED] callouts require a body explaining the replacement.')
+  })
+})

@@ -7,11 +7,11 @@ description: Use the authenticateRequest() method to verify a token passed from 
 
 Authenticates a token passed from the frontend. Networkless if the `jwtKey` is provided. Otherwise, performs a network call to retrieve the JWKS from the [Backend API](/docs/reference/backend-api/tag/jwks/get/jwks){{ target: '_blank' }}.
 
-<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   `authenticateRequest()` requires `publishableKey` to be set. You can set this value as an [environment variable](/docs/guides/development/clerk-environment-variables#clerk-publishable-and-secret-keys) and then pass it to `createClerkClient()` so that it is passed to `authenticateRequest()`.
 </If>
 
-<If sdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If sdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   `authenticateRequest()` requires `publishableKey` to be set. You should already have this set in your [environment variables](/docs/guides/development/clerk-environment-variables#clerk-publishable-and-secret-keys). `clerkClient` will infer the `publishableKey` from your environment variables.
 </If>
 
@@ -116,7 +116,7 @@ It is recommended to set these options as [environment variables](/docs/guides/d
 
 ## Examples
 
-<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   ```tsx
   import { createClerkClient } from '@clerk/backend'
 
@@ -242,6 +242,32 @@ It is recommended to set these options as [environment variables](/docs/guides/d
   ```
 </If>
 
+<If sdk="hono">
+  ```ts {{ filename: 'src/index.ts' }}
+  import { clerkMiddleware } from '@clerk/hono'
+  import { Hono } from 'hono'
+  import { HTTPException } from 'hono/http-exception'
+
+  const app = new Hono()
+
+  app.use('*', clerkMiddleware())
+
+  app.get('/example', async (c) => {
+    const clerk = c.get('clerk')
+
+    const { isAuthenticated } = await clerk.authenticateRequest(c.req.raw, {
+      authorizedParties: ['https://example.com'],
+    })
+
+    if (!isAuthenticated) {
+      throw new HTTPException(401, { message: 'User not authenticated' })
+    }
+
+    return c.json({ message: 'This is a reply' })
+  })
+  ```
+</If>
+
 <If sdk="nuxt">
   ```ts {{ filename: 'server/api/example.ts' }}
   import { clerkClient } from '@clerk/nuxt/server'
@@ -324,7 +350,7 @@ It is recommended to set these options as [environment variables](/docs/guides/d
 
 By default, `authenticateRequest()` will authenticate a session request. To authenticate a machine request, you need to set the `acceptsToken` option to a machine token type, such as `'api_key'`, `'oauth_token'` or `'m2m_token'`.
 
-<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   ```tsx
   import { createClerkClient } from '@clerk/backend'
 
@@ -450,6 +476,33 @@ By default, `authenticateRequest()` will authenticate a session request. To auth
       return res.json({ message: 'This is a machine-to-machine reply' })
     })
   }
+  ```
+</If>
+
+<If sdk="hono">
+  ```ts {{ filename: 'src/index.ts' }}
+  import { clerkMiddleware } from '@clerk/hono'
+  import { Hono } from 'hono'
+  import { HTTPException } from 'hono/http-exception'
+
+  const app = new Hono()
+
+  app.use('*', clerkMiddleware())
+
+  app.get('/example', async (c) => {
+    const clerk = c.get('clerk')
+
+    const { isAuthenticated } = await clerk.authenticateRequest(c.req.raw, {
+      authorizedParties: ['https://example.com'],
+      jwtKey: process.env.CLERK_JWT_KEY,
+    })
+
+    if (!isAuthenticated) {
+      throw new HTTPException(401, { message: 'User not authenticated' })
+    }
+
+    return c.json({ message: 'This is a machine-to-machine reply' })
+  })
   ```
 </If>
 

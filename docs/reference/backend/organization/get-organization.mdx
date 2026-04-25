@@ -46,7 +46,7 @@ const response = await clerkClient.organizations.getOrganization({ slug })
 
 To use the `getOrganization()` method, you first need to initialize the [`clerkClient()`](/docs/reference/backend/overview) helper. Then, you need to get the [Active Organization's](!active-organization) ID which you can access from the [`Auth`](/docs/reference/backend/types/auth-object) object. Finally, you can pass the Organization ID to the `getOrganization()` method to get the [Backend `Organization`](/docs/reference/backend/types/backend-organization) object.
 
-<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   ```js
   import { createClerkClient } from '@clerk/backend'
 
@@ -203,6 +203,41 @@ To use the `getOrganization()` method, you first need to initialize the [`clerkC
       res.json(organization)
     })
   }
+  ```
+</If>
+
+<If sdk="hono">
+  ```ts {{ filename: 'src/index.ts' }}
+  import { clerkMiddleware, getAuth } from '@clerk/hono'
+  import { Hono } from 'hono'
+  import { HTTPException } from 'hono/http-exception'
+
+  const app = new Hono()
+
+  app.use('*', clerkMiddleware())
+
+  app.get('/organization', async (c) => {
+    // Accessing the `Auth` object differs depending on the SDK you're using
+    // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+    const { isAuthenticated, orgId } = getAuth(c)
+
+    // Protect the route from unauthenticated users
+    if (!isAuthenticated) {
+      throw new HTTPException(401, { message: 'User not authenticated' })
+    }
+
+    // Check if there is an Active Organization
+    if (!orgId) {
+      return c.json({ error: 'Set an Active Organization to access this page.' }, 404)
+    }
+
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const clerk = c.get('clerk')
+    const organization = await clerk.organizations.getOrganization({ organizationId: orgId })
+
+    // Return the `Organization` object
+    return c.json(organization)
+  })
   ```
 </If>
 

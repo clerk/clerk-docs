@@ -38,201 +38,7 @@ There are three approaches for adding authentication to your Expo app.
 
 Use the following tabs to choose your preferred approach:
 
-<Tabs items={["JavaScript (Native sign-in optional)", "Native components"]}>
-  <Tab>
-    {/* JavaScript Tab */}
-
-    This approach uses [custom flows](!custom-flow) built with React Native components and **works in Expo Go — no dev build required.**
-
-    <Steps>
-      ## Enable Native API
-
-      <Include src="_partials/native-api-callout" />
-
-      ## Create a new Expo app
-
-      <Include src="_partials/expo/quickstart/create-new-expo-app" />
-
-      ## Remove default template files
-
-      <Include src="_partials/expo/quickstart/remove-default-template-files" />
-
-      ## Install dependencies
-
-      Install the required packages. Use `npx expo install` to ensure SDK-compatible versions.
-
-      - The [Clerk Expo SDK](/docs/reference/expo/overview) gives you access to prebuilt components, hooks, and helpers to make user authentication easier.
-      - Clerk stores the active user's session token in memory by default. In Expo apps, the recommended way to store sensitive data, such as tokens, is by using `expo-secure-store` which encrypts the data before storing it.
-
-      ```bash
-      npx expo install @clerk/expo expo-secure-store
-      ```
-
-      ## Set your Clerk API keys
-
-      <Include src="_partials/quickstarts/set-clerk-publishable-key" />
-
-      ```env {{ filename: '.env' }}
-      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-      ```
-
-      ## Add `<ClerkProvider>` to your root layout
-
-      <Include src="_partials/expo/quickstart/clerk-provider" />
-
-      ## Add sign-up and sign-in pages
-
-      Clerk currently only supports [control components](/docs/reference/components/overview#control-components) for Expo native. [UI components](/docs/reference/components/overview) are only available for Expo web. Instead, you must build [custom flows](!custom-flow) using Clerk's API. The following sections demonstrate how to build [custom email/password sign-up and sign-in flows](/docs/guides/development/custom-flows/authentication/email-password). If you want to use different authentication methods, such as passwordless or OAuth, see the dedicated custom flow guides.
-
-      ### Layout page
-
-      First, protect your sign-up and sign-in pages.
-
-      1. Create an `(auth)` [route group](https://docs.expo.dev/router/advanced/shared-routes/). This will group your sign-up and sign-in pages.
-      1. In the `(auth)` group, create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to access the user's authentication state. If the user is already signed in, they will be redirected to the home page.
-
-      ```tsx {{ filename: 'app/(auth)/_layout.tsx' }}
-      import { useAuth } from '@clerk/expo'
-      import { Redirect, Stack } from 'expo-router'
-
-      export default function AuthRoutesLayout() {
-        const { isSignedIn, isLoaded } = useAuth()
-
-        if (!isLoaded) {
-          return null
-        }
-
-        if (isSignedIn) {
-          return <Redirect href={'/'} />
-        }
-
-        return <Stack />
-      }
-      ```
-
-      ### Sign-up page
-
-      <Include src="_partials/expo/email-pass-sign-up" />
-
-      ### Sign-in page
-
-      <Include src="_partials/expo/email-pass-sign-in" />
-
-      For more information about building these [custom flows](!custom-flow), including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/guides/development/custom-flows/authentication/email-password) guide.
-
-      ## Add a home screen
-
-      You can control which content signed-in and signed-out users can see with Clerk's [prebuilt control components](/docs/reference/components/overview#control-components). For this guide, you'll use:
-
-      - [`<Show when="signed-in">`](/docs/reference/components/control/show): Children of this component can only be seen while **signed in**.
-      - [`<Show when="signed-out">`](/docs/reference/components/control/show): Children of this component can only be seen while **signed out**.
-
-      1. Create a `(home)` route group.
-      1. In the `(home)` group, create a `_layout.tsx` file with the following code.
-
-      ```tsx {{ filename: 'app/(home)/_layout.tsx' }}
-      import { useAuth } from '@clerk/expo'
-      import { Redirect, Stack } from 'expo-router'
-
-      export default function Layout() {
-        const { isSignedIn, isLoaded } = useAuth()
-
-        if (!isLoaded) {
-          return null
-        }
-
-        if (!isSignedIn) {
-          return <Redirect href="/(auth)/sign-in" />
-        }
-
-        return <Stack />
-      }
-      ```
-
-      Then, in the same folder, create an `index.tsx` file. If the user is signed in, it displays their email and a sign-out button. If they're not signed in, it displays sign-in and sign-up links.
-
-      ```tsx {{ filename: 'app/(home)/index.tsx', collapsible: true }}
-      import { Show, useUser } from '@clerk/expo'
-      import { useClerk } from '@clerk/expo'
-      import { Link } from 'expo-router'
-      import { Text, View, Pressable, StyleSheet } from 'react-native'
-
-      export default function Page() {
-        const { user } = useUser()
-        const { signOut } = useClerk()
-
-        return (
-          <View style={styles.container}>
-            <Text style={styles.title}>Welcome!</Text>
-            <Show when="signed-out">
-              <Link href="/(auth)/sign-in">
-                <Text>Sign in</Text>
-              </Link>
-              <Link href="/(auth)/sign-up">
-                <Text>Sign up</Text>
-              </Link>
-            </Show>
-            <Show when="signed-in">
-              <Text>Hello {user?.id}</Text>
-              <Pressable style={styles.button} onPress={() => signOut()}>
-                <Text style={styles.buttonText}>Sign out</Text>
-              </Pressable>
-            </Show>
-          </View>
-        )
-      }
-
-      const styles = StyleSheet.create({
-        container: {
-          flex: 1,
-          padding: 20,
-          paddingTop: 60,
-          gap: 16,
-        },
-        title: {
-          fontSize: 24,
-          fontWeight: 'bold',
-        },
-        button: {
-          backgroundColor: '#0a7ea4',
-          paddingVertical: 12,
-          paddingHorizontal: 24,
-          borderRadius: 8,
-          alignItems: 'center',
-        },
-        buttonText: {
-          color: '#fff',
-          fontWeight: '600',
-        },
-      })
-      ```
-
-      ## Run your project
-
-      Run your project with the following command:
-
-      ```bash
-      npx expo start
-      ```
-
-      <Include src="_partials/expo/quickstart/run-project-step" />
-
-      ## Create your first user
-
-      <Include src="_partials/expo/quickstart/create-first-user-step" />
-
-      ## Native sign-in with Google and Apple (optional)
-
-      If you want to add native Sign in with Google and Sign in with Apple buttons that authenticate without opening a browser, you'll need to install `expo-crypto`:
-
-      ```bash
-      npx expo install expo-crypto
-      ```
-
-      Then, refer to the [Sign in with Google](/docs/guides/configure/auth-strategies/sign-in-with-google) and [Sign in with Apple](/docs/guides/configure/auth-strategies/sign-in-with-apple) guides for full setup instructions, including any additional dependencies specific to each provider. **This approach requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/) because it uses native modules. It cannot run in Expo Go.**
-    </Steps>
-  </Tab>
-
+<Tabs items={["Native components", "JavaScript (Native sign-in optional)"]}>
   <Tab>
     {/* Native Components Tab */}
 
@@ -435,6 +241,200 @@ Use the following tabs to choose your preferred approach:
       ## Configure social connections (optional)
 
       <Include src="_partials/expo/configure-google-apple" />
+    </Steps>
+  </Tab>
+
+  <Tab>
+    {/* JavaScript Tab */}
+
+    This approach uses [custom flows](!custom-flow) built with React Native components and **works in Expo Go — no dev build required.**
+
+    <Steps>
+      ## Enable Native API
+
+      <Include src="_partials/native-api-callout" />
+
+      ## Create a new Expo app
+
+      <Include src="_partials/expo/quickstart/create-new-expo-app" />
+
+      ## Remove default template files
+
+      <Include src="_partials/expo/quickstart/remove-default-template-files" />
+
+      ## Install dependencies
+
+      Install the required packages. Use `npx expo install` to ensure SDK-compatible versions.
+
+      - The [Clerk Expo SDK](/docs/reference/expo/overview) gives you access to prebuilt components, hooks, and helpers to make user authentication easier.
+      - Clerk stores the active user's session token in memory by default. In Expo apps, the recommended way to store sensitive data, such as tokens, is by using `expo-secure-store` which encrypts the data before storing it.
+
+      ```bash
+      npx expo install @clerk/expo expo-secure-store
+      ```
+
+      ## Set your Clerk API keys
+
+      <Include src="_partials/quickstarts/set-clerk-publishable-key" />
+
+      ```env {{ filename: '.env' }}
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+      ```
+
+      ## Add `<ClerkProvider>` to your root layout
+
+      <Include src="_partials/expo/quickstart/clerk-provider" />
+
+      ## Add sign-up and sign-in pages
+
+      Clerk currently only supports [control components](/docs/reference/components/overview#control-components) for Expo native. [UI components](/docs/reference/components/overview) are only available for Expo web. Instead, you must build [custom flows](!custom-flow) using Clerk's API. The following sections demonstrate how to build [custom email/password sign-up and sign-in flows](/docs/guides/development/custom-flows/authentication/email-password). If you want to use different authentication methods, such as passwordless or OAuth, see the dedicated custom flow guides.
+
+      ### Layout page
+
+      First, protect your sign-up and sign-in pages.
+
+      1. Create an `(auth)` [route group](https://docs.expo.dev/router/advanced/shared-routes/). This will group your sign-up and sign-in pages.
+      1. In the `(auth)` group, create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to access the user's authentication state. If the user is already signed in, they will be redirected to the home page.
+
+      ```tsx {{ filename: 'app/(auth)/_layout.tsx' }}
+      import { useAuth } from '@clerk/expo'
+      import { Redirect, Stack } from 'expo-router'
+
+      export default function AuthRoutesLayout() {
+        const { isSignedIn, isLoaded } = useAuth()
+
+        if (!isLoaded) {
+          return null
+        }
+
+        if (isSignedIn) {
+          return <Redirect href={'/'} />
+        }
+
+        return <Stack />
+      }
+      ```
+
+      ### Sign-up page
+
+      <Include src="_partials/expo/email-pass-sign-up" />
+
+      ### Sign-in page
+
+      <Include src="_partials/expo/email-pass-sign-in" />
+
+      For more information about building these [custom flows](!custom-flow), including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/guides/development/custom-flows/authentication/email-password) guide.
+
+      ## Add a home screen
+
+      You can control which content signed-in and signed-out users can see with Clerk's [prebuilt control components](/docs/reference/components/overview#control-components). For this guide, you'll use:
+
+      - [`<Show when="signed-in">`](/docs/reference/components/control/show): Children of this component can only be seen while **signed in**.
+      - [`<Show when="signed-out">`](/docs/reference/components/control/show): Children of this component can only be seen while **signed out**.
+
+      1. Create a `(home)` route group.
+      1. In the `(home)` group, create a `_layout.tsx` file with the following code.
+
+      ```tsx {{ filename: 'app/(home)/_layout.tsx' }}
+      import { useAuth } from '@clerk/expo'
+      import { Redirect, Stack } from 'expo-router'
+
+      export default function Layout() {
+        const { isSignedIn, isLoaded } = useAuth()
+
+        if (!isLoaded) {
+          return null
+        }
+
+        if (!isSignedIn) {
+          return <Redirect href="/(auth)/sign-in" />
+        }
+
+        return <Stack />
+      }
+      ```
+
+      Then, in the same folder, create an `index.tsx` file. If the user is signed in, it displays their email and a sign-out button. If they're not signed in, it displays sign-in and sign-up links.
+
+      ```tsx {{ filename: 'app/(home)/index.tsx', collapsible: true }}
+      import { Show, useUser } from '@clerk/expo'
+      import { useClerk } from '@clerk/expo'
+      import { Link } from 'expo-router'
+      import { Text, View, Pressable, StyleSheet } from 'react-native'
+
+      export default function Page() {
+        const { user } = useUser()
+        const { signOut } = useClerk()
+
+        return (
+          <View style={styles.container}>
+            <Text style={styles.title}>Welcome!</Text>
+            <Show when="signed-out">
+              <Link href="/(auth)/sign-in">
+                <Text>Sign in</Text>
+              </Link>
+              <Link href="/(auth)/sign-up">
+                <Text>Sign up</Text>
+              </Link>
+            </Show>
+            <Show when="signed-in">
+              <Text>Hello {user?.id}</Text>
+              <Pressable style={styles.button} onPress={() => signOut()}>
+                <Text style={styles.buttonText}>Sign out</Text>
+              </Pressable>
+            </Show>
+          </View>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        container: {
+          flex: 1,
+          padding: 20,
+          paddingTop: 60,
+          gap: 16,
+        },
+        title: {
+          fontSize: 24,
+          fontWeight: 'bold',
+        },
+        button: {
+          backgroundColor: '#0a7ea4',
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          borderRadius: 8,
+          alignItems: 'center',
+        },
+        buttonText: {
+          color: '#fff',
+          fontWeight: '600',
+        },
+      })
+      ```
+
+      ## Run your project
+
+      Run your project with the following command:
+
+      ```bash
+      npx expo start
+      ```
+
+      <Include src="_partials/expo/quickstart/run-project-step" />
+
+      ## Create your first user
+
+      <Include src="_partials/expo/quickstart/create-first-user-step" />
+
+      ## Native sign-in with Google and Apple (optional)
+
+      If you want to add native Sign in with Google and Sign in with Apple buttons that authenticate without opening a browser, you'll need to install `expo-crypto`:
+
+      ```bash
+      npx expo install expo-crypto
+      ```
+
+      Then, refer to the [Sign in with Google](/docs/guides/configure/auth-strategies/sign-in-with-google) and [Sign in with Apple](/docs/guides/configure/auth-strategies/sign-in-with-apple) guides for full setup instructions, including any additional dependencies specific to each provider. **This approach requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/) because it uses native modules. It cannot run in Expo Go.**
     </Steps>
   </Tab>
 </Tabs>

@@ -46,7 +46,7 @@ This guide will have you create a new table in your [Supabase project](https://s
   1. In the Clerk Dashboard, navigate to the [Supabase integration setup](https://dashboard.clerk.com/setup/supabase).
   1. Choose your configuration options, and then select **Activate Supabase integration**. This will reveal the **Clerk domain** for your Clerk instance.
   1. Save the **Clerk domain**.
-  1. In the Supabase Dashboard, navigate to [**Authentication > Sign In / Up**](https://supabase.com/dashboard/project/_/auth/third-party).
+  1. In the Supabase Dashboard, navigate to [**Authentication > Sign In / Providers**](https://supabase.com/dashboard/project/_/auth/third-party).
   1. Select **Add provider** and select **Clerk** from the list of providers.
   1. Paste the **Clerk domain** you copied from the Clerk Dashboard.
 
@@ -97,8 +97,9 @@ This guide will have you create a new table in your [Supabase project](https://s
   ## Set up your environment variables
 
   1. In the Supabase dashboard, navigate to [**Project Settings > Data API**](https://supabase.com/dashboard/project/_/settings/api).
-  1. Add the **Project URL** to your `.env` file as `SUPABASE_URL`.
-  1. In the **Project API keys** section, copy the **Publishable key** (formerly the `anon` `public` key) and add it to your `.env` file as `SUPABASE_KEY`.
+  1. Copy the **API URL** and add it to your `.env` file as `SUPABASE_URL`. Only use the base project URL (e.g., `https://your-project-ref.supabase.co`) — remove any trailing path like `/rest/v1` if it's present.
+  1. Navigate to [**Project Settings > API Keys**](https://supabase.com/dashboard/project/_/settings/api-keys).
+  1. In the **Publishable and secret API keys** section, copy the **Publishable key** (formerly the `anon` `public` key) and add it to your `.env` file as `SUPABASE_PUBLISHABLE_KEY`.
 
   <If sdk="nextjs">
     > [!IMPORTANT]
@@ -107,7 +108,7 @@ This guide will have you create a new table in your [Supabase project](https://s
 
   ## Fetch Supabase data in your code
 
-  In your app's `page.tsx`, paste the following code. This example shows the list of tasks for the user and allows the user to add new tasks. The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/objects/initializing) to initialize a new Supabase client with access to Clerk's session token.
+  In your app's `page.tsx`, paste the following code. This example shows the list of tasks for the user and allows the user to add new tasks. The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/javascript/initializing) to initialize a new Supabase client with access to Clerk's session token.
 
   <Tabs items={["Client-side rendering", "Server-side rendering"]}>
     <Tab>
@@ -124,7 +125,7 @@ This guide will have you create a new table in your [Supabase project](https://s
         const [loading, setLoading] = useState(true)
         const [name, setName] = useState('')
         // The `useUser()` hook is used to ensure that Clerk has loaded data about the signed in user
-        const { user } = useUser()
+        const { isLoaded, user } = useUser()
         // The `useSession()` hook is used to get the Clerk session object
         // The session object is used to get the Clerk session token
         const { session } = useSession()
@@ -133,7 +134,7 @@ This guide will have you create a new table in your [Supabase project](https://s
         function createClerkSupabaseClient() {
           return createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_KEY!,
+            process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
             {
               async accessToken() {
                 return session?.getToken() ?? null
@@ -142,31 +143,49 @@ This guide will have you create a new table in your [Supabase project](https://s
           )
         }
 
-        // Create a `client` object for accessing Supabase data using the Clerk token
-        const client = createClerkSupabaseClient()
-
         // This `useEffect` will wait for the User object to be loaded before requesting
         // the tasks for the signed in user
         useEffect(() => {
-          if (!user) return
+          if (!isLoaded) {
+            return
+          }
+
+          if (!user) {
+            setTasks([])
+            setName('')
+            setLoading(false)
+            return
+          }
 
           async function loadTasks() {
             setLoading(true)
+            const client = createClerkSupabaseClient()
             const { data, error } = await client.from('tasks').select()
             if (!error) setTasks(data)
             setLoading(false)
           }
 
           loadTasks()
-        }, [user])
+        }, [isLoaded, user])
 
         async function createTask(e: React.FormEvent<HTMLFormElement>) {
           e.preventDefault()
-          // Insert task into the "tasks" database
-          await client.from('tasks').insert({
-            name,
-          })
-          window.location.reload()
+          const trimmedName = name.trim()
+          if (!trimmedName) return
+
+          const client = createClerkSupabaseClient()
+          const { data, error } = await client
+            .from('tasks')
+            .insert({
+              name: trimmedName,
+            })
+            .select()
+            .single()
+
+          if (!error && data) {
+            setTasks((currentTasks) => [...currentTasks, data])
+            setName('')
+          }
         }
 
         return (
@@ -175,21 +194,29 @@ This guide will have you create a new table in your [Supabase project](https://s
 
             {loading && <p>Loading...</p>}
 
-            {!loading && tasks.length > 0 && tasks.map((task: any) => <p key={task.id}>{task.name}</p>)}
+            {isLoaded && !user && !loading && <p>Sign in to view your tasks.</p>}
 
-            {!loading && tasks.length === 0 && <p>No tasks found</p>}
+            {isLoaded &&
+              user &&
+              !loading &&
+              tasks.length > 0 &&
+              tasks.map((task: any) => <p key={task.id}>{task.name}</p>)}
 
-            <form onSubmit={createTask}>
-              <input
-                autoFocus
-                type="text"
-                name="name"
-                placeholder="Enter new task"
-                onChange={(e) => setName(e.target.value)}
-                value={name}
-              />
-              <button type="submit">Add</button>
-            </form>
+            {isLoaded && user && !loading && tasks.length === 0 && <p>No tasks found</p>}
+
+            {isLoaded && user && (
+              <form onSubmit={createTask}>
+                <input
+                  autoFocus
+                  type="text"
+                  name="name"
+                  placeholder="Enter new task"
+                  onChange={(e) => setName(e.target.value)}
+                  value={name}
+                />
+                <button type="submit">Add</button>
+              </form>
+            )}
           </div>
         )
       }
@@ -208,7 +235,7 @@ This guide will have you create a new table in your [Supabase project](https://s
       export function createServerSupabaseClient() {
         return createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_KEY!,
+          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
           {
             async accessToken() {
               return (await auth()).getToken()

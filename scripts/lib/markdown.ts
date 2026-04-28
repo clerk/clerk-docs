@@ -13,6 +13,7 @@ import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { toString } from 'mdast-util-to-string'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
+import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
 import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
@@ -60,6 +61,7 @@ export const parseInMarkdownFile =
     const vfile = await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
+      .use(remarkGfm)
       .use(() => (tree, vfile) => {
         node = tree
 
@@ -102,6 +104,7 @@ export const parseInMarkdownFile =
     await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
+      .use(remarkGfm)
       .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
       .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links

@@ -653,6 +653,63 @@ This does a couple things:
 - Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
+#### llmsText
+
+The `llmsText` frontmatter object opts a doc into the curated docs index rendered at [`clerk.com/llms.txt`](https://clerk.com/llms.txt). The marketing site reads this field directly from each doc's frontmatter at build time — there is no build-pipeline output for it in this repo.
+
+This is **not** a flag for general-purpose LLM consumption. The full corpus of docs is already shipped at [`clerk.com/llms-full.txt`](https://clerk.com/llms-full.txt). `llmsText` controls a small, hand-curated index (~40 entries) intended for AI crawlers that need a high-signal landing page. Use it sparingly.
+
+| Name      | Type                                                             | Default | Description                                                              |
+| --------- | ---------------------------------------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `include` | `boolean`                                                        | `false` | Whether to include this doc in the curated `clerk.com/llms.txt` index.   |
+| `section` | `"Quick Start" \| "Guide" \| "Component" \| "Reference" \| true` | `true`  | Which subsection of the index to render the doc under (see table below). |
+
+If `include` is `true` but `section` is omitted, the doc is rendered ungrouped at the top of the `## Docs` section (equivalent to `section: true`).
+
+The `description` frontmatter field is required for any opted-in doc — each rendered line uses the format `- [Title](url): description`.
+
+| `section` value | Renders under       |
+| --------------- | ------------------- |
+| `"Quick Start"` | `### Quickstarts`   |
+| `"Guide"`       | `### Guides`        |
+| `"Component"`   | `### Components`    |
+| `"Reference"`   | `### SDK reference` |
+| `true`          | (no subheading)     |
+
+Order within each subsection follows manifest navigation order — authors do not control it.
+
+##### Examples
+
+<details>
+<summary>Opt a guide into the curated index</summary>
+
+```diff
+  ---
+  title: Sessions
+  description: Sessions, refresh, revocation, and multi-session.
++ llmsText:
++   include: true
++   section: Guide
+  ---
+```
+
+</details>
+
+<details>
+<summary>Opt a landing page into the index without a subsection</summary>
+
+```diff
+  ---
+  title: Welcome to Clerk Docs
+  description: Documentation home and product overview.
++ llmsText:
++   include: true
++   section: true
+  ---
+```
+
+</details>
+
 ### Doc variants
 
 A **doc variant** is a version of a page that is specific to a particular SDK. For example, the `quickstart.react.mdx` page is a variant of the `quickstart.mdx` page that is specific to the React SDK. This is useful when you want to show different content for different SDKs but want to keep the route the same.

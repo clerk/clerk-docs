@@ -8,11 +8,6 @@ export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles) => {
   return outputtedDocsFiles.map((file) => file.content).join('\n')
 }
 
-export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles) => {
-  const list = outputtedDocsFiles.map((page) => `- [${page.title}](${page.url})`).join('\n')
-  return `# Clerk\n\n## Docs\n\n${list}`
-}
-
 export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {
   return files
     .filter(({ path }) => !path.startsWith('~/')) // Exclude these quick redirect pages

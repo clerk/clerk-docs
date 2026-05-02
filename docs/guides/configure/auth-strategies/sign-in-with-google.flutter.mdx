@@ -1,0 +1,204 @@
+---
+title: Add "Sign in with Google" to your Flutter app
+description: Learn how to add native Sign in with Google to your Clerk Flutter app on iOS and Android.
+sdk: flutter
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "A Clerk application is required.",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "A Google Developer account is required.",
+      link: "https://console.developers.google.com/",
+      icon: "google",
+    },
+    {
+      title: "Follow the Flutter quickstart.",
+      link: "/docs/quickstarts/flutter",
+      icon: "flutter",
+    },
+  ]}
+/>
+
+This guide explains how to add native Sign in with Google to your Flutter app using Clerk. The native approach uses Google's platform SDK to obtain an ID token directly, which is then passed to Clerk for authentication.
+
+> [!WARNING]
+> On **Android**, Google [does not allow sign-in via in-app browsers](https://developers.googleblog.com/en/modernizing-oauth-interactions-in-native-apps-for-better-usability-and-security). The native ID token approach described in this guide is required for Android. On iOS, the in-app WebView OAuth flow (via `ssoSignIn`) is also supported.
+
+To make the setup process easier, it's recommended to keep two browser tabs open — one for the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections) and one for the [Google Cloud Console](https://console.cloud.google.com/).
+
+<Steps>
+  ## Enable Google as a social connection
+
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections).
+  1. In the left sidebar, select **User & Authentication**, then select **SSO Connections**.
+  1. Select **Add connection** and select **For all users**.
+  1. In the **Choose provider** dropdown, select **Google**.
+  1. Save the **Authorized Redirect URI** displayed — you will need it in the next step.
+  1. Toggle on **Enable for sign-up and sign-in**.
+
+  ## Create Google OAuth credentials
+
+  You need three OAuth clients in Google Cloud Console: one for Android, one for iOS, and one Web client. Clerk uses the Web client for server-side token verification — **the Web client is required even for native apps**.
+
+  1. Navigate to the [Google Cloud Console](https://console.cloud.google.com/).
+  1. Select an existing project or [create a new one](https://console.cloud.google.com/projectcreate).
+  1. In the top-left, select the menu icon (**≡**) and select **APIs & Services**, then **Credentials**.
+
+  ### Create the Android client
+
+  1. Next to **Credentials**, select **Create Credentials**, then **OAuth client ID**.
+  1. For **Application type**, select **Android**.
+  1. Complete the required fields:
+     - **Package name**: Your app's package name (e.g. `com.example.myapp`), found in `android/app/build.gradle`.
+     - **SHA-1 certificate fingerprint**: Run the following command, replacing the path with your debug or production keystore:
+       ```sh
+       keytool -keystore path-to-debug-or-production-keystore -list -v
+       ```
+       > [!IMPORTANT]
+       > By default, the debug keystore is at `~/.android/debug.keystore`. The keystore password is `android`. You may need to install [OpenJDK](https://openjdk.org/) to run `keytool`.
+  1. Select **Create**.
+
+  ### Create the iOS client
+
+  1. Select **Create Credentials**, then **OAuth client ID**.
+  1. For **Application type**, select **iOS**.
+  1. Enter your **Bundle ID** (e.g. `com.example.myapp`), found in your Xcode project settings.
+  1. Select **Create**.
+
+  ### Create the Web client
+
+  1. Select **Create Credentials**, then **OAuth client ID**.
+  1. For **Application type**, select **Web application**.
+  1. Under **Authorized redirect URIs**, paste the **Authorized Redirect URI** you saved from the Clerk Dashboard.
+  1. Select **Create**. A modal will display your **Client ID** and **Client Secret** — save these securely.
+
+  ## Set the Client ID and Secret in the Clerk Dashboard
+
+  1. Return to the [Clerk Dashboard SSO connections page](https://dashboard.clerk.com/~/user-authentication/sso-connections).
+  1. Select the Google connection you created earlier.
+  1. Enter the **Client ID** and **Client Secret** from the Web client you created in the previous step.
+  1. Select **Save**.
+
+  ## Install dependencies
+
+  Add the `google_sign_in` and `uuid` packages to your `pubspec.yaml`:
+
+  ```sh
+  flutter pub add google_sign_in uuid
+  ```
+
+  ## Configure your platforms
+
+  ### Android
+
+  No additional `AndroidManifest.xml` changes are required for the `google_sign_in` package beyond the `INTERNET` permission already present in the quickstart.
+
+  ### iOS
+
+  The `google_sign_in` package requires a URL scheme for the OAuth callback. Add the following to your `ios/Runner/Info.plist`, replacing the value with the reversed form of your **iOS Client ID** from Google Cloud Console:
+
+  ```xml
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <!-- Your reversed iOS client ID, e.g. com.googleusercontent.apps.YOUR_IOS_CLIENT_ID -->
+        <string>com.googleusercontent.apps.YOUR_IOS_CLIENT_ID</string>
+      </array>
+    </dict>
+  </array>
+  ```
+
+  ## Implement Sign in with Google
+
+  ### Using Clerk's pre-built UI (iOS only)
+
+  On iOS, if you're using `ClerkAuthentication` or `ClerkOAuthPanel`, the **Sign in with Google** button is rendered automatically once Google is enabled in the Clerk Dashboard. This uses the in-app WebView OAuth flow and does not require the `google_sign_in` package.
+
+  ```dart
+  ClerkAuthentication()
+  ```
+
+  ### Using a custom flow (iOS and Android)
+
+  For custom UI, or for Android where the in-app browser is not permitted, use `google_sign_in` to obtain an ID token natively and pass it to Clerk.
+
+  > [!IMPORTANT]
+  > The `serverClientId` must be the **Web client ID** from Google Cloud Console, not the Android or iOS client ID. Clerk requires this to verify the token server-side.
+
+  ```dart
+  import 'package:clerk_auth/clerk_auth.dart' as clerk;
+  import 'package:clerk_flutter/clerk_flutter.dart';
+  import 'package:google_sign_in/google_sign_in.dart';
+  import 'package:uuid/uuid.dart';
+
+  Future<void> signInWithGoogle(BuildContext context) async {
+    final authState = ClerkAuth.of(context);
+
+    // Reset the Clerk client before initialising Google Sign-In
+    await authState.resetClient();
+
+    final google = GoogleSignIn.instance;
+    await google.initialize(
+      // Use your Web client ID from Google Cloud Console
+      serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+      nonce: const Uuid().v4(),
+    );
+
+    final account = await google.authenticate(
+      scopeHint: const ['openid', 'email', 'profile'],
+    );
+
+    final token = account.authentication.idToken;
+    if (token == null) return;
+
+    // Pass the ID token to Clerk
+    await authState.idTokenSignIn(
+      provider: clerk.IdTokenProvider.google,
+      token: token,
+    );
+
+    // If this is a new user, a sign-up object may be returned with missing fields
+    if (authState.signUp case clerk.SignUp signUp
+        when signUp.missingFields.isNotEmpty) {
+      final nameParts = account.displayName?.split(' ') ?? [];
+      await authState.attemptSignUp(
+        firstName: signUp.missing(clerk.Field.firstName)
+            ? nameParts.firstOrNull
+            : null,
+        lastName: signUp.missing(clerk.Field.lastName)
+            ? (nameParts.length > 1 ? nameParts.last : null)
+            : null,
+      );
+    }
+  }
+  ```
+
+  To conditionally show the native Google Sign-In button only when the strategy is available in your Clerk environment:
+
+  ```dart
+  if (authState.env.config.firstFactors.contains(clerk.Strategy.oauthTokenGoogle))
+    ElevatedButton(
+      onPressed: () => signInWithGoogle(context),
+      child: const Text('Sign in with Google'),
+    ),
+  ```
+</Steps>
+
+## Troubleshooting
+
+### `PlatformException: sign_in_failed` on Android
+
+Ensure the SHA-1 fingerprint registered in Google Cloud Console matches the keystore you are using to sign your build. Debug and release builds use different keystores with different fingerprints — both may need to be registered during development.
+
+### Token verification fails
+
+Verify that the `serverClientId` passed to `GoogleSignIn.instance.initialize()` is the **Web client ID**, not the Android or iOS client ID. Clerk uses the Web client for server-side verification.

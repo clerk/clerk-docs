@@ -1,0 +1,117 @@
+---
+title: Add "Sign in with Apple" to your Flutter app
+description: Learn how to add native Sign in with Apple to your Clerk Flutter app on iOS.
+sdk: flutter
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "A Clerk application is required.",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "An Apple Developer account is required.",
+      link: "https://developer.apple.com/",
+      icon: "apple",
+    },
+  ]}
+/>
+
+> [!NOTE]
+> Native Sign in with Apple is only available on **iOS**. On Android, use the browser-based OAuth flow instead — call `ssoSignIn(context, Strategy.oauthApple)` as described in the [authentication flows reference](/docs/sdk-reference/authentication-flows#sign-in-with-oauth).
+
+This guide explains how to add native Sign in with Apple to your Flutter app using Clerk. The native approach uses Apple's platform SDK to obtain an ID token directly, which is then passed to Clerk for authentication.
+
+If you only need browser-based OAuth (a WebView flow that doesn't require additional packages), you can call `ssoSignIn(context, Strategy.oauthApple)` directly — see the [authentication flows reference](/docs/sdk-reference/authentication-flows#sign-in-with-oauth). The steps below cover the native ID token approach.
+
+<Steps>
+  ## Enable Apple as a social connection
+
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections).
+  1. In the left sidebar, select **User & Authentication**, then select **SSO Connections**.
+  1. Select **Add connection** and select **For all users**.
+  1. In the **Choose provider** dropdown, select **Apple**.
+  1. Toggle on **Enable for sign-up and sign-in** and select **Save**.
+
+  ## Add the Sign in with Apple capability in Xcode
+
+  1. Open your Flutter project's iOS workspace in Xcode (`ios/Runner.xcworkspace`).
+  1. Select the **Runner** target, then open the **Signing & Capabilities** tab.
+  1. Select **+ Capability** and add **Sign In with Apple**.
+
+  > [!NOTE]
+  > Sign in with Apple works on both iOS Simulators and physical devices. However, simulators have limited support — physical devices provide full functionality including biometric authentication (Face ID / Touch ID).
+
+  ## Install dependencies
+
+  Add the `sign_in_with_apple` and `uuid` packages to your `pubspec.yaml`:
+
+  ```sh
+  flutter pub add sign_in_with_apple uuid
+  ```
+
+  ## Implement Sign in with Apple
+
+  ### Using Clerk's pre-built UI
+
+  If you're using `ClerkAuthentication` or `ClerkOAuthPanel`, no additional code is required. Once Apple is enabled as a social connection in the Clerk Dashboard, the **Sign in with Apple** button is rendered automatically.
+
+  ```dart
+  ClerkAuthentication()
+  ```
+
+  ### Using a custom flow
+
+  For custom UI, use `sign_in_with_apple` to obtain an ID token and pass it to Clerk using `idTokenSignIn`.
+
+  ```dart
+  import 'package:clerk_auth/clerk_auth.dart' as clerk;
+  import 'package:clerk_flutter/clerk_flutter.dart';
+  import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+  import 'package:uuid/uuid.dart';
+
+  Future<void> signInWithApple(BuildContext context) async {
+    final authState = ClerkAuth.of(context);
+
+    // Request Apple ID credentials with a secure nonce
+    final credential = await SignInWithApple.getAppleIDCredential(
+      nonce: const Uuid().v4(),
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+    );
+
+    final token = credential.identityToken;
+    if (token == null) return;
+
+    // Pass the ID token to Clerk
+    await authState.idTokenSignIn(
+      provider: clerk.IdTokenProvider.apple,
+      token: token,
+    );
+
+    // If this is a new user, a sign-up object may be returned with missing fields
+    if (authState.signUp case clerk.SignUp signUp
+        when signUp.missingFields.isNotEmpty) {
+      await authState.attemptSignUp(
+        firstName: signUp.missing(clerk.Field.firstName)
+            ? credential.givenName
+            : null,
+        lastName: signUp.missing(clerk.Field.lastName)
+            ? credential.familyName
+            : null,
+      );
+    }
+  }
+  ```
+
+  > [!IMPORTANT]
+  > Apple only provides the user's full name (`givenName` and `familyName`) during their **first** app authorisation. On subsequent sign-ins, this data is not returned. Store the name when you first receive it and treat it as optional thereafter.
+</Steps>
+
+## Hide My Email
+
+Apple's **Hide My Email** feature lets users share a private relay email address instead of their real one. Clerk supports this out of the box, but you may need to configure [email communication through Apple's private relay](https://developer.apple.com/documentation/sign_in_with_apple/communicating_using_the_private_relay_service) in your Apple Developer account if your app sends transactional emails.

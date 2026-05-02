@@ -1,0 +1,410 @@
+---
+title: Authentication flows
+description: Learn how to handle sign-in, sign-up, MFA, password reset, and session management with the Clerk Flutter SDK.
+sdk: flutter
+---
+
+The Flutter SDK provides pre-built widgets that handle authentication flows automatically, as well as a lower-level API for building custom UI.
+
+## Pre-built authentication UI
+
+The `ClerkAuthentication` widget handles sign-in and sign-up flows, including OAuth, MFA, and password reset, with no additional code required:
+
+```dart
+ClerkAuthentication()
+```
+
+Place it anywhere in your widget tree when the user is signed out. Wrap your app with `ClerkAuth` to provide the auth state:
+
+```dart
+ClerkAuth(
+  publishableKey: 'pk_...',
+  child: ClerkAuthBuilder(
+    signedInBuilder: (context, auth) => const HomeScreen(),
+    signedOutBuilder: (context, auth) => const ClerkAuthentication(),
+  ),
+)
+```
+
+Other pre-built widgets:
+
+- `ClerkSignInPanel` — sign-in form only
+- `ClerkSignUpPanel` — sign-up form only
+- `ClerkOAuthPanel` — OAuth provider buttons only
+- `ClerkForgottenPasswordPanel` — password reset flow
+
+---
+
+For custom UI, access the auth state with `ClerkAuth.of(context)` and use the methods below.
+
+## Sign in
+
+The `attemptSignIn` method is progressive — call it repeatedly with updated parameters as the user moves through each step of the flow.
+
+### Sign in with password
+
+Sign in with an identifier (email, phone, or username) and password:
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.attemptSignIn(
+  strategy: Strategy.password,
+  identifier: 'user@email.com',
+  password: 'secretpassword',
+);
+```
+
+### Sign in with OTP (email)
+
+Send an OTP to the user's email, then verify the code:
+
+```dart
+final auth = ClerkAuth.of(context);
+
+// Send the code
+await auth.attemptSignIn(
+  strategy: Strategy.emailCode,
+  identifier: 'user@email.com',
+);
+
+// Verify the code
+await auth.attemptSignIn(
+  strategy: Strategy.emailCode,
+  code: '123456',
+);
+```
+
+### Sign in with OTP (phone)
+
+Send an OTP to the user's phone number, then verify the code:
+
+```dart
+final auth = ClerkAuth.of(context);
+
+// Send the code
+await auth.attemptSignIn(
+  strategy: Strategy.phoneCode,
+  identifier: '+1234567890',
+);
+
+// Verify the code
+await auth.attemptSignIn(
+  strategy: Strategy.phoneCode,
+  code: '123456',
+);
+```
+
+### Sign in with email link
+
+Send a magic link to the user's email. The link will be polled automatically:
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.attemptSignIn(
+  strategy: Strategy.emailLink,
+  identifier: 'user@email.com',
+  redirectUrl: 'yourapp://clerk/callback',
+);
+```
+
+### Sign in with OAuth
+
+Sign in using an OAuth provider (e.g., Google, GitHub):
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.ssoSignIn(context, Strategy.oauthGoogle);
+```
+
+The SDK handles the OAuth redirect flow in-app using a WebView by default. To handle the redirect externally (e.g., via a deep link), configure a `redirectionGenerator` in `ClerkAuthConfig`.
+
+### Sign in with ID token
+
+Sign in with an ID token from an identity provider (e.g., Apple):
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.idTokenSignIn(
+  provider: IdTokenProvider.apple,
+  token: credential.identityToken,
+);
+
+// If the user doesn't exist, transfer to sign-up
+if (auth.signIn?.isTransferable == true) {
+  await auth.transfer();
+}
+```
+
+### Sign in with passkey
+
+Sign in using a passkey:
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.attemptSignIn(strategy: Strategy.passkey);
+```
+
+### Sign in with Enterprise SSO
+
+Sign in using Enterprise SSO:
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.ssoSignIn(context, Strategy.enterpriseSSO);
+```
+
+### Multi-factor authentication
+
+After the first factor is verified, if MFA is required, call `attemptSignIn` again with the second factor strategy.
+
+#### MFA with phone code
+
+```dart
+// Send the SMS code
+await auth.attemptSignIn(strategy: Strategy.phoneCode);
+
+// Verify the code
+await auth.attemptSignIn(
+  strategy: Strategy.phoneCode,
+  code: '123456',
+);
+```
+
+#### MFA with email code
+
+```dart
+// Send the email code
+await auth.attemptSignIn(strategy: Strategy.emailCode);
+
+// Verify the code
+await auth.attemptSignIn(
+  strategy: Strategy.emailCode,
+  code: '123456',
+);
+```
+
+#### MFA with TOTP (authenticator app)
+
+```dart
+await auth.attemptSignIn(
+  strategy: Strategy.totp,
+  code: '123456',
+);
+```
+
+#### MFA with backup code
+
+```dart
+await auth.attemptSignIn(
+  strategy: Strategy.backupCode,
+  code: 'backup-code',
+);
+```
+
+#### Resend a code
+
+```dart
+await auth.resendCode(Strategy.phoneCode);
+```
+
+### Password reset
+
+#### Password reset with email
+
+```dart
+final auth = ClerkAuth.of(context);
+
+// Initiate reset and send code
+await auth.initiatePasswordReset(
+  identifier: 'user@email.com',
+  strategy: Strategy.resetPasswordEmailCode,
+);
+
+// Verify the code and set the new password
+await auth.attemptSignIn(
+  strategy: Strategy.resetPasswordEmailCode,
+  code: '123456',
+  password: 'newpassword',
+);
+```
+
+#### Password reset with phone
+
+```dart
+final auth = ClerkAuth.of(context);
+
+// Initiate reset and send code
+await auth.initiatePasswordReset(
+  identifier: '+1234567890',
+  strategy: Strategy.resetPasswordPhoneCode,
+);
+
+// Verify the code and set the new password
+await auth.attemptSignIn(
+  strategy: Strategy.resetPasswordPhoneCode,
+  code: '123456',
+  password: 'newpassword',
+);
+```
+
+## Sign up
+
+The `attemptSignUp` method is progressive — call it repeatedly with updated parameters until the user is fully signed up.
+
+### Create a new sign-up
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.attemptSignUp(
+  emailAddress: 'newuser@email.com',
+  password: 'secretpassword',
+  firstName: 'John',
+  lastName: 'Doe',
+  username: 'johndoe',
+  phoneNumber: '+1234567890',
+);
+```
+
+### Verify email via OTP
+
+After submitting a sign-up with an email address, verify it with a code:
+
+```dart
+// Send the verification code (triggered automatically by attemptSignUp,
+// or call again with the emailCode strategy)
+await auth.attemptSignUp(strategy: Strategy.emailCode);
+
+// Verify the code
+await auth.attemptSignUp(
+  strategy: Strategy.emailCode,
+  code: '123456',
+);
+```
+
+### Verify phone via OTP
+
+```dart
+// Send the verification code
+await auth.attemptSignUp(strategy: Strategy.phoneCode);
+
+// Verify the code
+await auth.attemptSignUp(
+  strategy: Strategy.phoneCode,
+  code: '123456',
+);
+```
+
+### Sign up with OAuth
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.ssoSignUp(context, Strategy.oauthGoogle);
+```
+
+### Sign up with ID token
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.idTokenSignUp(
+  provider: IdTokenProvider.apple,
+  idToken: credential.identityToken!,
+  firstName: credential.givenName,
+  lastName: credential.familyName,
+);
+
+// If the user already exists, transfer to sign-in
+if (auth.signUp?.isTransferable == true) {
+  await auth.transfer();
+}
+```
+
+### Sign up with Enterprise SSO
+
+```dart
+final auth = ClerkAuth.of(context);
+
+await auth.ssoSignUp(context, Strategy.enterpriseSSO);
+```
+
+## Current sign-in/sign-up
+
+Access the in-progress sign-in or sign-up for multi-step flows.
+
+### Current sign-in
+
+```dart
+final signIn = ClerkAuth.of(context).signIn;
+```
+
+### Current sign-up
+
+```dart
+final signUp = ClerkAuth.of(context).signUp;
+```
+
+## Session management
+
+### Sessions
+
+Retrieve all sessions for the current client:
+
+```dart
+final sessions = ClerkAuth.of(context).client.sessions;
+```
+
+### Get session token
+
+Retrieve the current session token to authenticate requests to your backend:
+
+```dart
+final auth = ClerkAuth.of(context);
+final tokenObj = await auth.sessionToken();
+final token = tokenObj.jwt;
+```
+
+You can also listen to the `sessionTokenStream` for token renewals:
+
+```dart
+auth.sessionTokenStream.listen((token) {
+  // Use token.jwt to authenticate requests
+});
+```
+
+### Set active session
+
+Switch to a different session:
+
+```dart
+final auth = ClerkAuth.of(context);
+await auth.activate(session);
+```
+
+### Set active organization
+
+Set the active organization for the current session:
+
+```dart
+final auth = ClerkAuth.of(context);
+await auth.setActiveOrganization(organization);
+```
+
+### Sign out
+
+```dart
+final auth = ClerkAuth.of(context);
+
+// Sign out from all sessions
+await auth.signOut();
+
+// Sign out from a specific session
+await auth.signOutOf(session);
+```

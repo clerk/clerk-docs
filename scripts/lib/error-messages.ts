@@ -32,6 +32,8 @@ export const errorMessages = {
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
   'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
+  'if-component-sdk-and-not-sdk-props-cannot-be-used-together': (): string =>
+    `Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.`,
   'doc-sdk-filtered-by-parent': (title: string, docSDK: SDK[], parentSDK: SDK[]): string =>
     `Doc "${title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
   'group-sdk-filtered-by-parent': (title: string, groupSDK: SDK[], parentSDK: SDK[]): string =>
@@ -68,6 +70,8 @@ export const errorMessages = {
   'link-doc-not-found': (url: string, file: string): string =>
     `Matching file not found for path: ${url}. Expected file to exist at ${file}`,
   'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
+  'doc-link-must-start-with-a-slash': (url: string): string =>
+    `Doc link must start with a slash (/docs/...). Fix url: ${url}`,
 
   // File reading errors
   'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,
@@ -82,7 +86,7 @@ export const errorMessages = {
 
   // Typedoc errors
   'typedoc-folder-not-found': (path: string): string =>
-    `Typedoc folder ${path} not found, run "npm run typedoc:download"`,
+    `Typedoc folder ${path} not found, run "pnpm run typedoc:download"`,
   'typedoc-read-error': (filePath: string): string => `Failed to read in ${filePath} from typedoc file`,
   'typedoc-parse-error': (filePath: string): string => `Failed to parse ${filePath} from typedoc file`,
   'typedoc-not-found': (filePath: string): string => `Typedoc ${filePath} not found`,
@@ -145,5 +149,24 @@ export const safeFail = <TCode extends WarningCode, TArgs extends Parameters<(ty
     // @ts-expect-error - TypeScript has trouble with spreading args into the function
     const message = errorMessages[warningCode](...args)
     vfile.fail(message, position)
+  }
+}
+
+export const safeError = <TCode extends WarningCode, TArgs extends Parameters<(typeof errorMessages)[TCode]>>(
+  config: BuildConfig,
+  vfile: VFile,
+  filePath: string,
+  section: WarningsSection,
+  warningCode: TCode,
+  args: TArgs,
+  position?: Position,
+) => {
+  if (!shouldIgnoreWarning(config, filePath, section, warningCode)) {
+    // @ts-expect-error - TypeScript has trouble with spreading args into the function
+    const message = errorMessages[warningCode](...args)
+    const vfileMessage = vfile.message(message, position)
+    // Marks the message as an error (not just a warning) so vfile-reporter
+    // formats it with ✖ and the build exits with a non-zero code.
+    vfileMessage.fatal = true
   }
 }

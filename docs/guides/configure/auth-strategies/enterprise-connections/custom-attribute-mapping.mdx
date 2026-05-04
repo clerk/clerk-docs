@@ -1,0 +1,81 @@
+---
+title: Custom Attribute Mapping
+description: Learn how to sync custom attributes from your Identity Provider to Clerk's public metadata, shared across SSO and Directory Sync connections.
+---
+
+Custom attribute mapping lets you sync additional user data from your Identity Provider (IdP) (such as department, employee ID, or cost center) into Clerk's `publicMetadata`. Attribute definitions are configured at the **enterprise connection level** and are shared between your SSO connection (SAML) and your Directory Sync (SCIM) connection, so the same attributes are available regardless of how a user authenticates or is provisioned.
+
+## How it works
+
+Attribute configuration happens in two layers:
+
+1. **Shared attribute pool** — You define the attributes you care about once, at the enterprise connection level. Each attribute maps to a key in the user's `publicMetadata`. These definitions are shared across SSO and SCIM for that connection.
+1. **Connection-specific mappings** — For each connection type (SAML or SCIM), you map the shared attribute to the IdP's specific field name or schema attribute.
+
+This keeps your schema consistent while allowing for the different naming conventions each IdP uses.
+
+## Common attributes
+
+Standard attributes (for example, username, first name, last name, and email addresses) are pre-configured for every enterprise connection. Clerk controls the mapping logic for these, but you don't need to define them manually.
+
+## Custom attributes
+
+Custom attributes let you sync any additional user data from your IdP into `publicMetadata`. When your IdP sends a value for a custom attribute, Clerk stores it at `publicMetadata.<key>` on the user object.
+
+For example, if you define a custom attribute with the key `department`, it will be stored as `publicMetadata.department` when synced.
+
+### Define custom attributes
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+1. Select the enterprise connection you want to configure.
+1. On the **Overview** tab, find the **Identity provider attributes** card.
+1. In the **Custom attributes** section, select **Create custom attribute**.
+1. In the **Key** field, enter the `publicMetadata` key where this value will be stored (e.g., `department`).
+1. In the **Display name** field, enter a human-readable name (e.g., `Department`).
+1. Select **Create attribute**.
+
+Once defined, the attribute appears in the **Attribute mapping** card on both the **SSO** tab and — if Directory Sync is enabled — the **Directory sync** tab, ready to be mapped to IdP-specific claim paths or SCIM schema attributes.
+
+## Map attributes for SSO connections
+
+For SSO connections, you map each shared attribute to the claim name your IdP returns during authentication.
+
+### SAML
+
+In SAML, attributes are passed as assertions. For each custom attribute:
+
+1. In the Clerk Dashboard, open your SAML connection and select the **SSO** tab.
+1. Scroll to the **Attribute mapping** card. Under **Custom attributes**, select **Map custom attribute**.
+1. In the **SSO attribute** field, enter the SAML claim name your IdP sends (e.g., `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/department`).
+1. In the **Clerk User attribute** dropdown, select one of your defined custom attributes.
+1. Select **Map attribute**.
+1. In your IdP, ensure the corresponding attribute is included in the SAML assertion and mapped to the same claim name.
+
+For a full walkthrough of setting up a SAML connection, see the [custom SAML provider guide](/docs/guides/configure/auth-strategies/enterprise-connections/saml/custom-provider).
+
+## Map attributes for SCIM (Directory Sync)
+
+When Directory Sync is enabled, SCIM is the **exclusive source of truth** for attribute values. SCIM-managed attributes are read-only in Clerk and cannot be edited from the Dashboard or by the user in `<UserProfile />`. When SCIM is disabled, attributes become editable again.
+
+Clerk's SCIM implementation exposes a `/Schemas` endpoint that advertises a custom schema extension (`urn:ietf:params:scim:schemas:extension:clerk:2.0:User`). This tells your IdP that Clerk accepts arbitrary custom attributes, which are mapped directly to `publicMetadata`.
+
+For each custom attribute, you map the shared attribute to the SCIM path your IdP sends. The path can target a top-level core attribute (e.g., `title`), a nested attribute (e.g., `name.givenName`), or an attribute under any extension namespace your IdP populates — including the standard enterprise extension or Clerk's custom extension:
+
+1. In the Clerk Dashboard, navigate to the **Directory sync** tab on your enterprise connection.
+1. Scroll to the **Attribute mapping** card. Under **Custom attributes**, select **Map custom attribute**.
+1. In the **SCIM attribute** field, enter the SCIM path your IdP sends:
+   - `urn:ietf:params:scim:schemas:extension:clerk:2.0:User.department` if your IdP sends `department` under Clerk's custom extension.
+   - `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department` if your IdP uses the standard enterprise extension.
+1. In the **Clerk User attribute** dropdown, select one of your defined custom attributes.
+1. Select **Map attribute**.
+
+For example, in Okta you can configure the `department` profile attribute to be sent under Clerk's custom extension (`urn:ietf:params:scim:schemas:extension:clerk:2.0:User.department`), then map that path to your shared `department` attribute in Clerk.
+
+For a full walkthrough of setting up Directory Sync, see the [Directory Sync guide](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync).
+
+## Accessing custom attributes
+
+Custom attribute values are stored in `publicMetadata` and are accessible from the [Backend API](https://clerk.com/docs/reference/backend-api) on the user object, the `useUser()` hook (via `user.publicMetadata`), and Clerk's [server-side helpers](/docs/guides/users/extending).
+
+> [!NOTE]
+> `publicMetadata` is server-controlled. Users cannot modify these values themselves. Only your backend or the Clerk Dashboard (when SCIM is not active) can update them.

@@ -1,0 +1,376 @@
+---
+title: Error handling
+description: Provide your users with useful information about the errors being returned from sign-up and sign-in requests.
+sdk: android
+---
+
+On Android, Clerk auth methods return a result that you handle with `.onSuccess` and `.onFailure`. The object passed to `.onFailure` is a `ClerkResult.Failure<ClerkErrorResponse>`. The underlying Clerk API errors are available on `failure.error?.errors`, and the SDK provides `errorMessage` and `throwable` so you can render user-facing messages and branch on specific error codes when your flow needs to recover programmatically.
+
+> [!TIP]
+> To see a list of all possible errors, refer to the [Errors](/docs/guides/development/errors/overview) documentation.
+
+In most cases, use `error.errorMessage` for the message you show to the user, and use `error.error?.errors?.firstOrNull()?.code` when you need to take a different action based on the specific error that occurred.
+
+## Example
+
+The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to capture Clerk errors in a `ViewModel`, render them in your Compose UI, and keep logging details available for debugging.
+
+<CodeBlockTabs options={["ErrorHandlingSignInViewModel.kt", "ErrorHandlingSignInActivity.kt"]}>
+  ```kotlin {{ filename: 'ErrorHandlingSignInViewModel.kt', collapsible: true }}
+  package com.clerk.customflows.errorhandling
+
+  import android.util.Log
+  import androidx.lifecycle.ViewModel
+  import androidx.lifecycle.viewModelScope
+  import com.clerk.api.Clerk
+  import com.clerk.api.auth.types.MfaType
+  import com.clerk.api.network.serialization.errorMessage
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signin.SignIn
+  import kotlinx.coroutines.flow.MutableStateFlow
+  import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.flow.combine
+  import kotlinx.coroutines.flow.launchIn
+  import kotlinx.coroutines.launch
+
+  class ErrorHandlingSignInViewModel : ViewModel() {
+    private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+    val uiState = _uiState.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage = _errorMessage.asStateFlow()
+
+    init {
+      combine(Clerk.userFlow, Clerk.isInitialized) { user, isInitialized ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user != null -> UiState.SignedIn
+              Clerk.auth.currentSignIn?.status == SignIn.Status.NEEDS_CLIENT_TRUST ->
+                UiState.NeedsClientTrust
+              else -> UiState.SignedOut
+            }
+        }
+        .launchIn(viewModelScope)
+    }
+
+    fun submit(email: String, password: String) {
+      _errorMessage.value = null
+
+      viewModelScope.launch {
+        Clerk.auth
+          .signInWithPassword {
+            identifier = email
+            this.password = password
+          }
+          .onSuccess { signIn ->
+            when (signIn.status) {
+              SignIn.Status.COMPLETE -> {
+                _uiState.value = UiState.SignedIn
+              }
+              SignIn.Status.NEEDS_SECOND_FACTOR -> {
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+                Log.d(TAG, "Additional MFA is required.")
+              }
+              SignIn.Status.NEEDS_CLIENT_TRUST -> {
+                val emailFactor =
+                  signIn.supportedSecondFactors.orEmpty().firstOrNull { it.strategy == "email_code" }
+
+                if (emailFactor != null) {
+                  signIn
+                    .sendMfaEmailCode(emailAddressId = emailFactor.emailAddressId)
+                    .onSuccess {
+                      _uiState.value = UiState.NeedsClientTrust
+                    }
+                    .onFailure { error ->
+                      _errorMessage.value = error.errorMessage
+                      Log.e(TAG, error.errorMessage, error.throwable)
+                    }
+                } else {
+                  Log.e(TAG, "Sign-in attempt not complete: ${signIn.status}")
+                }
+              }
+              else -> {
+                Log.e(TAG, "Sign-in attempt not complete: ${signIn.status}")
+              }
+            }
+          }
+          .onFailure { error ->
+            _errorMessage.value = error.errorMessage
+            Log.e(TAG, error.errorMessage, error.throwable)
+          }
+      }
+    }
+
+    fun resendClientTrustCode() {
+      _errorMessage.value = null
+
+      val signIn = Clerk.auth.currentSignIn ?: return
+
+      viewModelScope.launch {
+        signIn
+          .sendMfaEmailCode()
+          .onFailure { error ->
+            _errorMessage.value = error.errorMessage
+            Log.e(TAG, error.errorMessage, error.throwable)
+          }
+      }
+    }
+
+    fun verifyClientTrust(code: String) {
+      _errorMessage.value = null
+
+      val signIn = Clerk.auth.currentSignIn ?: return
+
+      viewModelScope.launch {
+        signIn
+          .verifyMfaCode(code, MfaType.EMAIL_CODE)
+          .onSuccess { updated ->
+            if (updated.status == SignIn.Status.COMPLETE) {
+              _uiState.value = UiState.SignedIn
+            } else {
+              Log.e(TAG, "Sign-in attempt not complete: ${updated.status}")
+            }
+          }
+          .onFailure { error ->
+            _errorMessage.value = error.errorMessage
+            Log.e(TAG, error.errorMessage, error.throwable)
+          }
+      }
+    }
+
+    sealed interface UiState {
+      data object Loading : UiState
+
+      data object SignedOut : UiState
+
+      data object NeedsClientTrust : UiState
+
+      data object SignedIn : UiState
+    }
+
+    companion object {
+      private const val TAG = "ErrorHandlingSignIn"
+    }
+  }
+  ```
+
+  ```kotlin {{ filename: 'ErrorHandlingSignInActivity.kt', collapsible: true }}
+  package com.clerk.customflows.errorhandling
+
+  import android.os.Bundle
+  import androidx.activity.ComponentActivity
+  import androidx.activity.compose.setContent
+  import androidx.activity.viewModels
+  import androidx.compose.foundation.layout.Arrangement
+  import androidx.compose.foundation.layout.Box
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.foundation.layout.fillMaxSize
+  import androidx.compose.foundation.layout.padding
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.CircularProgressIndicator
+  import androidx.compose.material3.MaterialTheme
+  import androidx.compose.material3.Text
+  import androidx.compose.material3.TextField
+  import androidx.compose.runtime.getValue
+  import androidx.compose.runtime.mutableStateOf
+  import androidx.compose.runtime.remember
+  import androidx.compose.runtime.setValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.compose.ui.text.input.PasswordVisualTransformation
+  import androidx.compose.ui.unit.dp
+  import androidx.lifecycle.compose.collectAsStateWithLifecycle
+  import com.clerk.api.Clerk
+
+  class ErrorHandlingSignInActivity : ComponentActivity() {
+    private val viewModel: ErrorHandlingSignInViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      setContent {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+
+        ErrorHandlingSignInView(
+          state = state,
+          errorMessage = errorMessage,
+          onSubmit = viewModel::submit,
+          onVerifyClientTrust = viewModel::verifyClientTrust,
+          onResendClientTrustCode = viewModel::resendClientTrustCode,
+        )
+      }
+    }
+  }
+
+  @Composable
+  fun ErrorHandlingSignInView(
+    state: ErrorHandlingSignInViewModel.UiState,
+    errorMessage: String?,
+    onSubmit: (String, String) -> Unit,
+    onVerifyClientTrust: (String) -> Unit,
+    onResendClientTrustCode: () -> Unit,
+  ) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var clientTrustCode by remember { mutableStateOf("") }
+
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      when (state) {
+        ErrorHandlingSignInViewModel.UiState.SignedOut -> {
+          Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+          ) {
+            TextField(value = email, onValueChange = { email = it }, label = { Text("Email") })
+            TextField(
+              value = password,
+              onValueChange = { password = it },
+              visualTransformation = PasswordVisualTransformation(),
+              label = { Text("Password") },
+            )
+
+            if (errorMessage != null) {
+              Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+            }
+
+            Button(onClick = { onSubmit(email, password) }) {
+              Text("Sign in")
+            }
+          }
+        }
+
+        ErrorHandlingSignInViewModel.UiState.NeedsClientTrust -> {
+          Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+          ) {
+            Text("Verify your account")
+            TextField(
+              value = clientTrustCode,
+              onValueChange = { clientTrustCode = it },
+              label = { Text("Code") },
+            )
+
+            if (errorMessage != null) {
+              Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+            }
+
+            Button(onClick = { onVerifyClientTrust(clientTrustCode) }) {
+              Text("Verify")
+            }
+            Button(onClick = onResendClientTrustCode) {
+              Text("I need a new code")
+            }
+          }
+        }
+
+        ErrorHandlingSignInViewModel.UiState.SignedIn -> {
+          Text("Current session: ${Clerk.session?.id}")
+        }
+
+        ErrorHandlingSignInViewModel.UiState.Loading -> {
+          CircularProgressIndicator()
+        }
+      }
+    }
+  }
+  ```
+</CodeBlockTabs>
+
+## Special error cases
+
+### User locked
+
+If you have [account lockout](/docs/guides/secure/user-lockout) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/guides/secure/user-lockout)), you will receive an HTTP status of `403 (Forbidden)` and the following error payload:
+
+```json
+{
+  "error": {
+    "message": "Account locked",
+    "long_message": "Your account is locked. You will be able to try again in 30 minutes. For more information, contact support.",
+    "code": "user_locked",
+    "meta": {
+      "lockout_expires_in_seconds": 1800
+    }
+  }
+}
+```
+
+`lockout_expires_in_seconds` represents the time remaining until the user is able to attempt authentication again.
+In the above example, 1800 seconds (or 30 minutes) are left until they are able to retry, as of the current moment.
+
+The admin might have [configured](/docs/guides/secure/user-lockout#customize-max-sign-in-attempts-and-lockout-duration) e.g. a 45-minute lockout duration.
+Thus, 15 minutes after one has been locked, 30 minutes will still remain until the lockout lapses.
+
+You can opt to render the error message returned as-is or format the supplied `lockout_expires_in_seconds` value as per your liking in your own custom error message.
+
+For instance, if you wish to inform a user at which absolute time they will be able to try again, you could format the value from `meta` like this:
+
+```kotlin
+import android.util.Log
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import kotlinx.serialization.json.jsonPrimitive
+
+val clerkError = error.error?.errors?.firstOrNull()
+val meta = error.error?.meta
+
+if (clerkError?.code == "user_locked") {
+  val lockoutExpiresAt =
+    meta
+      ?.get("lockout_expires_in_seconds")
+      ?.jsonPrimitive
+      ?.content
+      ?.toLongOrNull()
+      ?.let { seconds ->
+        Instant
+          .now()
+          .plusSeconds(seconds)
+          .atZone(ZoneId.systemDefault())
+          .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))
+      }
+
+  Log.d("ErrorHandlingSignIn", "Your account is locked. Try again at $lockoutExpiresAt")
+}
+```
+
+### Password compromised
+
+If you have marked a user's password as compromised and the user has another way to identify themselves, such as an email address (so they can use email [OTP](!otp) or email link), or a phone number (so they can use an SMS [OTP](!otp)), you will receive an HTTP status of `422 (Unprocessable Entity)` and the following error payload:
+
+```json
+{
+  "error": {
+    "long_message": "Your password may be compromised. To protect your account, please continue with an alternative sign-in method. You will be required to reset your password after signing in.",
+    "code": "form_password_compromised",
+    "meta": {
+      "name": "param"
+    }
+  }
+}
+```
+
+When a user password is marked as compromised, they will not be able to sign in with their compromised password, so you should prompt them to sign in with another method. If they do not have any other identification methods to sign in, e.g. if they only have username and password, they will be signed in but they will be required to reset their password.
+
+> [!WARNING]
+> If your instance is older than December 18, 2025, you will need to [update your instance](!update) to the **Reset password session task** update.
+
+You can branch on the error code in your `.onFailure` handler and then transition the user into an alternative sign-in flow:
+
+```kotlin
+val clerkError = error.error?.errors?.firstOrNull()
+
+if (clerkError?.code == "form_password_compromised") {
+  _errorMessage.value = error.errorMessage
+
+  // Prompt the user to continue with another supported sign-in method,
+  // such as an email OTP or SMS OTP flow.
+  return@onFailure
+}
+```

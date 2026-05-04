@@ -91,19 +91,21 @@ export const embedLinks =
         return node
       }
 
-      const linkedDocSDKs = [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
+      const linkedDocSDKs = [...(linkedDoc.frontmatter.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
 
       // Is the page we are currently rendering, compatible with the linked page?
       // If no current page sdk is provided, we assume it is compatible
-      const targetSdkSupported = currentPageSDK ? linkedDocSDKs.includes(currentPageSDK) : true
+      const targetSdkSupported =
+        linkedDocSDKs.length > 0 ? (currentPageSDK ? linkedDocSDKs.includes(currentPageSDK) : true) : true
 
       // Does the linked page support more than one sdk?
       const linkedDocIsMultiSDK = linkedDocSDKs.length > 1
 
-      // Do the linked page and the current page use exactly the same sdk?
-      const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
+      // Does the url we are linking to already contain sdk in it, for example /docs/react/doc-1 verses just /docs/doc-1
+      // This would be in the case that the author intents to link to a specific sdk variant of a doc, instead of using the version that user is currently on
+      const urlContainsSDKScoping = linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
 
-      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK || !usesTheSameSDKs
+      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK || urlContainsSDKScoping
 
       // In these cases, we don't need to convert to a SDKLink
       if (!shouldConvertToSDKLink) return node
@@ -112,7 +114,7 @@ export const embedLinks =
         linkedDocSDKs !== undefined &&
         // Don't inject SDK scoping for single SDK scenarios (only one valid SDK + document supports that SDK)
         linkedDocSDKs.length > 1 &&
-        !linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
+        !urlContainsSDKScoping
 
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
       if (inCardsComponent === true) {

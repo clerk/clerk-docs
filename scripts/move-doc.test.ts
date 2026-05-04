@@ -26,14 +26,33 @@ async function createTempFiles(files: Array<{ path: string; content: string }>) 
     await fs.writeFile(fullPath, content)
   }
 
+  // Manual walk instead of fs.readdir({ recursive: true }) because
+  // Dirent.path (needed to reconstruct full paths) was deprecated and
+  // returns unreliable values.
   const listFiles = async (dir: string = '') => {
     const fullDir = path.join(tempDir, dir)
+    const collectedFiles: string[] = []
+
+    const walk = async (currentDir: string) => {
+      const entries = await fs.readdir(currentDir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        const entryPath = path.join(currentDir, entry.name)
+
+        if (entry.isDirectory()) {
+          await walk(entryPath)
+          continue
+        }
+
+        if (entry.isFile()) {
+          collectedFiles.push(path.relative(tempDir, entryPath))
+        }
+      }
+    }
+
     try {
-      const entries = await fs.readdir(fullDir, { withFileTypes: true, recursive: true })
-      return entries
-        .filter((entry) => entry.isFile())
-        .map((entry) => path.relative(tempDir, path.join(entry.path, entry.name)))
-        .sort()
+      await walk(fullDir)
+      return collectedFiles.sort()
     } catch {
       return []
     }
@@ -161,7 +180,6 @@ sdk: react, nextjs
             {
               source: '/docs/old-auth-guide',
               destination: '/docs/references/auth',
-              permanent: true,
             },
           ],
           null,
@@ -250,7 +268,6 @@ sdk: react, nextjs
     expect(staticRedirects).toContainEqual({
       source: '/docs/references/auth',
       destination: '/docs/guide/authentication',
-      permanent: true,
     })
 
     // Check manifest was updated
@@ -353,8 +370,8 @@ describe('move-doc redirect functionality', () => {
       {
         path: 'redirects/static/docs.json',
         content: JSON.stringify([
-          { source: '/docs/old-auth', destination: '/docs/auth/overview', permanent: true },
-          { source: '/docs/legacy-users', destination: '/docs/users/management', permanent: true },
+          { source: '/docs/old-auth', destination: '/docs/auth/overview' },
+          { source: '/docs/legacy-users', destination: '/docs/users/management' },
         ]),
       },
       {
@@ -385,20 +402,17 @@ describe('move-doc redirect functionality', () => {
     expect(staticRedirects).toContainEqual({
       source: '/docs/auth/overview',
       destination: '/docs/authentication/guide',
-      permanent: true,
     })
 
     // Should preserve existing redirects
     expect(staticRedirects).toContainEqual({
       source: '/docs/old-auth',
       destination: '/docs/authentication/guide',
-      permanent: true,
     })
 
     expect(staticRedirects).toContainEqual({
       source: '/docs/legacy-users',
       destination: '/docs/users/management',
-      permanent: true,
     })
   })
 
@@ -453,9 +467,9 @@ describe('move-doc redirect functionality', () => {
     await tempSetup.writeFile(
       'redirects/static/docs.json',
       JSON.stringify([
-        { source: '/docs/old-auth', destination: '/docs/auth/overview', permanent: true },
-        { source: '/docs/legacy-users', destination: '/docs/users/management', permanent: true },
-        { source: '/docs/another-old-auth', destination: '/docs/auth/guide', permanent: true }, // This should be updated
+        { source: '/docs/old-auth', destination: '/docs/auth/overview' },
+        { source: '/docs/legacy-users', destination: '/docs/users/management' },
+        { source: '/docs/another-old-auth', destination: '/docs/auth/guide' }, // This should be updated
       ]),
     )
 
@@ -471,20 +485,17 @@ describe('move-doc redirect functionality', () => {
     expect(staticRedirects).toContainEqual({
       source: '/docs/old-auth',
       destination: '/docs/authentication/overview',
-      permanent: true,
     })
 
     expect(staticRedirects).toContainEqual({
       source: '/docs/another-old-auth',
       destination: '/docs/authentication/guide',
-      permanent: true,
     })
 
     // Unrelated redirects should remain unchanged
     expect(staticRedirects).toContainEqual({
       source: '/docs/legacy-users',
       destination: '/docs/users/management',
-      permanent: true,
     })
   })
 
@@ -545,7 +556,7 @@ describe('move-doc redirect functionality', () => {
     // Set up a redirect chain: A -> B, then move B -> C, should result in A -> C
     await tempSetup.writeFile(
       'redirects/static/docs.json',
-      JSON.stringify([{ source: '/docs/old-auth', destination: '/docs/auth/overview', permanent: true }]),
+      JSON.stringify([{ source: '/docs/old-auth', destination: '/docs/auth/overview' }]),
     )
 
     // Move the destination of the existing redirect
@@ -560,14 +571,12 @@ describe('move-doc redirect functionality', () => {
     expect(staticRedirects).toContainEqual({
       source: '/docs/old-auth',
       destination: '/docs/new-auth/overview',
-      permanent: true,
     })
 
     // Should also have the new redirect
     expect(staticRedirects).toContainEqual({
       source: '/docs/auth/overview',
       destination: '/docs/new-auth/overview',
-      permanent: true,
     })
   })
 
@@ -624,7 +633,7 @@ describe('move-doc redirect functionality', () => {
     // We have a static redirect that sends users to the new version
     await tempSetup.writeFile(
       'redirects/static/docs.json',
-      JSON.stringify([{ source: '/docs/api/v1/users', destination: '/docs/api/v2/users', permanent: true }]),
+      JSON.stringify([{ source: '/docs/api/v1/users', destination: '/docs/api/v2/users' }]),
     )
 
     // we then decide to drop the /api/ folder
@@ -641,7 +650,6 @@ describe('move-doc redirect functionality', () => {
     expect(JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))).toContainEqual({
       source: '/docs/v1/users',
       destination: '/docs/v2/users',
-      permanent: true,
     })
   })
 
@@ -650,8 +658,8 @@ describe('move-doc redirect functionality', () => {
     await tempSetup.writeFile(
       'redirects/static/docs.json',
       JSON.stringify([
-        { source: '/docs/old-auth#configuration', destination: '/docs/auth/overview#config', permanent: true },
-        { source: '/docs/legacy-guide', destination: '/docs/auth/overview#getting-started', permanent: true },
+        { source: '/docs/old-auth#configuration', destination: '/docs/auth/overview#config' },
+        { source: '/docs/legacy-guide', destination: '/docs/auth/overview#getting-started' },
       ]),
     )
 
@@ -665,13 +673,11 @@ describe('move-doc redirect functionality', () => {
     expect(staticRedirects).toContainEqual({
       source: '/docs/old-auth#configuration',
       destination: '/docs/authentication/guide#config',
-      permanent: true,
     })
 
     expect(staticRedirects).toContainEqual({
       source: '/docs/legacy-guide',
       destination: '/docs/authentication/guide#getting-started',
-      permanent: true,
     })
   })
 

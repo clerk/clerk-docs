@@ -6,7 +6,7 @@ These are the guidelines we use to write our docs.
 
 ### Alphabetize
 
-Try to keep things in alphabetic order, except Next.js, React, and JavaScript are prioritized as these are our core SDKs. For example, our SDK selector prioritizes Next.js, React, and Javascript, and then alphabetizes the rest of the SDK's. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
+Try to keep things in alphabetic order, except our most popular SDKs are prioritized first: Next.js, React, JavaScript, Expo, TanStack React Start, React Router, and Express. For example, our SDK selector prioritizes these SDKs in this order, and then alphabetizes the rest. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
 
 ### De-dupe reference links and tooltips
 
@@ -114,10 +114,10 @@ When learners are performing an order of operations, it helps for them to start 
 Use active verbs that put the reader in the first person instead of passive verbs; "be" verbs that describe the learners actions as a state of being, like "is/was/to be".
 
 > ❌
-> The `middleware.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
+> The `proxy.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
 
 > ✅
-> Create the `middleware.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
+> Create the `proxy.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
 
 > ❌
 > User session and data
@@ -199,6 +199,34 @@ Code examples should always have an explanation preceding them. Typically, they 
 > ❌ You might have already configured `<ConvexProvider>`. Ensure that `<ClerkProvider>` wraps `ConvexProviderWithClerk` and that `useAuth` is passed to `ConvexProviderWithClerk`.
 
 > ✅ The following example demonstrates how to configure Clerk and Convex's providers. Clerk's `useAuth()` hook must be passed to `<ConvexProviderWithClerk>` and Clerk's `<ClerkProvider>` must be wrapped around it.
+
+### List item punctuation
+
+When list items are full sentences, end with a period.
+
+> ❌
+>
+> - Click **Save**
+> - The system sends you a confirmation email
+
+> ✅
+>
+> - Click **Save**.
+> - The system sends you a confirmation email.
+
+When list items aren't full sentences, don't use a period.
+
+> ❌
+>
+> - Name.
+> - Email.
+> - Password.
+
+> ✅
+>
+> - Name
+> - Email
+> - Password
 
 ## Accessibility
 

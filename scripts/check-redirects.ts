@@ -64,6 +64,7 @@ interface ProtectedRoute {
 const PROTECTED_ROUTES = [
   '/docs/api/instance_keys',
   '/docs/core-1/[[...slug]]',
+  '/docs/core-2/[precomputeCode]/[[...slug]]',
   '/docs/experiment-create_account_from_docs_quickstart/[experiment]',
   '/docs/experiment-nextjs_quickstart_template/[experiment]',
   '/docs/images/[[...slug]]',
@@ -80,6 +81,7 @@ const PROTECTED_ROUTES = [
   '/docs/raw/[[...slug]]',
   '/docs/reference/backend-api/[[...slug]]',
   '/docs/reference/frontend-api/[[...slug]]',
+  '/docs/reference/platform-api/[[...slug]]',
   '/docs/reference/spec/[api]/[version]',
   '/docs/reference/spec/invalidate',
   '/docs/revalidate',
@@ -243,8 +245,23 @@ function hasHashFragment(url: string): boolean {
   return url.includes('#')
 }
 
+// Destinations that are valid pages on the site but live outside this repo
+// (e.g., in the clerk/clerk repo). These are skipped during validation.
+const DEFINED_OUTSIDE_REPO = ['/pricing']
+
 function isExternalUrl(url: string): boolean {
   return url.startsWith('http://') || url.startsWith('https://')
+}
+
+function isDefinedOutsideRepo(url: string): boolean {
+  return DEFINED_OUTSIDE_REPO.includes(url)
+}
+
+/**
+ * Matches any URL that starts with /docs/core- (e.g. /docs/core-2/, /docs/core-2/some/guide).
+ */
+function isCoreDocsDestination(url: string): boolean {
+  return url.startsWith('/docs/core-')
 }
 
 async function checkRedirects(): Promise<void> {
@@ -281,6 +298,32 @@ async function checkRedirects(): Promise<void> {
   console.log(`✅ No protected route violations found`)
   console.log()
 
+  // Check for redirects that shadow existing pages
+  console.log('📄 Checking for redirects that shadow existing pages...')
+  const shadowedPages: Array<{ source: string; destination: string }> = []
+
+  for (const [source, redirect] of Object.entries(staticRedirects)) {
+    if (validUrls.has(source)) {
+      shadowedPages.push({ source, destination: redirect.destination })
+    }
+  }
+
+  if (shadowedPages.length > 0) {
+    console.log(`❌ Found ${shadowedPages.length} redirect(s) that shadow existing pages:`)
+    console.log()
+    for (const { source, destination } of shadowedPages) {
+      console.log(`   Source: ${source}`)
+      console.log(`   Destination: ${destination}`)
+      console.log(`   Problem: A page already exists at this URL`)
+      console.log()
+    }
+    process.exitCode = 1
+    return
+  }
+
+  console.log('✅ No redirects shadow existing pages')
+  console.log()
+
   const results: RedirectCheckResult[] = []
   let invalidCount = 0
   let externalCount = 0
@@ -293,6 +336,16 @@ async function checkRedirects(): Promise<void> {
     // Skip external URLs
     if (isExternalUrl(destination)) {
       externalCount++
+      continue
+    }
+
+    // Skip destinations that are valid but defined outside this repo
+    if (isDefinedOutsideRepo(destination)) {
+      continue
+    }
+
+    // Skip validation for `/docs/core-*/[[...slug]]` destinations (pages exist but are not in the directory)
+    if (isCoreDocsDestination(destination)) {
       continue
     }
 

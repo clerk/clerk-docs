@@ -9,6 +9,51 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 import { z } from 'zod'
 
+/**
+ * Extracts list of allowed SDKs from the `sdk` and `notSdk` props of the <If /> component
+ */
+function extractSDKsFromIfComponent(
+  config: BuildConfig,
+  node: Node,
+  vfile: VFile,
+  filePath: string,
+  sdk: string | undefined,
+  notSdk: string | undefined,
+) {
+  if (sdk && notSdk) {
+    safeFail(
+      config,
+      vfile,
+      filePath,
+      'docs',
+      'if-component-sdk-and-not-sdk-props-cannot-be-used-together',
+      [],
+      node.position,
+    )
+  }
+
+  if (notSdk) {
+    // Still validate that the SDK names are valid, but don't return them
+    // for scope checking — notSdk exclusions don't require the excluded
+    // SDKs to be in the page's scope.
+    extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
+    return undefined
+  }
+
+  if (sdk) {
+    const allowedSdks = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
+    return allowedSdks
+  }
+
+  // Don't throw an error if neither `sdk` nor `notSdk` is present
+  // because <If> accepts a `condition` prop
+  return undefined
+}
+
+/**
+ * Validates the SDKs in the <If /> component against the SDKs declared in the frontmatter and the manifest.
+ * Set `ignoreSdkWarning` on an `<If>` to skip these checks (e.g. shared partials embedded in a single-SDK guide).
+ */
 export const validateIfComponents =
   (
     config: BuildConfig,
@@ -30,12 +75,41 @@ export const validateIfComponents =
         filePath,
         z.string(),
       )
+      const notSdk = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'If',
+        'notSdk',
+        false,
+        'docs',
+        filePath,
+        z.string(),
+      )
+      const ignoreSdkWarning = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'If',
+        'ignoreSdkWarning',
+        false,
+        'docs',
+        filePath,
+        z.boolean(),
+      )
 
-      if (sdk === undefined) return
+      const allowedSdks = extractSDKsFromIfComponent(config, node, vfile, filePath, sdk, notSdk)
 
-      const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
+      if (allowedSdks === undefined) return
 
-      if (sdksFilter === undefined) return
+      // Partials are shared across pages with different SDK scopes, so
+      // scope validation (frontmatter/manifest checks) at the embedding site
+      // would produce false positives. Prop parsing above still validates
+      // SDK names and catches sdk+notSdk misuse.
+      if ((node as any).data?.fromPartial) return
+
+      // If the `ignoreSdkWarning` prop is true, skip the validation checks
+      if (ignoreSdkWarning === true) return
 
       const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
 
@@ -44,7 +118,7 @@ export const validateIfComponents =
       // The doc doesn't exist in the manifest so we are skipping it
       if (manifestItems.length === 0) return
 
-      sdksFilter.forEach((sdk) => {
+      allowedSdks.forEach((sdk) => {
         ;(() => {
           if (doc.sdk === undefined) return
 

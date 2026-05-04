@@ -1,0 +1,140 @@
+---
+title: Theming Expo native components
+description: Customize the appearance of Clerk's native iOS and Android components with a JSON theme file.
+sdk: expo
+---
+
+<Include src="_partials/expo/beta-callout" />
+
+You can customize the appearance of Clerk's [Expo native components](/docs/reference/expo/native-components/overview) (`<AuthView />`, `<UserProfileView />`, and the profile modal opened by `<UserButton />`) by passing a `theme` option to the `@clerk/expo` config plugin. The plugin reads a JSON file at prebuild time and applies it to both iOS and Android.
+
+> [!NOTE]
+> The `<UserButton />` avatar itself is a React Native component and is not affected by the theme.
+
+## Configure the plugin
+
+Create a `clerk-theme.json` file in your project and reference it from the plugin in your `app.json`:
+
+```json {{ filename: 'app.json' }}
+{
+  "expo": {
+    "plugins": [
+      [
+        "@clerk/expo",
+        {
+          "theme": "./clerk-theme.json"
+        }
+      ]
+    ]
+  }
+}
+```
+
+Run `npx expo prebuild --clean` (or rerun `npx expo run:ios` / `npx expo run:android`) so the plugin picks up the theme. The JSON is validated during prebuild — invalid hex colors or value types will fail the build with a descriptive error.
+
+## Theme schema
+
+Every key is optional. Provide only what you want to override; everything else falls back to the default Clerk theme.
+
+```json {{ filename: 'clerk-theme.json' }}
+{
+  "colors": {
+    "primary": "#6C47FF",
+    "background": "#FFFFFF",
+    "input": "#F5F5F5",
+    "danger": "#EF4444",
+    "success": "#10B981",
+    "warning": "#F59E0B",
+    "foreground": "#0F172A",
+    "mutedForeground": "#64748B",
+    "primaryForeground": "#FFFFFF",
+    "inputForeground": "#0F172A",
+    "neutral": "#94A3B8",
+    "border": "#E2E8F0",
+    "ring": "#6C47FF",
+    "muted": "#F1F5F9",
+    "shadow": "#00000020"
+  },
+  "darkColors": {
+    "primary": "#8B6FFF",
+    "background": "#0B0B0F",
+    "foreground": "#FFFFFF",
+    "border": "#1F2937"
+  },
+  "design": {
+    "borderRadius": 12,
+    "fontFamily": "Inter"
+  }
+}
+```
+
+### `colors`
+
+Light mode color tokens. Each value must be a 6- or 8-digit hex string (8-digit includes an alpha channel, e.g. `#00000080`). Unknown keys are ignored with a warning.
+
+| Key | Description |
+| - | - |
+| `primary` | Primary action color (buttons, links, focus). |
+| `background` | Surface background. |
+| `input` | Input field background. |
+| `danger` | Destructive / error states. |
+| `success` | Success states. |
+| `warning` | Warning states. |
+| `foreground` | Primary text color on `background`. |
+| `mutedForeground` | Secondary / helper text. |
+| `primaryForeground` | Text color used on top of `primary` (e.g. button labels). |
+| `inputForeground` | Text color inside inputs. |
+| `neutral` | Neutral accent color. |
+| `border` | Borders and dividers. |
+| `ring` | Focus ring. |
+| `muted` | Muted surface (badges, subtle backgrounds). |
+| `shadow` | Shadow color. |
+
+### `darkColors`
+
+Same shape as `colors`, applied automatically when the device is in dark mode. Any tokens you omit fall back to the default dark theme.
+
+When `darkColors` is provided, native components automatically use the dark palette when the device is in dark mode. To enable system dark mode in your app, set `"userInterfaceStyle": "automatic"` in your `app.json`. If you pin your app to `"light"` or `"dark"`, the native components will always use the corresponding palette.
+
+### `design`
+
+| Key | Type | Platform | Description |
+| - | - | - | - |
+| `borderRadius` | `number` | iOS + Android | Corner radius applied across components, in points/dp. |
+| `fontFamily` | `string` | iOS only | Custom font family name. The font must be bundled with your iOS app and registered in `Info.plist` (`UIAppFonts`). |
+
+> [!NOTE]
+> Custom font families are currently iOS-only. Android uses the system font.
+
+## How it works
+
+The plugin runs during `expo prebuild`:
+
+- **iOS:** the parsed theme is embedded in `Info.plist` under the `ClerkTheme` key. At runtime, the iOS components read it and apply the light or dark palette based on the current system appearance via SwiftUI's environment.
+- **Android:** the JSON is copied to `android/app/src/main/assets/clerk_theme.json`. At runtime the Android module parses it and assigns it to `Clerk.customTheme`.
+
+The plugin does not modify your app's `userInterfaceStyle` setting. To control whether your app follows the system appearance or is pinned to light/dark mode, set `"userInterfaceStyle"` in your `app.json`.
+
+Because the theme is applied at the native layer, it only affects the native views (`<AuthView />`, `<UserProfileView />`, and the profile modal opened by `<UserButton />`). It does not affect web components or React Native UI elements like the `<UserButton />` avatar itself.
+
+## Troubleshooting
+
+### My theme changes aren't showing up
+
+Run `npx expo prebuild --clean` to regenerate the native projects. The theme is only read at prebuild time.
+
+### `Clerk theme: invalid hex color for colors.primary`
+
+All color values must be hex strings with a leading `#` and 6 or 8 hex digits.
+
+### `Clerk theme file not found`
+
+The `theme` path is resolved relative to your project root. Double-check the path in `app.json`.
+
+### Dark mode isn't switching on iOS
+
+Make sure you're providing `darkColors` and that `"userInterfaceStyle"` is set to `"automatic"` in your `app.json`.
+
+### I removed the `theme` prop but the old theme is still applied
+
+Run `npx expo prebuild --clean` after removing the `theme` option. Incremental prebuilds don't clean up previously embedded theme data from `Info.plist` or `android/app/src/main/assets/clerk_theme.json`.

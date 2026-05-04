@@ -3,14 +3,16 @@ title: Proxying the Clerk Frontend API
 description: Learn how to proxy the Clerk Frontend API through your domain.
 ---
 
-> [!WARNING]
-> This guide is for users who need to proxy the Frontend API for **production** (proxying does not work for Clerk development instances). If your application already uses a CNAME subdomain that is required for deploying with Clerk, then you must proxy the Frontend API using a different subdomain. Refer to the [deployment guide](/docs/guides/development/deployment/production#dns-records) on how to configure DNS records for deployment.
+<Include src="_partials/advanced-feature-callout" />
 
 Clerk supports two configuration methods for connecting to the Clerk Frontend API: CNAME and Proxy.
 
 The recommended way to connect to the Clerk Frontend API is to [set up CNAME records and use DNS](/docs/guides/development/deployment/production). However, if you're unable to use this approach, or would like more control over your integration with Clerk, you can use a proxy.
 
 When using a proxy, all requests to the Frontend API will be made through your domain. This allows you to use your own SSL certificate, and gives you more control over how you configure your application.
+
+> [!WARNING]
+> This guide is for users who need to proxy the Frontend API for **production** (proxying does not work for Clerk development instances). If your application already uses a CNAME subdomain that is required for deploying with Clerk, then you must proxy the Frontend API using a different subdomain. Refer to the [deployment guide](/docs/guides/development/deployment/production#dns-records) on how to configure DNS records for deployment.
 
 ## How to use proxying
 
@@ -35,12 +37,54 @@ When using a proxy, all requests to the Frontend API will be made through your d
   Three additional headers must be set
 
   - `Clerk-Proxy-Url`: Needs to have the full proxy URL.
-  - `Clerk-Secret-Key`: The Secret Key for your Clerk instance.
+  - `Clerk-Secret-Key`: Your Clerk [Secret Key](!secret-key).
   - `X-Forwarded-For`: The IP address of the original client making the request.
 
   #### Example configuration
 
-  <Tabs items={["Nginx", "Cloudflare Workers", "Next.js"]}>
+  <Tabs items={["Next.js", "Express", "Nginx", "Cloudflare Workers"]}>
+    <Tab>
+      If you're using **Next.js**, you can configure a frontend API proxy in one of two ways:
+
+      - Use the built-in `frontendApiProxy` option in [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware#frontend-api-proxy).
+      - Use [`createFrontendApiProxyHandlers()`](/docs/reference/nextjs/clerk-middleware#create-frontend-api-proxy-handlers) in a Next.js App Router route handler. **This is useful if you prefer to keep proxy logic separate from your middleware.**
+
+      <Tabs items={["Using clerkMiddleware()", "Using createFrontendApiProxyHandlers()"]}>
+        <Tab>
+          The `frontendApiProxy` option in `clerkMiddleware()` handles all proxy requirements automatically, including header forwarding, body streaming, and redirect rewriting. The `proxyUrl` for authentication handshake is also auto-derived.
+
+          <Include src="_partials/frontend-api-proxy/basic-usage-nextjs" />
+
+          <Include src="_partials/frontend-api-proxy/multi-domain-usage-nextjs" />
+        </Tab>
+
+        <Tab>
+          As an alternative to the middleware approach, you can use `createFrontendApiProxyHandlers()` in a Next.js App Router route handler.
+
+          <Include src="_partials/frontend-api-proxy/create-frontend-api-proxy-handlers" />
+        </Tab>
+      </Tabs>
+    </Tab>
+
+    <Tab>
+      If you're using **Express**, you can use the built-in `frontendApiProxy` option in [`clerkMiddleware()`](/docs/reference/express/clerk-middleware#frontend-api-proxy) instead of manually configuring a proxy server. This option handles all proxy requirements automatically, including header forwarding, body streaming, and redirect rewriting. The `proxyUrl` for authentication handshake is also auto-derived.
+
+      ```ts {{ filename: 'index.ts' }}
+      import express from 'express'
+      import { clerkMiddleware } from '@clerk/express'
+
+      const app = express()
+
+      app.use(
+        clerkMiddleware({
+          frontendApiProxy: {
+            enabled: true,
+          },
+        }),
+      )
+      ```
+    </Tab>
+
     <Tab>
       ```nginx {{ filename: 'nginx.conf' }}
       http {
@@ -103,62 +147,6 @@ When using a proxy, all requests to the Frontend API will be made through your d
         ```
       </CodeBlockTabs>
     </Tab>
-
-    <Tab>
-      ```ts {{ filename: 'middleware.ts' }}
-      import { NextResponse } from 'next/server'
-      import { clerkMiddleware } from '@clerk/nextjs/server'
-
-      function proxyMiddleware(req) {
-        if (req.nextUrl.pathname.match('__clerk')) {
-          const proxyHeaders = new Headers(req.headers)
-          proxyHeaders.set('Clerk-Proxy-Url', process.env.NEXT_PUBLIC_CLERK_PROXY_URL || '')
-          proxyHeaders.set('Clerk-Secret-Key', process.env.CLERK_SECRET_KEY || '')
-          if (req.ip) {
-            proxyHeaders.set('X-Forwarded-For', req.ip)
-          } else {
-            proxyHeaders.set('X-Forwarded-For', req.headers.get('X-Forwarded-For') || '')
-          }
-
-          const proxyUrl = new URL(req.url)
-          proxyUrl.host = 'frontend-api.clerk.dev'
-          proxyUrl.port = '443'
-          proxyUrl.protocol = 'https'
-          proxyUrl.pathname = proxyUrl.pathname.replace('/__clerk', '')
-
-          return NextResponse.rewrite(proxyUrl, {
-            request: {
-              headers: proxyHeaders,
-            },
-          })
-        }
-
-        return null
-      }
-
-      const clerkHandler = clerkMiddleware()
-
-      export default function middleware(req) {
-        // First check if it's a proxy request
-        const proxyResponse = proxyMiddleware(req)
-        if (proxyResponse) {
-          return proxyResponse
-        }
-
-        // Otherwise, use Clerk's middleware
-        return clerkHandler(req)
-      }
-
-      export const config = {
-        matcher: [
-          // Skip Next.js internals and all static files, unless found in search params
-          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-          // Always run for API routes AND anything passed through the proxy
-          '/(api|trpc|__clerk)(.*)',
-        ],
-      }
-      ```
-    </Tab>
   </Tabs>
 
   > [!NOTE]
@@ -175,8 +163,8 @@ When using a proxy, all requests to the Frontend API will be made through your d
   <Tabs items={["Dashboard", "Backend API"]}>
     <Tab>
       1. In the Clerk Dashboard, navigate to the **[Domains](https://dashboard.clerk.com/~/domains)** page.
-      1. In the **Frontend API** section, select the **Advanced** dropdown.
-      1. In the **Proxy URL** field, enter your proxy URL. The proxy URL must be a valid URL and resolve correctly.
+      1. In the **Frontend API** section, select the **Set proxy configuration** option.
+      1. Enter your proxy URL. The proxy URL must be a valid URL and resolve correctly.
     </Tab>
 
     <Tab>
@@ -186,12 +174,15 @@ When using a proxy, all requests to the Frontend API will be made through your d
       curl -X PATCH https://api.clerk.com/v1/domains/{{DOMAIN ID}} \
           -H "Authorization: Bearer {{SECRET KEY}}" \
           -H "Content-Type: application/json" \
-          -d '{"proxy_url": "https://app.dev/__clerk"}}'
+          -d '{"proxy_url": "https://app.dev/__clerk"}'
       ```
     </Tab>
   </Tabs>
 
   ### Configure your proxy setup
+
+  > [!IMPORTANT]
+  > If you used the `frontendApiProxy` option in `clerkMiddleware()` (Next.js or Express), the server-side `proxyUrl` is auto-derived from the proxy configuration. You only need to set the client-side environment variable (e.g., `NEXT_PUBLIC_CLERK_PROXY_URL`) so that ClerkJS in the browser routes requests through the proxy.
 
   You can configure your proxy setup by either:
 
@@ -202,7 +193,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   To configure your proxy setup using environment variables, your `.env` file should look like this:
 
-  <Tabs items={["Next.js", "Remix", "JavaScript"]}>
+  <Tabs items={["Next.js", "Express", "JavaScript"]}>
     <Tab>
       ```env {{ filename: '.env' }}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
@@ -235,56 +226,46 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   #### Properties in your application
 
-  <Tabs items={["Next.js", "Remix", "JavaScript"]}>
+  <Tabs items={["Next.js", "Express", "JavaScript"]}>
     <Tab>
       To configure your proxy setup using properties in your Next.js application, set the `proxyUrl` property on the [`<ClerkProvider>`](/docs/reference/components/clerk-provider) component.
 
-      ```tsx {{ filename: 'app/layout.tsx', mark: [5] }}
+      ```tsx {{ filename: 'app/layout.tsx', mark: [7] }}
       import { ClerkProvider } from '@clerk/nextjs'
 
       export default function RootLayout({ children }: { children: React.ReactNode }) {
         return (
-          <ClerkProvider proxyUrl="https://app.dev/__clerk/">
-            <html lang="en">
-              <body>{children}</body>
-            </html>
-          </ClerkProvider>
+          <html lang="en">
+            <body>
+              <ClerkProvider proxyUrl="https://app.dev/__clerk/">{children}</ClerkProvider>
+            </body>
+          </html>
         )
       }
       ```
     </Tab>
 
     <Tab>
-      To configure your proxy setup using properties in your Remix application, set the `proxyUrl` property on the [`ClerkApp`](/docs/reference/remix/clerk-app) wrapper.
+      To configure your proxy setup using properties in your Express application, set the `proxyUrl` option on [`clerkMiddleware()`](/docs/reference/express/clerk-middleware).
 
-      ```tsx {{ filename: 'root.tsx' }}
-      export const loader = (args) => {
-        return rootAuthLoader(
-          args,
-          ({ req }) => {
-            const { userId, sessionId, getToken } = req.auth
-            return json({
-              message: `Hello from the root loader :)`,
-              ENV: getBrowserEnvironment(),
-            })
-          },
-          {
-            loadUser: true,
-            proxyUrl: 'https://app.dev/__clerk',
-          } as const,
-        )
-      }
+      ```ts {{ filename: 'index.ts', mark: [8] }}
+      import { clerkMiddleware } from '@clerk/express'
+      import express from 'express'
 
-      export default ClerkApp(App, {
-        proxyUrl: 'https://app.dev/__clerk',
-      })
+      const app = express()
+
+      app.use(
+        clerkMiddleware({
+          proxyUrl: 'https://app.dev/__clerk',
+        }),
+      )
       ```
     </Tab>
 
     <Tab>
-      To configure your proxy setup using properties in your JavaScript application, pass the `proxyUrl` option to the [`load()`](/docs/reference/javascript/clerk#load) method.
+      To configure your proxy setup using properties in your JavaScript application, pass the `proxyUrl` option to the [`load()`](/docs/reference/objects/clerk#load) method.
 
-      ```js {{ filename: 'main.js' }}
+      ```js {{ filename: 'main.js', mark: [7] }}
       import { Clerk } from '@clerk/clerk-js'
 
       // Initialize Clerk with your Clerk Publishable Key
@@ -302,6 +283,55 @@ When using a proxy, all requests to the Frontend API will be made through your d
   ### Ready to go 🎉
 
   Your application should now be able to access the Frontend API from your proxy!
+</Steps>
+
+## Proxying for satellite domains
+
+If you use [satellite domains](/docs/guides/dashboard/dns-domains/satellite-domains) and are unable to add a CNAME record for the Clerk Frontend API, you can proxy it instead. This replaces the CNAME-based DNS setup described in the satellite domains guide.
+
+You can mostly follow the same steps as for adding a proxy to your primary domain detailed above, but for your satellite domain instead.
+
+<Steps>
+  ### Add your satellite domain
+
+  Start by adding your satellite domain to the Clerk Dashboard and configure `allowedRedirectOrigins` on your primary domain app. See the [satellite domains guide](/docs/guides/dashboard/dns-domains/satellite-domains#add-your-first-satellite-domain) for instructions.
+
+  ### Configure your proxy server
+
+  Set up a proxy on your satellite domain that forwards requests to Clerk's Frontend API. The requirements are the same as [configuring a proxy for a primary domain](#configure-your-proxy-server) — requests to your satellite's proxy path (e.g., `https://satellite.dev/__clerk/*`) must be forwarded to `https://frontend-api.clerk.dev/*` with the body, all headers, and the three required additional headers (`Clerk-Proxy-Url`, `Clerk-Secret-Key`, `X-Forwarded-For`).
+
+  ### Enable proxying for the satellite domain
+
+  <Tabs items={["Dashboard", "Backend API"]}>
+    <Tab>
+      1. In the Clerk Dashboard, navigate to the **[Domains](https://dashboard.clerk.com/~/domains)** page.
+      1. Select the **Satellites** tab.
+      1. Select your satellite domain.
+      1. Set the proxy URL (e.g., `https://satellite.dev/__clerk`). The proxy URL must be a valid URL and resolve correctly.
+    </Tab>
+
+    <Tab>
+      The request below will update the satellite domain to use a proxy URL. Replace `{{DOMAIN ID}}` with your satellite domain's ID.
+
+      ```bash
+      curl -X PATCH https://api.clerk.com/v1/domains/{{DOMAIN ID}} \
+          -H "Authorization: Bearer {{SECRET KEY}}" \
+          -H "Content-Type: application/json" \
+          -d '{"proxy_url": "https://satellite.dev/__clerk"}'
+      ```
+    </Tab>
+  </Tabs>
+
+  ### Configure your satellite app
+
+  You can now configure your satellite app to use the proxy, either via environment variables or by using properties in your application. See the [Configure your proxy setup](#configure-your-proxy-setup) section for more information.
+
+  > [!NOTE]
+  > When using a proxy for a satellite domain, you set `proxyUrl` / `CLERK_PROXY_URL` **instead of** `domain` / `CLERK_DOMAIN`. The `proxyUrl` replaces `domain` — you should not set both.
+
+  ### Ready to go 🎉
+
+  Your satellite application should now be able to access the Frontend API from your proxy!
 </Steps>
 
 If you have any questions about proxying, or you're having any trouble setting this up, contact [support@clerk.com](mailto:support@clerk.com).

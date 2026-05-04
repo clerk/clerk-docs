@@ -8,7 +8,7 @@ cd clerk-astro
 npm install
 ```
 
-Install `@clerk/astro@latest`. Set `PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in `.env` (or `.env.local`). Update `astro.config.mjs` with the Clerk integration, an SSR adapter, and `output: "server"`. Add `clerkMiddleware()` from `@clerk/astro/server` in `src/middleware.ts` if `src/` exists, otherwise `middleware.ts` at the project root. Use `<Show>`, `<UserButton>`, `<SignInButton>`, and `<SignUpButton>` from `@clerk/astro/components`.
+Install `@clerk/astro@latest`. Update `astro.config.mjs` with the Clerk integration, an SSR adapter, and `output: "server"`. Add `clerkMiddleware()` from `@clerk/astro/server` in `src/middleware.ts` if `src/` exists, otherwise `middleware.ts` at the project root. Use `<Show>`, `<UserButton>`, `<SignInButton>`, and `<SignUpButton>` from `@clerk/astro/components`.
 
 Latest docs: https://clerk.com/docs/astro/getting-started/quickstart
 
@@ -23,15 +23,6 @@ npm install @clerk/astro@latest @astrojs/node
 ```
 
 Use the existing package manager if the project already uses `pnpm`, `yarn`, or `bun`.
-
-## .env
-
-```bash
-PUBLIC_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-CLERK_SECRET_KEY=YOUR_SECRET_KEY
-```
-
-Use `PUBLIC_CLERK_PUBLISHABLE_KEY` for Astro client-side access. Never expose `CLERK_SECRET_KEY` in client code.
 
 ## astro.config.mjs
 

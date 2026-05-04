@@ -12,6 +12,10 @@ Install `@clerk/astro@latest`. Set `PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SEC
 
 Latest docs: https://clerk.com/docs/astro/getting-started/quickstart
 
+## Keyless Mode
+
+No signup required. Without env vars (`PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`), Clerk auto-generates temporary keys. A "Configure your application" prompt appears to claim later. Do NOT tell users to sign up, create accounts, get API keys, or add env vars before running.
+
 ## Install
 
 ```bash

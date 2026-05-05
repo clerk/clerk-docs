@@ -36,11 +36,46 @@ To configure Clerk within your Vercel preview environment, see the [guide for co
 
 ## Deploy to production
 
-If you would like to deploy your Vercel project to production, you will need to add your **production** API keys to your Vercel project. You will also need a domain that you own, as you cannot use a `*.vercel.app` domain for production. Refer to the [Deploy to production](/docs/guides/development/deployment/production) guide for more information.
+If you would like to deploy your Vercel project to production, you will need to add your **production** API keys to your Vercel project. For most production apps, Clerk recommends using a custom domain that you own. See the [Deploy to production](/docs/guides/development/deployment/production) guide for more information.
 
 > [!QUIZ]
-> Why can't you use a `*.vercel.app` domain for production?
+> Can you use a `*.vercel.app` domain for production?
 >
 > ---
 >
-> To deploy to production, you need to set DNS records, which isn't possible with `vercel.app` domains.
+> Yes. Clerk supports production instances on `*.vercel.app` domains when the app uses production API keys and a Clerk SDK version that supports Vercel auto-proxy. A custom domain is still recommended for full branded production behavior.
+
+## Production `*.vercel.app` domains
+
+Clerk can run a production instance on a Vercel-provided `*.vercel.app` domain. This setup does not require you to add Clerk DNS records manually. Clerk routes browser auth traffic through your Vercel app using the `https://<your-app>.vercel.app/__clerk` proxy path.
+
+This mode supports:
+
+| Capability | Behavior |
+| - | - |
+| Production mode | Uses `pk_live_` and `sk_live_` keys with no development watermark |
+| Sign-in and sign-up | Works through the app's `*.vercel.app` domain |
+| Core auth emails | Verification and password reset emails are delivered through Clerk's shared `accounts.dev` email infrastructure |
+
+Some email features require a custom domain:
+
+| Restricted until you add a custom domain |
+| - |
+| Custom email templates |
+| Email link authentication |
+| Application invitations |
+| Organization invitations |
+| Email template customization |
+
+If you're using Next.js middleware or proxy, make sure the matcher includes Clerk's proxy path:
+
+```ts
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc|__clerk)(.*)',
+  ],
+}
+```
+
+If `__clerk` is missing from the matcher, requests to Clerk's proxied Frontend API can be skipped by middleware and authentication can fail.

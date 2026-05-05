@@ -7,6 +7,7 @@ import simpleGit from 'simple-git'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { build } from './build-docs'
 import { createConfig } from './lib/config'
+import { LLMS_FULL_HEADER } from './lib/llms'
 import { createBlankStore, invalidateFile } from './lib/store'
 import * as ioModule from './lib/io'
 
@@ -7456,7 +7457,7 @@ description: Generated API docs
       }),
     )
 
-    expect(await readFile('./dist/llms-full.txt')).toEqual(`---
+    expect(await readFile('./dist/llms-full.txt')).toEqual(`${LLMS_FULL_HEADER}---
 title: API Documentation
 description: Generated API docs
 sdkScoped: "false"

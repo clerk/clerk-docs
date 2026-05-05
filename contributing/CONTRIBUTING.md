@@ -657,7 +657,7 @@ This does a couple things:
 
 The `llmsText` frontmatter object opts a doc into the curated docs index rendered at [`clerk.com/llms.txt`](https://clerk.com/llms.txt). The marketing site reads this field directly from each doc's frontmatter at build time — there is no build-pipeline output for it in this repo.
 
-This is **not** a flag for general-purpose LLM consumption. The full corpus of docs is already shipped at [`clerk.com/llms-full.txt`](https://clerk.com/llms-full.txt). `llmsText` controls a small, hand-curated index (~40 entries) intended for AI crawlers that need a high-signal landing page. Use it sparingly.
+This is **not** a flag for general-purpose LLM consumption. The full corpus of docs is already shipped at [`clerk.com/docs/llms-full.txt`](https://clerk.com/docs/llms-full.txt). `llmsText` controls a small, hand-curated index (~40 entries) intended for AI crawlers that need a high-signal landing page. Use it sparingly.
 
 | Name      | Type                                                             | Default | Description                                                              |
 | --------- | ---------------------------------------------------------------- | ------- | ------------------------------------------------------------------------ |

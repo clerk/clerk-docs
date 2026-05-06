@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import readdirp from 'readdirp'
 import { remark } from 'remark'
+import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
 import type { Node } from 'unist'
 import type { BuildConfig } from './config'
@@ -46,6 +47,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
 
       const vfile = await remark()
         .use(remarkMdx)
+        .use(remarkGfm)
         .use(() => (tree) => {
           node = tree
         })
@@ -71,6 +73,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       let node: Node | null = null
 
       const vfile = await remark()
+        .use(remarkGfm)
         .use(() => (tree) => {
           node = tree
         })

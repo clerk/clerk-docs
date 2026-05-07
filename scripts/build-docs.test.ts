@@ -7467,6 +7467,121 @@ sourceFile: /docs/api-doc.mdx
 # API Documentation
 `)
   })
+
+  test('Should output per-SDK llms-full.txt files containing the SDK variant for shadowed docs and core docs that are not SDK-scoped', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Quickstart', href: '/docs/quickstart' },
+              { title: 'API Doc', href: '/docs/api-doc' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Shared
+---
+
+Shared content
+`,
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, react
+---
+
+Default content
+`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+React content
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+        llms: {
+          fullPath: '_llms/llms-full.txt',
+          perSdkFullPath: '_llms/{sdk}/llms-full.txt',
+        },
+      }),
+    )
+
+    const dist = await listFiles('dist/_llms')
+    expect(dist).toEqual(['llms-full.txt', 'nextjs/llms-full.txt', 'react/llms-full.txt'])
+
+    const nextjs = await readFile('./dist/_llms/nextjs/llms-full.txt')
+    expect(nextjs).toContain('title: Quickstart')
+    expect(nextjs).toContain('Shared content')
+    expect(nextjs).toContain('activeSdk: nextjs')
+    expect(nextjs).toContain('Default content')
+    expect(nextjs).not.toContain('activeSdk: react')
+    expect(nextjs).not.toContain('React content')
+    expect(nextjs).not.toContain('redirectPage:')
+
+    const react = await readFile('./dist/_llms/react/llms-full.txt')
+    expect(react).toContain('title: Quickstart')
+    expect(react).toContain('Shared content')
+    expect(react).toContain('activeSdk: react')
+    expect(react).toContain('React content')
+    expect(react).not.toContain('activeSdk: nextjs')
+    expect(react).not.toContain('Default content')
+    expect(react).not.toContain('redirectPage:')
+  })
+
+  test('Should not emit a per-SDK llms-full.txt for SDKs with no docs', async () => {
+    const { tempDir, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs
+---
+
+Next.js only
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+        llms: {
+          perSdkFullPath: '_llms/{sdk}/llms-full.txt',
+        },
+      }),
+    )
+
+    expect(await listFiles('dist/_llms')).toEqual(['nextjs/llms-full.txt'])
+  })
 })
 
 describe('Multiple document variants for pages', () => {

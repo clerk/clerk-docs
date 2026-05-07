@@ -54,6 +54,10 @@ type BuildConfigOptions = {
   llms?: {
     overviewPath?: string
     fullPath?: string
+    // Path template for per-SDK full bundles. The `{sdk}` placeholder is
+    // replaced with each canonical SDK key from `validSdks`. When omitted,
+    // per-SDK bundles are not emitted.
+    perSdkFullPath?: string
   }
   siteFlags?: {
     inputPath: string
@@ -178,6 +182,7 @@ export async function createConfig(config: BuildConfigOptions) {
         ? {
             overviewPath: config.llms.overviewPath,
             fullPath: config.llms.fullPath,
+            perSdkFullPath: config.llms.perSdkFullPath,
           }
         : null,
 

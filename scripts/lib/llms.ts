@@ -13,6 +13,16 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles) => {
   return `# Clerk\n\n## Docs\n\n${list}`
 }
 
+// Build the public markdown URL for a docs file path. Points at the `.md`
+// export route so LLMs consuming llms.txt fetch the markdown variant directly.
+export const buildLLMsDocsUrl = (filePath: string, baseDocsLink: string): string => {
+  // For nested index pages (e.g. `guides/index.mdx`) the canonical URL drops
+  // the trailing `/index`, matching the docs site's routing. The root
+  // `index.mdx` keeps its slug so it maps to `/docs/index.md`.
+  const slug = removeMdxSuffix(filePath).replace(/\/index$/, '')
+  return `{{SITE_URL}}${baseDocsLink}${slug}.md`
+}
+
 export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {
   return files
     .filter(({ path }) => !path.startsWith('~/')) // Exclude these quick redirect pages
@@ -25,9 +35,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
 
       return {
         path,
-        url: `{{SITE_URL}}${config.baseDocsLink}${removeMdxSuffix(path)
-          .replace(/^index$/, '') // remove root index
-          .replace(/\/index$/, '')}`, // remove /index from the end,
+        url: buildLLMsDocsUrl(path, config.baseDocsLink),
         content,
       }
     })

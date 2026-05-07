@@ -7422,7 +7422,7 @@ description: Generated API docs
 
 ## Docs
 
-- [API Documentation]({{SITE_URL}}/docs/api-doc)`)
+- [API Documentation]({{SITE_URL}}/docs/api-doc): Generated API docs`)
   })
 
   test('Should output llms-full.txt full pages', async () => {

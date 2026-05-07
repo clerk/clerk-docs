@@ -1,0 +1,70 @@
+---
+title: Self-serve SSO
+description: Learn how to let your customers' IT admins configure their own enterprise SSO connections from inside your application.
+---
+
+By default, enterprise SSO connections are configured by your team inside the Clerk Dashboard. For every enterprise customer that needs SSO, someone on your side has to create the connection, exchange metadata with the customer's IT admin, test the connection, and activate it. As your enterprise motion scales, this becomes a bottleneck.
+
+Self-serve SSO lets you delegate that configuration directly to your customers' IT admins by embedding the [`<ConfigureSSO />`](/docs/reference/components/authentication/configure-sso) component inside your own application. The IT admin signs into your app with their Clerk account and uses the component to handle all identity provider (IdP) specific setup end-to-end — choosing an IdP, verifying the domain, exchanging metadata, and testing the connection — without ever touching the Clerk Dashboard.
+
+`<ConfigureSSO />` works whether or not your application uses [Clerk Organizations](/docs/guides/organizations/overview):
+
+- **With Clerk Organizations** — the connection is attached to the IT admin's active Organization.
+- **Without Clerk Organizations** — the connection is attached to an email domain at the application level. No Organization is required.
+
+> [!NOTE]
+> In its current implementation, `<ConfigureSSO />` is the only way to use self-serve SSO, and it requires an active Clerk session. The IT admin must have a Clerk user account in your application and be signed in to use the flow. It currently only supports Okta and custom SAML.
+
+## Enable self-serve SSO
+
+You must enable self-serve SSO at the application level before the `<ConfigureSSO />` component will render.
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+1. Open the **Self-serve** tab.
+1. Toggle **Self-serve SSO** on.
+
+If self-serve SSO is disabled, mounting `<ConfigureSSO />` in development will throw a runtime error to surface the misconfiguration. In production, it will simply not render.
+
+## Requirements
+
+To render `<ConfigureSSO />`, the following must be true:
+
+- Self-serve SSO is enabled in the Clerk Dashboard (see above).
+- The **Email address** identifier is enabled on your instance. The component uses the user's primary email address to derive and verify the domain being claimed.
+- The IT admin is signed in with a Clerk user account in your application. The component reads the active Clerk session and does not currently support unauthenticated, token-based access.
+
+If you use Clerk Organizations and want to scope a connection to an Organization, the signed-in user must have the `org:sys_enterprise_connections` system permission for that Organization. This permission ships with the default **Admin** role; if you've defined custom roles, add it to any role that should be able to manage enterprise connections. For more information, refer to the [roles and permissions guide](/docs/guides/organizations/control-access/roles-and-permissions).
+
+## How the flow works
+
+When the IT admin opens a page that renders `<ConfigureSSO />`, they are guided through a wizard with the following stages:
+
+1. **Verify domain** — the component verifies that the user controls the email domain they're claiming. If the user doesn't have a primary email address yet, they're prompted to add one first.
+1. **Configure** — the user selects an IdP and provides the protocol-specific configuration. IdP setup instructions are embedded inline, so you don't need to author or maintain your own walkthroughs.
+1. **Test** — the user runs a test sign-in to confirm the connection works end-to-end.
+1. **Confirmation** — once the test passes, you can review and enable the connection.
+
+## Embed the component
+
+The following example shows the minimal integration in a Next.js App Router app. The component is imported from `@clerk/nextjs/experimental` because it's still in early access.
+
+```tsx {{ filename: 'app/sso-setup/page.tsx' }}
+import { ConfigureSSO } from '@clerk/nextjs/experimental'
+
+export default function SSOSetupPage() {
+  return <ConfigureSSO />
+}
+```
+
+Wrap the page in your usual route protection (for example, [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect)) so that only signed-in users can reach it.
+
+For full prop and SDK reference, see the [`<ConfigureSSO />` component documentation](/docs/reference/components/authentication/configure-sso).
+
+## What's next
+
+Once a connection is created via `<ConfigureSSO />`, it behaves like any other Clerk enterprise connection. Users with matching email addresses can sign in via the configured IdP. To learn more, refer to:
+
+- [Authentication flows](/docs/guides/configure/auth-strategies/enterprise-connections/authentication-flows)
+- [Account linking](/docs/guides/configure/auth-strategies/enterprise-connections/account-linking)
+- [Just-in-Time (JIT) provisioning](/docs/guides/configure/auth-strategies/enterprise-connections/jit-provisioning)
+- [Directory Sync (SCIM)](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync)

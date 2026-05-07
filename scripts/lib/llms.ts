@@ -8,9 +8,19 @@ export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles) => {
   return outputtedDocsFiles.map((file) => file.content).join('\n')
 }
 
+export const formatLLMsDocLine = (page: { title: string; url: string; description?: string }) => {
+  return page.description ? `- [${page.title}](${page.url}): ${page.description}` : `- [${page.title}](${page.url})`
+}
+
 export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles) => {
-  const list = outputtedDocsFiles.map((page) => `- [${page.title}](${page.url})`).join('\n')
+  const list = outputtedDocsFiles.map(formatLLMsDocLine).join('\n')
   return `# Clerk\n\n## Docs\n\n${list}`
+}
+
+export const normalizeFrontmatterDescription = (raw: unknown): string | undefined => {
+  if (typeof raw !== 'string') return undefined
+  const trimmed = raw.trim().replace(/\s+/g, ' ')
+  return trimmed.length > 0 ? trimmed : undefined
 }
 
 export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {
@@ -43,6 +53,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
       return {
         ...file,
         title,
+        description: normalizeFrontmatterDescription(frontmatter.description),
       }
     })
     .filter((page) => page !== null)

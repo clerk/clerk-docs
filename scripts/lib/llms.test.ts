@@ -31,9 +31,7 @@ describe('normalizeFrontmatterDescription', () => {
   })
 
   test('collapses internal whitespace and newlines into single spaces', () => {
-    expect(normalizeFrontmatterDescription('Line one\nLine two\t  with  spaces')).toBe(
-      'Line one Line two with spaces',
-    )
+    expect(normalizeFrontmatterDescription('Line one\nLine two\t  with  spaces')).toBe('Line one Line two with spaces')
   })
 
   test('returns undefined for empty or whitespace-only strings', () => {

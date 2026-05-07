@@ -29,9 +29,7 @@ describe('buildLLMsDocsUrl', () => {
   })
 
   test('respects a custom baseDocsLink', () => {
-    expect(buildLLMsDocsUrl('cli.mdx', '/docs/pr/feature-branch/')).toBe(
-      '{{SITE_URL}}/docs/pr/feature-branch/cli.md',
-    )
+    expect(buildLLMsDocsUrl('cli.mdx', '/docs/pr/feature-branch/')).toBe('{{SITE_URL}}/docs/pr/feature-branch/cli.md')
   })
 
   test('does not strip a non-trailing index segment', () => {

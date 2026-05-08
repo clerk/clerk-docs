@@ -26,9 +26,29 @@ const SDK_DISPLAY_NAMES: Record<SDK, string> = {
   ruby: 'Ruby',
 }
 
+// Some SDKs are referenced in URL/file paths under a slug that doesn't match
+// their SDK key (e.g. /docs/reference/javascript/... is the js-frontend SDK).
+// This map allows those path segments to be recognized as SDK-scoped.
+const PATH_SEGMENT_SDK_ALIASES: Record<string, SDK> = {
+  javascript: 'js-frontend',
+  express: 'expressjs',
+}
+
 const getSdkFromPath = (path: string, validSdks: readonly SDK[]): SDK | null => {
-  const firstSegment = path.split('/')[0]
-  return validSdks.includes(firstSegment as SDK) ? (firstSegment as SDK) : null
+  // Skip the trailing file segment (e.g. "expo.mdx") - we only want directory
+  // segments, so a generic doc whose filename contains an SDK name is not
+  // misclassified as SDK-scoped.
+  const segments = path.split('/').slice(0, -1)
+  for (const segment of segments) {
+    if (validSdks.includes(segment as SDK)) {
+      return segment as SDK
+    }
+    const aliased = PATH_SEGMENT_SDK_ALIASES[segment]
+    if (aliased && validSdks.includes(aliased)) {
+      return aliased
+    }
+  }
+  return null
 }
 
 const getSdkDisplayName = (sdk: SDK): string => SDK_DISPLAY_NAMES[sdk] ?? sdk

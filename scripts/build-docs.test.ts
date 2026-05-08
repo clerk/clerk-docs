@@ -7487,6 +7487,108 @@ sdk: nextjs, react
 - [SDK Doc]({{SITE_URL}}/docs/react/sdk-doc)`)
   })
 
+  test('Should group reference/<sdk>/ pages and URL-aliased SDKs under their SDK sub-header', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Generic Guide', href: '/docs/generic-guide' },
+              { title: 'Vue Plugin', href: '/docs/reference/vue/clerk-plugin' },
+              { title: 'Astro Middleware', href: '/docs/reference/astro/clerk-middleware' },
+              { title: 'JS Overview', href: '/docs/reference/javascript/overview' },
+              { title: 'Express Middleware', href: '/docs/reference/express/clerk-middleware' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/generic-guide.mdx',
+        content: `---
+title: Generic Guide
+description: A generic guide
+---
+
+# Generic Guide
+`,
+      },
+      {
+        path: './docs/reference/vue/clerk-plugin.mdx',
+        content: `---
+title: clerkPlugin
+description: Vue clerkPlugin reference
+---
+
+# clerkPlugin
+`,
+      },
+      {
+        path: './docs/reference/astro/clerk-middleware.mdx',
+        content: `---
+title: clerkMiddleware (Astro)
+description: Astro middleware reference
+---
+
+# clerkMiddleware
+`,
+      },
+      {
+        path: './docs/reference/javascript/overview.mdx',
+        content: `---
+title: JavaScript Overview
+description: JS frontend SDK overview
+---
+
+# JavaScript Overview
+`,
+      },
+      {
+        path: './docs/reference/express/clerk-middleware.mdx',
+        content: `---
+title: clerkMiddleware (Express)
+description: Express middleware reference
+---
+
+# clerkMiddleware
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['vue', 'astro', 'js-frontend', 'expressjs'],
+        llms: {
+          overviewPath: 'llms.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+## Docs
+
+- [Generic Guide]({{SITE_URL}}/docs/generic-guide)
+
+### Vue
+
+- [clerkPlugin]({{SITE_URL}}/docs/reference/vue/clerk-plugin)
+
+### Astro
+
+- [clerkMiddleware (Astro)]({{SITE_URL}}/docs/reference/astro/clerk-middleware)
+
+### JavaScript
+
+- [JavaScript Overview]({{SITE_URL}}/docs/reference/javascript/overview)
+
+### Express
+
+- [clerkMiddleware (Express)]({{SITE_URL}}/docs/reference/express/clerk-middleware)`)
+  })
+
   test('Should output llms-full.txt full pages', async () => {
     const { tempDir, readFile } = await createTempFiles([
       {

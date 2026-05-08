@@ -1,16 +1,70 @@
 import type { BuildConfig } from './config'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import yaml from 'yaml'
+import type { SDK } from './schemas'
 
 type Docs = Map<string, string>
+
+// Display names for SDKs when rendered as sub-headers in llms.txt.
+// Keep these in sync with VALID_SDKS in ./schemas.ts.
+const SDK_DISPLAY_NAMES: Record<SDK, string> = {
+  nextjs: 'Next.js',
+  react: 'React',
+  'js-frontend': 'JavaScript',
+  'chrome-extension': 'Chrome Extension',
+  expo: 'Expo',
+  android: 'Android',
+  ios: 'iOS',
+  expressjs: 'Express',
+  fastify: 'Fastify',
+  'react-router': 'React Router',
+  'tanstack-react-start': 'TanStack React Start',
+  go: 'Go',
+  astro: 'Astro',
+  nuxt: 'Nuxt',
+  vue: 'Vue',
+  ruby: 'Ruby',
+}
+
+const getSdkFromPath = (path: string, validSdks: readonly SDK[]): SDK | null => {
+  const firstSegment = path.split('/')[0]
+  return validSdks.includes(firstSegment as SDK) ? (firstSegment as SDK) : null
+}
+
+const getSdkDisplayName = (sdk: SDK): string => SDK_DISPLAY_NAMES[sdk] ?? sdk
 
 export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles) => {
   return outputtedDocsFiles.map((file) => file.content).join('\n')
 }
 
-export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles) => {
-  const list = outputtedDocsFiles.map((page) => `- [${page.title}](${page.url})`).join('\n')
-  return `# Clerk\n\n## Docs\n\n${list}`
+export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdks: readonly SDK[]) => {
+  const generic: OutputtedDocsFiles = []
+  const bySdk = new Map<SDK, OutputtedDocsFiles>()
+
+  for (const page of outputtedDocsFiles) {
+    const sdk = getSdkFromPath(page.path, validSdks)
+    if (sdk === null) {
+      generic.push(page)
+    } else {
+      const list = bySdk.get(sdk) ?? []
+      list.push(page)
+      bySdk.set(sdk, list)
+    }
+  }
+
+  const formatPage = (page: OutputtedDocsFiles[number]) => `- [${page.title}](${page.url})`
+
+  const sections: string[] = [`## Docs`, generic.map(formatPage).join('\n')]
+
+  // Emit SDK sections in the order they appear in validSdks for stable, predictable output.
+  for (const sdk of validSdks) {
+    const pages = bySdk.get(sdk)
+    if (!pages || pages.length === 0) continue
+    sections.push(`### ${getSdkDisplayName(sdk)}`)
+    sections.push(pages.map(formatPage).join('\n'))
+  }
+
+  return `# Clerk\n\n${sections.filter((section) => section.length > 0).join('\n\n')}`
 }
 
 export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {

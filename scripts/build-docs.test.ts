@@ -7425,6 +7425,68 @@ description: Generated API docs
 - [API Documentation]({{SITE_URL}}/docs/api-doc)`)
   })
 
+  test('Should group SDK-scoped pages under sub-headers in llms.txt overview', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Generic Doc', href: '/docs/generic-doc' },
+              { title: 'SDK Doc', href: '/docs/sdk-doc' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/generic-doc.mdx',
+        content: `---
+title: Generic Doc
+description: A generic guide
+---
+
+# Generic Doc
+`,
+      },
+      {
+        path: './docs/sdk-doc.mdx',
+        content: `---
+title: SDK Doc
+description: An SDK-scoped guide
+sdk: nextjs, react
+---
+
+# SDK Doc
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+        llms: {
+          overviewPath: 'llms.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+## Docs
+
+- [Generic Doc]({{SITE_URL}}/docs/generic-doc)
+
+### Next.js
+
+- [SDK Doc]({{SITE_URL}}/docs/nextjs/sdk-doc)
+
+### React
+
+- [SDK Doc]({{SITE_URL}}/docs/react/sdk-doc)`)
+  })
+
   test('Should output llms-full.txt full pages', async () => {
     const { tempDir, readFile } = await createTempFiles([
       {

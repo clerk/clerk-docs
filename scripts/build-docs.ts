@@ -1207,7 +1207,7 @@ ${yaml.stringify({
     }
 
     if (config.llms?.overviewPath) {
-      const llms = await generateLLMs(outputtedDocsFiles)
+      const llms = await generateLLMs(outputtedDocsFiles, config.validSdks)
       await writeFile(config.llms.overviewPath, llms)
     }
   }

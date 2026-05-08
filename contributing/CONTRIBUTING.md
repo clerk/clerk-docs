@@ -710,28 +710,6 @@ Order within each subsection follows manifest navigation order — authors do no
 
 </details>
 
-##### How `llmsText` interacts with SDK variants
-
-The marketing site reads `llmsText` per source MDX, but a manifest entry can fan out to many SDKs. Two cases to know:
-
-1. **Shared-source pages templated through `:sdk:`** (manifest `href` like `/docs/:sdk:/guides/.../overview` with no per-SDK MDX behind it). The build pipeline emits the same content under every SDK in the entry's `sdk: [...]` list. The marketing site automatically collapses these into a **single** entry in `llms.txt`, using the unscoped `/docs/...` URL (which the docs site renders via the SDK switcher). Two entries collapse iff they share the same unscoped href, title, and description — so you do not need to do anything special, and you cannot opt individual SDKs in or out of a shared-source page.
-
-2. **Doc variants** (per-SDK source files like `quickstart.nextjs.mdx`, `quickstart.react.mdx`). Each file owns its own frontmatter, so `llmsText.include` is decided independently per SDK. To exclude a specific SDK's variant from the index, set `include: false` (or omit `llmsText` entirely) in just that file:
-
-```diff
-  ---
-  title: Express Quickstart
-  description: Add Clerk to an Express server.
-- llmsText:
--   include: true
--   section: Quick Start
-+ llmsText:
-+   include: false
-  ---
-```
-
-This is the only supported way to curate which SDKs appear in `llms.txt` for a `:sdk:`-templated entry — there is no central allowlist.
-
 ### Doc variants
 
 A **doc variant** is a version of a page that is specific to a particular SDK. For example, the `quickstart.react.mdx` page is a variant of the `quickstart.mdx` page that is specific to the React SDK. This is useful when you want to show different content for different SDKs but want to keep the route the same.

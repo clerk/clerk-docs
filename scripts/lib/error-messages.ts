@@ -47,12 +47,6 @@ export const errorMessages = {
   'frontmatter-missing-title': (): string => 'Frontmatter must have a "title" property',
   'frontmatter-missing-description': (): string => 'Frontmatter should have a "description" property',
   'frontmatter-parse-failed': (href: string): string => `Frontmatter parsing failed for ${href}`,
-  'invalid-llms-text-section': (section: string, validSections: string[]): string =>
-    `Invalid llmsText.section "${section}", expected one of ${JSON.stringify(validSections)} or true`,
-  'llms-text-shape-invalid': (): string =>
-    `Frontmatter "llmsText" must be an object with optional "include" (boolean) and "section" properties`,
-  'llms-text-missing-description': (): string =>
-    `Frontmatter "description" is required when "llmsText.include" is true (used in the llms.txt index entry)`,
   'doc-not-found': (title: string, href: string): string =>
     `Doc "${title}" in manifest.json not found in the docs folder at ${href}.mdx`,
   'doc-parse-failed': (href: string): string => `Doc "${href}" failed to parse`,

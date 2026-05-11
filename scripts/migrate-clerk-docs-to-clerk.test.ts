@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import {
   assertGitFilterRepoVersionOutput,
   assertSemverAtLeast,
+  buildClosePrCommandArgs,
   buildMigrationBranchName,
   buildPrRefsRewriteCallback,
   canCommentOnPrInRepo,
@@ -15,6 +16,7 @@ import {
   classifyExistingMigration,
   commandJson,
   formatClosedPrAbortMessage,
+  formatMigrationNoticeCommentBody,
   formatSourcePrMigrationAppendix,
   formatUpdateMergeConflictHints,
   isSemverAtLeast,
@@ -243,6 +245,19 @@ describe('parseConfig', () => {
     expect(config.clerkRepo).toEqual(['acme', 'clerk'])
     expect(config.clerkDocsRepo).toEqual(['acme', 'clerk-docs'])
     expect(config.prNumber).toBe(9)
+    expect(config.closeSourcePr).toBe(true)
+  })
+
+  test('parseConfig defaults closeSourcePr to true when no flag is passed', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts']
+    const config = parseConfig()
+    expect(config.closeSourcePr).toBe(true)
+  })
+
+  test('parseConfig sets closeSourcePr to false when --no-close-source-pr is passed', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--no-close-source-pr']
+    const config = parseConfig()
+    expect(config.closeSourcePr).toBe(false)
   })
 
   test('parseConfig rejects invalid --pr values', () => {
@@ -463,5 +478,36 @@ describe('formatUpdateMergeConflictHints', () => {
       remoteName: 'clerk-docs-migrate-789',
     })
     expect(hints.join('\n')).not.toContain('--clerk-path')
+  })
+})
+
+describe('formatMigrationNoticeCommentBody', () => {
+  test('embeds the marker and the migrated clerk PR URL', () => {
+    const body = formatMigrationNoticeCommentBody('https://github.com/clerk/clerk/pull/1234')
+    expect(body).toContain('<!-- clerk-docs-migration-notice -->')
+    expect(body).toContain('https://github.com/clerk/clerk/pull/1234')
+  })
+
+  test('starts with the marker so maybeCommentWithMarker can detect re-runs', () => {
+    const body = formatMigrationNoticeCommentBody('https://example.invalid/pr/1')
+    expect(body.startsWith('<!-- clerk-docs-migration-notice -->')).toBe(true)
+  })
+})
+
+describe('buildClosePrCommandArgs', () => {
+  test('returns the gh CLI args to close a PR by number in a specific repo', () => {
+    expect(buildClosePrCommandArgs(42, 'clerk/clerk-docs')).toEqual([
+      'pr',
+      'close',
+      '42',
+      '--repo',
+      'clerk/clerk-docs',
+    ])
+  })
+
+  test('coerces the PR number to a string for the CLI', () => {
+    const args = buildClosePrCommandArgs(7, 'acme/docs')
+    expect(args[2]).toBe('7')
+    expect(typeof args[2]).toBe('string')
   })
 })

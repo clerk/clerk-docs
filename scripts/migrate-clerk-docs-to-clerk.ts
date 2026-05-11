@@ -5,7 +5,7 @@
  *   Merges origin/main into the current clerk-docs branch, rewrites that branch's history under
  *   clerk/clerk-docs/ (preserving authors per imported commit), merges the rewritten history into a
  *   new branch in the clerk repo, pushes it, and opens a PR in clerk if an open clerk-docs PR exists.
- *   A backlink comment is added to the source clerk-docs PR.
+ *   A backlink comment is added to the source clerk-docs PR and that PR is then closed.
  *
  * Re-run on the same clerk-docs branch (update mode):
  *   Safe and idempotent. The script detects the existing `${headRef}-docs-migration` branch on clerk,
@@ -56,6 +56,11 @@ interface CliConfig {
   clerkDocsRepo: RepoSlug
   /** When several open PRs share the same head, use this PR number (required if stdin is not a TTY) */
   prNumber?: number
+  /**
+   * In create mode, close the source clerk-docs PR after posting the backlink comment. Default true.
+   * Disable with `--no-close-source-pr` when you want to leave the source PR open for review.
+   */
+  closeSourcePr: boolean
 }
 
 interface CommandResult {
@@ -341,6 +346,7 @@ Optional:
   --local-only                Create or update the migrated branch in the clerk workspace only (skip push, PR creation, and source-PR comment); pair with --clerk-path, otherwise the temp clerk clone is deleted at the end and the branch is lost
   --dry-run                   Print actions only
   --pr <number>               Open clerk-docs PR to use when several match this branch (required if stdin is not a TTY)
+  --no-close-source-pr        Skip closing the source clerk-docs PR after the backlink comment is posted (default: close it)
   --debug, --verbose          Verbose logs (includes JSON metadata)
   --help
 `)
@@ -420,6 +426,7 @@ const migrateCliSchema = z.object({
     .catch(() => NaN)
     .pipe(githubPrNumberSchema)
     .optional(),
+  closeSourcePr: z.boolean(),
 })
 
 /** Avoid slashes in temp directory names (branch names like foo/bar are common). */
@@ -540,6 +547,7 @@ function parseConfig(): CliConfig {
     clerkRepo: getArg('--clerk-repo') ?? 'clerk/clerk',
     clerkDocsRepo: getArgAliases(['--docs-repo', '--clerk-docs-repo']) ?? 'clerk/clerk-docs',
     prNumber: getArg('--pr'),
+    closeSourcePr: !hasFlag('--no-close-source-pr'),
   })
   if (!parsed.success) {
     const first = parsed.error.errors[0]
@@ -1370,6 +1378,30 @@ async function maybeCommentWithMarker(
   return true
 }
 
+/** Body for the backlink comment that {@link maybeCommentWithMarker} posts on the source clerk-docs PR. */
+function formatMigrationNoticeCommentBody(clerkPrUrl: string): string {
+  return `${MIGRATION_NOTICE_MARKER}\nThis branch and pr were migrated to: ${clerkPrUrl}`
+}
+
+/** `gh pr close` args used by {@link closeSourcePrAfterMigration} (extracted for unit testing). */
+function buildClosePrCommandArgs(prNumber: number, repo: string): string[] {
+  return ['pr', 'close', String(prNumber), '--repo', repo]
+}
+
+/**
+ * Close the source clerk-docs PR after the backlink comment has been posted.
+ * Idempotent in spirit: if the PR is already closed, `gh pr close` exits non-zero and the caller logs a warning.
+ * Skips the close in dry-run mode.
+ */
+async function closeSourcePrAfterMigration(config: CliConfig, prNumber: number, repo: string): Promise<void> {
+  if (config.dryRun) {
+    infoLog('Dry-run: would close source PR after migration', { repo, prNumber })
+    return
+  }
+  await runCommand('gh', buildClosePrCommandArgs(prNumber, repo), process.cwd())
+  infoLog('Closed source clerk-docs PR after migration', { repo, prNumber })
+}
+
 interface MigrationOutcome {
   newBranch: string
   clerkPrUrl: string
@@ -1468,6 +1500,12 @@ async function createNewMigration(
         sourcePr !== null
           ? 'would match draft + assignees + requested reviewers from source PR where possible; review approvals cannot transfer (summarized in PR body)'
           : 'n/a',
+      sourcePrComment: sourcePr ? 'would post backlink comment to source clerk-docs PR' : 'n/a',
+      sourcePrClose: sourcePr
+        ? config.closeSourcePr
+          ? 'would close source clerk-docs PR after the comment'
+          : 'would leave source clerk-docs PR open (--no-close-source-pr)'
+        : 'n/a',
     })
     return { newBranch: buildMigrationBranchName(headRef), clerkPrUrl: '(dry-run)' }
   }
@@ -1560,16 +1598,33 @@ async function createNewMigration(
     }
 
     if (sourcePr) {
+      const sourceRepoSlug = formatRepoSlug(config.clerkDocsRepo)
       try {
         await maybeCommentWithMarker(
           config,
           sourcePr.number,
-          formatRepoSlug(config.clerkDocsRepo),
-          `${MIGRATION_NOTICE_MARKER}\nThis branch and pr were migrated to: ${clerkPrUrl}`,
+          sourceRepoSlug,
+          formatMigrationNoticeCommentBody(clerkPrUrl),
         )
       } catch (err) {
         warnLog('Could not comment on source PR (migration itself succeeded)', {
           error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      if (config.closeSourcePr) {
+        try {
+          await closeSourcePrAfterMigration(config, sourcePr.number, sourceRepoSlug)
+        } catch (err) {
+          warnLog('Could not close source PR (migration itself succeeded; close it manually)', {
+            repo: sourceRepoSlug,
+            prNumber: sourcePr.number,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      } else {
+        infoLog('Leaving source clerk-docs PR open (--no-close-source-pr)', {
+          repo: sourceRepoSlug,
+          prNumber: sourcePr.number,
         })
       }
     }
@@ -1608,6 +1663,7 @@ async function updateExistingMigration(
         'would re-run gitignore cleanup; idempotent after first migration (commits only if anything actually changed)',
       clerkPrCreate: 'skipped in update mode (re-uses existing PR, or leaves branch PR-less if none exists yet)',
       sourcePrComment: 'skipped in update mode (migration marker already on source PR)',
+      sourcePrClose: 'skipped in update mode (source PR was already closed during the initial migration)',
     })
     return { newBranch: migrationBranch, clerkPrUrl: existing.pr?.url ?? '(dry-run)' }
   }
@@ -1694,6 +1750,7 @@ function printRunIntro(config: CliConfig): void {
     '- Rewrites that branch history under clerk/clerk-docs/',
     '- Merges rewritten history into the clerk repo (create mode = new branch + PR; update mode = existing migration branch)',
     '- Pushes the branch and opens/links PRs when source PR context is available',
+    '- In create mode, posts a backlink comment on the source clerk-docs PR and closes it',
     '- Re-runs on the same clerk-docs branch update the existing migration branch instead of creating duplicates',
     '',
     'Run configuration',
@@ -1705,6 +1762,7 @@ function printRunIntro(config: CliConfig): void {
     `- clerk-docs repo: ${formatRepoSlug(config.clerkDocsRepo)}`,
     `- clerk base branch: ${config.clerkBaseBranch}`,
     `- local-only (skip push/PR): ${config.localOnly ? 'yes' : 'no'}`,
+    `- close source clerk-docs PR after migration: ${config.closeSourcePr ? 'yes' : 'no (--no-close-source-pr)'}`,
     `- allow dirty clerk: ${config.allowDirtyClerk ? 'yes' : 'no'}`,
     `- allow dirty clerk-docs: ${config.allowDirtyClerkDocs ? 'yes' : 'no'}`,
     `- interactive prompts (stdin TTY): ${stdinSupportsInteractivePrompts() ? 'yes' : 'no'}`,
@@ -1966,6 +2024,8 @@ export {
   classifyExistingMigration,
   formatUpdateMergeConflictHints,
   formatClosedPrAbortMessage,
+  formatMigrationNoticeCommentBody,
+  buildClosePrCommandArgs,
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

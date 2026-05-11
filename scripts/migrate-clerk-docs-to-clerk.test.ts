@@ -496,13 +496,7 @@ describe('formatMigrationNoticeCommentBody', () => {
 
 describe('buildClosePrCommandArgs', () => {
   test('returns the gh CLI args to close a PR by number in a specific repo', () => {
-    expect(buildClosePrCommandArgs(42, 'clerk/clerk-docs')).toEqual([
-      'pr',
-      'close',
-      '42',
-      '--repo',
-      'clerk/clerk-docs',
-    ])
+    expect(buildClosePrCommandArgs(42, 'clerk/clerk-docs')).toEqual(['pr', 'close', '42', '--repo', 'clerk/clerk-docs'])
   })
 
   test('coerces the PR number to a string for the CLI', () => {

@@ -61,6 +61,12 @@ interface CliConfig {
    * Disable with `--no-close-source-pr` when you want to leave the source PR open for review.
    */
   closeSourcePr: boolean
+  /**
+   * Merge `origin/main` into the current clerk-docs branch as the first migration step. Default true.
+   * Disable with `--no-merge-main` when the branch is already up to date with main, you're working
+   * offline, or you want to migrate the branch exactly as-is without picking up new commits from main.
+   */
+  mergeMain: boolean
 }
 
 interface CommandResult {
@@ -347,6 +353,7 @@ Optional:
   --dry-run                   Print actions only
   --pr <number>               Open clerk-docs PR to use when several match this branch (required if stdin is not a TTY)
   --no-close-source-pr        Skip closing the source clerk-docs PR after the backlink comment is posted (default: close it)
+  --no-merge-main             Skip merging origin/main into the current clerk-docs branch before migration (default: merge it). Use when the branch is already up to date or you want to migrate it as-is.
   --debug, --verbose          Verbose logs (includes JSON metadata)
   --help
 `)
@@ -427,6 +434,7 @@ const migrateCliSchema = z.object({
     .pipe(githubPrNumberSchema)
     .optional(),
   closeSourcePr: z.boolean(),
+  mergeMain: z.boolean(),
 })
 
 /** Avoid slashes in temp directory names (branch names like foo/bar are common). */
@@ -548,6 +556,7 @@ function parseConfig(): CliConfig {
     clerkDocsRepo: getArgAliases(['--docs-repo', '--clerk-docs-repo']) ?? 'clerk/clerk-docs',
     prNumber: getArg('--pr'),
     closeSourcePr: !hasFlag('--no-close-source-pr'),
+    mergeMain: !hasFlag('--no-merge-main'),
   })
   if (!parsed.success) {
     const first = parsed.error.errors[0]
@@ -1308,8 +1317,15 @@ async function ensureClerkOnBranch(config: CliConfig, clerkPath: string, branch:
 }
 
 async function mergeMainIntoCurrentBranch(config: CliConfig): Promise<void> {
-  stepLog('Merging clerk-docs/main into current branch')
   const current = await getCurrentBranch(config.clerkDocsPath)
+  if (!config.mergeMain) {
+    warnLog('Skipping origin/main merge into current branch (--no-merge-main)', {
+      current,
+      note: 'Migration will proceed against your current branch as-is. If main has moved on, the rewritten history may not include those commits.',
+    })
+    return
+  }
+  stepLog('Merging clerk-docs/main into current branch')
   if (config.dryRun) {
     infoLog('Dry-run: would fetch and merge origin/main', { current })
     return
@@ -1763,6 +1779,7 @@ function printRunIntro(config: CliConfig): void {
     `- clerk base branch: ${config.clerkBaseBranch}`,
     `- local-only (skip push/PR): ${config.localOnly ? 'yes' : 'no'}`,
     `- close source clerk-docs PR after migration: ${config.closeSourcePr ? 'yes' : 'no (--no-close-source-pr)'}`,
+    `- merge origin/main into clerk-docs branch first: ${config.mergeMain ? 'yes' : 'no (--no-merge-main)'}`,
     `- allow dirty clerk: ${config.allowDirtyClerk ? 'yes' : 'no'}`,
     `- allow dirty clerk-docs: ${config.allowDirtyClerkDocs ? 'yes' : 'no'}`,
     `- interactive prompts (stdin TTY): ${stdinSupportsInteractivePrompts() ? 'yes' : 'no'}`,
@@ -1913,10 +1930,17 @@ async function main(): Promise<void> {
 
     currentPhase = 'merge-main'
     await mergeMainIntoCurrentBranch(config)
-    phases.push({ name: 'merge-main', completed: ['Merged origin/main into feature branch (or dry-run)'] })
+    phases.push({
+      name: 'merge-main',
+      completed: [
+        config.mergeMain
+          ? 'Merged origin/main into feature branch (or dry-run)'
+          : 'Skipped origin/main merge into feature branch (--no-merge-main)',
+      ],
+    })
 
     await checkpoint({
-      title: 'Merge main complete',
+      title: config.mergeMain ? 'Merge main complete' : 'Merge main skipped',
       completed: phases.flatMap((p) => p.completed),
       next:
         migrationMode === 'update'

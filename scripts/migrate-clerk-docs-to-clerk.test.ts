@@ -246,6 +246,7 @@ describe('parseConfig', () => {
     expect(config.clerkDocsRepo).toEqual(['acme', 'clerk-docs'])
     expect(config.prNumber).toBe(9)
     expect(config.closeSourcePr).toBe(true)
+    expect(config.mergeMain).toBe(true)
   })
 
   test('parseConfig defaults closeSourcePr to true when no flag is passed', () => {
@@ -258,6 +259,18 @@ describe('parseConfig', () => {
     process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--no-close-source-pr']
     const config = parseConfig()
     expect(config.closeSourcePr).toBe(false)
+  })
+
+  test('parseConfig defaults mergeMain to true when no flag is passed', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts']
+    const config = parseConfig()
+    expect(config.mergeMain).toBe(true)
+  })
+
+  test('parseConfig sets mergeMain to false when --no-merge-main is passed', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--no-merge-main']
+    const config = parseConfig()
+    expect(config.mergeMain).toBe(false)
   })
 
   test('parseConfig rejects invalid --pr values', () => {

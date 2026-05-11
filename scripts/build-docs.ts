@@ -41,6 +41,7 @@ import path from 'node:path'
 import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
+import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
 import symlinkDir from 'symlink-dir'
 import { Node } from 'unist'
@@ -196,7 +197,11 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {},
+      typedoc: {
+        'shared/o-auth-application-namespace.mdx': ['link-doc-not-found'],
+        'shared/o-auth-consent-info.mdx': ['link-doc-not-found'],
+        'shared/use-o-auth-consent-return.mdx': ['link-doc-not-found'],
+      },
       partials: {},
       tooltips: {},
     },
@@ -611,6 +616,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
+          .use(remarkGfm)
           .use(
             validateLinks(config, routableDocsMap, partial.path, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
@@ -655,6 +661,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
         const vfile = await remark()
           .use(remarkMdx)
+          .use(remarkGfm)
           .use(
             validateLinks(config, routableDocsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
               links.add(linkInTooltip)
@@ -696,6 +703,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(remarkMdx)
+            .use(remarkGfm)
             .use(
               validateLinks(config, routableDocsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
@@ -832,6 +840,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
+          .use(remarkGfm)
           .use(
             validateLinks(
               config,
@@ -1029,6 +1038,7 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
+              .use(remarkGfm)
               .use(validateLinks(config, routableDocsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
@@ -1117,6 +1127,7 @@ ${yaml.stringify({
       const vfile = await remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
+        .use(remarkGfm)
         .use(() => (inputTree) => {
           return mdastFilter(inputTree, (node) => {
             const sdkProp = extractComponentPropValueFromNode(

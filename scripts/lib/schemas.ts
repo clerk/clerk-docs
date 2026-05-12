@@ -20,6 +20,7 @@ export const VALID_SDKS = [
   'nuxt',
   'vue',
   'ruby',
+  'flutter',
 ] as const
 
 export type SDK = (typeof VALID_SDKS)[number]

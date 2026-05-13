@@ -225,6 +225,7 @@ describe('parseConfig', () => {
       '--allow-dirty-clerk',
       '--dry-run',
       '--allow-dirty-docs',
+      '--allow-docs-main',
       '--debug',
       '--clerk-repo',
       'acme/clerk',
@@ -241,6 +242,7 @@ describe('parseConfig', () => {
     expect(config.allowDirtyClerk).toBe(true)
     expect(config.dryRun).toBe(true)
     expect(config.allowDirtyClerkDocs).toBe(true)
+    expect(config.allowClerkDocsMain).toBe(true)
     expect(config.debug).toBe(true)
     expect(config.clerkRepo).toEqual(['acme', 'clerk'])
     expect(config.clerkDocsRepo).toEqual(['acme', 'clerk-docs'])
@@ -271,6 +273,24 @@ describe('parseConfig', () => {
     process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--no-merge-main']
     const config = parseConfig()
     expect(config.mergeMain).toBe(false)
+  })
+
+  test('parseConfig defaults allowClerkDocsMain to false when no flag is passed', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts']
+    const config = parseConfig()
+    expect(config.allowClerkDocsMain).toBe(false)
+  })
+
+  test('parseConfig sets allowClerkDocsMain to true when --allow-docs-main is passed', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--allow-docs-main']
+    const config = parseConfig()
+    expect(config.allowClerkDocsMain).toBe(true)
+  })
+
+  test('parseConfig accepts the legacy --allow-clerk-docs-main alias', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--allow-clerk-docs-main']
+    const config = parseConfig()
+    expect(config.allowClerkDocsMain).toBe(true)
   })
 
   test('parseConfig rejects invalid --pr values', () => {

@@ -51,6 +51,12 @@ interface CliConfig {
   allowDirtyClerk: boolean
   /** Skip preflight refusal when clerk-docs has local uncommitted changes */
   allowDirtyClerkDocs: boolean
+  /**
+   * Skip preflight refusal when the current clerk-docs branch is `main`. Off by default because
+   * migrating `main` rewrites the entire clerk-docs history into clerk and is almost always the
+   * wrong thing to do for an ad-hoc PR migration.
+   */
+  allowClerkDocsMain: boolean
   debug: boolean
   clerkRepo: RepoSlug
   clerkDocsRepo: RepoSlug
@@ -159,7 +165,10 @@ const migrationErrorDefinitions = {
   'refuse-clerk-docs-main': {
     message: (): string =>
       'Refusing to run on clerk-docs/main. Use a feature branch for your PR, or migrate main separately by hand.',
-    hints: (): readonly string[] => ['Checkout your feature branch in clerk-docs and rerun from there.'],
+    hints: (): readonly string[] => [
+      'Checkout your feature branch in clerk-docs and rerun from there.',
+      'If you really want to migrate main (e.g. a one-shot full-history import), rerun with --allow-docs-main.',
+    ],
   },
   'insufficient-repo-access': {
     message: (detail: string): string => detail,
@@ -348,6 +357,7 @@ Optional:
   --docs-repo <owner/repo>    Source PR lookup (default: clerk/clerk-docs)
   --docs-base <branch>        Desired checked-out branch in clerk-docs before migration starts
   --allow-dirty-docs          Skip clean-tree preflight for clerk-docs; only committed history is migrated (filter-repo reads commits, not the working tree), though the merge of origin/main can still abort if local edits conflict
+  --allow-docs-main           Skip the preflight refusal when the current clerk-docs branch is "main". Off by default because migrating main rewrites the entire clerk-docs history into clerk; only use it when you know that is what you want (e.g. a one-shot full-history import).
 
   --local-only                Create or update the migrated branch in the clerk workspace only (skip push, PR creation, and source-PR comment); pair with --clerk-path, otherwise the temp clerk clone is deleted at the end and the branch is lost
   --dry-run                   Print actions only
@@ -425,6 +435,7 @@ const migrateCliSchema = z.object({
   dryRun: z.boolean(),
   allowDirtyClerk: z.boolean(),
   allowDirtyClerkDocs: z.boolean(),
+  allowClerkDocsMain: z.boolean(),
   debug: z.boolean(),
   clerkRepo: repoSlugSchema,
   clerkDocsRepo: repoSlugSchema,
@@ -551,6 +562,7 @@ function parseConfig(): CliConfig {
     dryRun: hasFlag('--dry-run'),
     allowDirtyClerk: hasFlag('--allow-dirty-clerk'),
     allowDirtyClerkDocs: hasFlagAliases(['--allow-dirty-docs', '--allow-dirty-clerk-docs']),
+    allowClerkDocsMain: hasFlagAliases(['--allow-docs-main', '--allow-clerk-docs-main']),
     debug: hasFlag('--debug') || hasFlag('--verbose'),
     clerkRepo: getArg('--clerk-repo') ?? 'clerk/clerk',
     clerkDocsRepo: getArgAliases(['--docs-repo', '--clerk-docs-repo']) ?? 'clerk/clerk-docs',
@@ -1782,6 +1794,7 @@ function printRunIntro(config: CliConfig): void {
     `- merge origin/main into clerk-docs branch first: ${config.mergeMain ? 'yes' : 'no (--no-merge-main)'}`,
     `- allow dirty clerk: ${config.allowDirtyClerk ? 'yes' : 'no'}`,
     `- allow dirty clerk-docs: ${config.allowDirtyClerkDocs ? 'yes' : 'no'}`,
+    `- allow clerk-docs main branch: ${config.allowClerkDocsMain ? 'yes (--allow-docs-main)' : 'no'}`,
     `- interactive prompts (stdin TTY): ${stdinSupportsInteractivePrompts() ? 'yes' : 'no'}`,
     `- verbose logging: ${config.debug ? 'yes' : 'no (use --verbose)'}`,
     '',
@@ -1877,7 +1890,12 @@ async function main(): Promise<void> {
     let clerkDocsBranch = await getCurrentBranch(config.clerkDocsPath)
     clerkDocsBranch = await maybeAlignClerkDocsBranch(config, clerkDocsBranch)
     if (clerkDocsBranch === 'main') {
-      throwMigrationError('refuse-clerk-docs-main')
+      if (!config.allowClerkDocsMain) {
+        throwMigrationError('refuse-clerk-docs-main')
+      }
+      warnLog(
+        'Bypassing clerk-docs/main refusal due to --allow-docs-main. This will rewrite the entire clerk-docs main history into clerk; make sure that is what you want.',
+      )
     }
 
     const baseRef = config.clerkBaseBranch

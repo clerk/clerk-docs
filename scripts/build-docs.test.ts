@@ -7,7 +7,6 @@ import simpleGit from 'simple-git'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { build } from './build-docs'
 import { createConfig } from './lib/config'
-import { LLMS_FULL_HEADER } from './lib/llms'
 import { createBlankStore, invalidateFile } from './lib/store'
 import * as ioModule from './lib/io'
 
@@ -7457,7 +7456,21 @@ description: Generated API docs
       }),
     )
 
-    expect(await readFile('./dist/llms-full.txt')).toEqual(`${LLMS_FULL_HEADER}---
+    expect(await readFile('./dist/llms-full.txt')).toEqual(`# Clerk Documentation (full content)
+
+> Complete Clerk documentation: every doc page concatenated into one file
+> for LLM/agent consumption.
+
+## Companion files
+
+- [All sections index](https://clerk.com/llms-full.txt): Top-level index linking to every llms-full.txt file on clerk.com
+- [Articles](https://clerk.com/articles/llms-full.txt): Full content of all Clerk articles
+- [Blog](https://clerk.com/blog/llms-full.txt): Full content of all Clerk blog posts
+- [Changelog](https://clerk.com/changelog/llms-full.txt): Full content of all Clerk changelog entries
+
+---
+
+---
 title: API Documentation
 description: Generated API docs
 sdkScoped: "false"

@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import type { BuildConfig } from './config'
 import { formatLLMsDocLine, listOutputDocsFiles, normalizeFrontmatterDescription, writeLLMs } from './llms'
-
-const baseConfig = { baseDocsLink: '/docs/' } as unknown as BuildConfig
 
 describe('formatLLMsDocLine', () => {
   test('appends description after a colon when present', () => {
@@ -60,7 +57,7 @@ Body content`,
       ],
     ])
 
-    const result = listOutputDocsFiles(baseConfig, docs, [{ path: 'quickstart.mdx' }])
+    const result = listOutputDocsFiles(docs, [{ path: 'quickstart.mdx', url: '/docs/quickstart' }])
 
     expect(result).toEqual([
       {
@@ -85,7 +82,7 @@ Body`,
       ],
     ])
 
-    const result = listOutputDocsFiles(baseConfig, docs, [{ path: 'overview.mdx' }])
+    const result = listOutputDocsFiles(docs, [{ path: 'overview.mdx', url: '/docs/overview' }])
 
     expect(result).toEqual([
       {
@@ -110,7 +107,7 @@ Body`,
       ],
     ])
 
-    const result = listOutputDocsFiles(baseConfig, docs, [{ path: 'no-title.mdx' }])
+    const result = listOutputDocsFiles(docs, [{ path: 'no-title.mdx', url: '/docs/no-title' }])
 
     expect(result).toEqual([])
   })
@@ -127,12 +124,12 @@ Body`,
       ],
     ])
 
-    const result = listOutputDocsFiles(baseConfig, docs, [{ path: '~/quick-redirect.mdx' }])
+    const result = listOutputDocsFiles(docs, [{ path: '~/quick-redirect.mdx', url: '/docs/quick-redirect' }])
 
     expect(result).toEqual([])
   })
 
-  test('strips index and /index from the URL', () => {
+  test('prefixes the supplied URL with {{SITE_URL}} verbatim, including the docs root', () => {
     const docs = new Map<string, string>([
       [
         'index.mdx',
@@ -152,15 +149,20 @@ Body`,
       ],
     ])
 
-    const result = listOutputDocsFiles(baseConfig, docs, [{ path: 'index.mdx' }, { path: 'guides/index.mdx' }])
+    const result = listOutputDocsFiles(docs, [
+      { path: 'index.mdx', url: '/docs' },
+      { path: 'guides/index.mdx', url: '/docs/guides' },
+    ])
 
-    expect(result.map((entry) => entry.url)).toEqual(['{{SITE_URL}}/docs/', '{{SITE_URL}}/docs/guides'])
+    expect(result.map((entry) => entry.url)).toEqual(['{{SITE_URL}}/docs', '{{SITE_URL}}/docs/guides'])
   })
 
   test('throws when a doc cannot be found in the docs map', () => {
     const docs = new Map<string, string>()
 
-    expect(() => listOutputDocsFiles(baseConfig, docs, [{ path: 'missing.mdx' }])).toThrow('Doc not found: missing.mdx')
+    expect(() => listOutputDocsFiles(docs, [{ path: 'missing.mdx', url: '/docs/missing' }])).toThrow(
+      'Doc not found: missing.mdx',
+    )
   })
 })
 

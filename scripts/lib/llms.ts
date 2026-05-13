@@ -1,5 +1,3 @@
-import type { BuildConfig } from './config'
-import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import yaml from 'yaml'
 
 type Docs = Map<string, string>
@@ -23,10 +21,10 @@ export const normalizeFrontmatterDescription = (raw: unknown): string | undefine
   return trimmed.length > 0 ? trimmed : undefined
 }
 
-export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {
+export const listOutputDocsFiles = (docs: Docs, files: { path: string; url: string }[]) => {
   return files
     .filter(({ path }) => !path.startsWith('~/')) // Exclude these quick redirect pages
-    .map(({ path }) => {
+    .map(({ path, url }) => {
       const content = docs.get(path)
 
       if (!content) {
@@ -35,9 +33,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
 
       return {
         path,
-        url: `{{SITE_URL}}${config.baseDocsLink}${removeMdxSuffix(path)
-          .replace(/^index$/, '') // remove root index
-          .replace(/\/index$/, '')}`, // remove /index from the end,
+        url: `{{SITE_URL}}${url}`,
         content,
       }
     })

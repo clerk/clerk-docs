@@ -1,5 +1,3 @@
-import type { BuildConfig } from './config'
-import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import yaml from 'yaml'
 import type { SDK } from './schemas'
 
@@ -72,7 +70,8 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdk
     }
   }
 
-  const formatPage = (page: OutputtedDocsFiles[number]) => `- [${page.title}](${page.url})`
+  const formatPage = (page: OutputtedDocsFiles[number]) =>
+    page.description ? `- [${page.title}](${page.url}): ${page.description}` : `- [${page.title}](${page.url})`
 
   const sections: string[] = [`## Docs`, generic.map(formatPage).join('\n')]
 
@@ -87,10 +86,16 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdk
   return `# Clerk\n\n${sections.filter((section) => section.length > 0).join('\n\n')}`
 }
 
-export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {
+export const normalizeFrontmatterDescription = (raw: unknown): string | undefined => {
+  if (typeof raw !== 'string') return undefined
+  const trimmed = raw.trim().replace(/\s+/g, ' ')
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+export const listOutputDocsFiles = (docs: Docs, files: { path: string; url: string }[]) => {
   return files
     .filter(({ path }) => !path.startsWith('~/')) // Exclude these quick redirect pages
-    .map(({ path }) => {
+    .map(({ path, url }) => {
       const content = docs.get(path)
 
       if (!content) {
@@ -99,9 +104,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
 
       return {
         path,
-        url: `{{SITE_URL}}${config.baseDocsLink}${removeMdxSuffix(path)
-          .replace(/^index$/, '') // remove root index
-          .replace(/\/index$/, '')}`, // remove /index from the end,
+        url: `{{SITE_URL}}${url}`,
         content,
       }
     })
@@ -117,6 +120,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
       return {
         ...file,
         title,
+        description: normalizeFrontmatterDescription(frontmatter.description),
       }
     })
     .filter((page) => page !== null)

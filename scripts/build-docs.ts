@@ -1171,12 +1171,17 @@ ${yaml.stringify({
   const mdxFilePaths = mdxFiles
     .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
     .filter((filePath) => !filePath.includes(config.partialsFolderName)) // Exclude partials
-    .map((path) => ({
-      path,
-      url: `${config.baseDocsLink}${removeMdxSuffix(path)
+    .map((path) => {
+      const slug = removeMdxSuffix(path)
         .replace(/^index$/, '') // remove root index
-        .replace(/\/index$/, '')}`, // remove /index from the end,
-    }))
+        .replace(/\/index$/, '') // remove /index from the end
+
+      // Strip the trailing slash from baseDocsLink when the page is the root
+      // index, so the canonical URL is `/docs` rather than `/docs/`.
+      const base = slug === '' ? config.baseDocsLink.replace(/\/$/, '') : config.baseDocsLink
+
+      return { path, url: `${base}${slug}` }
+    })
 
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 
@@ -1199,7 +1204,7 @@ ${yaml.stringify({
   abortSignal?.throwIfAborted()
 
   if (config.llms?.fullPath || config.llms?.overviewPath) {
-    const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
+    const outputtedDocsFiles = listOutputDocsFiles(store.writtenFiles, mdxFilePaths)
 
     if (config.llms?.fullPath) {
       const llmsFull = await generateLLMsFull(outputtedDocsFiles)

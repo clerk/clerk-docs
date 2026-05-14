@@ -55,6 +55,9 @@ export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles) => {
   return outputtedDocsFiles.map((file) => file.content).join('\n')
 }
 
+export const formatLLMsDocLine = (page: OutputtedDocsFiles[number]) =>
+  page.description ? `- [${page.title}](${page.url}): ${page.description}` : `- [${page.title}](${page.url})`
+
 export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdks: readonly SDK[]) => {
   const generic: OutputtedDocsFiles = []
   const bySdk = new Map<SDK, OutputtedDocsFiles>()
@@ -70,17 +73,14 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdk
     }
   }
 
-  const formatPage = (page: OutputtedDocsFiles[number]) =>
-    page.description ? `- [${page.title}](${page.url}): ${page.description}` : `- [${page.title}](${page.url})`
-
-  const sections: string[] = [`## Docs`, generic.map(formatPage).join('\n')]
+  const sections: string[] = [`## Docs`, generic.map(formatLLMsDocLine).join('\n')]
 
   // Emit SDK sections in the order they appear in validSdks for stable, predictable output.
   for (const sdk of validSdks) {
     const pages = bySdk.get(sdk)
     if (!pages || pages.length === 0) continue
     sections.push(`### ${getSdkDisplayName(sdk)}`)
-    sections.push(pages.map(formatPage).join('\n'))
+    sections.push(pages.map(formatLLMsDocLine).join('\n'))
   }
 
   return `# Clerk\n\n${sections.filter((section) => section.length > 0).join('\n\n')}`

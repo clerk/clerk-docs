@@ -1,5 +1,31 @@
 import { describe, expect, test } from 'vitest'
-import { listOutputDocsFiles, normalizeFrontmatterDescription, writeLLMs } from './llms'
+import { formatLLMsDocLine, listOutputDocsFiles, normalizeFrontmatterDescription, writeLLMs } from './llms'
+
+describe('formatLLMsDocLine', () => {
+  test('appends description after a colon when present', () => {
+    expect(
+      formatLLMsDocLine({
+        title: 'Quickstart',
+        url: 'https://example.com/docs/quickstart',
+        description: 'Get up and running with Clerk in minutes.',
+        path: 'quickstart.mdx',
+        content: '',
+      }),
+    ).toBe('- [Quickstart](https://example.com/docs/quickstart): Get up and running with Clerk in minutes.')
+  })
+
+  test('omits the colon when no description is provided', () => {
+    expect(
+      formatLLMsDocLine({
+        title: 'Quickstart',
+        url: 'https://example.com/docs/quickstart',
+        description: undefined,
+        path: 'quickstart.mdx',
+        content: '',
+      }),
+    ).toBe('- [Quickstart](https://example.com/docs/quickstart)')
+  })
+})
 
 describe('normalizeFrontmatterDescription', () => {
   test('returns trimmed string when description is non-empty', () => {

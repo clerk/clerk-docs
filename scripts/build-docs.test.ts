@@ -2203,6 +2203,92 @@ sdk: react, nextjs
     // Test SDK-scoped nested index.mdx - canonical should be /docs/:sdk:/sdk not /docs/:sdk:/sdk/index
     expect(await readFile('./dist/react/sdk/index.mdx')).toContain('canonical: /docs/:sdk:/sdk\n')
     expect(await readFile('./dist/nextjs/sdk/index.mdx')).toContain('canonical: /docs/:sdk:/sdk\n')
+
+    // directory.json should mirror the canonical URLs (root index has no trailing slash).
+    const directory = JSON.parse(await readFile('./dist/directory.json')) as Array<{
+      path: string
+      url: string
+    }>
+    const urlByPath = Object.fromEntries(directory.map((entry) => [entry.path, entry.url]))
+    expect(urlByPath['index.mdx']).toBe('/docs')
+    expect(urlByPath['guides/index.mdx']).toBe('/docs/guides')
+    expect(urlByPath['react/sdk/index.mdx']).toBe('/docs/react/sdk')
+    expect(urlByPath['nextjs/sdk/index.mdx']).toBe('/docs/nextjs/sdk')
+  })
+
+  test('directory.json excludes partials and tooltips', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Intro', href: '/docs/intro' },
+              { title: 'Billing Overview', href: '/docs/billing/overview' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/global-partial.mdx',
+        content: `Shared global partial content.`,
+      },
+      {
+        path: './docs/billing/_partials/local-partial.mdx',
+        content: `Local billing partial content.`,
+      },
+      {
+        path: './docs/_tooltips/sample-tooltip.mdx',
+        content: `Sample tooltip content.`,
+      },
+      {
+        path: './docs/intro.mdx',
+        content: `---
+title: Intro
+description: Intro page
+---
+
+<Include src="_partials/global-partial" />
+
+[Tooltip](!sample-tooltip)
+`,
+      },
+      {
+        path: './docs/billing/overview.mdx',
+        content: `---
+title: Billing Overview
+description: Billing overview page
+---
+
+<Include src="_partials/local-partial" />
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        tooltips: {
+          inputPath: '../docs/_tooltips',
+          outputPath: './_tooltips',
+        },
+      }),
+    )
+
+    const directory = JSON.parse(await readFile('./dist/directory.json')) as Array<{
+      path: string
+      url: string
+    }>
+
+    expect(directory).toEqual([
+      { path: 'intro.mdx', url: '/docs/intro' },
+      { path: 'billing/overview.mdx', url: '/docs/billing/overview' },
+    ])
+
+    expect(directory.some((entry) => entry.path.includes('_partials'))).toBe(false)
+    expect(directory.some((entry) => entry.path.includes('_tooltips'))).toBe(false)
   })
 
   test('should not inject :sdk: for single SDK documents when multiple SDKs are available', async () => {
@@ -7422,7 +7508,7 @@ description: Generated API docs
 
 ## Docs
 
-- [API Documentation]({{SITE_URL}}/docs/api-doc.md)`)
+- [API Documentation]({{SITE_URL}}/docs/api-doc.md): Generated API docs`)
   })
 
   test('Should output llms-full.txt full pages', async () => {

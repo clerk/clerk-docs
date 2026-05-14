@@ -1,40 +1,199 @@
 import { describe, expect, test } from 'vitest'
-import { buildLLMsDocsUrl } from './llms'
+import { formatLLMsDocLine, listOutputDocsFiles, normalizeFrontmatterDescription, writeLLMs } from './llms'
 
-const baseDocsLink = '/docs/'
-
-describe('buildLLMsDocsUrl', () => {
-  test('appends .md to top-level guide paths', () => {
-    expect(buildLLMsDocsUrl('cli.mdx', baseDocsLink)).toBe('{{SITE_URL}}/docs/cli.md')
+describe('formatLLMsDocLine', () => {
+  test('appends description after a colon when present', () => {
+    expect(
+      formatLLMsDocLine({
+        title: 'Quickstart',
+        url: 'https://example.com/docs/quickstart',
+        description: 'Get up and running with Clerk in minutes.',
+      }),
+    ).toBe('- [Quickstart](https://example.com/docs/quickstart): Get up and running with Clerk in minutes.')
   })
 
-  test('appends .md to nested guide paths', () => {
-    expect(buildLLMsDocsUrl('nextjs/getting-started/quickstart.mdx', baseDocsLink)).toBe(
-      '{{SITE_URL}}/docs/nextjs/getting-started/quickstart.md',
+  test('omits the colon when no description is provided', () => {
+    expect(
+      formatLLMsDocLine({
+        title: 'Quickstart',
+        url: 'https://example.com/docs/quickstart',
+      }),
+    ).toBe('- [Quickstart](https://example.com/docs/quickstart)')
+  })
+})
+
+describe('normalizeFrontmatterDescription', () => {
+  test('returns trimmed string when description is non-empty', () => {
+    expect(normalizeFrontmatterDescription('  Hello world  ')).toBe('Hello world')
+  })
+
+  test('collapses internal whitespace and newlines into single spaces', () => {
+    expect(normalizeFrontmatterDescription('Line one\nLine two\t  with  spaces')).toBe('Line one Line two with spaces')
+  })
+
+  test('returns undefined for empty or whitespace-only strings', () => {
+    expect(normalizeFrontmatterDescription('')).toBeUndefined()
+    expect(normalizeFrontmatterDescription('   ')).toBeUndefined()
+  })
+
+  test('returns undefined for non-string input', () => {
+    expect(normalizeFrontmatterDescription(undefined)).toBeUndefined()
+    expect(normalizeFrontmatterDescription(null)).toBeUndefined()
+    expect(normalizeFrontmatterDescription(123)).toBeUndefined()
+  })
+})
+
+describe('listOutputDocsFiles', () => {
+  test('extracts title and description from frontmatter', () => {
+    const docs = new Map<string, string>([
+      [
+        'quickstart.mdx',
+        `---
+title: Quickstart
+description: Get up and running with Clerk in minutes.
+---
+
+Body content`,
+      ],
+    ])
+
+    const result = listOutputDocsFiles(docs, [{ path: 'quickstart.mdx', url: '/docs/quickstart' }])
+
+    expect(result).toEqual([
+      {
+        path: 'quickstart.mdx',
+        url: '{{SITE_URL}}/docs/quickstart.md',
+        content: docs.get('quickstart.mdx'),
+        title: 'Quickstart',
+        description: 'Get up and running with Clerk in minutes.',
+      },
+    ])
+  })
+
+  test('leaves description undefined when frontmatter omits it', () => {
+    const docs = new Map<string, string>([
+      [
+        'overview.mdx',
+        `---
+title: Overview
+---
+
+Body`,
+      ],
+    ])
+
+    const result = listOutputDocsFiles(docs, [{ path: 'overview.mdx', url: '/docs/overview' }])
+
+    expect(result).toEqual([
+      {
+        path: 'overview.mdx',
+        url: '{{SITE_URL}}/docs/overview.md',
+        content: docs.get('overview.mdx'),
+        title: 'Overview',
+        description: undefined,
+      },
+    ])
+  })
+
+  test('skips entries without a title', () => {
+    const docs = new Map<string, string>([
+      [
+        'no-title.mdx',
+        `---
+description: A description but no title
+---
+
+Body`,
+      ],
+    ])
+
+    const result = listOutputDocsFiles(docs, [{ path: 'no-title.mdx', url: '/docs/no-title' }])
+
+    expect(result).toEqual([])
+  })
+
+  test('filters out paths starting with ~/', () => {
+    const docs = new Map<string, string>([
+      [
+        '~/quick-redirect.mdx',
+        `---
+title: Quick Redirect
+---
+
+Body`,
+      ],
+    ])
+
+    const result = listOutputDocsFiles(docs, [{ path: '~/quick-redirect.mdx', url: '/docs/quick-redirect' }])
+
+    expect(result).toEqual([])
+  })
+
+  test('prefixes the supplied URL with {{SITE_URL}} verbatim, including the docs root', () => {
+    const docs = new Map<string, string>([
+      [
+        'index.mdx',
+        `---
+title: Welcome
+---
+
+Body`,
+      ],
+      [
+        'guides/index.mdx',
+        `---
+title: Guides
+---
+
+Body`,
+      ],
+    ])
+
+    const result = listOutputDocsFiles(docs, [
+      { path: 'index.mdx', url: '/docs' },
+      { path: 'guides/index.mdx', url: '/docs/guides' },
+    ])
+
+    expect(result.map((entry) => entry.url)).toEqual(['{{SITE_URL}}/docs.md', '{{SITE_URL}}/docs/guides.md'])
+  })
+
+  test('throws when a doc cannot be found in the docs map', () => {
+    const docs = new Map<string, string>()
+
+    expect(() => listOutputDocsFiles(docs, [{ path: 'missing.mdx', url: '/docs/missing' }])).toThrow(
+      'Doc not found: missing.mdx',
     )
   })
+})
 
-  test('keeps root index as /docs/index.md', () => {
-    expect(buildLLMsDocsUrl('index.mdx', baseDocsLink)).toBe('{{SITE_URL}}/docs/index.md')
-  })
+describe('writeLLMs', () => {
+  test('renders a markdown list with descriptions when available', async () => {
+    const result = await writeLLMs([
+      {
+        path: 'quickstart.mdx',
+        url: '{{SITE_URL}}/docs/quickstart',
+        content: '',
+        title: 'Quickstart',
+        description: 'Get up and running with Clerk in minutes.',
+      },
+      {
+        path: 'overview.mdx',
+        url: '{{SITE_URL}}/docs/overview',
+        content: '',
+        title: 'Overview',
+        description: undefined,
+      },
+    ])
 
-  test('collapses nested /index segments to the parent slug', () => {
-    expect(buildLLMsDocsUrl('guides/index.mdx', baseDocsLink)).toBe('{{SITE_URL}}/docs/guides.md')
-  })
-
-  test('handles deeply nested /index paths', () => {
-    expect(buildLLMsDocsUrl('nextjs/guides/billing/index.mdx', baseDocsLink)).toBe(
-      '{{SITE_URL}}/docs/nextjs/guides/billing.md',
-    )
-  })
-
-  test('respects a custom baseDocsLink', () => {
-    expect(buildLLMsDocsUrl('cli.mdx', '/docs/pr/feature-branch/')).toBe('{{SITE_URL}}/docs/pr/feature-branch/cli.md')
-  })
-
-  test('does not strip a non-trailing index segment', () => {
-    expect(buildLLMsDocsUrl('index/getting-started.mdx', baseDocsLink)).toBe(
-      '{{SITE_URL}}/docs/index/getting-started.md',
+    expect(result).toBe(
+      [
+        '# Clerk',
+        '',
+        '## Docs',
+        '',
+        '- [Quickstart]({{SITE_URL}}/docs/quickstart): Get up and running with Clerk in minutes.',
+        '- [Overview]({{SITE_URL}}/docs/overview)',
+      ].join('\n'),
     )
   })
 })

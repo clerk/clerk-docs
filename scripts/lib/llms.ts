@@ -1,5 +1,3 @@
-import type { BuildConfig } from './config'
-import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import yaml from 'yaml'
 
 type Docs = Map<string, string>
@@ -8,25 +6,25 @@ export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles) => {
   return outputtedDocsFiles.map((file) => file.content).join('\n')
 }
 
+export const formatLLMsDocLine = (page: { title: string; url: string; description?: string }) => {
+  return page.description ? `- [${page.title}](${page.url}): ${page.description}` : `- [${page.title}](${page.url})`
+}
+
 export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles) => {
-  const list = outputtedDocsFiles.map((page) => `- [${page.title}](${page.url})`).join('\n')
+  const list = outputtedDocsFiles.map(formatLLMsDocLine).join('\n')
   return `# Clerk\n\n## Docs\n\n${list}`
 }
 
-// Build the public markdown URL for a docs file path. Points at the `.md`
-// export route so LLMs consuming llms.txt fetch the markdown variant directly.
-export const buildLLMsDocsUrl = (filePath: string, baseDocsLink: string): string => {
-  // For nested index pages (e.g. `guides/index.mdx`) the canonical URL drops
-  // the trailing `/index`, matching the docs site's routing. The root
-  // `index.mdx` keeps its slug so it maps to `/docs/index.md`.
-  const slug = removeMdxSuffix(filePath).replace(/\/index$/, '')
-  return `{{SITE_URL}}${baseDocsLink}${slug}.md`
+export const normalizeFrontmatterDescription = (raw: unknown): string | undefined => {
+  if (typeof raw !== 'string') return undefined
+  const trimmed = raw.trim().replace(/\s+/g, ' ')
+  return trimmed.length > 0 ? trimmed : undefined
 }
 
-export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {
+export const listOutputDocsFiles = (docs: Docs, files: { path: string; url: string }[]) => {
   return files
     .filter(({ path }) => !path.startsWith('~/')) // Exclude these quick redirect pages
-    .map(({ path }) => {
+    .map(({ path, url }) => {
       const content = docs.get(path)
 
       if (!content) {
@@ -35,7 +33,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
 
       return {
         path,
-        url: buildLLMsDocsUrl(path, config.baseDocsLink),
+        url: `{{SITE_URL}}${url}.md`,
         content,
       }
     })
@@ -51,6 +49,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
       return {
         ...file,
         title,
+        description: normalizeFrontmatterDescription(frontmatter.description),
       }
     })
     .filter((page) => page !== null)

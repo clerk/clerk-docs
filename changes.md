@@ -11,6 +11,7 @@ Restructured the "Authentication flows" section of the main docs nav into a flat
 **What changed:** Replaced the "Authentication flows" top-level section (which contained a nested "Authentication strategies" sub-section) with a flat "Authentication" section.
 
 **Before:**
+
 ```
 Authentication flows
 └── Authentication strategies
@@ -30,6 +31,7 @@ Authentication flows
 ```
 
 **After:**
+
 ```
 Authentication
 ├── Overview                        ← new page
@@ -72,7 +74,8 @@ Authentication
 
 **What it is:** New page serving as the entry point for the Authentication section.
 
-**Content:** 
+**Content:**
+
 - Brief intro to Clerk's authentication options
 - Links to all sub-sections (sign-in options, MFA, social login, enterprise connections, web3 wallets)
 - SSO connections explainer (moved from sign-up-sign-in-options.mdx)
@@ -95,6 +98,7 @@ Authentication
 **What changed:** Slimmed down significantly. Now covers only the standard sign-in options.
 
 **Content kept (unchanged):**
+
 - Email (OTP, magic link, same-device requirement)
 - Phone + SMS allowlist
 - Username
@@ -103,6 +107,7 @@ Authentication
 - User model
 
 **Content moved out:**
+
 - Intro paragraph → overview.mdx
 - "User & authentication" section header → replaced with a shorter intro sentence
 - SSO connections section → overview.mdx
@@ -134,6 +139,7 @@ Authentication
 ### Problem
 
 The original "OAuth" section in Authentication contained a page called "Use OAuth for Single Sign-On (SSO)" that covered two unrelated things:
+
 1. Letting users sign in to your Clerk app via social providers (already covered by Social login)
 2. Configuring Clerk as an OAuth IdP so users can sign in to third-party apps with their Clerk credentials
 
@@ -195,10 +201,12 @@ The file paths for all OAuth pages are unchanged — only the nav location chang
 **What changed:** Merged the full content of `authentication-flows.mdx` into this page. The separate "Authentication flows" nav item has been removed.
 
 **Content added:**
+
 - New "### Authentication flows" sub-section under SAML, covering SP-initiated flow, IdP-initiated flow, risks, and Clerk's security measures (verbatim from authentication-flows.mdx)
 - One-line note under OIDC about OIDC authentication flows pointing to easie.dev (was in authentication-flows.mdx)
 
 **Content updated:**
+
 - Intro sentence: removed the link to the now-removed authentication-flows page
 - FAQ "Does Clerk support IdP-initiated SSO?" answer: updated to link to the new in-page section anchor instead of the separate page
 - Fixed a minor typo in the description frontmatter ("such such as" → "such as")
@@ -211,6 +219,7 @@ The file paths for all OAuth pages are unchanged — only the nav location chang
 ### manifest.json — Enterprise connections restructured
 
 **Before:**
+
 ```
 Enterprise connections
 ├── Overview
@@ -232,6 +241,7 @@ Enterprise connections
 ```
 
 **After:**
+
 ```
 Enterprise connections
 ├── Overview                      ← now includes authentication flows content

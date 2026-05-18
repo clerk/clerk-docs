@@ -79,9 +79,9 @@ We refer to the reader with "you/your/yours." We objectively refer to Clerk as "
 > ✅
 > Clerk's `<ClerkProvider>` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
 
-### Use conjunctions
+### Use contractions
 
-Use conjunctions in the copy to make the copy more colloquial.
+Use contractions in the copy to make the copy more colloquial.
 
 > ❌
 > "You will"

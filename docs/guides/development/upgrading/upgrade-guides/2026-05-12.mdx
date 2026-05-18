@@ -1,0 +1,66 @@
+---
+title: Upgrade to API version 2026-05-12
+description: Learn how to upgrade to version 2026-05-12 of Clerk's API.
+---
+
+**Version 2026-05-12** of Clerk's Frontend and Backend APIs removes user metadata fields from the general-purpose user update endpoints. Metadata must now be set through the dedicated metadata endpoints, which provide deep-merge semantics.
+
+To use this new API version, refer to the [versioning guide](/docs/guides/development/upgrading/versioning). This guide documents all updates at the API level. Since implementation details may differ between SDKs, it will help you identify which parts of your SDK usage may require additional review in the documentation, and assist consumers using unofficial or custom API clients in managing the upgrade.
+
+## Backend endpoint changes
+
+`PATCH /v1/users/{user_id}` no longer accepts the following fields in the request body:
+
+- `public_metadata`
+- `private_metadata`
+- `unsafe_metadata`
+
+To update user metadata, use one of the dedicated endpoints below:
+
+| Endpoint | Semantics |
+| - | - |
+| `PATCH /v1/users/{user_id}/metadata` | Deep-merges the provided values into the existing metadata. Any key set to `null` is removed. |
+| `PUT /v1/users/{user_id}/metadata` | Replaces each provided top-level metadata field in full — no merging at any level. Top-level fields omitted from the request body are left untouched. Send `{}` to clear a field, or `null` to store a JSON `null` value. |
+
+Choose `PATCH` when you want to update specific keys without affecting others, and `PUT` when you want to overwrite an entire metadata field.
+
+If you are using a Clerk SDK, use the [`updateUserMetadata()`](/docs/reference/backend/user/update-user-metadata) method (which wraps `PATCH`) or the [`replaceUserMetadata()`](/docs/reference/backend/user/replace-user-metadata) method (which wraps `PUT`) instead of passing metadata fields to `updateUser()`.
+
+```ts {{ del: [[1, 5]], ins: [[6, 15]] }}
+await clerkClient.users.updateUser(userId, {
+  publicMetadata: {
+    role: 'admin',
+  },
+})
+await clerkClient.users.updateUserMetadata(userId, {
+  publicMetadata: {
+    role: 'admin',
+  },
+})
+
+await clerkClient.users.replaceUserMetadata(userId, {
+  publicMetadata: {
+    role: 'admin',
+  },
+})
+```
+
+## Frontend endpoint changes
+
+`PATCH /v1/me` no longer accepts the `unsafe_metadata` field in the request body.
+
+To update unsafe metadata from the frontend, use the dedicated endpoint `PATCH /v1/me/metadata` instead. This endpoint deep-merges the provided value with the existing `unsafeMetadata`, and any key set to `null` is removed.
+
+If you are using a Clerk SDK, use the [`updateMetadata()`](/docs/reference/objects/user#update-metadata) method on the `User` object instead of passing `unsafeMetadata` to `update()`.
+
+```ts {{ del: [[1, 5]], ins: [[6, 8]] }}
+await user.update({
+  unsafeMetadata: {
+    ...user.unsafeMetadata,
+    theme: 'dark',
+  },
+})
+await user.updateMetadata({
+  unsafeMetadata: { theme: 'dark' },
+})
+```

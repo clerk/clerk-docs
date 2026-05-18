@@ -8,6 +8,8 @@ describe('formatLLMsDocLine', () => {
         title: 'Quickstart',
         url: 'https://example.com/docs/quickstart',
         description: 'Get up and running with Clerk in minutes.',
+        path: 'quickstart.mdx',
+        content: '',
       }),
     ).toBe('- [Quickstart](https://example.com/docs/quickstart): Get up and running with Clerk in minutes.')
   })
@@ -17,6 +19,9 @@ describe('formatLLMsDocLine', () => {
       formatLLMsDocLine({
         title: 'Quickstart',
         url: 'https://example.com/docs/quickstart',
+        description: undefined,
+        path: 'quickstart.mdx',
+        content: '',
       }),
     ).toBe('- [Quickstart](https://example.com/docs/quickstart)')
   })
@@ -168,22 +173,25 @@ Body`,
 
 describe('writeLLMs', () => {
   test('renders a markdown list with descriptions when available', async () => {
-    const result = await writeLLMs([
-      {
-        path: 'quickstart.mdx',
-        url: '{{SITE_URL}}/docs/quickstart',
-        content: '',
-        title: 'Quickstart',
-        description: 'Get up and running with Clerk in minutes.',
-      },
-      {
-        path: 'overview.mdx',
-        url: '{{SITE_URL}}/docs/overview',
-        content: '',
-        title: 'Overview',
-        description: undefined,
-      },
-    ])
+    const result = await writeLLMs(
+      [
+        {
+          path: 'quickstart.mdx',
+          url: '{{SITE_URL}}/docs/quickstart',
+          content: '',
+          title: 'Quickstart',
+          description: 'Get up and running with Clerk in minutes.',
+        },
+        {
+          path: 'overview.mdx',
+          url: '{{SITE_URL}}/docs/overview',
+          content: '',
+          title: 'Overview',
+          description: undefined,
+        },
+      ],
+      ['react'],
+    )
 
     expect(result).toBe(
       [

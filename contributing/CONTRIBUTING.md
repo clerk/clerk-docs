@@ -301,7 +301,6 @@ To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`)
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
-1. Add the color SVG to the partials icon folder `_partials/icons/`.
 1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
 1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
 
@@ -321,7 +320,6 @@ To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`),
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
-1. Add the color SVG to the partials icon folder `_partials/icons/`.
 1. Add the SDK to `index.mdx` and `reference/overview.mdx`.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:

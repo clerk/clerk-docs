@@ -142,13 +142,16 @@ To make the setup process easier, it's recommended to keep two browser tabs open
     </Tab>
   </Tabs>
 
-  ## Set up native Sign in with Google (iOS only)
+  ## Configure the Clerk Expo plugin
 
-  This step is for **iOS only** and is **optional**. Currently, Sign in with Google will open a web browser to initiate the flow. If you'd rather have the app handle the flow natively and not open a web browser, follow this step.
+  Add the `@clerk/expo` plugin and your Google OAuth client IDs to the `extra` field in your app config. This step is **required for all platforms** (iOS and Android) when building with EAS or any production / non-dev bundle.
 
-  ### Configure the Clerk Expo plugin
-
-  The `@clerk/expo` config plugin configures the URL scheme needed for Google's authentication callback. Add the plugin to your `app.json` or `app.config.ts`, depending on your app's configuration:
+  > [!QUIZ]
+  > Why do we need to add the Google client IDs to our app config if they are already in our environment variables?
+  >
+  > ---
+  >
+  > Expo only inlines `EXPO_PUBLIC_*` environment variables into your own application source — they are **not** inlined into code inside `node_modules`. As a result, the Google OAuth client ID's in your environment variables resolve to `undefined` in EAS production bundles, even when the variables are correctly configured in EAS and visible in build logs. The `useSignInWithGoogle()` hook reads from your app config first and falls back to `process.env`, so exposing the values through your app config makes them reliably available in production.
 
   > [!QUIZ]
   > What is the difference between `app.json` and `app.config.ts`?
@@ -159,13 +162,55 @@ To make the setup process easier, it's recommended to keep two browser tabs open
 
   <Tabs items={["app.json", "app.config.ts"]}>
     <Tab>
-      Replace `your-ios-client-id` with the same `<your-ios-client-id>` from your `EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID` environment variable (it should only be the part of your iOS Client ID before ".apps.googleusercontent.com").
-
       ```json {{ filename: 'app.json' }}
       {
         "expo": {
           "plugins": ["@clerk/expo"],
           "extra": {
+            "EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID": "your-web-client-id.apps.googleusercontent.com",
+            "EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID": "your-ios-client-id.apps.googleusercontent.com",
+            "EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID": "your-android-client-id.apps.googleusercontent.com"
+          }
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'app.config.ts' }}
+      export default {
+        expo: {
+          plugins: ['@clerk/expo'],
+          extra: {
+            EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID,
+            EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID,
+            EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID:
+              process.env.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
+          },
+        },
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  ### (iOS only) Enable the native Sign in with Google flow
+
+  This step is for **iOS only** and is **optional**.
+
+  By default, Sign in with Google opens a web browser to initiate the flow. On iOS, you can optionally have the app handle the flow natively (no web browser) by adding `EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME` to the `extra` field in your app config.
+
+  In the following example, replace `your-ios-client-id` with the same `<your-ios-client-id>` from your `EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID` environment variable (it should only be the part of your iOS Client ID before ".apps.googleusercontent.com").
+
+  <Tabs items={["app.json", "app.config.ts"]}>
+    <Tab>
+      ```json {{ filename: 'app.json' }}
+      {
+        "expo": {
+          "plugins": ["@clerk/expo"],
+          "extra": {
+            "EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID": "your-web-client-id.apps.googleusercontent.com",
+            "EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID": "your-ios-client-id.apps.googleusercontent.com",
+            "EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID": "your-android-client-id.apps.googleusercontent.com",
             "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.your-ios-client-id"
           }
         }
@@ -179,6 +224,10 @@ To make the setup process easier, it's recommended to keep two browser tabs open
         expo: {
           plugins: ['@clerk/expo'],
           extra: {
+            EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID,
+            EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID,
+            EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID:
+              process.env.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
             EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME: process.env.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
           },
         },
@@ -186,11 +235,6 @@ To make the setup process easier, it's recommended to keep two browser tabs open
       ```
     </Tab>
   </Tabs>
-
-  The plugin resolves the `EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME` value from either of the following:
-
-  1. An environment variable (recommended for EAS builds, configured in `eas.json`).
-  1. The `config.extra` field in your app config.
 
   For EAS builds, add the environment variable to your build profile in `eas.json`:
 
@@ -208,7 +252,8 @@ To make the setup process easier, it's recommended to keep two browser tabs open
 
   ## Build your authentication flow
 
-  <Include src="_partials/expo/authview-google-callout" />
+  > [!IMPORTANT]
+  > If you're using [`<AuthView />`](/docs/reference/expo/native-components/auth-view) from `@clerk/expo/native`, you can skip this step as it handles the sign-in flow automatically.
 
   1. The [`useSignInWithGoogle()`](/docs/reference/expo/native-hooks/use-sign-in-with-google) hook requires `expo-crypto` for generating secure nonces during the authentication flow.
      ```bash {{ filename: 'terminal' }}

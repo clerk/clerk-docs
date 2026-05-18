@@ -2203,6 +2203,92 @@ sdk: react, nextjs
     // Test SDK-scoped nested index.mdx - canonical should be /docs/:sdk:/sdk not /docs/:sdk:/sdk/index
     expect(await readFile('./dist/react/sdk/index.mdx')).toContain('canonical: /docs/:sdk:/sdk\n')
     expect(await readFile('./dist/nextjs/sdk/index.mdx')).toContain('canonical: /docs/:sdk:/sdk\n')
+
+    // directory.json should mirror the canonical URLs (root index has no trailing slash).
+    const directory = JSON.parse(await readFile('./dist/directory.json')) as Array<{
+      path: string
+      url: string
+    }>
+    const urlByPath = Object.fromEntries(directory.map((entry) => [entry.path, entry.url]))
+    expect(urlByPath['index.mdx']).toBe('/docs')
+    expect(urlByPath['guides/index.mdx']).toBe('/docs/guides')
+    expect(urlByPath['react/sdk/index.mdx']).toBe('/docs/react/sdk')
+    expect(urlByPath['nextjs/sdk/index.mdx']).toBe('/docs/nextjs/sdk')
+  })
+
+  test('directory.json excludes partials and tooltips', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Intro', href: '/docs/intro' },
+              { title: 'Billing Overview', href: '/docs/billing/overview' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/global-partial.mdx',
+        content: `Shared global partial content.`,
+      },
+      {
+        path: './docs/billing/_partials/local-partial.mdx',
+        content: `Local billing partial content.`,
+      },
+      {
+        path: './docs/_tooltips/sample-tooltip.mdx',
+        content: `Sample tooltip content.`,
+      },
+      {
+        path: './docs/intro.mdx',
+        content: `---
+title: Intro
+description: Intro page
+---
+
+<Include src="_partials/global-partial" />
+
+[Tooltip](!sample-tooltip)
+`,
+      },
+      {
+        path: './docs/billing/overview.mdx',
+        content: `---
+title: Billing Overview
+description: Billing overview page
+---
+
+<Include src="_partials/local-partial" />
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        tooltips: {
+          inputPath: '../docs/_tooltips',
+          outputPath: './_tooltips',
+        },
+      }),
+    )
+
+    const directory = JSON.parse(await readFile('./dist/directory.json')) as Array<{
+      path: string
+      url: string
+    }>
+
+    expect(directory).toEqual([
+      { path: 'intro.mdx', url: '/docs/intro' },
+      { path: 'billing/overview.mdx', url: '/docs/billing/overview' },
+    ])
+
+    expect(directory.some((entry) => entry.path.includes('_partials'))).toBe(false)
+    expect(directory.some((entry) => entry.path.includes('_tooltips'))).toBe(false)
   })
 
   test('should not inject :sdk: for single SDK documents when multiple SDKs are available', async () => {
@@ -7422,7 +7508,171 @@ description: Generated API docs
 
 ## Docs
 
-- [API Documentation]({{SITE_URL}}/docs/api-doc)`)
+- [API Documentation]({{SITE_URL}}/docs/api-doc): Generated API docs`)
+  })
+
+  test('Should group SDK-scoped pages under sub-headers in llms.txt overview', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Generic Doc', href: '/docs/generic-doc' },
+              { title: 'SDK Doc', href: '/docs/sdk-doc' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/generic-doc.mdx',
+        content: `---
+title: Generic Doc
+description: A generic guide
+---
+
+# Generic Doc
+`,
+      },
+      {
+        path: './docs/sdk-doc.mdx',
+        content: `---
+title: SDK Doc
+description: An SDK-scoped guide
+sdk: nextjs, react
+---
+
+# SDK Doc
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+        llms: {
+          overviewPath: 'llms.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+## Docs
+
+- [Generic Doc]({{SITE_URL}}/docs/generic-doc): A generic guide
+
+### Next.js
+
+- [SDK Doc]({{SITE_URL}}/docs/nextjs/sdk-doc): An SDK-scoped guide
+
+### React
+
+- [SDK Doc]({{SITE_URL}}/docs/react/sdk-doc): An SDK-scoped guide`)
+  })
+
+  test('Should group reference/<sdk>/ pages and URL-aliased SDKs under their SDK sub-header', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Generic Guide', href: '/docs/generic-guide' },
+              { title: 'Vue Plugin', href: '/docs/reference/vue/clerk-plugin' },
+              { title: 'Astro Middleware', href: '/docs/reference/astro/clerk-middleware' },
+              { title: 'JS Overview', href: '/docs/reference/javascript/overview' },
+              { title: 'Express Middleware', href: '/docs/reference/express/clerk-middleware' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/generic-guide.mdx',
+        content: `---
+title: Generic Guide
+description: A generic guide
+---
+
+# Generic Guide
+`,
+      },
+      {
+        path: './docs/reference/vue/clerk-plugin.mdx',
+        content: `---
+title: clerkPlugin
+description: Vue clerkPlugin reference
+---
+
+# clerkPlugin
+`,
+      },
+      {
+        path: './docs/reference/astro/clerk-middleware.mdx',
+        content: `---
+title: clerkMiddleware (Astro)
+description: Astro middleware reference
+---
+
+# clerkMiddleware
+`,
+      },
+      {
+        path: './docs/reference/javascript/overview.mdx',
+        content: `---
+title: JavaScript Overview
+description: JS frontend SDK overview
+---
+
+# JavaScript Overview
+`,
+      },
+      {
+        path: './docs/reference/express/clerk-middleware.mdx',
+        content: `---
+title: clerkMiddleware (Express)
+description: Express middleware reference
+---
+
+# clerkMiddleware
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['vue', 'astro', 'js-frontend', 'expressjs'],
+        llms: {
+          overviewPath: 'llms.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+## Docs
+
+- [Generic Guide]({{SITE_URL}}/docs/generic-guide): A generic guide
+
+### Vue
+
+- [clerkPlugin]({{SITE_URL}}/docs/reference/vue/clerk-plugin): Vue clerkPlugin reference
+
+### Astro
+
+- [clerkMiddleware (Astro)]({{SITE_URL}}/docs/reference/astro/clerk-middleware): Astro middleware reference
+
+### JavaScript
+
+- [JavaScript Overview]({{SITE_URL}}/docs/reference/javascript/overview): JS frontend SDK overview
+
+### Express
+
+- [clerkMiddleware (Express)]({{SITE_URL}}/docs/reference/express/clerk-middleware): Express middleware reference`)
   })
 
   test('Should output llms-full.txt full pages', async () => {

@@ -7706,7 +7706,21 @@ description: Generated API docs
       }),
     )
 
-    expect(await readFile('./dist/llms-full.txt')).toEqual(`---
+    expect(await readFile('./dist/llms-full.txt')).toEqual(`# Clerk Documentation (full content)
+
+> Complete Clerk documentation: every doc page concatenated into one file
+> for LLM/agent consumption.
+
+## Companion files
+
+- [All sections index](https://clerk.com/llms-full.txt): Top-level index linking to every llms-full.txt file on clerk.com
+- [Articles](https://clerk.com/articles/llms-full.txt): Full content of all Clerk articles
+- [Blog](https://clerk.com/blog/llms-full.txt): Full content of all Clerk blog posts
+- [Changelog](https://clerk.com/changelog/llms-full.txt): Full content of all Clerk changelog entries
+
+---
+
+---
 title: API Documentation
 description: Generated API docs
 sdkScoped: "false"

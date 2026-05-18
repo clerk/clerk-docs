@@ -3,6 +3,21 @@ import type { SDK } from './schemas'
 
 type Docs = Map<string, string>
 
+export const LLMS_FULL_HEADER = `# Clerk Documentation (full content)
+
+> Complete Clerk documentation: every doc page concatenated into one file
+> for LLM/agent consumption.
+
+## Companion files
+
+- [All sections index](https://clerk.com/llms-full.txt): Top-level index linking to every llms-full.txt file on clerk.com
+- [Articles](https://clerk.com/articles/llms-full.txt): Full content of all Clerk articles
+- [Blog](https://clerk.com/blog/llms-full.txt): Full content of all Clerk blog posts
+- [Changelog](https://clerk.com/changelog/llms-full.txt): Full content of all Clerk changelog entries
+
+---
+
+`
 // Display names for SDKs when rendered as sub-headers in llms.txt.
 // Keep these in sync with VALID_SDKS in ./schemas.ts.
 const SDK_DISPLAY_NAMES: Record<SDK, string> = {
@@ -52,7 +67,7 @@ const getSdkFromPath = (path: string, validSdks: readonly SDK[]): SDK | null => 
 const getSdkDisplayName = (sdk: SDK): string => SDK_DISPLAY_NAMES[sdk] ?? sdk
 
 export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles) => {
-  return outputtedDocsFiles.map((file) => file.content).join('\n')
+  return LLMS_FULL_HEADER + outputtedDocsFiles.map((file) => file.content).join('\n')
 }
 
 export const formatLLMsDocLine = (page: OutputtedDocsFiles[number]) =>

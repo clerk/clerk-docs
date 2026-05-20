@@ -7616,15 +7616,15 @@ sdk: nextjs, react
 
 ## Docs
 
-- [Generic Doc]({{SITE_URL}}/docs/generic-doc): A generic guide
+- [Generic Doc]({{SITE_URL}}/docs/generic-doc.md): A generic guide
 
 ### Next.js
 
-- [SDK Doc]({{SITE_URL}}/docs/nextjs/sdk-doc): An SDK-scoped guide
+- [SDK Doc]({{SITE_URL}}/docs/nextjs/sdk-doc.md): An SDK-scoped guide
 
 ### React
 
-- [SDK Doc]({{SITE_URL}}/docs/react/sdk-doc): An SDK-scoped guide`)
+- [SDK Doc]({{SITE_URL}}/docs/react/sdk-doc.md): An SDK-scoped guide`)
   })
 
   test('Should group reference/<sdk>/ pages and URL-aliased SDKs under their SDK sub-header', async () => {
@@ -7710,23 +7710,23 @@ description: Express middleware reference
 
 ## Docs
 
-- [Generic Guide]({{SITE_URL}}/docs/generic-guide): A generic guide
+- [Generic Guide]({{SITE_URL}}/docs/generic-guide.md): A generic guide
 
 ### Vue
 
-- [clerkPlugin]({{SITE_URL}}/docs/reference/vue/clerk-plugin): Vue clerkPlugin reference
+- [clerkPlugin]({{SITE_URL}}/docs/reference/vue/clerk-plugin.md): Vue clerkPlugin reference
 
 ### Astro
 
-- [clerkMiddleware (Astro)]({{SITE_URL}}/docs/reference/astro/clerk-middleware): Astro middleware reference
+- [clerkMiddleware (Astro)]({{SITE_URL}}/docs/reference/astro/clerk-middleware.md): Astro middleware reference
 
 ### JavaScript
 
-- [JavaScript Overview]({{SITE_URL}}/docs/reference/javascript/overview): JS frontend SDK overview
+- [JavaScript Overview]({{SITE_URL}}/docs/reference/javascript/overview.md): JS frontend SDK overview
 
 ### Express
 
-- [clerkMiddleware (Express)]({{SITE_URL}}/docs/reference/express/clerk-middleware): Express middleware reference`)
+- [clerkMiddleware (Express)]({{SITE_URL}}/docs/reference/express/clerk-middleware.md): Express middleware reference`)
   })
 
   test('Should output llms-full.txt full pages', async () => {

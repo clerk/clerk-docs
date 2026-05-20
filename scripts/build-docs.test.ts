@@ -8136,8 +8136,39 @@ tag: wip
     )
 
     await expect(promise).rejects.toThrow(
-      'Invalid tag "wip" in frontmatter. Must be one of: beta, community, deprecated.',
+      'Invalid tag "wip" in frontmatter. Must be one of: beta, community, deprecated, legacy.',
     )
+  })
+
+  test('accepts tag: legacy', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Legacy Page', href: '/docs/legacy-page' }]],
+        }),
+      },
+      {
+        path: './docs/legacy-page.mdx',
+        content: `---
+title: Legacy Page
+description: A page tagged as legacy
+tag: legacy
+---
+
+# Legacy Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
   })
 })
 

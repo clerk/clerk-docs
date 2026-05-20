@@ -5,7 +5,7 @@ import type { VFile } from 'vfile'
 import type { ValidationError } from 'zod-validation-error'
 import type { BuildConfig } from './config'
 import type { Position } from 'unist'
-import type { SDK } from './schemas'
+import { tag as tagSchema, type SDK } from './schemas'
 
 export const errorMessages = {
   // Manifest errors
@@ -29,7 +29,7 @@ export const errorMessages = {
   'invalid-sdk-in-frontmatter': (invalidSDKs: string[], validSdks: SDK[]): string =>
     `Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(validSdks)}`,
   'invalid-tag-in-frontmatter': (tag: string): string =>
-    `Invalid tag "${tag}" in frontmatter. Must be one of: beta, community, deprecated.`,
+    `Invalid tag "${tag}" in frontmatter. Must be one of: ${tagSchema.options.join(', ')}.`,
   'if-component-sdk-not-in-frontmatter': (sdk: SDK, docSdk: SDK[]): string =>
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
   'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>

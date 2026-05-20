@@ -10,7 +10,7 @@ export type Frontmatter = {
   title: string
   description?: string
   sdk?: SDK[]
-  tag?: 'beta' | 'community' | 'deprecated'
+  tag?: 'beta' | 'community' | 'deprecated' | 'legacy'
 }
 
 export const extractFrontmatter =

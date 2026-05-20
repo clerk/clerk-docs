@@ -188,6 +188,8 @@ async function main() {
         'guides/development/migrating/cognito.mdx': ['doc-not-in-manifest'],
         'guides/development/migrating/firebase.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/all-providers.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/enterprise-connections/authentication-flows.mdx': ['doc-not-in-manifest'],
+        'guides/development/local-credentials.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'getting-started/quickstart/setup-clerk.mdx': ['doc-not-in-manifest'],

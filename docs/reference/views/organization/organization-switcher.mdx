@@ -1,0 +1,199 @@
+---
+title: '`OrganizationSwitcher`'
+description: Clerk's OrganizationSwitcher is a prebuilt Android component for switching between personal and organization accounts.
+sdk: android
+---
+
+The `OrganizationSwitcher` is a self-contained prebuilt Jetpack Compose component for switching between the signed-in user's personal account and organization accounts. It can show a trailing [`UserButton`](/docs/reference/views/user/user-button), accept pending organization invitations and suggestions, and open default organization management and organization creation flows unless you override those actions with callbacks.
+
+`OrganizationSwitcher` only renders when there is a current user, a current session, and organizations are enabled for the instance.
+
+> [!NOTE]
+> When organization selection is forced, [`AuthView`](/docs/reference/views/authentication/auth-view) handles the `choose_organization` session task automatically. Continue rendering `AuthView` while the session has a pending task, then render your signed-in UI after the task is complete.
+
+## Import
+
+```kotlin
+import com.clerk.ui.organizationswitcher.OrganizationSwitcher
+```
+
+## Parameters
+
+<Properties>
+  - `modifier`
+  - `Modifier`
+
+  A modifier applied to the switcher's root layout.
+
+  ---
+
+  - `clerkTheme`
+  - `ClerkTheme?`
+
+  Optional theme customization for the switcher UI.
+
+  ---
+
+  - `showUserButton`
+  - `Boolean`
+
+  Whether to render a trailing `UserButton`. Defaults to `true`.
+
+  ---
+
+  - `onOrganizationChanged`
+  - `(() -> Unit)?`
+
+  Called after the user successfully switches to an organization or personal account.
+
+  ---
+
+  - `hidePersonal`
+  - `Boolean`
+
+  Whether to hide the personal account option when organization selection is not forced. Defaults to `false`.
+
+  ---
+
+  - `displayMode`
+  - `OrganizationSwitcherDisplayMode`
+
+  Controls the trigger style. Defaults to `OrganizationSwitcherDisplayMode.Normal`.
+
+  ---
+
+  - `onManageOrganization`
+  - `((OrganizationMembership) -> Unit)?`
+
+  Called when the user selects the manage organization action. When `null`, the switcher opens the default `OrganizationProfileView`.
+
+  ---
+
+  - `onCreateOrganization`
+  - `((OrganizationCreationDefaults?) -> Unit)?`
+
+  Called when the user selects create organization. When `null`, the switcher opens the default organization creation flow.
+
+  ---
+
+  - `organizationProfileCustomRows`
+  - `List<OrganizationProfileCustomRow>`
+
+  Custom rows forwarded to the default `OrganizationProfileView` opened by the switcher.
+
+  ---
+
+  - `organizationProfileCustomDestination`
+  - `(@Composable (String) -> Unit)?`
+
+  Custom destination builder forwarded to the default `OrganizationProfileView`. The destination receives the tapped row's `routeKey`.
+</Properties>
+
+## Display modes
+
+`OrganizationSwitcherDisplayMode` supports:
+
+- `OrganizationSwitcherDisplayMode.Normal`
+- `OrganizationSwitcherDisplayMode.Compact`
+- `OrganizationSwitcherDisplayMode.normal(size)`
+- `OrganizationSwitcherDisplayMode.compact(size)`
+
+`Normal` shows the active account avatar, account name, and chevron. `Compact` shows only the avatar-sized account trigger.
+
+## Usage
+
+### Basic usage
+
+```kotlin
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.clerk.api.Clerk
+import com.clerk.api.session.pendingTaskKey
+import com.clerk.ui.auth.AuthView
+import com.clerk.ui.organizationswitcher.OrganizationSwitcher
+
+@Composable
+fun HomeScreen() {
+    val session by Clerk.sessionFlow.collectAsStateWithLifecycle()
+    val user by Clerk.userFlow.collectAsStateWithLifecycle()
+
+    if (user != null && session?.pendingTaskKey == null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(24.dp),
+        ) {
+            OrganizationSwitcher()
+        }
+    } else {
+        AuthView()
+    }
+}
+```
+
+### Compact trigger
+
+```kotlin
+import androidx.compose.ui.unit.dp
+import com.clerk.ui.organizationswitcher.OrganizationSwitcher
+import com.clerk.ui.organizationswitcher.OrganizationSwitcherDisplayMode
+
+OrganizationSwitcher(
+    showUserButton = false,
+    displayMode = OrganizationSwitcherDisplayMode.compact(size = 40.dp),
+)
+```
+
+### Override default flows
+
+```kotlin
+OrganizationSwitcher(
+    onOrganizationChanged = {
+        // Refresh organization-scoped data.
+    },
+    onManageOrganization = { membership ->
+        // Navigate to your own organization settings screen.
+    },
+    onCreateOrganization = { creationDefaults ->
+        // Navigate to your own organization creation flow.
+    },
+)
+```
+
+### Customize the default organization profile
+
+Custom rows are shown in the switcher's default `OrganizationProfileView` only when you provide both `organizationProfileCustomRows` and `organizationProfileCustomDestination`.
+
+```kotlin
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import com.clerk.ui.organizationprofile.custom.OrganizationProfileCustomRow
+import com.clerk.ui.organizationprofile.custom.OrganizationProfileCustomRowPlacement
+import com.clerk.ui.organizationprofile.custom.OrganizationProfileRow
+import com.clerk.ui.organizationprofile.custom.OrganizationProfileRowIcon
+import com.clerk.ui.organizationswitcher.OrganizationSwitcher
+
+OrganizationSwitcher(
+    organizationProfileCustomRows = listOf(
+        OrganizationProfileCustomRow(
+            routeKey = "settings",
+            title = "Settings",
+            icon = OrganizationProfileRowIcon.Vector(Icons.Filled.Settings),
+            placement = OrganizationProfileCustomRowPlacement.After(OrganizationProfileRow.Members),
+        )
+    ),
+    organizationProfileCustomDestination = { routeKey ->
+        when (routeKey) {
+            "settings" -> OrganizationSettingsContent()
+        }
+    },
+)
+```

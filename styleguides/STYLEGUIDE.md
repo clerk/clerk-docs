@@ -49,6 +49,16 @@ When writing titles that contain component references in MDX pages, wrap the com
 > ✅
 > Add it to your app's Middleware.
 
+### Capitalize Clerk feature proper nouns
+
+Clerk's own product and feature names are proper nouns — capitalize them consistently (for example, "Agent Tasks"). This follows the same reasoning as the Next.js convention above. Use judgment; this isn't an exhaustive list, but when a name refers to a specific Clerk feature, treat it as a proper noun.
+
+> ❌
+> Create an agent task to test your authentication flows.
+
+> ✅
+> Create an Agent Task to test your authentication flows.
+
 ### Use "sign in" instead of "log in"
 
 Use "sign in" and "sign out" rather than "log in" or "log out".

@@ -243,7 +243,7 @@ Testing with a simple page.`)
 
   test('Warning on missing description in frontmatter', async () => {
     // Create temp environment with minimal files array
-    const { tempDir, pathJoin } = await createTempFiles([
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -1174,7 +1174,7 @@ Testing with a simple page.`,
   })
 
   test('Invalid SDK in frontmatter fails the build', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -1745,7 +1745,7 @@ sdk: nextjs, react
   })
 
   test('should handle <If /> components with both `sdk` and `notSdk` props', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -2455,7 +2455,7 @@ iOS Quickstart`,
 
 describe('Heading Validation', () => {
   test('should error on duplicate headings', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -2785,7 +2785,7 @@ title: Simple Test
   })
 
   test('Nested partials should work (partial inside a partial)', async () => {
-    const { tempDir, pathJoin, readFile } = await createTempFiles([
+    const { tempDir, readFile } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -4276,7 +4276,7 @@ title: Core Page
   })
 
   test('should correctly handle links with anchors to specific sections of documents', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -5087,7 +5087,7 @@ sourceFile: /docs/doc-2.mdx
   })
 
   test('Should embed links in sdk scoped docs', async () => {
-    const { tempDir, readFile, listFiles } = await createTempFiles([
+    const { tempDir, readFile } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -7508,7 +7508,61 @@ description: Generated API docs
 
 ## Docs
 
-- [API Documentation]({{SITE_URL}}/docs/api-doc): Generated API docs`)
+- [API Documentation]({{SITE_URL}}/docs/api-doc.md): Generated API docs`)
+  })
+
+  test('Should collapse /index in llms.txt URLs', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Home', href: '/docs/index' },
+              { title: 'Guides', href: '/docs/guides/index' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/index.mdx',
+        content: `---
+title: Home
+description: Welcome to the docs
+---
+
+# Welcome
+`,
+      },
+      {
+        path: './docs/guides/index.mdx',
+        content: `---
+title: Guides
+description: Guides overview
+---
+
+# Guides
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        llms: {
+          overviewPath: 'llms.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+## Docs
+
+- [Home]({{SITE_URL}}/docs.md): Welcome to the docs
+- [Guides]({{SITE_URL}}/docs/guides.md): Guides overview`)
   })
 
   test('Should group SDK-scoped pages under sub-headers in llms.txt overview', async () => {

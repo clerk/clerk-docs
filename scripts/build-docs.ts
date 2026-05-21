@@ -971,6 +971,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 ${yaml.stringify({
   metadata: { title: doc.frontmatter.title },
   description: doc.frontmatter.description,
+  tag: doc.frontmatter.tag,
   template: 'wide',
   redirectPage: 'true',
   availableSdks: sdks.join(','),

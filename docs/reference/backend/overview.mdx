@@ -3,21 +3,21 @@ title: '`clerkClient`'
 description: Use clerkClient to interact with Clerk's Backend API resources.
 ---
 
-{/* DOCS NOTE: The IF blocks depend on if the SDK can access clerkClient() or not. The SDKs that can access clerkClient() are nextjs, astro, express, fastify, nuxt, react-router, and tanstack-react-start. Everything else must install the `@clerk/backend` package separately. */}
+{/* DOCS NOTE: The IF blocks depend on if the SDK can access clerkClient() or not. The SDKs that can access clerkClient() are nextjs, astro, express, fastify, hono, nuxt, react-router, and tanstack-react-start. Everything else must install the `@clerk/backend` package separately. */}
 
 The `clerkClient` is a wrapper around the [Backend API](/docs/reference/backend-api){{ target: '_blank' }} that makes it easier to interact with the API **for JavaScript environments**. For example, to retrieve a list of all users in your application, you can use the [`users.getUserList()`](/docs/reference/backend/user/get-user-list) method instead of manually making a fetch request to the [`https://api.clerk.com/v1/users`](/docs/reference/backend-api/tag/users/get/users){{ target: '_blank' }} endpoint.
 
 ## Installation
 
-<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
-  Some of Clerk's SDKs, like Next.js and React Router, re-export `clerkClient` from their package. If you are not using one of these SDKs, install the `@clerk/backend` package using the following command:
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
+  Some of Clerk's SDKs, like Next.js and React Router, provide access to `clerkClient` from their package. If you are not using one of these SDKs, install the `@clerk/backend` package using the following command:
 
   ```npm {{ filename: 'terminal' }}
   npm install @clerk/backend
   ```
 </If>
 
-<If sdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If sdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   The SDK you are using already includes an instance of `clerkClient`, so you don't need to install `@clerk/backend` separately.
 </If>
 
@@ -25,7 +25,7 @@ The `clerkClient` is a wrapper around the [Backend API](/docs/reference/backend-
 
 `clerkClient()` is organized around [resources](#resources), such as **Users** and **Organizations**. To access a resource, you must **first instantiate a `clerkClient` instance.**
 
-<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   To instantiate a `clerkClient` instance, you must call `createClerkClient()` and pass in your Clerk [Secret Key](!secret-key). You can also pass other [`options`](#create-clerk-client-options) to customize the behavior of the `clerkClient` instance.
 
   > [!NOTE]
@@ -38,7 +38,7 @@ The `clerkClient` is a wrapper around the [Backend API](/docs/reference/backend-
   ```
 </If>
 
-<If sdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "tanstack-react-start"]}>
+<If sdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "tanstack-react-start"]}>
   {/* DOCS NOTE: You cannot instantiate a "default" clerkClient instance for React Router. You must instantiate a "custom" instance, which is why React Router is not included in this section. */}
 
   ### Instantiate a default `clerkClient` instance
@@ -72,6 +72,26 @@ The `clerkClient` is a wrapper around the [Backend API](/docs/reference/backend-
   <If sdk="fastify">
     ```jsx
     import { clerkClient } from '@clerk/fastify'
+    ```
+  </If>
+
+  <If sdk="hono">
+    In Hono applications, the `clerkMiddleware()` helper attaches the Clerk Backend API client to the context. Use `c.get('clerk')` inside a route handler after `clerkMiddleware()` has run.
+
+    ```ts
+    import { clerkMiddleware } from '@clerk/hono'
+    import { Hono } from 'hono'
+
+    const app = new Hono()
+
+    app.use('*', clerkMiddleware())
+
+    app.get('/users', async (c) => {
+      const clerk = c.get('clerk')
+      const userList = await clerk.users.getUserList()
+
+      return c.json({ userList })
+    })
     ```
   </If>
 
@@ -213,7 +233,7 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object contains importan
 
 <Include src="_partials/auth-object-table" />
 
-<If notSdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If notSdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   The following example demonstrates how to retrieve the authenticated user's ID using `request.auth`. It also shows how to use the [`getUser()`](/docs/reference/backend/user/get-user) method to get the [Backend `User` object](/docs/reference/backend/types/backend-user).
 
   ```js
@@ -239,7 +259,7 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object contains importan
   ```
 </If>
 
-<If sdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+<If sdk={["nextjs", "astro", "expressjs", "fastify", "hono", "nuxt", "react-router", "tanstack-react-start"]}>
   The following examples demonstrate how to retrieve the authenticated user's ID using framework-specific auth helpers and how to use the [`getUser()`](/docs/reference/backend/user/get-user) method to get the [Backend `User` object](/docs/reference/backend/types/backend-user).
 
   <If sdk="nextjs">
@@ -362,6 +382,38 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object contains importan
         res.status(200).json(user)
       })
     }
+    ```
+  </If>
+
+  <If sdk="hono">
+    For Hono, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/reference/hono/get-auth).
+
+    ```ts {{ filename: 'src/index.ts' }}
+    import { clerkMiddleware, getAuth } from '@clerk/hono'
+    import { Hono } from 'hono'
+    import { HTTPException } from 'hono/http-exception'
+
+    const app = new Hono()
+
+    app.use('*', clerkMiddleware())
+
+    app.get('/user', async (c) => {
+      // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+      // Accessing the `Auth` object differs depending on the SDK you're using
+      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+      const { isAuthenticated, userId } = getAuth(c)
+
+      // Protect the route by checking if the user is authenticated
+      if (!isAuthenticated) {
+        throw new HTTPException(401, { message: 'User not authenticated' })
+      }
+
+      // Use the `getUser()` method to get the Backend User object
+      const clerk = c.get('clerk')
+      const user = await clerk.users.getUser(userId)
+
+      return c.json(user)
+    })
     ```
   </If>
 

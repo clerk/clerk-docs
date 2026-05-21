@@ -159,7 +159,7 @@ async function loadDirectory(): Promise<Set<string>> {
         validUrls.add(entry.url.slice(0, -1))
       }
       // Also add the URL with trailing slash if it doesn't have one
-      if (!entry.url.endsWith('/') && entry.url !== '/docs') {
+      if (!entry.url.endsWith('/')) {
         validUrls.add(entry.url + '/')
       }
     }

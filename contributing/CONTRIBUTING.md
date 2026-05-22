@@ -370,7 +370,7 @@ As mentioned above, all of the documentation content is located in the **`/docs`
 
 ### File metadata
 
-Each file has a few required frontmatter fields, which are defined like so:
+Each file has frontmatter fields, which are defined like so:
 
 ```mdx
 ---

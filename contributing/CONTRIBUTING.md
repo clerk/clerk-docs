@@ -131,6 +131,8 @@ Because warnings don't fail the build, a green build is not the same as a clean 
 
 **Lint** with `pnpm run lint`. This checks formatting (Prettier), redirects, quickstarts, and more.
 
+Neither check verifies **factual** claims about the external APIs and SDKs the docs describe (endpoints, versions, method signatures, how the reference renders). Verify those against their source repositories — see [`AGENTS.md`](../AGENTS.md) under "Verifying technical claims."
+
 > [!IMPORTANT]
 > Rebase long-lived PRs on the latest `main` (or merge it in) and re-build before merging. A change in another PR can invalidate frontmatter or links that were valid when your PR was opened.
 

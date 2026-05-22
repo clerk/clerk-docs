@@ -17,6 +17,16 @@ This repo is Clerk's documentation — MDX content in `docs/`, built by a custom
 
 See `contributing/CONTRIBUTING.md` → "Validating your changes" for what each severity means and why.
 
+## Verifying technical claims
+
+clerk-docs documents APIs and SDKs it doesn't own, so a change can be syntactically valid yet factually wrong, and `build:tsx`/`lint` won't catch it. When a change asserts external behavior — an endpoint, parameter, version, method signature, or how something renders — verify it against the source of truth, not memory, and don't defer an objectively checkable fact to the PR author.
+
+- API behavior, endpoints, versions, OpenAPI specs → [`clerk/clerk_go`](https://github.com/clerk/clerk_go)
+- SDK method names, types, and signatures → [`clerk/javascript`](https://github.com/clerk/javascript)
+- How docs pages and the API reference render (e.g. the version dropdown) → [`clerk/clerk`](https://github.com/clerk/clerk)
+
+These repos aren't part of this one. Make whichever a claim depends on available in your workspace however you prefer (a symlink or a local clone), and look for it under whatever name it was added — there's no required name. `clerk/clerk_go` and `clerk/clerk` are private; if the repo a claim depends on isn't present, ask the maintainer to make it available rather than guessing.
+
 ## Map
 
 - `docs/` — MDX content; each file is a route under clerk.com/docs.

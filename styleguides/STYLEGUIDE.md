@@ -51,7 +51,7 @@ When writing titles that contain component references in MDX pages, wrap the com
 
 ### Capitalize Clerk feature proper nouns
 
-Clerk's own product and feature names are proper nouns — capitalize them consistently (for example, "Agent Tasks"). This follows the same reasoning as the Next.js convention above. Use judgment; this isn't an exhaustive list, but when a name refers to a specific Clerk feature, treat it as a proper noun.
+Clerk's own product and feature names are proper nouns — capitalize them consistently (for example, "Organization", "Billing", and "Agent Tasks"). This follows the same reasoning as the Next.js convention above. Use judgment; this isn't an exhaustive list, but when a name refers to a specific Clerk feature, treat it as a proper noun.
 
 > ❌
 > Create an agent task to test your authentication flows.

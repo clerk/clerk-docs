@@ -1638,9 +1638,6 @@ When you document a new feature or reference, some conventions are easy to miss 
 
 - **Is the feature in beta or experimental?** Add a beta callout partial (follow an existing one, e.g. [`agent-tasks-beta-callout.mdx`](../docs/_partials/agent-tasks-beta-callout.mdx)) and include it on the relevant pages, then add a `(Beta)` `tag` to the matching `manifest.json` entries. Valid `tag` values are defined by the `tag` enum in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts).
 - **Are you documenting a new SDK type or interface?** Give it its own page under `/docs/reference/types/<name>` with a matching `manifest.json` entry, rather than documenting it inline within a method reference. These type pages are hand-authored — see [`agent-task.mdx`](../docs/reference/types/agent-task.mdx) for an example. This is distinct from reference content rendered with [`<Typedoc />`](#typedoc-), which is auto-generated from `clerk/javascript`.
-- **Be precise about required vs. optional frontmatter.** `title` is required; `description` is optional but recommended (see [File metadata](#file-metadata)). Don't present optional frontmatter as required.
-
-Beta or experimental status isn't something the build can detect from a diff — it's on the author and reviewer to remember to ask.
 
 ## Help wanted!
 

@@ -119,7 +119,7 @@ export const listOutputDocsFiles = (docs: Docs, files: { path: string; url: stri
 
       return {
         path,
-        url: `{{SITE_URL}}${url}`,
+        url: `{{SITE_URL}}${url}.md`,
         content,
       }
     })

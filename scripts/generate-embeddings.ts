@@ -252,7 +252,7 @@ async function main() {
   const openai = createOpenAI({ apiKey: OPENAI_EMBEDDINGS_API_KEY })
 
   const { embeddings } = await embedMany({
-    model: openai.textEmbeddingModel(EMBEDDING_MODEL.model),
+    model: openai.embeddingModel(EMBEDDING_MODEL.model),
     values: markdownChunks.map((chunk) => chunk.content),
     providerOptions: {
       openai: {

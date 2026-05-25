@@ -251,15 +251,64 @@ async function main() {
 
   const openai = createOpenAI({ apiKey: OPENAI_EMBEDDINGS_API_KEY })
 
-  const { embeddings } = await embedMany({
-    model: openai.embeddingModel(EMBEDDING_MODEL.model),
-    values: markdownChunks.map((chunk) => chunk.content),
-    providerOptions: {
-      openai: {
-        dimensions: EMBEDDING_DIMENSIONS,
+  // OpenAI's `/v1/embeddings` enforces its 300k tokens-per-request cap with a
+  // *conservative byte-based estimate* (≈ body bytes / 4), not real
+  // tokenization. Content with lots of compressible whitespace (markdown
+  // tables, etc.) tokenizes to far fewer tokens than `bytes/4` suggests, so
+  // we cap each batch by character count. We also cap items at 2048 to match
+  // the @ai-sdk/openai internal splitter, so the SDK doesn't re-split our
+  // batches.
+  //
+  // Char budget math: 300k * 4 = 1.2M chars hard ceiling. We target 1M chars
+  // (≈ 250k server-estimated tokens) to leave headroom for JSON overhead.
+  const CHARS_PER_REQUEST_LIMIT = 1_000_000
+  const ITEMS_PER_REQUEST_LIMIT = 2048
+
+  const batches: Chunk[][] = []
+  let currentBatch: Chunk[] = []
+  let currentBatchChars = 0
+  for (const chunk of markdownChunks) {
+    const overChars = currentBatchChars + chunk.content.length > CHARS_PER_REQUEST_LIMIT
+    const overItems = currentBatch.length >= ITEMS_PER_REQUEST_LIMIT
+    if (currentBatch.length > 0 && (overChars || overItems)) {
+      batches.push(currentBatch)
+      currentBatch = []
+      currentBatchChars = 0
+    }
+    currentBatch.push(chunk)
+    currentBatchChars += chunk.content.length
+  }
+  if (currentBatch.length > 0) batches.push(currentBatch)
+
+  const embeddings: number[][] = []
+  for (const [i, batch] of batches.entries()) {
+    const values = batch.map((chunk) => chunk.content)
+    const localTokens = batch.reduce((acc, c) => acc + c.tokens, 0)
+    const localChars = batch.reduce((acc, c) => acc + c.content.length, 0)
+    const bodyBytes = Buffer.byteLength(JSON.stringify(values), 'utf8')
+    const estimatedServerTokens = Math.ceil(bodyBytes / 4)
+
+    console.info(
+      `→ Batch ${i + 1}/${batches.length}: ${batch.length} chunks | ` +
+        `localTokens=${localTokens} chars=${localChars} body=${(bodyBytes / 1024).toFixed(1)}KB ` +
+        `~serverEst=${estimatedServerTokens}`,
+    )
+
+    const result = await embedMany({
+      model: openai.embeddingModel(EMBEDDING_MODEL.model),
+      values,
+      providerOptions: {
+        openai: {
+          dimensions: EMBEDDING_DIMENSIONS,
+        },
       },
-    },
-  })
+    })
+    embeddings.push(...result.embeddings)
+    console.info(
+      `  ✓ server usage tokens=${result.usage?.tokens ?? 'n/a'} ` +
+        `(local=${localTokens}, est=${estimatedServerTokens})`,
+    )
+  }
 
   const chunksWithEmbeddings = markdownChunks.map(({ cost, tokens, ...chunk }, index) => {
     const embedding = embeddings[index]

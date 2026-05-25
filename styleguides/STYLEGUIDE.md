@@ -6,7 +6,7 @@ These are the guidelines we use to write our docs.
 
 ### Alphabetize
 
-Try to keep things in alphabetic order, except Next.js, React, and JavaScript are prioritized as these are our core SDKs. For example, our SDK selector prioritizes Next.js, React, and Javascript, and then alphabetizes the rest of the SDK's. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
+Try to keep things in alphabetic order, except our most popular SDKs are prioritized first: Next.js, React, JavaScript, Expo, TanStack React Start, React Router, and Express. For example, our SDK selector prioritizes these SDKs in this order, and then alphabetizes the rest. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
 
 ### De-dupe reference links and tooltips
 
@@ -79,9 +79,9 @@ We refer to the reader with "you/your/yours." We objectively refer to Clerk as "
 > ✅
 > Clerk's `<ClerkProvider>` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
 
-### Use conjunctions
+### Use contractions
 
-Use conjunctions in the copy to make the copy more colloquial.
+Use contractions in the copy to make the copy more colloquial.
 
 > ❌
 > "You will"
@@ -114,10 +114,10 @@ When learners are performing an order of operations, it helps for them to start 
 Use active verbs that put the reader in the first person instead of passive verbs; "be" verbs that describe the learners actions as a state of being, like "is/was/to be".
 
 > ❌
-> The `middleware.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
+> The `proxy.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
 
 > ✅
-> Create the `middleware.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
+> Create the `proxy.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
 
 > ❌
 > User session and data

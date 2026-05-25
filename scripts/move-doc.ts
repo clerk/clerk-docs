@@ -55,11 +55,18 @@ interface PathWithHash {
   hash: string
 }
 
-interface Redirect {
+interface StaticRedirect {
+  source: string
+  destination: string
+}
+
+interface DynamicRedirect {
   source: string
   destination: string
   permanent: boolean
 }
+
+type Redirect = StaticRedirect | DynamicRedirect
 
 interface MoveResult {
   source: string
@@ -316,7 +323,7 @@ const updateMdxLinks = async (oldPaths: string[], newPath: string): Promise<void
 }
 
 const updateRedirects = async (oldPath: string, newPath: string): Promise<string[]> => {
-  const redirects: Redirect[] = await readJsonFile(DOCS_FILE)
+  const redirects: StaticRedirect[] = await readJsonFile(DOCS_FILE)
   const { path: newPathBase, hash: newHash } = splitPathAndHash(newPath)
   const { path: oldPathBase } = splitPathAndHash(oldPath)
 
@@ -359,7 +366,6 @@ const updateRedirects = async (oldPath: string, newPath: string): Promise<string
       updatedRedirects.push({
         source: existingRedirect.destination,
         destination: `${newPathBase}${newHash || existingDestHash || ''}`,
-        permanent: true,
       })
     }
   } else {
@@ -368,7 +374,6 @@ const updateRedirects = async (oldPath: string, newPath: string): Promise<string
       updatedRedirects.push({
         source: oldPath,
         destination: newPath,
-        permanent: true,
       })
     } else {
       console.log(`Skipped redundant static redirect: ${oldPath} -> ${newPath}`)
@@ -453,7 +458,7 @@ const updateDynamicRedirects = async (
   destPattern: string,
   sourceFiles: string[],
 ): Promise<string[]> => {
-  const dynamicRedirects: Redirect[] = await readJsoncFile(DYNAMIC_DOCS_FILE)
+  const dynamicRedirects: DynamicRedirect[] = await readJsoncFile(DYNAMIC_DOCS_FILE)
   const addedPatterns: string[] = []
 
   // Always add the basic dynamic redirect
@@ -462,7 +467,7 @@ const updateDynamicRedirects = async (
 
   // Skip if source and destination are the same (would create redundant redirect)
   if (sourceDynamicPattern !== destDynamicPattern) {
-    const basicRedirect: Redirect = {
+    const basicRedirect: DynamicRedirect = {
       source: sourceDynamicPattern,
       destination: destDynamicPattern,
       permanent: true,
@@ -493,7 +498,7 @@ const updateDynamicRedirects = async (
 
     // Skip if source and destination are the same (would create redundant redirect)
     if (sourceSDKPattern !== destSDKPattern) {
-      const sdkRedirect: Redirect = {
+      const sdkRedirect: DynamicRedirect = {
         source: sourceSDKPattern,
         destination: destSDKPattern,
         permanent: true,
@@ -526,7 +531,7 @@ const updateStaticRedirectsForDynamic = async (
   destPattern: string,
   sourcePattern: string,
 ): Promise<void> => {
-  const staticRedirects: Redirect[] = await readJsonFile(DOCS_FILE)
+  const staticRedirects: StaticRedirect[] = await readJsonFile(DOCS_FILE)
 
   // Find static redirects that would be affected by the new dynamic redirects
   // We need to update any static redirects that have sources or destinations that would be handled by the dynamic redirects
@@ -564,7 +569,6 @@ const updateStaticRedirectsForDynamic = async (
         }
 
         return {
-          ...redirect,
           source: newSource,
           destination: newDestination,
         }

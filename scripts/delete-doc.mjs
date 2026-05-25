@@ -279,7 +279,6 @@ const addRedirect = async (deletedPath, redirectTo) => {
     redirects.push({
       source: deletedPath,
       destination: redirectTo,
-      permanent: true,
     })
   }
 

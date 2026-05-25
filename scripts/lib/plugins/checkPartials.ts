@@ -95,7 +95,17 @@ export const checkPartials =
       foundPartial?.(resolvedPartialPath)
 
       if (options.embed === true) {
-        return Object.assign(node, partial.node)
+        const result = Object.assign(node, partial.node)
+        // Mark all nodes in the partial subtree so validators can distinguish
+        // embedded content from content authored directly in the host page.
+        const markFromPartial = (n: Node) => {
+          ;(n as any).data = { ...(n as any).data, fromPartial: true }
+          if ('children' in n && Array.isArray((n as any).children)) {
+            ;(n as any).children.forEach(markFromPartial)
+          }
+        }
+        markFromPartial(result)
+        return result
       }
 
       return node

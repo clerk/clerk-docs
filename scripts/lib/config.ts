@@ -35,6 +35,8 @@ type BuildConfigOptions = {
     static: {
       inputPath: string
       outputPath: string
+      outputCompactPath?: string
+      outputBloomFilterPath?: string
     }
     dynamic: {
       inputPath: string
@@ -62,6 +64,7 @@ type BuildConfigOptions = {
     controlled?: boolean
     skipGit?: boolean
     skipApiErrors?: boolean
+    silenceTypedocErrors?: boolean
   }
 }
 
@@ -139,6 +142,12 @@ export async function createConfig(config: BuildConfigOptions) {
             static: {
               inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
               outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
+              outputCompactPath: config.redirects.static.outputCompactPath
+                ? resolve(path.join(tempDist, config.redirects.static.outputCompactPath))
+                : undefined,
+              outputBloomFilterPath: config.redirects.static.outputBloomFilterPath
+                ? resolve(path.join(tempDist, config.redirects.static.outputBloomFilterPath))
+                : undefined,
             },
             dynamic: {
               inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),
@@ -186,6 +195,7 @@ export async function createConfig(config: BuildConfigOptions) {
         controlled: config.flags?.controlled ?? false,
         skipGit: config.flags?.skipGit ?? false,
         skipApiErrors: config.flags?.skipApiErrors ?? false,
+        silenceTypedocErrors: config.flags?.silenceTypedocErrors ?? false,
       },
     }
   }

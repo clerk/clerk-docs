@@ -1231,7 +1231,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ```mdx
 <Cards variant="cta">
 
-- [Join our Discord](/discord 'Join Discord')
+- [Join our Discord](https://clerk.com/discord 'Join Discord')
 - Join our official Discord server to chat with us directly and become a part of the Clerk community.
 - ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 

@@ -15,7 +15,7 @@
   <a href="https://www.npmjs.com/package/@clerk/clerk-js">
     <img alt="" src="https://img.shields.io/npm/dm/@clerk/clerk-js" />
   </a>
-  <a href="/discord">
+  <a href="https://clerk.com/discord">
     <img alt="Discord" src="https://img.shields.io/discord/856971667393609759?color=7389D8&label&logo=discord&logoColor=ffffff" />
   </a>
   <a href="https://x.com/clerk">
@@ -47,6 +47,6 @@ Feel free to create an [issue](https://github.com/clerk/clerk-docs/issues) with 
 
 ## Connect with us
 
-You can discuss ideas and meet others from the community in our [Discord](/discord).
+You can discuss ideas and meet others from the community in our [Discord](https://clerk.com/discord).
 
 You can also follow [@clerk on X](https://x.com/clerk) for updates, or [email us](mailto:support@clerk.com) directly.

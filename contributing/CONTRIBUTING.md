@@ -1237,7 +1237,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [Need help?](/support 'Get help')
+- [Need help?](/https://clerk.com/contact/support 'Get help')
 - Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
 - ![alt text(/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 

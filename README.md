@@ -32,7 +32,7 @@ Clerk is more than authentication, and we want to convey every feature of Clerk 
 
 We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./contributing/CONTRIBUTING.md).
 
-> This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](/contact/support).
+> This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](https://clerk.com/contact/support).
 
 ## Found an issue?
 

@@ -15,11 +15,11 @@
   <a href="https://www.npmjs.com/package/@clerk/clerk-js">
     <img alt="" src="https://img.shields.io/npm/dm/@clerk/clerk-js" />
   </a>
-  <a href="https://clerk.com/discord">
+  <a href="/discord">
     <img alt="Discord" src="https://img.shields.io/discord/856971667393609759?color=7389D8&label&logo=discord&logoColor=ffffff" />
   </a>
-  <a href="https://twitter.com/clerkdev">
-    <img alt="Twitter" src="https://img.shields.io/twitter/url.svg?label=%40clerkdev&style=social&url=https%3A%2F%2Ftwitter.com%2Fclerkdev" />
+  <a href="https://x.com/clerk">
+    <img alt="Twitter" src="https://img.shields.io/twitter/url.svg?label=%40clerk&style=social&url=https%3A%2F%2Fx.com%2Fclerk" />
   </a> 
   <br />
   <br />
@@ -32,7 +32,7 @@ Clerk is more than authentication, and we want to convey every feature of Clerk 
 
 We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./contributing/CONTRIBUTING.md).
 
-> This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](https://clerk.com/support).
+> This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](/contact/support).
 
 ## Found an issue?
 
@@ -47,6 +47,6 @@ Feel free to create an [issue](https://github.com/clerk/clerk-docs/issues) with 
 
 ## Connect with us
 
-You can discuss ideas, ask questions, and meet others from the community in our [Discord](https://clerk.com/discord).
+You can discuss ideas, ask questions, and meet others from the community in our [Discord](/discord).
 
-If you prefer, you can also find support through our [Twitter](https://twitter.com/ClerkDev), or you can [email](mailto:support@clerk.dev) us!
+You can also follow [@clerk on X](https://x.com/clerk) for updates, or [email us](mailto:support@clerk.com) directly.

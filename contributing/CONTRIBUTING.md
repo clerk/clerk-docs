@@ -1231,14 +1231,14 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ```mdx
 <Cards variant="cta">
 
-- [Join our Discord](https://clerk.com/discord 'Join Discord')
-- Join our official Discord server to chat with us directly and become a part of the Clerk community.
+- [Join the Discord community](https://clerk.com/discord 'Join Discord')
+- Join the official Discord community to connect with other developers.
 - ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [Need help?](/https://clerk.com/contact/support 'Get help')
-- Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
+- Contact the support team to get answers to your questions.
 - ![alt text(/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>

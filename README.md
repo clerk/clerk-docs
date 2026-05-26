@@ -47,6 +47,6 @@ Feel free to create an [issue](https://github.com/clerk/clerk-docs/issues) with 
 
 ## Connect with us
 
-You can discuss ideas, ask questions, and meet others from the community in our [Discord](/discord).
+You can discuss ideas and meet others from the community in our [Discord](/discord).
 
 You can also follow [@clerk on X](https://x.com/clerk) for updates, or [email us](mailto:support@clerk.com) directly.

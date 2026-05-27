@@ -74,12 +74,14 @@ export const config = {
 
 <Include src="_partials/nextjs/nextjs-15-callout" />
 
-After you update your proxy's matcher, in the Clerk Dashboard, return to the [**Domains**](https://dashboard.clerk.com/~/domains) page and select **Verify proxy** to confirm that Clerk can reach the `__clerk` proxy path. If `__clerk` is missing from the matcher, requests to Clerk's proxied Frontend API can be skipped by middleware and authentication can fail.
+After you update your proxy's matcher, in the Clerk Dashboard, return to the [**Domains**](https://dashboard.clerk.com/~/domains) page and select **Verify proxy** to confirm that Clerk can reach the `__clerk` proxy path. Keep `/__clerk/(.*)` as a separate matcher entry, even if you already have a broad matcher, because Clerk also loads browser assets from `/__clerk/npm/...`. Without the explicit matcher, a static-asset exclusion can skip those requests and authentication can fail.
 
 When using this setup:
 
 - Use production Clerk API keys (`pk_live_` and `sk_live_`).
 - Use a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
+
+Sign-up, sign-in, social OAuth callbacks, email-code verification, password verification, `auth()`, and `getToken()` all use the same auto-proxy path on your app domain.
 
 Core auth emails are delivered through Clerk's shared `accounts.dev` email infrastructure, so custom domains are still recommended when you need full branded production behavior:
 
@@ -130,7 +132,7 @@ When you replace Clerk's shared OAuth credentials with your own for a `*.vercel.
 https://<your-app>.vercel.app/__clerk/v1/oauth_callback
 ```
 
-Clerk's Frontend API processes the OAuth callback through the auto-proxy on your app domain. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
+Clerk's Frontend API processes OAuth callbacks through the auto-proxy on your app domain. This callback URL applies to each social provider that uses custom credentials. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
 
 ## Authentication across subdomains
 
@@ -227,7 +229,7 @@ If your production Vercel app loads a development watermark, fails to load Clerk
 - **Production keys:** Your Vercel production environment must use live Clerk keys (`pk_live_` and `sk_live_`). Preview and development environments should continue to use development keys (`pk_test_` and `sk_test_`); auto-proxy only engages on Vercel production targets, so `pk_live_` keys in preview environments will not reach the Clerk Frontend API.
 - **Domain sync:** The Clerk production instance domain must match the assigned `*.vercel.app` production domain.
 - **SDK support:** Use a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
-- **Next.js matcher:** If you're using a Next.js proxy, include `/__clerk/(.*)` as a separate matcher entry so Clerk proxy requests are handled.
+- **Next.js matcher:** If you're using a Next.js proxy, include `/__clerk/(.*)` as a separate matcher entry so Clerk proxy requests and browser assets under `/__clerk/npm/...` are handled.
 - **Custom OAuth credentials:** If you're using your own OAuth credentials for a social provider, ensure the provider's authorization callback URL is set to `https://<your-app>.vercel.app/__clerk/v1/oauth_callback`. See [Custom OAuth provider credentials](#custom-oauth-credentials) for details.
 - **External JWT verification:** If you verify Clerk session tokens outside the official SDKs, configure your verifier to expect `iss` equal to `https://<your-app>.vercel.app/__clerk`. See [Verifying session tokens](#verifying-session-tokens).
 

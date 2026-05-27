@@ -3,10 +3,9 @@ title: Deploy your Clerk app to production
 description: Learn how to deploy your Clerk app to production.
 ---
 
-Before you begin:
+Before you start:
 
-1. You will need a production domain. For most apps, this is a custom domain that you own. For Vercel-hosted apps, Clerk also supports production instances on `*.vercel.app` domains with some [email feature limitations](#vercel-app-production-domains).
-1. If you're using a custom domain, you will need to be able to add DNS records on your domain.
+1. A production domain — either a custom domain you own, or a Vercel-provided `*.vercel.app` domain.
 1. You will need social sign-in (OAuth) credentials for any providers that you would like to use in production. Each [OAuth provider](/docs/guides/configure/auth-strategies/social-connections/overview) has a dedicated guide on how to set up OAuth credentials for Clerk production apps.
 
 ## Create your production instance
@@ -36,6 +35,8 @@ In development, for most social providers, Clerk provides you with a set of shar
 
 In production, these are not secure and you will need to provide your own. Each [OAuth provider](/docs/guides/configure/auth-strategies/social-connections/overview) has a dedicated guide on how to set up OAuth credentials for Clerk production apps.
 
+If you use a `*.vercel.app` production domain and configure custom OAuth credentials, see [Custom OAuth provider credentials](#custom-oauth-credentials) for the required callback URL format.
+
 ## Webhooks
 
 Your webhook endpoints will need to be updated to use your production instance's URL and signing secret. See the [guide on syncing data](/docs/guides/development/webhooks/syncing#configure-your-production-instance) for more information.
@@ -44,11 +45,15 @@ Your webhook endpoints will need to be updated to use your production instance's
 
 If you're using a CSP, follow the instructions in the [CSP guide](/docs/guides/secure/best-practices/csp-headers).
 
-## DNS records
+## Configure your domain
 
-Clerk uses DNS records to provide session management and emails verified from your domain.
+Production deployments use either a custom domain or a Vercel-provided `*.vercel.app` domain. Pick the section below that matches your setup.
 
-To see what DNS records you need, navigate to the [**Domains**](https://dashboard.clerk.com/~/domains) page in the Clerk Dashboard. If you're using a `*.vercel.app` domain, you can skip this section. See [Vercel `*.vercel.app` production domains](#vercel-app-production-domains) for setup details.
+### Custom domain {{ id: 'dns-records' }}
+
+If you're using a custom domain, you'll need to be able to add DNS records on it. Clerk uses DNS records to provide session management and emails verified from your domain.
+
+To see what DNS records you need, navigate to the [**Domains**](https://dashboard.clerk.com/~/domains) page in the Clerk Dashboard.
 
 > [!NOTE]
 > It can take up to 48hrs for DNS records to fully propagate.
@@ -56,7 +61,7 @@ To see what DNS records you need, navigate to the [**Domains**](https://dashboar
 > [!TIP]
 > If you're unable to add a CNAME record for the Frontend API, you can use a proxy instead. See [Proxying the Clerk Frontend API](/docs/guides/dashboard/dns-domains/proxy-fapi) for more information.
 
-## Vercel `*.vercel.app` production domains {{ id: 'vercel-app-production-domains' }}
+### Vercel `*.vercel.app` domain {{ id: 'vercel-app-production-domains' }}
 
 Production instances can use a Vercel-provided `*.vercel.app` domain. This setup is designed for Vercel apps and doesn't require you to add Clerk DNS records manually. Instead, Clerk routes browser auth traffic through your Vercel app using the `https://<your-app>.vercel.app/__clerk` proxy path.
 
@@ -97,7 +102,7 @@ Core auth emails are delivered through Clerk's shared `accounts.dev` email infra
 | Organization invitations | <CompareNo /> | <CompareYes /> |
 | Hosted Account Portal | <CompareNo /> | <CompareYes /> |
 
-### Authentication on the app domain {{ id: 'authentication-on-app-domain' }}
+#### Authentication on the app domain
 
 Production `*.vercel.app` instances have the hosted Account Portal disabled by default. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration.
 
@@ -118,13 +123,13 @@ Programmatic redirect helpers and `navigation`-mode components read URLs from th
 | Waitlist flows | Render `<Waitlist />` on your app and pass `waitlistUrl` to `<ClerkProvider>` or `<Waitlist />`. |
 | Multi-session single sign-out | Pass `signInUrl` to `<ClerkProvider>` so Clerk can build the session-switch URL on your app. |
 
-### Verifying session tokens {{ id: 'verifying-session-tokens' }}
+#### Verifying session tokens
 
 Session tokens issued on a `*.vercel.app` production instance carry an `iss` claim equal to your app's proxy URL, for example `https://<your-app>.vercel.app/__clerk`. The official Clerk SDKs (`@clerk/backend`, `@clerk/nextjs`, and the other framework integrations) resolve this automatically from your publishable key.
 
 If you verify Clerk session tokens outside the official SDKs — for example, in Go, Python, or third-party tools — configure your verifier to expect this issuer value rather than a Clerk-hosted Frontend API host.
 
-### Custom OAuth provider credentials {{ id: 'custom-oauth-credentials' }}
+#### Custom OAuth provider credentials {{ id: 'custom-oauth-credentials' }}
 
 When you replace Clerk's shared OAuth credentials with your own for a `*.vercel.app` production instance, set the provider's authorization callback URL to:
 
@@ -135,6 +140,8 @@ https://<your-app>.vercel.app/__clerk/v1/oauth_callback
 Clerk's Frontend API processes OAuth callbacks through the auto-proxy on your app domain. This callback URL applies to each social provider that uses custom credentials. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
 
 ## Authentication across subdomains
+
+This applies when you've configured a root domain on your production instance, typically with a custom domain. It does not apply to sharing auth across sibling `*.vercel.app` domains.
 
 When you set a root domain for your production deployment, Clerk's authentication will work across all subdomains. User sessions will also be shared across the subdomains.
 
@@ -222,17 +229,6 @@ The Clerk Dashboard home page will tell you what steps are still required to dep
 
 ## Troubleshooting
 
-### Vercel `*.vercel.app` production app isn't working
-
-If your production Vercel app loads a development watermark, fails to load Clerk, or can't complete sign-in, check the following:
-
-- **Production keys:** Your Vercel production environment must use live Clerk keys (`pk_live_` and `sk_live_`). Preview and development environments should continue to use development keys (`pk_test_` and `sk_test_`); auto-proxy only engages on Vercel production targets, so `pk_live_` keys in preview environments will not reach the Clerk Frontend API.
-- **Domain sync:** The Clerk production instance domain must match the assigned `*.vercel.app` production domain.
-- **SDK support:** Use a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
-- **Next.js matcher:** If you're using a Next.js proxy, include `/__clerk/(.*)` as a separate matcher entry so Clerk proxy requests and browser assets under `/__clerk/npm/...` are handled.
-- **Custom OAuth credentials:** If you're using your own OAuth credentials for a social provider, ensure the provider's authorization callback URL is set to `https://<your-app>.vercel.app/__clerk/v1/oauth_callback`. See [Custom OAuth provider credentials](#custom-oauth-credentials) for details.
-- **External JWT verification:** If you verify Clerk session tokens outside the official SDKs, configure your verifier to expect `iss` equal to `https://<your-app>.vercel.app/__clerk`. See [Verifying session tokens](#verifying-session-tokens).
-
 ### DNS records not propagating with Cloudflare
 
 Clerk uses a DNS check to validate this CNAME record. If this subdomain is reverse proxied behind a service that points to generic hostnames, such as Cloudflare, the DNS check will fail. Set the DNS record for this subdomain to a "DNS only" mode on your host to prevent proxying.
@@ -250,6 +246,17 @@ dig example.com +short CAA
 ```
 
 If the command returns an empty response, your domain is correctly configured. If it returns any text, you need to remove the CAA records from your primary domain to avoid potential downtime during certificate renewal.
+
+### Vercel `*.vercel.app` production app isn't working
+
+If your production Vercel app loads a development watermark, fails to load Clerk, or can't complete sign-in, check the following:
+
+- **Production keys:** Your Vercel production environment must use live Clerk keys (`pk_live_` and `sk_live_`). Preview and development environments should continue to use development keys (`pk_test_` and `sk_test_`); auto-proxy only engages on Vercel production targets, so `pk_live_` keys in preview environments will not reach the Clerk Frontend API.
+- **Domain sync:** The Clerk production instance domain must match the assigned `*.vercel.app` production domain.
+- **SDK support:** Use a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
+- **Next.js matcher:** If you're using a Next.js proxy, include `/__clerk/(.*)` as a separate matcher entry so Clerk proxy requests and browser assets under `/__clerk/npm/...` are handled.
+- **Custom OAuth credentials:** If you're using your own OAuth credentials for a social provider, ensure the provider's authorization callback URL is set to `https://<your-app>.vercel.app/__clerk/v1/oauth_callback`. See [Custom OAuth provider credentials](#custom-oauth-credentials) for details.
+- **External JWT verification:** If you verify Clerk session tokens outside the official SDKs, configure your verifier to expect `iss` equal to `https://<your-app>.vercel.app/__clerk`. See [Verifying session tokens](#verifying-session-tokens).
 
 ### Incorrect domain
 

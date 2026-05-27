@@ -65,109 +65,113 @@ On `*.vercel.app` instances, core auth emails are delivered through Clerk's shar
 
 Pick the section below that matches your setup.
 
-### Custom domain {{ id: 'dns-records' }}
+<Tabs items={["Custom domain", "Vercel *.vercel.app domain"]}>
+  <Tab>
+    ### DNS records
 
-If you're using a custom domain, you'll need to be able to add DNS records on it. Clerk uses DNS records to provide session management and emails verified from your domain.
+    If you're using a custom domain, you'll need to be able to add DNS records on it. Clerk uses DNS records to provide session management and emails verified from your domain.
 
-To see what DNS records you need, navigate to the [**Domains**](https://dashboard.clerk.com/~/domains) page in the Clerk Dashboard. After you add them, propagation can take up to 48 hours.
+    To see what DNS records you need, navigate to the [**Domains**](https://dashboard.clerk.com/~/domains) page in the Clerk Dashboard. After you add them, propagation can take up to 48 hours.
 
-> [!TIP]
-> If you're unable to add a CNAME record for the Frontend API, you can use a proxy instead. See [Proxying the Clerk Frontend API](/docs/guides/dashboard/dns-domains/proxy-fapi) for more information.
+    > [!TIP]
+    > If you're unable to add a CNAME record for the Frontend API, you can use a proxy instead. See [Proxying the Clerk Frontend API](/docs/guides/dashboard/dns-domains/proxy-fapi) for more information.
+  </Tab>
 
-### Vercel `*.vercel.app` domain {{ id: 'vercel-app-production-domains' }}
+  <Tab>
+    Production instances can use a Vercel-provided `*.vercel.app` domain. This setup is designed for Vercel apps and doesn't require you to add Clerk DNS records manually. Instead, Clerk routes browser auth traffic through your Vercel app using the `https://<your-app>.vercel.app/__clerk` proxy path.
 
-Production instances can use a Vercel-provided `*.vercel.app` domain. This setup is designed for Vercel apps and doesn't require you to add Clerk DNS records manually. Instead, Clerk routes browser auth traffic through your Vercel app using the `https://<your-app>.vercel.app/__clerk` proxy path.
+    > [!NOTE]
+    > This setup requires a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
 
-> [!NOTE]
-> This setup requires a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
+    If you're using a Next.js proxy, ensure the matcher includes Clerk's proxy path:
 
-If you're using a Next.js proxy, ensure the matcher includes Clerk's proxy path:
+    ```ts {{ filename: 'proxy.ts' }}
+    export const config = {
+      matcher: [
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        '/(api|trpc)(.*)',
+        '/__clerk/(.*)',
+      ],
+    }
+    ```
 
-```ts {{ filename: 'proxy.ts' }}
-export const config = {
-  matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
-    '/__clerk/(.*)',
-  ],
-}
-```
+    <Include src="_partials/nextjs/nextjs-15-callout" />
 
-<Include src="_partials/nextjs/nextjs-15-callout" />
+    After you update your proxy's matcher, in the Clerk Dashboard, return to the [**Domains**](https://dashboard.clerk.com/~/domains) page and select **Verify proxy** to confirm that Clerk can reach the `__clerk` proxy path. Keep `/__clerk/(.*)` as a separate matcher entry, even if you already have a broad matcher, because Clerk also loads browser assets from `/__clerk/npm/...`. Without the explicit matcher, a static-asset exclusion can skip those requests and authentication can fail.
 
-After you update your proxy's matcher, in the Clerk Dashboard, return to the [**Domains**](https://dashboard.clerk.com/~/domains) page and select **Verify proxy** to confirm that Clerk can reach the `__clerk` proxy path. Keep `/__clerk/(.*)` as a separate matcher entry, even if you already have a broad matcher, because Clerk also loads browser assets from `/__clerk/npm/...`. Without the explicit matcher, a static-asset exclusion can skip those requests and authentication can fail.
+    Sign-up, sign-in, social OAuth callbacks, email-code verification, password verification, `auth()`, and `getToken()` all use the same auto-proxy path on your app domain.
 
-Sign-up, sign-in, social OAuth callbacks, email-code verification, password verification, `auth()`, and `getToken()` all use the same auto-proxy path on your app domain.
+    ### Authentication on the app domain
 
-#### Authentication on the app domain
+    Production `*.vercel.app` instances have the hosted Account Portal disabled by default. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration:
 
-Production `*.vercel.app` instances have the hosted Account Portal disabled by default. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration:
+    - `<SignIn />` and `<SignUp />` render on the page where you place them.
+    - `<UserButton />` opens `<UserProfile />` in a modal on the app domain.
+    - `<OrganizationSwitcher />` opens `<CreateOrganization />` and `<OrganizationProfile />` in modals on the app domain.
+    - `<SignOutButton />` and `clerk.signOut()` redirect to `/` by default.
 
-- `<SignIn />` and `<SignUp />` render on the page where you place them.
-- `<UserButton />` opens `<UserProfile />` in a modal on the app domain.
-- `<OrganizationSwitcher />` opens `<CreateOrganization />` and `<OrganizationProfile />` in modals on the app domain.
-- `<SignOutButton />` and `clerk.signOut()` redirect to `/` by default.
+    If you need to opt out of modal mode or use programmatic redirects, the configuration depends on the mechanism.
 
-If you need to opt out of modal mode or use programmatic redirects, the configuration depends on the mechanism.
+    #### Components in navigation mode
 
-##### Components in navigation mode
+    To make `<UserButton />` or `<OrganizationSwitcher />` navigate to dedicated pages instead of opening modals, pass navigation-mode props on the component instance and host the corresponding flow as a page.
 
-To make `<UserButton />` or `<OrganizationSwitcher />` navigate to dedicated pages instead of opening modals, pass navigation-mode props on the component instance and host the corresponding flow as a page.
+    For `<UserButton />`:
 
-For `<UserButton />`:
+    ```tsx {{ prettier: false }}
+    // Open <UserProfile /> as a page at /user-profile instead of a modal
+    <UserButton userProfileMode="navigation" userProfileUrl="/user-profile" />
 
-```tsx {{ prettier: false }}
-// Open <UserProfile /> as a page at /user-profile instead of a modal
-<UserButton userProfileMode="navigation" userProfileUrl="/user-profile" />
+    // Render the matching page at /user-profile
+    <UserProfile path="/user-profile" routing="path" />
+    ```
 
-// Render the matching page at /user-profile
-<UserProfile path="/user-profile" routing="path" />
-```
+    `<OrganizationSwitcher />` uses the same pattern across its two flows. Render `<CreateOrganization />` and `<OrganizationProfile />` on the matching pages:
 
-`<OrganizationSwitcher />` uses the same pattern across its two flows. Render `<CreateOrganization />` and `<OrganizationProfile />` on the matching pages:
+    ```tsx {{ prettier: false }}
+    // Open <CreateOrganization /> and <OrganizationProfile /> as pages instead of modals
+    <OrganizationSwitcher
+      createOrganizationMode="navigation"
+      createOrganizationUrl="/create-organization"
+      organizationProfileMode="navigation"
+      organizationProfileUrl="/organization"
+    />
+    ```
 
-```tsx {{ prettier: false }}
-// Open <CreateOrganization /> and <OrganizationProfile /> as pages instead of modals
-<OrganizationSwitcher
-  createOrganizationMode="navigation"
-  createOrganizationUrl="/create-organization"
-  organizationProfileMode="navigation"
-  organizationProfileUrl="/organization"
-/>
-```
+    #### Standalone redirect helpers
 
-##### Standalone redirect helpers
+    `clerk.redirectToUserProfile()`, `clerk.redirectToCreateOrganization()`, and `clerk.redirectToOrganizationProfile()` resolve to URLs in the instance's display config, which on a `*.vercel.app` instance points to the disabled Account Portal subdomain. They can't be overridden via `<ClerkProvider>` or component props. For these flows on `*.vercel.app`, use the navigation-mode component pattern above instead of calling the helpers directly.
 
-`clerk.redirectToUserProfile()`, `clerk.redirectToCreateOrganization()`, and `clerk.redirectToOrganizationProfile()` resolve to URLs in the instance's display config, which on a `*.vercel.app` instance points to the disabled Account Portal subdomain. They can't be overridden via `<ClerkProvider>` or component props. For these flows on `*.vercel.app`, use the navigation-mode component pattern above instead of calling the helpers directly.
+    `clerk.redirectToWaitlist()` and multi-session single sign-out are overridable via props on `<ClerkProvider>`:
 
-`clerk.redirectToWaitlist()` and multi-session single sign-out are overridable via props on `<ClerkProvider>`:
+    ```tsx
+    <ClerkProvider
+      // Used by clerk.redirectToWaitlist()
+      waitlistUrl="/waitlist"
+      // Used to build the session-switch URL for multi-session sign-out
+      signInUrl="/sign-in"
+    >
+      {/* ... */}
+    </ClerkProvider>
+    ```
 
-```tsx
-<ClerkProvider
-  // Used by clerk.redirectToWaitlist()
-  waitlistUrl="/waitlist"
-  // Used to build the session-switch URL for multi-session sign-out
-  signInUrl="/sign-in"
->
-  {/* ... */}
-</ClerkProvider>
-```
+    ### Verifying session tokens
 
-#### Verifying session tokens
+    Session tokens issued on a `*.vercel.app` production instance carry an `iss` claim equal to your app's proxy URL, for example `https://<your-app>.vercel.app/__clerk`. The official Clerk SDKs (`@clerk/backend`, `@clerk/nextjs`, and the other framework integrations) resolve this automatically from your publishable key.
 
-Session tokens issued on a `*.vercel.app` production instance carry an `iss` claim equal to your app's proxy URL, for example `https://<your-app>.vercel.app/__clerk`. The official Clerk SDKs (`@clerk/backend`, `@clerk/nextjs`, and the other framework integrations) resolve this automatically from your publishable key.
+    If you verify Clerk session tokens outside the official SDKs — for example, in Go, Python, or third-party tools — configure your verifier to expect this issuer value rather than a Clerk-hosted Frontend API host.
 
-If you verify Clerk session tokens outside the official SDKs — for example, in Go, Python, or third-party tools — configure your verifier to expect this issuer value rather than a Clerk-hosted Frontend API host.
+    ### Custom OAuth provider credentials {{ id: 'custom-oauth-credentials' }}
 
-#### Custom OAuth provider credentials {{ id: 'custom-oauth-credentials' }}
+    When you replace Clerk's shared OAuth credentials with your own for a `*.vercel.app` production instance, set the provider's authorization callback URL to:
 
-When you replace Clerk's shared OAuth credentials with your own for a `*.vercel.app` production instance, set the provider's authorization callback URL to:
+    ```
+    https://<your-app>.vercel.app/__clerk/v1/oauth_callback
+    ```
 
-```
-https://<your-app>.vercel.app/__clerk/v1/oauth_callback
-```
-
-Clerk's Frontend API processes OAuth callbacks through the auto-proxy on your app domain. This callback URL applies to each social provider that uses custom credentials. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
+    Clerk's Frontend API processes OAuth callbacks through the auto-proxy on your app domain. This callback URL applies to each social provider that uses custom credentials. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
+  </Tab>
+</Tabs>
 
 ## Authentication across subdomains
 

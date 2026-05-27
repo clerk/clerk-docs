@@ -95,6 +95,43 @@ Core auth emails are delivered through Clerk's shared `accounts.dev` email infra
 | Organization invitations | <CompareNo /> | <CompareYes /> |
 | Hosted Account Portal | <CompareNo /> | <CompareYes /> |
 
+### Authentication on the app domain {{ id: 'authentication-on-app-domain' }}
+
+Production `*.vercel.app` instances have the hosted Account Portal disabled by default. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration.
+
+| Component | Behavior on `*.vercel.app` |
+| - | - |
+| `<SignIn />`, `<SignUp />` | Render on the app domain. |
+| `<UserButton />` | Opens `<UserProfile />` in a modal on the app domain. |
+| `<OrganizationSwitcher />` | Opens `<CreateOrganization />` and `<OrganizationProfile />` in modals on the app domain. |
+| `<SignOutButton>`, `clerk.signOut()` | Redirect to `/` by default. |
+
+Programmatic redirect helpers and `navigation`-mode components read URLs from the instance's display config, which on a `*.vercel.app` instance point to the disabled Account Portal subdomain. To use them, host the corresponding flow on your app and pass the URL explicitly:
+
+| API | Required configuration |
+| - | - |
+| `clerk.redirectToUserProfile()` | Render `<UserProfile path="/user-profile" routing="path" />` and pass `<UserButton userProfileMode="navigation" userProfileUrl="/user-profile" />`. |
+| `clerk.redirectToCreateOrganization()` | Render `<CreateOrganization path="/create-organization" routing="path" />` and pass `createOrganizationUrl` to relevant components. |
+| `clerk.redirectToOrganizationProfile()` | Render `<OrganizationProfile path="/organization" routing="path" />` and pass `organizationProfileUrl` to relevant components. |
+| Waitlist flows | Render `<Waitlist />` on your app and pass `waitlistUrl` to `<ClerkProvider>` or `<Waitlist />`. |
+| Multi-session single sign-out | Pass `signInUrl` to `<ClerkProvider>` so Clerk can build the session-switch URL on your app. |
+
+### Verifying session tokens {{ id: 'verifying-session-tokens' }}
+
+Session tokens issued on a `*.vercel.app` production instance carry an `iss` claim equal to your app's proxy URL, for example `https://<your-app>.vercel.app/__clerk`. The official Clerk SDKs (`@clerk/backend`, `@clerk/nextjs`, and the other framework integrations) resolve this automatically from your publishable key.
+
+If you verify Clerk session tokens outside the official SDKs — for example, in Go, Python, or third-party tools — configure your verifier to expect this issuer value rather than a Clerk-hosted Frontend API host.
+
+### Custom OAuth provider credentials {{ id: 'custom-oauth-credentials' }}
+
+When you replace Clerk's shared OAuth credentials with your own for a `*.vercel.app` production instance, set the provider's authorization callback URL to:
+
+```
+https://<your-app>.vercel.app/__clerk/v1/oauth_callback
+```
+
+Clerk's Frontend API processes the OAuth callback through the auto-proxy on your app domain. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
+
 ## Authentication across subdomains
 
 When you set a root domain for your production deployment, Clerk's authentication will work across all subdomains. User sessions will also be shared across the subdomains.
@@ -187,10 +224,12 @@ The Clerk Dashboard home page will tell you what steps are still required to dep
 
 If your production Vercel app loads a development watermark, fails to load Clerk, or can't complete sign-in, check the following:
 
-- **Production keys:** Your Vercel production environment must use live Clerk keys (`pk_live_` and `sk_live_`). Preview and development environments should continue to use development keys (`pk_test_` and `sk_test_`).
+- **Production keys:** Your Vercel production environment must use live Clerk keys (`pk_live_` and `sk_live_`). Preview and development environments should continue to use development keys (`pk_test_` and `sk_test_`); auto-proxy only engages on Vercel production targets, so `pk_live_` keys in preview environments will not reach the Clerk Frontend API.
 - **Domain sync:** The Clerk production instance domain must match the assigned `*.vercel.app` production domain.
 - **SDK support:** Use a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
 - **Next.js matcher:** If you're using a Next.js proxy, include `/__clerk/(.*)` as a separate matcher entry so Clerk proxy requests are handled.
+- **Custom OAuth credentials:** If you're using your own OAuth credentials for a social provider, ensure the provider's authorization callback URL is set to `https://<your-app>.vercel.app/__clerk/v1/oauth_callback`. See [Custom OAuth provider credentials](#custom-oauth-credentials) for details.
+- **External JWT verification:** If you verify Clerk session tokens outside the official SDKs, configure your verifier to expect `iss` equal to `https://<your-app>.vercel.app/__clerk`. See [Verifying session tokens](#verifying-session-tokens).
 
 ### DNS records not propagating with Cloudflare
 

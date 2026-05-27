@@ -47,16 +47,29 @@ If you're using a CSP, follow the instructions in the [CSP guide](/docs/guides/s
 
 ## Configure your domain
 
-Production deployments use either a custom domain or a Vercel-provided `*.vercel.app` domain. Pick the section below that matches your setup.
+Production deployments use either a custom domain or a Vercel-provided `*.vercel.app` domain.
+
+On `*.vercel.app` instances, core auth emails are delivered through Clerk's shared `accounts.dev` email infrastructure. Custom domains support more features:
+
+| Feature | `*.vercel.app` domain | Custom domain |
+| - | :-: | :-: |
+| Sign-in and sign-up verification | <CompareYes /> | <CompareYes /> |
+| Verification codes | <CompareYes /> | <CompareYes /> |
+| Password reset codes | <CompareYes /> | <CompareYes /> |
+| Branded email domain | <CompareNo /> | <CompareYes /> |
+| Custom email templates | <CompareNo /> | <CompareYes /> |
+| Email link authentication | <CompareNo /> | <CompareYes /> |
+| Application invitations | <CompareNo /> | <CompareYes /> |
+| Organization invitations | <CompareNo /> | <CompareYes /> |
+| Hosted Account Portal | <CompareNo /> | <CompareYes /> |
+
+Pick the section below that matches your setup.
 
 ### Custom domain {{ id: 'dns-records' }}
 
 If you're using a custom domain, you'll need to be able to add DNS records on it. Clerk uses DNS records to provide session management and emails verified from your domain.
 
-To see what DNS records you need, navigate to the [**Domains**](https://dashboard.clerk.com/~/domains) page in the Clerk Dashboard.
-
-> [!NOTE]
-> It can take up to 48hrs for DNS records to fully propagate.
+To see what DNS records you need, navigate to the [**Domains**](https://dashboard.clerk.com/~/domains) page in the Clerk Dashboard. After you add them, propagation can take up to 48 hours.
 
 > [!TIP]
 > If you're unable to add a CNAME record for the Frontend API, you can use a proxy instead. See [Proxying the Clerk Frontend API](/docs/guides/dashboard/dns-domains/proxy-fapi) for more information.
@@ -64,6 +77,9 @@ To see what DNS records you need, navigate to the [**Domains**](https://dashboar
 ### Vercel `*.vercel.app` domain {{ id: 'vercel-app-production-domains' }}
 
 Production instances can use a Vercel-provided `*.vercel.app` domain. This setup is designed for Vercel apps and doesn't require you to add Clerk DNS records manually. Instead, Clerk routes browser auth traffic through your Vercel app using the `https://<your-app>.vercel.app/__clerk` proxy path.
+
+> [!NOTE]
+> This setup requires a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
 
 If you're using a Next.js proxy, ensure the matcher includes Clerk's proxy path:
 
@@ -81,47 +97,61 @@ export const config = {
 
 After you update your proxy's matcher, in the Clerk Dashboard, return to the [**Domains**](https://dashboard.clerk.com/~/domains) page and select **Verify proxy** to confirm that Clerk can reach the `__clerk` proxy path. Keep `/__clerk/(.*)` as a separate matcher entry, even if you already have a broad matcher, because Clerk also loads browser assets from `/__clerk/npm/...`. Without the explicit matcher, a static-asset exclusion can skip those requests and authentication can fail.
 
-When using this setup:
-
-- Use production Clerk API keys (`pk_live_` and `sk_live_`).
-- Use a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
-
 Sign-up, sign-in, social OAuth callbacks, email-code verification, password verification, `auth()`, and `getToken()` all use the same auto-proxy path on your app domain.
-
-Core auth emails are delivered through Clerk's shared `accounts.dev` email infrastructure, so custom domains are still recommended when you need full branded production behavior:
-
-| Feature | `*.vercel.app` domain | Custom domain |
-| - | :-: | :-: |
-| Sign-in and sign-up verification | <CompareYes /> | <CompareYes /> |
-| Verification codes | <CompareYes /> | <CompareYes /> |
-| Password reset codes | <CompareYes /> | <CompareYes /> |
-| Branded email domain | <CompareNo /> | <CompareYes /> |
-| Custom email templates | <CompareNo /> | <CompareYes /> |
-| Email link authentication | <CompareNo /> | <CompareYes /> |
-| Application invitations | <CompareNo /> | <CompareYes /> |
-| Organization invitations | <CompareNo /> | <CompareYes /> |
-| Hosted Account Portal | <CompareNo /> | <CompareYes /> |
 
 #### Authentication on the app domain
 
-Production `*.vercel.app` instances have the hosted Account Portal disabled by default. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration.
+Production `*.vercel.app` instances have the hosted Account Portal disabled by default. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration:
 
-| Component | Behavior on `*.vercel.app` |
-| - | - |
-| `<SignIn />`, `<SignUp />` | Render on the app domain. |
-| `<UserButton />` | Opens `<UserProfile />` in a modal on the app domain. |
-| `<OrganizationSwitcher />` | Opens `<CreateOrganization />` and `<OrganizationProfile />` in modals on the app domain. |
-| `<SignOutButton>`, `clerk.signOut()` | Redirect to `/` by default. |
+- `<SignIn />` and `<SignUp />` render on the page where you place them.
+- `<UserButton />` opens `<UserProfile />` in a modal on the app domain.
+- `<OrganizationSwitcher />` opens `<CreateOrganization />` and `<OrganizationProfile />` in modals on the app domain.
+- `<SignOutButton />` and `clerk.signOut()` redirect to `/` by default.
 
-Programmatic redirect helpers and `navigation`-mode components read URLs from the instance's display config, which on a `*.vercel.app` instance point to the disabled Account Portal subdomain. To use them, host the corresponding flow on your app and pass the URL explicitly:
+If you need to opt out of modal mode or use programmatic redirects, the configuration depends on the mechanism.
 
-| API | Required configuration |
-| - | - |
-| `clerk.redirectToUserProfile()` | Render `<UserProfile path="/user-profile" routing="path" />` and pass `<UserButton userProfileMode="navigation" userProfileUrl="/user-profile" />`. |
-| `clerk.redirectToCreateOrganization()` | Render `<CreateOrganization path="/create-organization" routing="path" />` and pass `createOrganizationUrl` to relevant components. |
-| `clerk.redirectToOrganizationProfile()` | Render `<OrganizationProfile path="/organization" routing="path" />` and pass `organizationProfileUrl` to relevant components. |
-| Waitlist flows | Render `<Waitlist />` on your app and pass `waitlistUrl` to `<ClerkProvider>` or `<Waitlist />`. |
-| Multi-session single sign-out | Pass `signInUrl` to `<ClerkProvider>` so Clerk can build the session-switch URL on your app. |
+##### Components in navigation mode
+
+To make `<UserButton />` or `<OrganizationSwitcher />` navigate to dedicated pages instead of opening modals, pass navigation-mode props on the component instance and host the corresponding flow as a page.
+
+For `<UserButton />`:
+
+```tsx {{ prettier: false }}
+// Open <UserProfile /> as a page at /user-profile instead of a modal
+<UserButton userProfileMode="navigation" userProfileUrl="/user-profile" />
+
+// Render the matching page at /user-profile
+<UserProfile path="/user-profile" routing="path" />
+```
+
+`<OrganizationSwitcher />` uses the same pattern across its two flows. Render `<CreateOrganization />` and `<OrganizationProfile />` on the matching pages:
+
+```tsx {{ prettier: false }}
+// Open <CreateOrganization /> and <OrganizationProfile /> as pages instead of modals
+<OrganizationSwitcher
+  createOrganizationMode="navigation"
+  createOrganizationUrl="/create-organization"
+  organizationProfileMode="navigation"
+  organizationProfileUrl="/organization"
+/>
+```
+
+##### Standalone redirect helpers
+
+`clerk.redirectToUserProfile()`, `clerk.redirectToCreateOrganization()`, and `clerk.redirectToOrganizationProfile()` resolve to URLs in the instance's display config, which on a `*.vercel.app` instance points to the disabled Account Portal subdomain. They can't be overridden via `<ClerkProvider>` or component props. For these flows on `*.vercel.app`, use the navigation-mode component pattern above instead of calling the helpers directly.
+
+`clerk.redirectToWaitlist()` and multi-session single sign-out are overridable via props on `<ClerkProvider>`:
+
+```tsx
+<ClerkProvider
+  // Used by clerk.redirectToWaitlist()
+  waitlistUrl="/waitlist"
+  // Used to build the session-switch URL for multi-session sign-out
+  signInUrl="/sign-in"
+>
+  {/* ... */}
+</ClerkProvider>
+```
 
 #### Verifying session tokens
 

@@ -49,4 +49,4 @@ Feel free to create an [issue](https://github.com/clerk/clerk-docs/issues) with 
 
 You can discuss ideas and meet others from the community in [Discord](https://clerk.com/discord).
 
-You can also follow [@clerk on X](https://x.com/clerk) for updates, or [email Clerk](mailto:support@clerk.com) directly.
+You can also follow [@clerk on X](https://x.com/clerk) for updates, or [email the support team](mailto:support@clerk.com) directly.

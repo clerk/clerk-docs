@@ -1,6 +1,6 @@
 # Contributing to Clerk's documentation
 
-Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
+Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](../styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
 
 If you're contributing specifically to our hooks and components documentation, please refer to the [dedicated guide](./CONTRIBUTING-COMPONENTS-HOOKS.md).
 
@@ -50,6 +50,8 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<Accordion />`](#accordion-)
     - [Images and static assets](#images-and-static-assets)
     - [API reference docs](#api-reference-docs)
+    - [Authoring SDK code examples](#authoring-sdk-code-examples)
+    - [Documenting a new feature or reference](#documenting-a-new-feature-or-reference)
   - [Help wanted!](#help-wanted)
 
 </details>
@@ -118,17 +120,21 @@ Clerk employees can run the application and preview their documentation changes 
 
 ## Validating your changes
 
-Before committing your changes, run our linting checks to validate the changes you are making are correct. Currently we:
+Before committing, validate your changes locally with two complementary checks.
 
-- **Check for broken links.** If your change contains URLs that are not authored inside this repository (e.g. marketing pages or other docs) the linter will fail. You'll need to add your URLs to the `EXCLUDE_LIST` inside [`check-links.mjs`](./scripts/check-links.mjs).
-- **Check that files are formatted with the prettier configuration settings.**
-- **Check for changes to quickstarts.**
+**Build the docs** with `pnpm run build:tsx`. The build validates content and reports two severities:
 
-To run all linting steps:
+- **Failures** stop the build. These include invalid frontmatter (for example, an `sdk` value outside the set defined in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts)), a missing `title`, or frontmatter that fails to parse. (For a real example, [#3176](https://github.com/clerk/clerk-docs/pull/3176) shipped an invalid `sdk` key that broke the production build.)
+- **Warnings** don't stop the build, but should still be resolved. These include a missing `description`, a doc that isn't in `manifest.json`, or a broken internal link or heading anchor.
 
-```shell
-pnpm run lint
-```
+Because warnings don't fail the build, a green build is not the same as a clean one — read the warnings before opening or merging a PR.
+
+**Lint** with `pnpm run lint`. This checks formatting (Prettier), redirects, quickstarts, and more.
+
+Neither check verifies **factual** claims about the external APIs and SDKs the docs describe (endpoints, versions, method signatures, how the reference renders). Verify those against their source repositories — see [`AGENTS.md`](../AGENTS.md) under "Verifying technical claims."
+
+> [!IMPORTANT]
+> Rebase long-lived PRs on the latest `main` (or merge it in) and re-build before merging. A change in another PR can invalidate frontmatter or links that were valid when your PR was opened.
 
 ## Getting your contributions reviewed
 
@@ -142,13 +148,13 @@ The content rendered on https://clerk.com/docs is pulled from the `main` branch 
 
 ## Repository structure
 
-The documentation content is located in the [`/docs` directory](./docs/). Each MDX file located in this directory will be rendered under https://clerk.com/docs at its path relative to the root `/docs` directory, without the file extension.
+The documentation content is located in the [`/docs` directory](../docs/). Each MDX file located in this directory will be rendered under https://clerk.com/docs at its path relative to the root `/docs` directory, without the file extension.
 
 For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at https://clerk.com/docs/quickstarts/setup-clerk.
 
 ### Sidenav
 
-The side navigation is powered by two things: the SDK selector and the manifest file at [`/docs/manifest.json`](./docs/manifest.json).
+The side navigation is powered by two things: the SDK selector and the manifest file at [`/docs/manifest.json`](../docs/manifest.json).
 
 The SDK selector allows a user to choose the SDK of their choice, and depending on the option they select, the sidenav will update to show docs specific to that SDK. For example, if you were to choose "Next.js", you would see the sidenav update to show docs that are scoped to Next.js.
 
@@ -156,7 +162,7 @@ The SDK selector allows a user to choose the SDK of their choice, and depending 
 
 The `manifest.json` is responsible for the structure of the sidenav, including setting the title and link for each sidenav item. Below is some helpful information on the typing and structure of the file.
 
-[Manifest JSON schema →](./docs/manifest.schema.json)
+[Manifest JSON schema →](../docs/manifest.schema.json)
 
 <details>
 <summary>Equivalent TypeScript types and descriptions</summary>
@@ -364,7 +370,7 @@ As mentioned above, all of the documentation content is located in the **`/docs`
 
 ### File metadata
 
-Each file has a few required frontmatter fields, which are defined like so:
+Each file has frontmatter fields, which are defined like so:
 
 ```mdx
 ---
@@ -376,7 +382,7 @@ description: Some brief, but effective description of the page's content.
 - **`title`** - The title of the page. Used to populate the HTML `<title>` tag and the h1 of the page. Supports markdown e.g. ``title: '`<SignUp>`'``
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 
-These fields should be present on every documentation page.
+A `title` is **required** — the build fails without one. A `description` is strongly recommended on every page and the build **warns** when it's missing, but a missing `description` won't block the build.
 
 #### Metadata
 
@@ -1231,14 +1237,14 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ```mdx
 <Cards variant="cta">
 
-- [Join our Discord](/discord 'Join Discord')
-- Join our official Discord server to chat with us directly and become a part of the Clerk community.
+- [Join the Discord community](https://clerk.com/discord 'Join Discord')
+- Join the official Discord community to connect with other developers.
 - ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
-- [Need help?](/support 'Get help')
-- Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
+- [Need help?](/https://clerk.com/contact/support 'Get help')
+- Contact the support team to get answers to your questions.
 - ![alt text(/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
@@ -1621,6 +1627,19 @@ The API reference documentation at `/docs/reference/*` is powered by [Scalar](ht
 
 > [!NOTE]
 > Only Clerk team members can update API reference docs, as these docs are stored in private repositories. For instructions, see the [guide in Notion](https://www.notion.so/clerkdev/Contributing-to-Scalar-docs-2f92b9ab44fe80298124c794fdc7a9fb).
+
+### Authoring SDK code examples
+
+When a code example differs across SDKs, match the canonical partials [`create-user.mdx`](../docs/_partials/create-user.mdx) and [`delete-user.mdx`](../docs/_partials/delete-user.mdx). They show, per SDK, the correct import path, how to access auth, and how `clerkClient` is obtained and called — some SDKs import it directly, others call it, and some pass request context. These details vary by SDK and are easy to get wrong from memory.
+
+The build does not execute code blocks, and Prettier only checks formatting, so neither will catch a wrong import or an incorrect `clerkClient` accessor. Copy the pattern from the canonical partials rather than reconstructing it.
+
+### Documenting a new feature or reference
+
+When you document a new feature or reference, some conventions are easy to miss because the build can't enforce them. Work through this checklist:
+
+- **Is the feature in beta or experimental?** Add a beta callout partial (follow an existing one, e.g. [`agent-tasks-beta-callout.mdx`](../docs/_partials/agent-tasks-beta-callout.mdx)) and include it on the relevant pages, then add a `(Beta)` `tag` to the matching `manifest.json` entries. Valid `tag` values are defined by the `tag` enum in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts).
+- **Are you documenting a new SDK type or interface?** Give it its own page under `/docs/reference/types/<name>` with a matching `manifest.json` entry, rather than documenting it inline within a method reference. These type pages are hand-authored — see [`agent-task.mdx`](../docs/reference/types/agent-task.mdx) for an example. This is distinct from reference content rendered with [`<Typedoc />`](#typedoc-), which is auto-generated from `clerk/javascript`.
 
 ## Help wanted!
 

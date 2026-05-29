@@ -3,10 +3,10 @@ title: Deploy your Clerk app to production
 description: Learn how to deploy your Clerk app to production.
 ---
 
-Before you start:
+Before you start, you will need:
 
-1. A production domain — either a custom domain you own, or a Vercel-provided `*.vercel.app` domain.
-1. You will need social sign-in (OAuth) credentials for any providers that you would like to use in production. Each [OAuth provider](/docs/guides/configure/auth-strategies/social-connections/overview) has a dedicated guide on how to set up OAuth credentials for Clerk production apps.
+- A production domain — either a custom domain you own, or a Vercel-provided `*.vercel.app` domain.
+- Social sign-in (OAuth) credentials for any providers that you would like to use in production. Each [OAuth provider](/docs/guides/configure/auth-strategies/social-connections/overview) has a dedicated guide on how to set up custom OAuth credentials for Clerk production apps.
 
 ## Create your production instance
 
@@ -31,11 +31,15 @@ A common mistake when deploying to production is **forgetting to change your API
 
 ## OAuth credentials
 
-In development, for most social providers, Clerk provides you with a set of shared OAuth credentials.
+In development, for most social providers, Clerk provides you with a set of **shared credentials**.
 
-In production, these are not secure and you will need to provide your own. Each [OAuth provider](/docs/guides/configure/auth-strategies/social-connections/overview) has a dedicated guide on how to set up OAuth credentials for Clerk production apps.
+In production, these are not secure and you will need to provide **custom credentials**. Each [OAuth provider](/docs/guides/configure/auth-strategies/social-connections/overview) has a dedicated guide on how to set up custom OAuth credentials for Clerk production apps. If you use a `*.vercel.app` production domain, set the provider's authorization callback URL to:
 
-If you use a `*.vercel.app` production domain and configure custom OAuth credentials, see [Custom OAuth provider credentials](#custom-oauth-credentials) for the required callback URL format.
+```
+https://<your-app>.vercel.app/__clerk/v1/oauth_callback
+```
+
+Clerk's Frontend API processes OAuth callbacks through the auto-proxy on your app domain. This callback URL applies to each social provider that uses custom credentials. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
 
 ## Webhooks
 
@@ -78,39 +82,41 @@ Pick the section below that matches your setup.
   </Tab>
 
   <Tab>
-    Production instances can use a Vercel-provided `*.vercel.app` domain. This setup is designed for Vercel apps and doesn't require you to add Clerk DNS records manually. Instead, Clerk routes browser auth traffic through your Vercel app using the `https://<your-app>.vercel.app/__clerk` proxy path.
+    If you're using a Vercel-provided `*.vercel.app` domain, you aren't required to add Clerk DNS records manually. Instead, Clerk routes browser auth traffic through your Vercel app using the `https://<your-app>.vercel.app/__clerk` proxy path.
 
     > [!NOTE]
     > This setup requires a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
 
-    If you're using a Next.js proxy, ensure the matcher includes Clerk's proxy path:
+    <If sdk="nextjs">
+      In your `proxy.ts` file, ensure the `matcher` includes Clerk's proxy path `/__clerk/(.*)`. Keep `/__clerk/(.*)` as a separate matcher entry, even if you already have a broad matcher, because Clerk also loads browser assets from `/__clerk/npm/...`. Without the explicit matcher, a static-asset exclusion can skip those requests and authentication can fail.
 
-    ```ts {{ filename: 'proxy.ts' }}
-    export const config = {
-      matcher: [
-        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-        '/(api|trpc)(.*)',
-        '/__clerk/(.*)',
-      ],
-    }
-    ```
+      ```ts {{ filename: 'proxy.ts' }}
+      export const config = {
+        matcher: [
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          '/(api|trpc)(.*)',
+          '/__clerk/(.*)',
+        ],
+      }
+      ```
 
-    <Include src="_partials/nextjs/nextjs-15-callout" />
+      <Include src="_partials/nextjs/nextjs-15-callout" />
 
-    After you update your proxy's matcher, in the Clerk Dashboard, return to the [**Domains**](https://dashboard.clerk.com/~/domains) page and select **Verify proxy** to confirm that Clerk can reach the `__clerk` proxy path. Keep `/__clerk/(.*)` as a separate matcher entry, even if you already have a broad matcher, because Clerk also loads browser assets from `/__clerk/npm/...`. Without the explicit matcher, a static-asset exclusion can skip those requests and authentication can fail.
+      To confirm that Clerk can reach the `__clerk` proxy path, in the Clerk Dashboard, navigate to the [**Domains**](https://dashboard.clerk.com/~/domains) page and select **Verify proxy**.
 
-    Sign-up, sign-in, social OAuth callbacks, email-code verification, password verification, `auth()`, and `getToken()` all use the same auto-proxy path on your app domain.
+      Sign-up, sign-in, social OAuth callbacks, email-code verification, password verification, `auth()`, and `getToken()` all use the same auto-proxy path on your app domain.
+    </If>
 
     ### Authentication on the app domain
 
-    Production `*.vercel.app` instances have the hosted Account Portal disabled by default. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration:
+    Production `*.vercel.app` instances have the hosted Account Portal disabled by default so that authentication happens on the app's domain. The built-in Clerk components render in modal mode on your app's own domain, so they work without additional configuration:
 
     - `<SignIn />` and `<SignUp />` render on the page where you place them.
     - `<UserButton />` opens `<UserProfile />` in a modal on the app domain.
-    - `<OrganizationSwitcher />` opens `<CreateOrganization />` and `<OrganizationProfile />` in modals on the app domain.
+    - `<OrganizationSwitcher />` opens `<CreateOrganization />` and `<OrganizationProfile />` in modals on the page where you placed it.
     - `<SignOutButton />` and `clerk.signOut()` redirect to `/` by default.
 
-    If you need to opt out of modal mode or use programmatic redirects, the configuration depends on the mechanism.
+    To make these components navigate to dedicated pages instead of opening modals, see the [Components in navigation mode](#components-in-navigation-mode) section.
 
     #### Components in navigation mode
 
@@ -122,11 +128,11 @@ Pick the section below that matches your setup.
     // Open <UserProfile /> as a page at /user-profile instead of a modal
     <UserButton userProfileMode="navigation" userProfileUrl="/user-profile" />
 
-    // Render the matching page at /user-profile
+    // Render the <UserProfile /> at the set URL: /user-profile
     <UserProfile path="/user-profile" routing="path" />
     ```
 
-    `<OrganizationSwitcher />` uses the same pattern across its two flows. Render `<CreateOrganization />` and `<OrganizationProfile />` on the matching pages:
+    For `<OrganizationSwitcher />`:
 
     ```tsx {{ prettier: false }}
     // Open <CreateOrganization /> and <OrganizationProfile /> as pages instead of modals
@@ -136,48 +142,122 @@ Pick the section below that matches your setup.
       organizationProfileMode="navigation"
       organizationProfileUrl="/organization"
     />
+
+    // Render the <CreateOrganization /> at the set URL: /create-organization
+    <CreateOrganization path="/create-organization" routing="path" />
+
+    // Render the <OrganizationProfile /> at the set URL: /organization
+    <OrganizationProfile path="/organization" routing="path" />
     ```
 
     #### Standalone redirect helpers
 
-    `clerk.redirectToUserProfile()`, `clerk.redirectToCreateOrganization()`, and `clerk.redirectToOrganizationProfile()` resolve to URLs in the instance's display config, which on a `*.vercel.app` instance points to the disabled Account Portal subdomain. They can't be overridden via `<ClerkProvider>` or component props. For these flows on `*.vercel.app`, use the navigation-mode component pattern above instead of calling the helpers directly.
+    The following Clerk redirect helpers resolve to URLs in the instance's display config, which on a `*.vercel.app` instance points to the disabled Account Portal subdomain. If you're using them in your application, you must host the corresponding components on dedicated pages instead of using them in modal mode. See the [Components in navigation mode](#components-in-navigation-mode) section.
 
-    `clerk.redirectToWaitlist()` and multi-session single sign-out are overridable via props on `<ClerkProvider>`:
+    - `clerk.redirectToUserProfile()`
+    - `clerk.redirectToCreateOrganization()`
+    - `clerk.redirectToOrganizationProfile()`
 
-    ```tsx
-    <ClerkProvider
-      // Used by clerk.redirectToWaitlist()
-      waitlistUrl="/waitlist"
-      // Used to build the session-switch URL for multi-session sign-out
-      signInUrl="/sign-in"
-    >
-      {/* ... */}
-    </ClerkProvider>
-    ```
+    {/* TODO: What about redirectToSignIn, redirectToSignUp? How do they work? */}
+
+    #### Multi-session single sign-out
+
+    <If notSdk={["astro", "js-frontend", "vue", "nuxt", "fastify"]}>
+      If your application supports [multi-session handling](/docs/guides/secure/session-options#multi-session-applications), set the `signInUrl` prop on your [`<ClerkProvider>`](/docs/reference/components/clerk-provider) so Clerk can build the session-switch URL on your app.
+
+      ```tsx
+      <ClerkProvider signInUrl="/sign-in">{/* ... */}</ClerkProvider>
+      ```
+    </If>
+
+    <If sdk="astro">
+      If your application supports [multi-session handling](/docs/guides/secure/session-options#multi-session-applications), set the `signInUrl` prop on your [`clerk()`](/docs/reference/astro/overview) integration so Clerk can build the session-switch URL on your app.
+
+      ```js {{ filename: 'astro.config.mjs' }}
+      import clerk from '@clerk/astro'
+
+      export default defineConfig({
+        integrations: [
+          clerk({
+            signInUrl: '/sign-in',
+          }),
+        ],
+      })
+      ```
+    </If>
+
+    <If sdk="js-frontend">
+      If your application supports [multi-session handling](/docs/guides/secure/session-options#multi-session-applications), set the `signInUrl` prop on your [`clerk.load()`](/docs/reference/objects/clerk#load) method so Clerk can build the session-switch URL on your app.
+
+      ```js {{ filename: 'main.ts' }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(clerkPubKey)
+      await clerk.load({
+        signInUrl: '/sign-in',
+      })
+      ```
+    </If>
+
+    <If sdk="vue">
+      If your application supports [multi-session handling](/docs/guides/secure/session-options#multi-session-applications), set the `signInUrl` prop on your [`clerkPlugin()`](/docs/reference/vue/clerk-plugin) integration so Clerk can build the session-switch URL on your app.
+
+      ```ts {{ filename: 'src/main.ts' }}
+      import { createApp } from 'vue'
+      import App from './App.vue'
+      import { clerkPlugin } from '@clerk/vue'
+
+      const app = createApp(App)
+      app.use(clerkPlugin, {
+        signInUrl: '/sign-in',
+      })
+      app.mount('#app')
+      ```
+    </If>
+
+    <If sdk="nuxt">
+      If your application supports [multi-session handling](/docs/guides/secure/session-options#multi-session-applications), set the `signInUrl` prop on your [`clerk` property](/docs/reference/nuxt/clerk-middleware) in your Nuxt config so Clerk can build the session-switch URL on your app.
+
+      ```ts {{ filename: 'nuxt.config.ts' }}
+      export default defineNuxtConfig({
+        modules: ['@clerk/nuxt'],
+        clerk: {
+          signInUrl: '/sign-in',
+        },
+      })
+      ```
+    </If>
+
+    <If sdk="fastify">
+      If your application supports [multi-session handling](/docs/guides/secure/session-options#multi-session-applications), set the `signInUrl` prop on your [`clerkPlugin()`](/docs/reference/fastify/clerk-plugin) integration so Clerk can build the session-switch URL on your app.
+
+      ```ts {{ filename: 'src/main.ts' }}
+      import Fastify from 'fastify'
+      import { clerkPlugin } from '@clerk/fastify'
+
+      const fastify = Fastify({ logger: true })
+
+      fastify.register(clerkPlugin, {
+        signInUrl: '/sign-in',
+      })
+      ```
+    </If>
 
     ### Verifying session tokens
 
     Session tokens issued on a `*.vercel.app` production instance carry an `iss` claim equal to your app's proxy URL, for example `https://<your-app>.vercel.app/__clerk`. The official Clerk SDKs (`@clerk/backend`, `@clerk/nextjs`, and the other framework integrations) resolve this automatically from your publishable key.
 
     If you verify Clerk session tokens outside the official SDKs — for example, in Go, Python, or third-party tools — configure your verifier to expect this issuer value rather than a Clerk-hosted Frontend API host.
-
-    ### Custom OAuth provider credentials {{ id: 'custom-oauth-credentials' }}
-
-    When you replace Clerk's shared OAuth credentials with your own for a `*.vercel.app` production instance, set the provider's authorization callback URL to:
-
-    ```
-    https://<your-app>.vercel.app/__clerk/v1/oauth_callback
-    ```
-
-    Clerk's Frontend API processes OAuth callbacks through the auto-proxy on your app domain. This callback URL applies to each social provider that uses custom credentials. Using any other URL — such as a Clerk-hosted Frontend API host or the Account Portal subdomain — will fail with a token exchange error.
   </Tab>
 </Tabs>
 
 ## Authentication across subdomains
 
-This applies when you've configured a root domain on your production instance, typically with a custom domain. It does not apply to sharing auth across sibling `*.vercel.app` domains.
-
 When you set a root domain for your production deployment, Clerk's authentication will work across all subdomains. User sessions will also be shared across the subdomains.
+
+This applies when you've configured a root domain on your production instance, typically **with a custom domain**. It does not apply to sharing auth across sibling `*.vercel.app` domains.
 
 <Include src="_partials/allowed-subdomains-callout" />
 
@@ -273,7 +353,7 @@ If your instance is stuck during TLS certificate issuance for longer than a few 
 
 CAA are DNS records you may set to denote which certificate authorities (CA) are permitted to issue certificates for your domain, as a security measure against certain attacks. When you deploy your application, Clerk attempts to provision certificates using either the [LetsEncrypt](https://letsencrypt.org/) or [Google Trust Services](https://pki.goog/) certificate authorities.
 
-Ensure that your primary domain (e.g., example.com) does not have any CAA records that prevent either LetsEncrypt or Google Trust Services from issuing certificates for your domain. To check this, run the following command in your terminal, replacing `example.com` with your app’s domain:
+Ensure that your primary domain (e.g., example.com) does not have any CAA records that prevent either LetsEncrypt or Google Trust Services from issuing certificates for your domain. To check this, run the following command in your terminal, replacing `example.com` with your app's domain:
 
 ```sh
 dig example.com +short CAA
@@ -289,7 +369,7 @@ If your production Vercel app loads a development watermark, fails to load Clerk
 - **Domain sync:** The Clerk production instance domain must match the assigned `*.vercel.app` production domain.
 - **SDK support:** Use a Clerk SDK release with Vercel auto-proxy support: `@clerk/nextjs` 7.2.8+, `@clerk/clerk-js` 6.7.8+, or `@clerk/backend` 3.4.2+.
 - **Next.js matcher:** If you're using a Next.js proxy, include `/__clerk/(.*)` as a separate matcher entry so Clerk proxy requests and browser assets under `/__clerk/npm/...` are handled.
-- **Custom OAuth credentials:** If you're using your own OAuth credentials for a social provider, ensure the provider's authorization callback URL is set to `https://<your-app>.vercel.app/__clerk/v1/oauth_callback`. See [Custom OAuth provider credentials](#custom-oauth-credentials) for details.
+- **Custom OAuth credentials:** If you're using your own OAuth credentials for a social provider, ensure the provider's authorization callback URL is set to `https://<your-app>.vercel.app/__clerk/v1/oauth_callback`. See [the OAuth credentials section](#o-auth-credentials) for details.
 - **External JWT verification:** If you verify Clerk session tokens outside the official SDKs, configure your verifier to expect `iss` equal to `https://<your-app>.vercel.app/__clerk`. See [Verifying session tokens](#verifying-session-tokens).
 
 ### Incorrect domain

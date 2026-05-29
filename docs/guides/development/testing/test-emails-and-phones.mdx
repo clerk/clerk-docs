@@ -1,11 +1,9 @@
 ---
 title: Test emails and phones
-description: Write end to end tests by simulating OTP verifications.
+description: Write end-to-end tests for email and phone verification flows, including OTPs and email verification links.
 ---
 
-Most of Clerk's sign-in and sign-up flows involve verifying ownership of an email address or phone number via a [one-time password (OTP)](!otp). To confirm that your integration works correctly, you can simulate verification flows without sending an email or SMS, by using reserved values in test mode.
-
-Verification messages are used during sign-up, sign-in, and when adding an email address or phone number to an existing account.
+Many of Clerk's sign-up, sign-in, and account update flows require verifying ownership of an email address or phone number, typically via a [one-time password (OTP)](!otp) or an email verification link. To confirm that your integration works correctly without sending real emails or SMS messages, you can simulate these verifications by using reserved test values in **test mode**.
 
 ## Limitations
 
@@ -20,23 +18,33 @@ The following cases do not count toward the limit:
 - Self-delivered SMS messages or emails (i.e. not delivered by Clerk)
 - SMS messages or emails for apps with a paid subscription
 
-If your development instance requires a higher allowance of monthly SMS messages or emails, contact support to request a limit increase.
+If your development instance requires a higher allowance of monthly SMS messages or emails, [contact support](https://clerk.com/contact/support) to request a limit increase.
 
 ## Set up test mode
 
 Every development instance has **test mode** enabled by default. If you need to use **test mode** on a production instance, you can enable it in the Clerk Dashboard. However, this is highly discouraged.
 
-To enable or disable **test mode**, in the Clerk Dashboard, navigate to the [**Settings**](https://dashboard.clerk.com/~/settings) page.
+To enable or disable **test mode**, in the Clerk Dashboard, navigate to the [**Instance Settings**](https://dashboard.clerk.com/~/instance-settings) page.
 
 ### Email addresses
 
-Any email with the `+clerk_test` subaddress is a test email address. No emails will be sent, and they can be verified with the code `424242`.
+Any email with the `+clerk_test` subaddress is a test email address.
 
 For example:
 
 `jane+clerk_test@example.com`
 
 `doe+clerk_test@example.com`
+
+#### Testing email verification codes
+
+When testing email verification codes, no email with the verification code will be sent. Instead you can use the code `424242`.
+
+#### Testing email verification links
+
+When testing email verification links, an email will be sent to the test email address with a link to the verification URL. The link will be valid for 10 minutes.
+
+Testing email links in E2E suites is an uphill task. We recommend turning on the [**Email verification code**](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#email) setting, and using that flow to authenticate your tests.
 
 ### Phone numbers
 
@@ -52,35 +60,26 @@ For example:
 
 `+19735550133`
 
-### Email links
-
-Testing email links in E2E suites is an uphill task. We recommend turning on the [**Email verification code**](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#email) setting, and using that flow to authenticate your tests. The flows are very similar.
-
 ## Code examples
 
 ### Testing sign in via email code
+
+The following example uses an email address to sign in, with an email verification code to verify the user. To find other flow examples, see the [custom flow guides](/docs/guides/development/custom-flows/overview). This example uses the [email/phone OTP custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp).
 
 ```tsx
 const testSignInWithEmailCode = async () => {
   const { signIn } = useSignIn()
 
-  const emailAddress = 'john+clerk_test@example.com'
-  const signInResp = await signIn.create({ identifier: emailAddress })
-  const { emailAddressId } = signInResp.supportedFirstFactors.find(
-    (ff) => ff.strategy === 'email_code' && ff.safeIdentifier === emailAddress,
-  )! as EmailCodeFactor
+  // Use a test email address to create the sign in attempt
+  await signIn.create({ identifier: 'john+clerk_test@example.com' })
 
-  await signIn.prepareFirstFactor({
-    strategy: 'email_code',
-    emailAddressId: emailAddressId,
-  })
+  // Calling `sendCode()` is still required even though no email will be sent
+  await signIn.emailCode.sendCode()
 
-  const attemptResponse = await signIn.attemptFirstFactor({
-    strategy: 'email_code',
-    code: '424242',
-  })
+  // Use the test code to verify the email address
+  await signIn.emailCode.verifyCode({ code: '424242' })
 
-  if (attemptResponse.status == 'complete') {
+  if (signIn.status === 'complete') {
     console.log('success')
   } else {
     console.log('error')
@@ -90,19 +89,26 @@ const testSignInWithEmailCode = async () => {
 
 ### Testing sign up with phone number
 
+The following example uses a phone number to sign up, with an SMS verification code to verify the user. To find other flow examples, see the [custom flow guides](/docs/guides/development/custom-flows/overview). This example uses the [email/phone OTP custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp).
+
 ```jsx
 const testSignUpWithPhoneNumber = async () => {
   const { signUp } = useSignUp()
 
+  // Use a test phone number to create the sign up attempt
   await signUp.create({
     phoneNumber: '+12015550100',
   })
-  await signUp.preparePhoneNumberVerification()
 
-  const res = await signUp.attemptPhoneNumberVerification({
+  // Calling `sendPhoneCode()` is still required even though no SMS will be sent
+  await signUp.verifications.sendPhoneCode()
+
+  // Use the test code to verify the phone number
+  await signUp.verifications.verifyPhoneCode({
     code: '424242',
   })
-  if (res.verifications.phoneNumber.status == 'verified') {
+
+  if (signUp.status === 'complete') {
     console.log('success')
   } else {
     console.log('error')

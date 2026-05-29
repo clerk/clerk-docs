@@ -96,13 +96,34 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
 
   To protect the `/admin` route, choose **one** of the two following methods:
 
-  1. **Middleware**: Apply Role-based access control globally at the route level. This method restricts access to all routes matching `/admin` before the request reaches the actual page.
-  1. **Page-level Role check**: Apply Role-based access control directly in the `/admin` page component. This method protects this specific page. To protect other pages in the admin dashboard, apply this protection to each route.
+  1. **Page-level Role check (recommended)**: Apply Role-based access control directly in the `/admin` page component. This method protects this specific page. To protect other pages in the admin dashboard, apply this protection to each route.
+  1. **Middleware**: Apply Role-based access control at the route level, before the request reaches the page. This approach is no longer recommended.
 
   > [!IMPORTANT]
   > You only need to follow **one** of the following methods to secure your `/admin` route.
 
-  ### Option 1: Protect the `/admin` route using middleware
+  ### Option 1: Protect the `/admin` route at the page-level
+
+  1. Add the following code to the `app/admin/page.tsx` file. The `checkRole()` function checks if the user has the `admin` Role. If they don't, it redirects them to the home page.
+
+  ```tsx {{ filename: 'app/admin/page.tsx' }}
+  import { checkRole } from '@/utils/roles'
+  import { redirect } from 'next/navigation'
+
+  export default async function AdminDashboard() {
+    // Protect the page from users who are not admins
+    const isAdmin = await checkRole('admin')
+    if (!isAdmin) {
+      redirect('/')
+    }
+
+    return <p>This is the protected admin dashboard restricted to users with the `admin` Role.</p>
+  }
+  ```
+
+  ### Option 2: Protect the `/admin` route using middleware
+
+  <Include src="_partials/middleware-auth-deprecation" />
 
   <Include src="_partials/nextjs/nextjs-15-callout" />
 
@@ -112,7 +133,7 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
   import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
   import { NextResponse } from 'next/server'
 
-  const isAdminRoute = createRouteMatcher(['/admin(.*)'])
+  const isAdminRoute = createRouteMatcher(['/admin/:path*'])
 
   export default clerkMiddleware(async (auth, req) => {
     // Protect all routes starting with `/admin`
@@ -131,25 +152,6 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
       // Always run for Clerk-specific frontend API routes
       '/__clerk/(.*)',
     ],
-  }
-  ```
-
-  ### Option 2: Protect the `/admin` route at the page-level
-
-  1. Add the following code to the `app/admin/page.tsx` file. The `checkRole()` function checks if the user has the `admin` Role. If they don't, it redirects them to the home page.
-
-  ```tsx {{ filename: 'app/admin/page.tsx' }}
-  import { checkRole } from '@/utils/roles'
-  import { redirect } from 'next/navigation'
-
-  export default async function AdminDashboard() {
-    // Protect the page from users who are not admins
-    const isAdmin = await checkRole('admin')
-    if (!isAdmin) {
-      redirect('/')
-    }
-
-    return <p>This is the protected admin dashboard restricted to users with the `admin` Role.</p>
   }
   ```
 

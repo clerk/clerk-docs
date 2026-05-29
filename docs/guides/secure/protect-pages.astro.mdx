@@ -1,0 +1,52 @@
+---
+title: Protect pages and routes
+description: Learn how to protect pages and endpoints in your Clerk + Astro application.
+sdk: astro
+---
+
+This guide demonstrates how to protect pages and [endpoints](https://docs.astro.build/en/guides/endpoints/) in your Astro application by checking authentication **close to the resource being accessed** rather than in your middleware.
+
+> [!NOTE]
+> Astro has no built-in way to protect groups of routes, so you protect each page and endpoint individually. This is more verbose than a single middleware rule, but it keeps each resource responsible for its own access, which avoids the [structural problems with middleware-based auth checks](#why-not-protect-in-middleware).
+
+## Protect a page
+
+Use [`Astro.locals.auth()`](/docs/reference/astro/locals) to check `isAuthenticated` in the page's frontmatter, and redirect unauthenticated users to your sign-in route.
+
+```astro {{ filename: 'src/pages/dashboard.astro' }}
+---
+const { isAuthenticated } = Astro.locals.auth()
+
+if (!isAuthenticated) {
+  return Astro.redirect('/sign-in')
+}
+---
+
+<h1>Dashboard</h1>
+```
+
+## Protect an endpoint
+
+Check `isAuthenticated` from `locals.auth()` and return a `401` if the user isn't signed in.
+
+```ts {{ filename: 'src/pages/api/me.ts' }}
+export async function GET({ locals }) {
+  const { isAuthenticated, userId } = locals.auth()
+
+  if (!isAuthenticated) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  return new Response(JSON.stringify({ userId }))
+}
+```
+
+To also check whether a user is **authorized** (has a specific Role, Permission, Feature, or Plan), see [Authorization checks](/docs/guides/secure/authorization-checks).
+
+## Why not protect in middleware?
+
+It's tempting to gate routes inside `clerkMiddleware()` with `createRouteMatcher()`, but auth checks in the middleware layer are structurally unsafe. Clerk has to normalize and match the request URL exactly the way Astro and your host do, and any mismatch (such as percent-encoding, double-encoding, or an extra path segment) can let a request reach a protected resource without being checked.
+
+Protecting close to the resource avoids this entire class of bug: the same code that reads or renders the data also enforces access to it.
+
+`clerkMiddleware()` itself is still required and fully supported. Only auth checks _inside_ the callback are discouraged.

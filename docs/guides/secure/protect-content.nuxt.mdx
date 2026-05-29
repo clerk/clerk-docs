@@ -15,28 +15,55 @@ This guide demonstrates how to protect content from unauthenticated users in you
 
 ## Protect multiple pages
 
-`createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes in your Nuxt application. It accepts an array of route patterns and checks if the route the user is trying to visit matches one of the patterns passed to it.
+To protect groups of pages, use Nuxt's built-in [route middleware](https://nuxt.com/docs/4.x/guide/directory-structure/middleware) instead of matching paths yourself. This keeps the page structure as the source of truth, so there's no separate list of paths that can fall out of sync with your routes.
 
-The `createRouteMatcher()` helper returns a function that, when called with the `to` route object from Nuxt's [`defineNuxtRouteMiddleware()`](https://nuxt.com/docs/4.x/api/utils/define-nuxt-route-middleware), will return `true` if the user is trying to access a route that matches one of the patterns provided.
+### Named middleware
 
-### Example
+Create a named middleware that checks the user's authentication status, then opt pages into it with [`definePageMeta()`](https://nuxt.com/docs/4.x/api/utils/define-page-meta). Child routes inherit the middleware applied to their parent, so a single declaration can protect a whole section.
 
-In your `middleware/` directory, create a file named `auth.global.ts` with the following code. This middleware:
-
-- Uses the `isSignedIn` property returned by the [`useAuth()`](/docs/reference/composables/use-auth) composable to check if the user is signed in.
-- Uses the `createRouteMatcher()` helper to check if the user is trying to access a protected route. If they are but they aren't signed in, they are redirected to the sign-in page.
-
-```ts {{ filename: 'app/middleware/auth.global.ts' }}
-// Define the routes you want to protect with `createRouteMatcher()`
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default defineNuxtRouteMiddleware((to) => {
+```ts {{ filename: 'app/middleware/auth.ts' }}
+export default defineNuxtRouteMiddleware(() => {
   // Use the `useAuth()` composable to access the `isSignedIn` property
   const { isSignedIn } = useAuth()
 
-  // Check if the user is not signed in and is trying to access a protected route
-  // If so, redirect them to the sign-in page
-  if (!isSignedIn.value && isProtectedRoute(to)) {
+  // Redirect the user to the sign-in page if they aren't signed in
+  if (!isSignedIn.value) {
+    return navigateTo('/sign-in')
+  }
+})
+```
+
+```vue {{ filename: 'app/pages/dashboard.vue' }}
+<script setup lang="ts">
+definePageMeta({ middleware: 'auth' })
+</script>
+
+<template>
+  <NuxtPage />
+</template>
+```
+
+### Route groups
+
+If you're on Nuxt 4.3 or later, you can group pages with [route groups](https://nuxt.com/docs/4.x/guide/directory-structure/app/pages#route-groups) (a folder wrapped in parentheses) and protect them in a single global middleware. Each route exposes the groups it belongs to on `to.meta.groups`.
+
+```text
+pages/
+  (public)/
+    sign-in.vue
+    pricing.vue
+  (protected)/
+    dashboard.vue
+    settings.vue
+```
+
+```ts {{ filename: 'app/middleware/auth.global.ts' }}
+export default defineNuxtRouteMiddleware((to) => {
+  // Only guard pages in the `protected` route group
+  if (!to.meta.groups?.includes('protected')) return
+
+  const { isSignedIn } = useAuth()
+  if (!isSignedIn.value) {
     return navigateTo('/sign-in')
   }
 })

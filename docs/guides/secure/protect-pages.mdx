@@ -1,45 +1,106 @@
 ---
-title: Protect pages in your Nuxt app with Clerk
-description: Learn how to protect the pages in your Clerk + Nuxt application.
-sdk: nuxt
+title: Protect pages and routes
+description: Learn how to protect pages, route handlers, and Server Actions in your Clerk + Next.js application.
+sdk: nextjs
 ---
 
-This guide demonstrates how to protect pages in your Nuxt application.
+This guide demonstrates how to protect pages, route handlers, and Server Actions in your Next.js application by checking authentication **close to the resource being accessed** rather than in your middleware.
 
 > [!TIP]
-> To learn how to protect API routes, see the [dedicated guide](/docs/reference/nuxt/clerk-middleware#protect-api-routes).
+> Protect access where the resource is read, not inside `clerkMiddleware()`. [Auth checks in the middleware layer are no longer recommended](#why-not-protect-in-middleware) because they're difficult to keep in sync with how your framework and host route requests.
 
-## Protect a single page
+To check whether a user is **authorized** (has a specific Role, Permission, Feature, or Plan) in addition to being signed in, see [Authorization checks](/docs/guides/secure/authorization-checks). This guide focuses on **authentication** (whether a user is signed in).
 
-The `useAuth()` composable provides access to the current user's authentication state and methods to manage the active session. It also includes the `isSignedIn` property to check if the active user is signed in, which is helpful for protecting a page.
+## Protect a page
 
-<Include src="_partials/vue-nuxt/use-auth" />
+Use [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) to redirect unauthenticated users to the sign-in route, or use [`auth()`](/docs/reference/nextjs/app-router/auth) and check `isAuthenticated` yourself if you want more control over the response.
 
-## Protect multiple pages
+<CodeBlockTabs options={["auth.protect()", "auth()"]}>
+  ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+  import { auth } from '@clerk/nextjs/server'
 
-The `createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes in your Nuxt application. It accepts an array of route patterns and checks if the route the user is trying to visit matches one of the patterns passed to it.
+  export default async function Page() {
+    // Redirects to the sign-in route if the user is not signed in
+    await auth.protect()
 
-The `createRouteMatcher()` helper returns a function that, when called with the `to` route object from Nuxt's [`defineNuxtRouteMiddleware()`](https://nuxt.com/docs/4.x/api/utils/define-nuxt-route-middleware), will return `true` if the user is trying to access a route that matches one of the patterns provided.
-
-### Example
-
-In your `middleware/` directory, create a file named `auth.global.ts` with the following code. This middleware:
-
-- Uses the `isSignedIn` property returned by the [`useAuth()`](/docs/reference/composables/use-auth) composable to check if the user is signed in.
-- Uses the `createRouteMatcher()` helper to check if the user is trying to access a protected route. If they are but they aren't signed in, they are redirected to the sign-in page.
-
-```ts {{ filename: 'app/middleware/auth.global.ts' }}
-// Define the routes you want to protect with `createRouteMatcher()`
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default defineNuxtRouteMiddleware((to) => {
-  // Use the `useAuth()` composable to access the `isSignedIn` property
-  const { isSignedIn } = useAuth()
-
-  // Check if the user is not signed in and is trying to access a protected route
-  // If so, redirect them to the sign-in page
-  if (!isSignedIn.value && isProtectedRoute(to)) {
-    return navigateTo('/sign-in')
+    return <h1>Dashboard</h1>
   }
-})
+  ```
+
+  ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+  import { auth } from '@clerk/nextjs/server'
+
+  export default async function Page() {
+    const { isAuthenticated, redirectToSignIn } = await auth()
+
+    if (!isAuthenticated) {
+      // Add custom logic to run before redirecting
+      return redirectToSignIn()
+    }
+
+    return <h1>Dashboard</h1>
+  }
+  ```
+</CodeBlockTabs>
+
+## Protect a route handler
+
+Check `isAuthenticated` from [`auth()`](/docs/reference/nextjs/app-router/auth) and return a `401` if the user isn't signed in.
+
+```tsx {{ filename: 'app/api/me/route.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+export const GET = async () => {
+  const { isAuthenticated, userId } = await auth()
+
+  if (!isAuthenticated) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  return Response.json({ userId })
+}
 ```
+
+## Protect a Server Action
+
+Verify the user inside the action itself, before running any logic that depends on them being signed in.
+
+```tsx {{ filename: 'app/actions.ts' }}
+'use server'
+import { auth } from '@clerk/nextjs/server'
+
+export async function createPost(formData: FormData) {
+  const { isAuthenticated, userId } = await auth()
+
+  if (!isAuthenticated) {
+    throw new Error('You must be signed in to create a post.')
+  }
+
+  // Add your Server Action logic using the `userId`
+}
+```
+
+## Protect a group of pages
+
+To protect several pages that share a path prefix, add the check to a shared [layout](https://nextjs.org/docs/app/api-reference/file-conventions/layout).
+
+```tsx {{ filename: 'app/dashboard/layout.tsx' }}
+import { auth } from '@clerk/nextjs/server'
+
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  await auth.protect()
+
+  return <>{children}</>
+}
+```
+
+> [!WARNING]
+> Layouts don't re-render on client-side navigation, so the session isn't re-checked on every route change. Treat a layout check as a convenience for the first load, **not** a security boundary. Always verify authentication (and authorization) in the page, Server Action, route handler, or data-access code that actually reads or mutates protected data. For more information, see the [Next.js docs](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks).
+
+## Why not protect in middleware?
+
+It's tempting to gate routes inside `clerkMiddleware()` with `createRouteMatcher()`, but auth checks in the middleware layer are structurally unsafe. Clerk has to normalize and match the request URL exactly the way your framework and host do, and any mismatch (such as percent-encoding, double-encoding, or an extra path segment) can let a request reach a protected resource without being checked. These mismatches are hard to prevent and can be reintroduced by changes outside your control.
+
+Protecting close to the resource avoids this entire class of bug: the same code that reads or mutates the data also enforces access to it.
+
+`clerkMiddleware()` itself is still required and fully supported. Only auth checks _inside_ the callback are discouraged.

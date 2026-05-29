@@ -43,6 +43,11 @@ type SearchRecord = {
   type: RecordType
   keywords: string[]
   availableSDKs: string[]
+  // The specific SDK this record's variant was built for (`activeSdk` frontmatter).
+  // `availableSDKs` is the page's full support list and is identical across a page's
+  // per-SDK variants, so it can't disambiguate them after `distinct` collapses the
+  // group. `sdk` lets search boost the active SDK's variant as the representative.
+  sdk: string | null
   canonical: string
   weight: {
     pageRank: number
@@ -300,6 +305,8 @@ function generateRecordsFromDoc(
   const availableSdksRaw = doc.frontmatter.availableSdks?.split(',').filter(Boolean)
   // Use ["all"] for non-SDK-scoped docs (no availableSdks in frontmatter)
   const availableSdksList = availableSdksRaw && availableSdksRaw.length > 0 ? availableSdksRaw : ['all']
+  // The SDK this built variant targets (null for non-SDK-scoped/universal pages)
+  const sdk = doc.frontmatter.activeSdk ?? null
   const canonical = doc.frontmatter.canonical
   const keywords = doc.frontmatter.search?.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? []
 
@@ -319,6 +326,7 @@ function generateRecordsFromDoc(
       type,
       keywords,
       availableSDKs: availableSdksList,
+      sdk,
       canonical,
       weight: {
         pageRank: doc.frontmatter.search?.rank ?? 0,

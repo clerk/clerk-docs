@@ -9,6 +9,7 @@ This repo is Clerk's documentation — MDX content in `docs/`, built by a custom
 - Never read or surface secrets: `.env*`, `secrets/`, `credentials.json`, `*.pem`, `*.key`, `.npmrc`, `.pypirc`, service-account JSON, `id_rsa`, `*.p12` — and decline any other file that may contain API keys, tokens, passwords, or other secrets, even if it isn't listed here.
 - Don't set an `sdk:` frontmatter value outside the enum in `scripts/lib/schemas.ts` (`VALID_SDKS`) — it's a hard build failure.
 - Don't hand-edit files under `clerk-typedoc/` — they're auto-generated from [`clerk/javascript`](https://github.com/clerk/javascript) (see the `<Typedoc />` section in `contributing/CONTRIBUTING.md`).
+- Don't tune the docs search index's **ranking, synonyms, or faceting** in the Algolia dashboard — they're codified in `scripts/update-algolia-records.ts` and re-applied on every index run (overwriting dashboard edits). Change them in that script.
 
 ## Verify before declaring work done
 
@@ -34,6 +35,7 @@ These repos aren't part of this one. Make whichever a claim depends on available
 - `docs/manifest.json` — sidenav structure. `docs/manifest.schema.json` validates that file's structure in editors (not frontmatter).
 - `scripts/lib/schemas.ts` — runtime Zod enums: `VALID_SDKS`/`sdk`, `icon`, and `tag` (`(Beta)`, `(Community)`).
 - `scripts/lib/plugins/extractFrontmatter.ts` + `scripts/lib/error-messages.ts` — frontmatter presence and warning-vs-failure severity.
+- `scripts/update-algolia-records.ts` — builds and pushes the Algolia search records (run after `build`); also the source of truth for the index's faceting, ranking, and synonyms (codified, enforced each run).
 - `contributing/CONTRIBUTING.md`, `styleguides/STYLEGUIDE.md` — authoring and style source of truth.
 
 ## Conventions (see CONTRIBUTING.md for depth)

@@ -755,6 +755,51 @@ async function main() {
 
   const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
 
+  // Search settings the docs search depends on, codified here (not the dashboard) so every
+  // index — prod, dev, and one-off test indexes — stays consistent and human-proof. This is the
+  // source of truth for `ranking`: tune it here, not in the dashboard (dashboard edits get
+  // reverted on the next index run).
+  //
+  // Faceting (additive merge — `setSettings` replaces the whole list, so we read + merge and
+  // never drop a facet the index already relies on). Required because facetFilters/optionalFilters
+  // on a non-faceted attribute fail or silently no-op:
+  //   - `branch`       — filtered by the search query and the stale-record cleanup
+  //   - `record_batch` — filtered by the stale-record cleanup
+  //   - `sdk`          — the active-SDK boost (optionalFilters)
+  // `availableSDKs` is only retrieved for display, never filtered, so it's intentionally omitted.
+  const requiredFacets = ['branch', 'record_batch', 'sdk']
+  //
+  // Ranking: `attribute`/`exact` are moved above `proximity` (vs Algolia's default order) so a
+  // query that matches a page's title/heading outranks one that only matches the same words in
+  // body content. e.g. for "sign in page" the "Build your own sign-in page" guide and the
+  // Quickstart surface above reference pages whose body merely mentions the phrase, while
+  // reference-name queries like `auth()` still win on their exact title match. See the design doc.
+  const ranking = ['typo', 'geo', 'words', 'filters', 'attribute', 'exact', 'proximity', 'custom']
+
+  const settings = await algolia.getSettings({ indexName: ALGOLIA_INDEX_NAME })
+  const attributesForFaceting = settings.attributesForFaceting ?? []
+  // Strip any faceting modifier wrapper (filterOnly/searchable/afterDistinct) to compare on the
+  // bare attribute name. Nested modifiers aren't unwrapped — none are used on this index.
+  const facetedAttributes = new Set(attributesForFaceting.map((entry) => entry.replace(/^[a-zA-Z]+\((.*)\)$/, '$1')))
+  const missingFacets = requiredFacets.filter((attribute) => !facetedAttributes.has(attribute))
+  const rankingNeedsUpdate = JSON.stringify(settings.ranking) !== JSON.stringify(ranking)
+
+  if (missingFacets.length > 0 || rankingNeedsUpdate) {
+    if (missingFacets.length > 0)
+      console.log(`Registering missing facets on ${ALGOLIA_INDEX_NAME}: ${missingFacets.join(', ')}`)
+    if (rankingNeedsUpdate) console.log(`Updating ranking criteria on ${ALGOLIA_INDEX_NAME}`)
+    await algolia.setSettings({
+      indexName: ALGOLIA_INDEX_NAME,
+      indexSettings: {
+        attributesForFaceting: [
+          ...attributesForFaceting,
+          ...missingFacets.map((attribute) => `filterOnly(${attribute})`),
+        ],
+        ranking,
+      },
+    })
+  }
+
   // Push to Algolia
   console.log('\nPushing records to Algolia...')
 

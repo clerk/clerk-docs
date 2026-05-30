@@ -18,7 +18,7 @@
 // - Final URLs and frontmatter
 
 import { slugifyWithCounter } from '@sindresorhus/slugify'
-import { algoliasearch } from 'algoliasearch'
+import { algoliasearch, type SynonymHit } from 'algoliasearch'
 import 'dotenv/config'
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -613,6 +613,81 @@ function generateRecordsFromDoc(
   return records
 }
 
+// Synonyms are codified and enforced every run (replaceExistingSynonyms), same model as ranking.
+// Acronym ⇄ expansion pairs are auto-derived from the `_tooltips` glossary so they stay in sync as
+// tooltips are added; a curated list covers product-rename/phrasing synonyms that aren't glossary
+// definitions (e.g. "magic link" → "email link", "login" → "sign in"). Tooltip content is excluded
+// from the search index, so without these these terms would miss entirely.
+async function buildSynonyms(): Promise<SynonymHit[]> {
+  const isAcronym = (s: string) => /^[A-Z][A-Za-z0-9]{2,7}$/.test(s.trim())
+  const clean = (s: string) =>
+    s
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // strip markdown links: [text](url) -> text
+      .replace(/&/g, 'and')
+      .replace(/,/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+  const byId = new Map<string, SynonymHit>()
+
+  // 1. Auto-extract acronym ⇄ expansion pairs from the tooltip glossary.
+  try {
+    const tooltipsDir = path.join(__dirname, '../docs/_tooltips')
+    for (const file of await fs.readdir(tooltipsDir)) {
+      if (!file.endsWith('.mdx')) continue
+      const text = await fs.readFile(path.join(tooltipsDir, file), 'utf-8')
+      const add = (acronym: string, expansion: string) => {
+        const objectID = `tooltip-${acronym.toLowerCase()}`
+        byId.set(objectID, { objectID, type: 'synonym', synonyms: [acronym, expansion] })
+      }
+      let matched = false
+      // Format A: **X (Y)** — one of X/Y is the acronym (e.g. "DKIM (DomainKeys Identified Mail)").
+      for (const [, bold] of text.matchAll(/\*\*([^*]+?)\*\*/g)) {
+        const paren = clean(bold).match(/^(.+?)\s*\(([^)]+)\)\s*(.*)$/)
+        if (!paren) continue
+        const left = paren[1].trim()
+        const right = `${paren[2]} ${paren[3]}`.trim()
+        if (isAcronym(left) && !isAcronym(right)) add(left, right)
+        else if (isAcronym(right) && !isAcronym(left)) add(right, left)
+        else continue
+        matched = true
+        break // first acronym pair per tooltip is enough
+      }
+      // Format B: **X** stands for 'Y' (e.g. "WYSIWYG stands for 'What You See Is What You Get'").
+      if (!matched) {
+        const sf = text.match(/\*\*([^*]+?)\*\*\s+stands for\s+['"]([^'"]+)['"]/)
+        if (sf && isAcronym(sf[1].trim())) add(sf[1].trim(), clean(sf[2]))
+      }
+    }
+  } catch {
+    console.warn('⚠︎ Could not read _tooltips for synonyms; using the curated list only')
+  }
+
+  // 2. Curated product-rename / phrasing synonyms (not glossary acronyms).
+  const curated: Record<string, string[]> = {
+    'magic-link': ['magic link', 'email link'],
+    i18n: ['i18n', 'internationalization', 'localization', 'l10n'],
+    login: ['login', 'log in', 'sign in', 'signin'],
+    logout: ['logout', 'log out', 'sign out'],
+    signup: ['signup', 'sign up', 'register', 'registration'],
+    'social-connection': ['social login', 'social connection'],
+    sso: ['SSO', 'single sign-on'],
+    rbac: ['RBAC', 'role-based access control'],
+    mfa: ['MFA', '2FA', 'multi-factor authentication', 'two-factor authentication'],
+    jwks: ['JWKS', 'JSON Web Key Set'],
+    org: ['org', 'organization'],
+  }
+  for (const [objectID, synonyms] of Object.entries(curated)) {
+    byId.set(objectID, { objectID, type: 'synonym', synonyms })
+  }
+
+  // one-way: searching "webauthn" should surface passkey docs, not the reverse.
+  return [
+    ...byId.values(),
+    { objectID: 'webauthn-passkey', type: 'oneWaySynonym', input: 'webauthn', synonyms: ['passkey', 'passkeys'] },
+  ]
+}
+
 async function main() {
   if (VERCEL_ENV === 'preview') {
     if (DEBUG_SEARCH_BRANCH !== undefined) {
@@ -799,6 +874,16 @@ async function main() {
       },
     })
   }
+
+  // Synonyms (codified, enforced — replaceExistingSynonyms) — see buildSynonyms above.
+  const synonyms = await buildSynonyms()
+  console.log(`Setting ${synonyms.length} synonyms on ${ALGOLIA_INDEX_NAME}`)
+  await algolia.saveSynonyms({
+    indexName: ALGOLIA_INDEX_NAME,
+    synonymHit: synonyms,
+    forwardToReplicas: true,
+    replaceExistingSynonyms: true,
+  })
 
   // Push to Algolia
   console.log('\nPushing records to Algolia...')

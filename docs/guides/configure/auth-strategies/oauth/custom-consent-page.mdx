@@ -1,0 +1,154 @@
+---
+title: Customize the OAuth consent page
+description: Learn how to configure a custom OAuth consent page, and how to avoid common consent phishing and token grant risks.
+---
+
+Clerk strongly recommends using the default OAuth consent page hosted by the [Account Portal](/docs/guides/account-portal/overview). OAuth consent is a security boundary: it is where a signed-in user decides whether an OAuth [client](!oauth-client) can receive [OAuth access tokens](!oauth-access-token) and access the requested data. A custom page can weaken that boundary if it hides the requesting application, misstates the requested scopes, buries the deny action, auto-approves access, or trains users to trust an unfamiliar consent surface.
+
+Only customize the OAuth consent page when you have a specific product requirement that the Account Portal cannot satisfy. If you customize it, the safest approach is to host a page on your own application domain and render Clerk's prebuilt [`<OAuthConsent />`](/docs/reference/components/authentication/oauth-consent) component. This keeps Clerk's consent logic, scope rendering, organization selection, form submission, and denial handling intact while letting you control the route, page styling, and surrounding page.
+
+> [!CAUTION]
+> Consent phishing is a real OAuth attack pattern. Attackers can trick users into granting a malicious app access to their account data without stealing their password. Microsoft describes consent phishing as an attack where users grant permissions to malicious cloud applications, and notes that MFA or password resets do not remediate illicit consent grants because the user authorized the app itself. See Microsoft's guidance on [protecting against consent phishing](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/protect-against-consent-phishing) and [detecting illicit consent grants](https://learn.microsoft.com/en-us/defender-office-365/detect-and-remediate-illicit-consent-grants).
+
+After shipping a custom consent page, monitor [Application Logs](/docs/guides/dashboard/logs/application-logs) for OAuth grant activity. The `oauth_authorization.granted` event records successful user consent, and the `oauth_token.created` event records token issuance. Review these events for unfamiliar OAuth applications, unexpected users, or unusual grant volume.
+
+## Before you start
+
+Custom consent pages apply to Clerk's OAuth provider flows, where Clerk acts as the authorization service for OAuth applications that request access to user data through Clerk.
+
+> [!NOTE]
+> If you're new to OAuth terminology, start with the [OAuth terminology guide](/docs/guides/configure/auth-strategies/oauth/overview#key-terminology).
+
+Before customizing the page:
+
+- Keep the consent screen enabled for every OAuth application. Without consent, a signed-in user who visits a valid authorization URL can grant access without seeing the request.
+- Use narrow [scopes](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#scopes). OAuth security guidance recommends restricting access tokens to the minimum required privileges, and Google recommends choosing the most narrowly focused scopes possible. See [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700) and Google's guide to [configuring OAuth consent and choosing scopes](https://developers.google.com/workspace/guides/configure-oauth-consent).
+- Treat OAuth application branding as user-facing security information. App names, logos, client URLs, and redirect domains help users decide whether to grant access.
+- Verify the route in development and production before enabling it for real users. A broken custom consent page can block OAuth authorization flows.
+
+## What the consent page must show
+
+A safe consent page must give users enough information to make an informed decision. At minimum, show:
+
+- The OAuth application's name.
+- The OAuth application's logo, if one is available.
+- The OAuth application's public URL, if one is available.
+- The [resource service](!oauth-resource-service) receiving the access request.
+- The signed-in user who is granting access.
+- Every requested scope that requires consent, using clear descriptions.
+- The redirect destination the user will return to after allowing or denying access.
+- Equally visible **Allow** and **Deny** actions.
+
+The redirect destination presentation is security-sensitive. The prebuilt consent page shows a short domain derived from the `redirect_uri`, and lets the user expand it to view the full URL. This makes it harder for an attacker to hide the real root domain inside a very long URL with many subdomains or path segments. If you build your own UI, do not show only a truncated full URL. Show a clear domain summary, provide a way to view the full `redirect_uri`, and make sure the root domain cannot be pushed out of view by long subdomains.
+
+If you use the prebuilt component, do not hide the requested scopes, redirect warning, deny action, or application identity with `appearance` overrides. If you build a custom flow, include equivalent warning copy near the allow/deny controls. For example: "`<OAuth app name>` will be able to access `<application name>` and redirect you to `<redirect domain>`. Review the requested permissions before continuing."
+
+## Recommended implementation
+
+Use Clerk's prebuilt [`<OAuthConsent />`](/docs/reference/components/authentication/oauth-consent) component on your custom consent route. The component reads the OAuth authorization parameters from the current URL, loads consent metadata for the signed-in user, renders the requested scopes, and submits the user's decision to Clerk.
+
+For example, create a route that renders `<OAuthConsent />`:
+
+<Include src="_partials/components/oauth-consent-examples" />
+
+The [`<Show />`](/docs/reference/components/control/show) component renders the consent screen only for signed-in users. In a normal OAuth authorization flow, Clerk redirects signed-out users to sign-in before sending them to the consent page. If users can visit your custom consent route directly, handle signed-out users the same way you handle any other protected route in your app.
+
+Keep the consent route focused on the consent decision. If your application uses a shared layout with navigation, account menus, sign-in or sign-out controls, or other links, use a minimal layout for this route instead. Unrelated navigation can take the user away from the OAuth flow and cause the authorization request to fail or lose its original parameters.
+
+If your framework does not support route metadata, set the same referrer policy with a `<meta>` tag or equivalent framework API:
+
+```tsx
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+```
+
+The referrer policy is required because the consent form posts to Clerk's [Frontend API URL](!frontend-api-url). Without it, some cross-origin form submissions can send `Origin: null`, causing Clerk to reject the request.
+
+You can style `<OAuthConsent />` with the standard [`appearance`](/docs/guides/customizing-clerk/appearance-prop/overview) prop, but keep the security content intact. The Account Portal consent page is built from Clerk's prebuilt consent component, so using `appearance` is the safer option when your goal is visual customization. Use a fully custom flow only when the prebuilt component cannot support your required layout or interaction.
+
+## Configure the custom route
+
+After you create and deploy the route, configure Clerk to send users to it during OAuth flows that require consent.
+
+<Steps>
+  ### Open path settings
+
+  In the [Clerk Dashboard](https://dashboard.clerk.com), open your application, select the relevant instance, and navigate to **Configure** > **Paths**.
+
+  ### Set the OAuth consent location
+
+  In the **OAuth consent** section, choose your custom location:
+
+  - For a development instance, enter a path on the development host, such as `/oauth-consent`.
+  - For a production instance, enter an `https://` URL on your application domain, such as `https://example.com/oauth-consent`.
+
+  Clerk only accepts production OAuth consent URLs that use HTTPS and belong to the same registrable domain as your instance domain, such as `example.com` or a subdomain of `example.com`.
+
+  ### Keep OAuth application consent enabled
+
+  Navigate to [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) and confirm that the consent screen is enabled for every OAuth application that can use the custom route.
+
+  If [dynamic client registration](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#dynamic-client-registration) is enabled, Clerk enforces the consent screen and does not allow it to be disabled.
+
+  ### Test an authorization request
+
+  Start an OAuth authorization flow for one of your OAuth applications. If the user is signed out, Clerk redirects to sign-in first, then redirects to your custom consent route with the original OAuth parameters. After the user allows or denies access, Clerk continues the OAuth flow and redirects back to the OAuth client's `redirect_uri`.
+</Steps>
+
+## Build a custom flow
+
+Building a [custom flow](!custom-flow) from low-level APIs is riskier than using `<OAuthConsent />`. Only do this if you need a layout or interaction that the prebuilt component cannot support.
+
+The custom flow needs to do the same work as the prebuilt component:
+
+1. Read `client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `code_challenge_method`, and any other OAuth authorization parameters from the incoming URL.
+1. Load consent metadata for the signed-in user with `useOAuthConsent()` or `Clerk.oauthApplication.getConsentInfo()`.
+1. Display the returned OAuth application name, logo URL, application URL, client ID, and scopes without changing their meaning.
+1. Display the redirect destination safely. Show a short domain summary, and let the user inspect the full `redirect_uri`.
+1. Preserve and forward the original OAuth authorization parameters when submitting the decision.
+1. Submit a form with `method="POST"` to the URL returned by `Clerk.oauthApplication.buildConsentActionUrl({ clientId })`.
+1. Use a submit field named `consented`, with `value="true"` for allow and `value="false"` for deny.
+1. Include `organization_id` when the user grants access for a specific organization.
+1. Preserve the user's ability to deny access. A denial returns an OAuth `access_denied` response to the OAuth client.
+
+Do not construct the [Frontend API URL](!frontend-api-url) by hand. Use `buildConsentActionUrl()` so Clerk can include the current session and development browser parameters that are required for the request.
+
+The following examples show the minimum shape of a custom consent page. They intentionally keep the UI plain so you can see the OAuth-specific requirements.
+
+<Include src="_partials/components/oauth-consent-custom-flow-examples" />
+
+These examples display the full redirect hostname and an expandable full URL. For a production custom flow, use a public-suffix-aware approach for root-domain summaries, handle IP addresses and localhost explicitly, and test long redirect URIs to make sure the real destination remains visible.
+
+These examples also do not implement organization selection. If an OAuth application can request `user:org:read`, use `<OAuthConsent />` or add an organization selector that submits the selected `organization_id` with the allow action.
+
+The low-level `useOAuthConsent()` examples in this guide are available for Clerk's React-based SDKs. For Astro, Vue, and Nuxt, use the prebuilt `<OAuthConsent />` component unless you are prepared to build directly against [ClerkJS](/docs/reference/javascript/overview) and maintain the consent flow yourself.
+
+## Security checklist
+
+Before shipping a custom consent page, verify the following:
+
+- The page is served over HTTPS in production.
+- The page is on your application domain or subdomain, not on an unrelated domain.
+- The page cannot be framed by untrusted sites. Use appropriate `Content-Security-Policy` `frame-ancestors` or equivalent headers.
+- The page does not include third-party scripts that can read OAuth parameters or alter the consent form.
+- The page uses a minimal layout without unrelated navigation, account menus, or links that could take the user away from the OAuth flow.
+- The page displays the requesting OAuth application's identity and requested scopes before the user can allow access.
+- The page prevents code injection from OAuth application-provided values, including application names, logo URLs, application URLs, and redirect URLs.
+- The **Deny** action is visible and works.
+- The page never grants consent automatically.
+- The page forwards the original OAuth authorization parameters without allowing query parameters to override form-controlled fields such as `consented` or `organization_id`.
+- The page uses `strict-origin-when-cross-origin` referrer policy.
+- The OAuth application requests only the scopes it needs.
+- Your team can audit OAuth applications and revoke suspicious grants if needed.
+
+## Prefer appearance for visual changes
+
+If your main goal is to change colors, fonts, spacing, or logos, use the [`appearance`](/docs/guides/customizing-clerk/appearance-prop/overview) prop with `<OAuthConsent />` instead of building a custom flow. This keeps Clerk's consent behavior, redirect destination presentation, organization selection, form submission, and future security updates intact.
+
+Only build a low-level custom flow if:
+
+- The prebuilt component cannot support your required layout or interaction.
+- You can maintain the route as a security-sensitive surface.
+- You can show the requesting OAuth application's identity, requested scopes, and redirect destination clearly.
+- You can preserve an equally visible deny action.
+
+Do not build a custom flow to hide scopes, hide redirect destinations, remove the deny action, or auto-approve trusted clients. Instead, model trust through OAuth application configuration, narrow scopes, and administrative review. Custom consent pages should make the consent decision clearer, not easier to miss.

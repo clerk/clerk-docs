@@ -21,28 +21,17 @@ do {
 
 ## Active Organization
 
-The [Active Organization](!active-organization) is stored on `Session.lastActiveOrganizationId` for the current session. Use [`clerk.organization`](/docs/reference/native-mobile/clerk#active-organization-state) to read the Active Organization and `clerk.organizationMembership` to read the signed-in user's Active Organization Membership.
+The [Active Organization](!active-organization) is stored on `Session.lastActiveOrganizationId` for the current session. Use [`clerk.organization`](/docs/reference/native-mobile/clerk#access-the-active-organization-state) to read the Active Organization and `clerk.organizationMembership` to read the signed-in user's Active Organization membership.
 
-Use `clerk.auth.setActive()` to switch the [Active Organization](!active-organization) for a session. Pass `sessionId` and `organizationId` to select an organization, or omit `organizationId` (or pass `null`) to select the user's [Personal Account](!personal-account). The latter isn't allowed when `clerk.environment?.organizationSettings.forceOrganizationSelection` is `true`.
+<Include src="_partials/ios/active-organization-description" />
 
 ### Select an Organization
 
-```swift
-guard let sessionId = clerk.session?.id else { return }
-
-try await clerk.auth.setActive(
-  sessionId: sessionId,
-  organizationId: "org_123"
-)
-```
+<Include src="_partials/ios/select-organization" />
 
 ### Select the Personal Account
 
-```swift
-guard let sessionId = clerk.session?.id else { return }
-
-try await clerk.auth.setActive(sessionId: sessionId)
-```
+<Include src="_partials/ios/select-personal-account" />
 
 ## Organization
 
@@ -79,12 +68,6 @@ let deletedObject = try await organization.destroy()
 ```swift
 let updatedOrganization = try await organization.setLogo(imageData: imageData)
 let organizationWithoutLogo = try await organization.deleteLogo()
-```
-
-### Leave an Organization
-
-```swift
-let deletedObject = try await user.leaveOrganization(organizationId: "org_123")
 ```
 
 ### List Roles
@@ -125,7 +108,7 @@ let removedMembership = try await organization.removeMember(userId: userId)
 
 ### Update or delete a membership
 
-`OrganizationMembership.update(role:)` updates that member's role in the membership's organization. `OrganizationMembership.destroy()` deletes the membership.
+`OrganizationMembership` also provides helpers for updating a member's role in the Organization and deleting the membership.
 
 ```swift
 let updatedMembership = try await organizationMembership.update(role: "org:admin")
@@ -169,6 +152,8 @@ if organizationMembership.hasPermission(.manageDomains) {
 
 Use invitation APIs to invite users to an Organization, list invitations, bulk-create invitations, and revoke invitations.
 
+### Create or list invitations
+
 ```swift
 let invitation = try await organization.inviteMember(
   emailAddress: "new@acme.com",
@@ -184,18 +169,28 @@ let response = try await organization.getInvitations(
 let invitations = response.data
 ```
 
+### Bulk-create invitations
+
 ```swift
 let invitations = try await organization.inviteMembers(
   emailAddresses: ["one@acme.com", "two@acme.com"],
   role: "org:member"
 )
+```
 
+### Revoke an invitation
+
+`OrganizationInvitation` also provides a helper for revoking an invitation.
+
+```swift
 let revokedInvitation = try await invitation.revoke()
 ```
 
 ## Membership requests
 
 Use membership request APIs to list, accept, and reject requests to join an Organization.
+
+### List membership requests
 
 ```swift
 let response = try await organization.getMembershipRequests(
@@ -205,7 +200,13 @@ let response = try await organization.getMembershipRequests(
 )
 
 let membershipRequests = response.data
+```
 
+### Accept or reject a membership request
+
+`OrganizationMembershipRequest` also provides helpers for accepting and rejecting membership requests.
+
+```swift
 let acceptedRequest = try await membershipRequest.accept()
 let rejectedRequest = try await membershipRequest.reject()
 ```
@@ -213,6 +214,8 @@ let rejectedRequest = try await membershipRequest.reject()
 ## Domains
 
 Use Organization domain APIs to create, list, retrieve, verify, update, and delete Verified Domains.
+
+### Create or list domains
 
 ```swift
 let domain = try await organization.createDomain(domainName: "acme.com")
@@ -226,12 +229,14 @@ let response = try await organization.getDomains(
 let domains = response.data
 ```
 
+### Get or delete a domain
+
 ```swift
 let domain = try await organization.getDomain(domainId: domainId)
-let deletedObject = try await domain.delete()
+let deletedObject = try await organization.deleteDomain(domainId: domainId)
 ```
 
-`OrganizationDomain` provides domain-level helpers:
+`OrganizationDomain` also provides helpers for deleting a domain, verifying affiliation, and updating the enrollment mode.
 
 - `domain.delete()`
 - `domain.prepareAffiliationVerification(affiliationEmailAddress:)`
@@ -240,22 +245,50 @@ let deletedObject = try await domain.delete()
 - `domain.verifyCode(_:)`
 - `domain.updateEnrollmentMode(_:deletePending:)`
 
+### Delete a domain
+
+Use `domain.delete()` when you already have an `OrganizationDomain` instance. To delete a domain directly from the parent `Organization` by ID, use [`organization.deleteDomain()`](#get-or-delete-a-domain) instead.
+
+```swift
+let deletedObject = try await domain.delete()
+```
+
+### Prepare or attempt affiliation verification
+
+```swift
+let preparedDomain = try await domain.prepareAffiliationVerification(
+  affiliationEmailAddress: "admin@acme.com"
+)
+
+let verifiedDomain = try await preparedDomain.attemptAffiliationVerification(
+  code: "123456"
+)
+```
+
+### Send and verify a domain email code
+
 ```swift
 let preparedDomain = try await domain.sendEmailCode(
   affiliationEmailAddress: "admin@acme.com"
 )
 
 let verifiedDomain = try await preparedDomain.verifyCode("123456")
+```
 
+### Update a domain's enrollment mode
+
+```swift
 let updatedDomain = try await verifiedDomain.updateEnrollmentMode(
   .automaticInvitation,
   deletePending: false
 )
 ```
 
-## User Organization invitations and suggestions
+## User Organization helpers
 
-Use user-level helpers to list Organization invitations, suggestions, memberships, and creation defaults for the current user.
+`User` also provides helpers for listing Organization invitations, suggestions, memberships, and creation defaults.
+
+### List Organization invitations
 
 ```swift
 let invitationResponse = try await user.getOrganizationInvitations(
@@ -265,8 +298,15 @@ let invitationResponse = try await user.getOrganizationInvitations(
 )
 
 let invitations = invitationResponse.data
+```
+
+`UserOrganizationInvitation` also provides a helper for accepting an invitation.
+
+```swift
 let acceptedInvitation = try await userOrganizationInvitation.accept()
 ```
+
+### List Organization suggestions
 
 ```swift
 let suggestionResponse = try await user.getOrganizationSuggestions(
@@ -276,8 +316,15 @@ let suggestionResponse = try await user.getOrganizationSuggestions(
 )
 
 let suggestions = suggestionResponse.data
+```
+
+`OrganizationSuggestion` also provides a helper for accepting a suggestion.
+
+```swift
 let acceptedSuggestion = try await organizationSuggestion.accept()
 ```
+
+### List Organization memberships
 
 ```swift
 let membershipResponse = try await user.getOrganizationMemberships(
@@ -286,5 +333,16 @@ let membershipResponse = try await user.getOrganizationMemberships(
 )
 
 let memberships = membershipResponse.data
+```
+
+### Get Organization creation defaults
+
+```swift
 let creationDefaults = try await user.getOrganizationCreationDefaults()
+```
+
+### Leave an Organization
+
+```swift
+let deletedObject = try await user.leaveOrganization(organizationId: "org_123")
 ```

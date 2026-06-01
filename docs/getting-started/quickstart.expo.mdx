@@ -103,22 +103,27 @@ Use the following tabs to choose your preferred approach:
 
       ## Add authentication and home screen
 
-      With [native components](/docs/reference/expo/native-components/overview), you can build a complete app in a single file. The [`<AuthView />`](/docs/reference/expo/native-components/auth-view) component handles all sign-in and sign-up flows, [`<UserButton />`](/docs/reference/expo/native-components/user-button) provides a profile avatar that opens the native profile modal, and the [`useUserProfileModal()`](/docs/reference/expo/native-components/user-profile-view) hook lets you open the profile modal from any button.
+      With [native components](/docs/reference/expo/native-components/overview), you can build a complete app in a single file. The [`<AuthView />`](/docs/reference/expo/native-components/auth-view) component handles all sign-in and sign-up flows, and [`<UserButton />`](/docs/reference/expo/native-components/user-button) provides a profile avatar that opens the native user profile.
 
-      Create an `index.tsx` file in your `app` folder with the following code. If the user is signed in, it displays their email, a profile button, and a sign-out button. If they're not signed in, it displays the `<AuthView />` component which handles both sign-in and sign-up.
+      Create an `index.tsx` file in your `app` folder with the following code. If the user is signed in, it displays the `<UserButton />`. If they're not signed in, it displays a **Sign in** button that opens the `<AuthView />`.
 
       <Include src="_partials/expo/session-sync-callout" />
 
       ```tsx {{ filename: 'app/index.tsx', collapsible: true }}
-      import { useAuth, useUser, useClerk, useUserProfileModal } from '@clerk/expo'
+      import { useAuth } from '@clerk/expo'
       import { AuthView, UserButton } from '@clerk/expo/native'
-      import { Text, View, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native'
+      import { useEffect, useState } from 'react'
+      import { View, StyleSheet, ActivityIndicator, Button, Modal } from 'react-native'
 
       export default function MainScreen() {
+        const [isAuthOpen, setIsAuthOpen] = useState(false)
         const { isSignedIn, isLoaded } = useAuth({ treatPendingAsSignedOut: false })
-        const { user } = useUser()
-        const { signOut } = useClerk()
-        const { presentUserProfile } = useUserProfileModal()
+
+        useEffect(() => {
+          if (isSignedIn) {
+            setIsAuthOpen(false)
+          }
+        }, [isSignedIn])
 
         if (!isLoaded) {
           return (
@@ -128,33 +133,16 @@ Use the following tabs to choose your preferred approach:
           )
         }
 
-        if (!isSignedIn) {
-          return <AuthView mode="signInOrUp" />
-        }
-
         return (
           <View style={styles.container}>
-            <View style={styles.header}>
-              <Text style={styles.title}>Welcome</Text>
-              <View style={{ width: 44, height: 44, borderRadius: 22, overflow: 'hidden' }}>
-                <UserButton />
-              </View>
-            </View>
-            <View style={styles.profileCard}>
-              {user?.imageUrl && <Image source={{ uri: user.imageUrl }} style={styles.avatar} />}
-              <View>
-                <Text>Hello {user?.id}</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.linkButton} onPress={presentUserProfile}>
-              <Text style={styles.linkButtonText}>Manage Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.linkButton, { backgroundColor: '#666' }]}
-              onPress={() => signOut()}
+            {isSignedIn ? <UserButton /> : <Button title="Sign in" onPress={() => setIsAuthOpen(true)} />}
+            <Modal
+              visible={isAuthOpen}
+              presentationStyle="pageSheet"
+              onRequestClose={() => setIsAuthOpen(false)}
             >
-              <Text style={styles.linkButtonText}>Sign Out</Text>
-            </TouchableOpacity>
+              <AuthView onDismiss={() => setIsAuthOpen(false)} />
+            </Modal>
           </View>
         )
       }
@@ -169,51 +157,10 @@ Use the following tabs to choose your preferred approach:
         },
         container: {
           flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
           backgroundColor: '#fff',
           padding: 20,
-          paddingTop: 60,
-          gap: 16,
-        },
-        header: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        },
-        title: {
-          fontSize: 28,
-          fontWeight: 'bold',
-        },
-        profileCard: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: 16,
-          backgroundColor: '#f5f5f5',
-          borderRadius: 12,
-          gap: 12,
-        },
-        avatar: {
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-        },
-        name: {
-          fontSize: 18,
-          fontWeight: '600',
-        },
-        email: {
-          fontSize: 14,
-          color: '#666',
-        },
-        linkButton: {
-          backgroundColor: '#007AFF',
-          padding: 16,
-          borderRadius: 12,
-          alignItems: 'center',
-        },
-        linkButtonText: {
-          color: '#fff',
-          fontSize: 16,
-          fontWeight: '600',
         },
       })
       ```
@@ -291,7 +238,7 @@ Use the following tabs to choose your preferred approach:
 
       ## Add sign-up and sign-in pages
 
-      Clerk currently only supports [control components](/docs/reference/components/overview#control-components) for Expo native. [UI components](/docs/reference/components/overview) are only available for Expo web. Instead, you must build [custom flows](!custom-flow) using Clerk's API. The following sections demonstrate how to build [custom email/password sign-up and sign-in flows](/docs/guides/development/custom-flows/authentication/email-password). If you want to use different authentication methods, such as passwordless or OAuth, see the dedicated custom flow guides.
+      For JavaScript-only Expo native apps that run in Expo Go, use Clerk's [control components](/docs/reference/components/overview#control-components) and build [custom flows](!custom-flow) with Clerk's API. [UI components](/docs/reference/components/overview) are available for Expo web, and [native components](/docs/reference/expo/native-components/overview) are available for iOS and Android apps that use a development build. The following sections demonstrate how to build [custom email/password sign-up and sign-in flows](/docs/guides/development/custom-flows/authentication/email-password). If you want to use different authentication methods, such as passwordless or OAuth, see the dedicated custom flow guides.
 
       ### Layout page
 

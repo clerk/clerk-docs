@@ -1,0 +1,373 @@
+<Tabs items={["Next.js", "React", "React Router", "TanStack React Start"]}>
+  <Tab>
+    ```tsx {{ filename: 'app/oauth-consent/custom-consent-form.tsx' }}
+    'use client'
+
+    import { useClerk, useOAuthConsent } from '@clerk/nextjs'
+    import { useSearchParams } from 'next/navigation'
+
+    function getRedirectHostname(redirectUri: string) {
+      try {
+        return new URL(redirectUri).hostname
+      } catch {
+        return ''
+      }
+    }
+
+    export function CustomConsentForm() {
+      const clerk = useClerk()
+      const searchParams = useSearchParams()
+
+      const clientId = searchParams.get('client_id') ?? ''
+      const redirectUri = searchParams.get('redirect_uri') ?? ''
+      const scope = searchParams.get('scope') ?? undefined
+      const redirectHostname = getRedirectHostname(redirectUri)
+
+      const { data, isLoading, error } = useOAuthConsent({
+        oauthClientId: clientId,
+        scope,
+      })
+
+      if (!clientId || !redirectUri) {
+        return <p>Missing OAuth consent parameters.</p>
+      }
+
+      if (isLoading) {
+        return <p>Loading consent request...</p>
+      }
+
+      if (error || !data) {
+        return <p>Unable to load consent request.</p>
+      }
+
+      return (
+        <form method="POST" action={clerk.oauthApplication.buildConsentActionUrl({ clientId })}>
+          <h1>{data.oauthApplicationName} wants access to your account</h1>
+
+          {data.oauthApplicationLogoUrl && (
+            <img src={data.oauthApplicationLogoUrl} alt={`${data.oauthApplicationName} logo`} />
+          )}
+
+          <p>
+            Review the requested permissions before continuing. After you allow or deny access, you will
+            be redirected to <strong>{redirectHostname}</strong>.
+          </p>
+
+          <details>
+            <summary>View full redirect URL</summary>
+            <code>{redirectUri}</code>
+          </details>
+
+          <ul>
+            {data.scopes.map((scope) => (
+              <li key={scope.scope}>{scope.description || scope.scope}</li>
+            ))}
+          </ul>
+
+          {Array.from(searchParams.entries()).map(([key, value], index) => (
+            <input key={`${key}:${index}`} type="hidden" name={key} value={value} />
+          ))}
+
+          <button type="submit" name="consented" value="false">
+            Deny
+          </button>
+          <button type="submit" name="consented" value="true">
+            Allow
+          </button>
+        </form>
+      )
+    }
+    ```
+
+    ```tsx {{ filename: 'app/oauth-consent/page.tsx' }}
+    import { Show } from '@clerk/nextjs'
+    import { CustomConsentForm } from './custom-consent-form'
+
+    export const metadata = {
+      referrer: 'strict-origin-when-cross-origin',
+    }
+
+    export default function OAuthConsentPage() {
+      return (
+        <Show when="signed-in">
+          <CustomConsentForm />
+        </Show>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'src/OAuthConsentPage.tsx' }}
+    import { Show, useClerk, useOAuthConsent } from '@clerk/react'
+
+    function getConsentSearchParams() {
+      if (typeof window === 'undefined') {
+        return new URLSearchParams()
+      }
+
+      return new URLSearchParams(window.location.search)
+    }
+
+    function getRedirectHostname(redirectUri: string) {
+      try {
+        return new URL(redirectUri).hostname
+      } catch {
+        return ''
+      }
+    }
+
+    function CustomConsentForm() {
+      const clerk = useClerk()
+      const searchParams = getConsentSearchParams()
+
+      const clientId = searchParams.get('client_id') ?? ''
+      const redirectUri = searchParams.get('redirect_uri') ?? ''
+      const scope = searchParams.get('scope') ?? undefined
+      const redirectHostname = getRedirectHostname(redirectUri)
+
+      const { data, isLoading, error } = useOAuthConsent({
+        oauthClientId: clientId,
+        scope,
+      })
+
+      if (!clientId || !redirectUri) {
+        return <p>Missing OAuth consent parameters.</p>
+      }
+
+      if (isLoading) {
+        return <p>Loading consent request...</p>
+      }
+
+      if (error || !data) {
+        return <p>Unable to load consent request.</p>
+      }
+
+      return (
+        <form method="POST" action={clerk.oauthApplication.buildConsentActionUrl({ clientId })}>
+          <h1>{data.oauthApplicationName} wants access to your account</h1>
+
+          {data.oauthApplicationLogoUrl && (
+            <img src={data.oauthApplicationLogoUrl} alt={`${data.oauthApplicationName} logo`} />
+          )}
+
+          <p>
+            Review the requested permissions before continuing. After you allow or deny access, you will
+            be redirected to <strong>{redirectHostname}</strong>.
+          </p>
+
+          <details>
+            <summary>View full redirect URL</summary>
+            <code>{redirectUri}</code>
+          </details>
+
+          <ul>
+            {data.scopes.map((scope) => (
+              <li key={scope.scope}>{scope.description || scope.scope}</li>
+            ))}
+          </ul>
+
+          {Array.from(searchParams.entries()).map(([key, value], index) => (
+            <input key={`${key}:${index}`} type="hidden" name={key} value={value} />
+          ))}
+
+          <button type="submit" name="consented" value="false">
+            Deny
+          </button>
+          <button type="submit" name="consented" value="true">
+            Allow
+          </button>
+        </form>
+      )
+    }
+
+    export function OAuthConsentPage() {
+      return (
+        <Show when="signed-in">
+          <CustomConsentForm />
+        </Show>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/routes/oauth-consent.tsx' }}
+    import { Show, useClerk, useOAuthConsent } from '@clerk/react-router'
+    import { useLocation } from 'react-router'
+
+    function getRedirectHostname(redirectUri: string) {
+      try {
+        return new URL(redirectUri).hostname
+      } catch {
+        return ''
+      }
+    }
+
+    function CustomConsentForm() {
+      const clerk = useClerk()
+      const { search } = useLocation()
+      const searchParams = new URLSearchParams(search)
+
+      const clientId = searchParams.get('client_id') ?? ''
+      const redirectUri = searchParams.get('redirect_uri') ?? ''
+      const scope = searchParams.get('scope') ?? undefined
+      const redirectHostname = getRedirectHostname(redirectUri)
+
+      const { data, isLoading, error } = useOAuthConsent({
+        oauthClientId: clientId,
+        scope,
+      })
+
+      if (!clientId || !redirectUri) {
+        return <p>Missing OAuth consent parameters.</p>
+      }
+
+      if (isLoading) {
+        return <p>Loading consent request...</p>
+      }
+
+      if (error || !data) {
+        return <p>Unable to load consent request.</p>
+      }
+
+      return (
+        <form method="POST" action={clerk.oauthApplication.buildConsentActionUrl({ clientId })}>
+          <h1>{data.oauthApplicationName} wants access to your account</h1>
+
+          {data.oauthApplicationLogoUrl && (
+            <img src={data.oauthApplicationLogoUrl} alt={`${data.oauthApplicationName} logo`} />
+          )}
+
+          <p>
+            Review the requested permissions before continuing. After you allow or deny access, you will
+            be redirected to <strong>{redirectHostname}</strong>.
+          </p>
+
+          <details>
+            <summary>View full redirect URL</summary>
+            <code>{redirectUri}</code>
+          </details>
+
+          <ul>
+            {data.scopes.map((scope) => (
+              <li key={scope.scope}>{scope.description || scope.scope}</li>
+            ))}
+          </ul>
+
+          {Array.from(searchParams.entries()).map(([key, value], index) => (
+            <input key={`${key}:${index}`} type="hidden" name={key} value={value} />
+          ))}
+
+          <button type="submit" name="consented" value="false">
+            Deny
+          </button>
+          <button type="submit" name="consented" value="true">
+            Allow
+          </button>
+        </form>
+      )
+    }
+
+    export default function OAuthConsentPage() {
+      return (
+        <Show when="signed-in">
+          <CustomConsentForm />
+        </Show>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/routes/oauth-consent.tsx' }}
+    import { Show, useClerk, useOAuthConsent } from '@clerk/tanstack-react-start'
+    import { createFileRoute, useLocation } from '@tanstack/react-router'
+
+    export const Route = createFileRoute('/oauth-consent')({
+      component: OAuthConsentPage,
+    })
+
+    function getRedirectHostname(redirectUri: string) {
+      try {
+        return new URL(redirectUri).hostname
+      } catch {
+        return ''
+      }
+    }
+
+    function CustomConsentForm() {
+      const clerk = useClerk()
+      const location = useLocation()
+      const searchParams = new URLSearchParams(location.searchStr)
+
+      const clientId = searchParams.get('client_id') ?? ''
+      const redirectUri = searchParams.get('redirect_uri') ?? ''
+      const scope = searchParams.get('scope') ?? undefined
+      const redirectHostname = getRedirectHostname(redirectUri)
+
+      const { data, isLoading, error } = useOAuthConsent({
+        oauthClientId: clientId,
+        scope,
+      })
+
+      if (!clientId || !redirectUri) {
+        return <p>Missing OAuth consent parameters.</p>
+      }
+
+      if (isLoading) {
+        return <p>Loading consent request...</p>
+      }
+
+      if (error || !data) {
+        return <p>Unable to load consent request.</p>
+      }
+
+      return (
+        <form method="POST" action={clerk.oauthApplication.buildConsentActionUrl({ clientId })}>
+          <h1>{data.oauthApplicationName} wants access to your account</h1>
+
+          {data.oauthApplicationLogoUrl && (
+            <img src={data.oauthApplicationLogoUrl} alt={`${data.oauthApplicationName} logo`} />
+          )}
+
+          <p>
+            Review the requested permissions before continuing. After you allow or deny access, you will
+            be redirected to <strong>{redirectHostname}</strong>.
+          </p>
+
+          <details>
+            <summary>View full redirect URL</summary>
+            <code>{redirectUri}</code>
+          </details>
+
+          <ul>
+            {data.scopes.map((scope) => (
+              <li key={scope.scope}>{scope.description || scope.scope}</li>
+            ))}
+          </ul>
+
+          {Array.from(searchParams.entries()).map(([key, value], index) => (
+            <input key={`${key}:${index}`} type="hidden" name={key} value={value} />
+          ))}
+
+          <button type="submit" name="consented" value="false">
+            Deny
+          </button>
+          <button type="submit" name="consented" value="true">
+            Allow
+          </button>
+        </form>
+      )
+    }
+
+    function OAuthConsentPage() {
+      return (
+        <Show when="signed-in">
+          <CustomConsentForm />
+        </Show>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>

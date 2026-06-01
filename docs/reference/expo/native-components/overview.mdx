@@ -8,7 +8,7 @@ sdk: expo
 
 The Clerk Expo SDK provides prebuilt native UI components rendered with **SwiftUI** on iOS and **Jetpack Compose** on Android. These components provide a fully native authentication experience while automatically synchronizing with the JavaScript SDK.
 
-`<AuthView />` and `<UserProfileView />` render inline in your React Native view hierarchy. Your app owns the presentation surface, so you can place them in a route, a React Native `<Modal>`, a full-screen screen, or any other layout. `<UserButton />` renders the platform-native Clerk button and opens the native user profile surface when tapped.
+`<AuthView />` and `<UserProfileView />` render inline in your React Native view hierarchy. Your app owns the presentation surface, so the common pattern is to place them in a React Native `<Modal>`. You can also render them in a route, full-screen view, or any other layout. `<UserButton />` renders the platform-native Clerk button and opens the native user profile surface when tapped.
 
 ## Available components
 
@@ -96,46 +96,47 @@ Native components do not use component-specific auth-completion callbacks. Inste
 
 <Include src="_partials/expo/session-sync-callout" />
 
-```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+The following example demonstrates how to present `<AuthView />` in a React Native `<Modal>` and close it when the user signs in.
+
+```tsx {{ filename: 'app/index.tsx' }}
 import { AuthView } from '@clerk/expo/native'
 import { useAuth } from '@clerk/expo'
-import { useRouter } from 'expo-router'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Button, Modal, View } from 'react-native'
 
-export default function SignInScreen() {
+export default function HomeScreen() {
+  const [isAuthOpen, setIsAuthOpen] = useState(false)
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false })
-  const router = useRouter()
 
   useEffect(() => {
     if (isSignedIn) {
-      router.replace('/(home)')
+      setIsAuthOpen(false)
     }
   }, [isSignedIn])
 
-  return <AuthView isDismissible={false} />
+  return (
+    <View>
+      <Button title="Sign in" onPress={() => setIsAuthOpen(true)} />
+      <Modal
+        visible={isAuthOpen}
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsAuthOpen(false)}
+      >
+        <AuthView onDismiss={() => setIsAuthOpen(false)} />
+      </Modal>
+    </View>
+  )
 }
 ```
 
-The same pattern applies to sign-out detection:
+You can also render `<AuthView />` or `<UserProfileView />` directly in a route or full-screen view. In those cases, pass `isDismissible={false}` when the user must complete the flow to continue.
 
-```tsx {{ filename: 'app/(home)/profile.tsx' }}
-import { UserProfileView } from '@clerk/expo/native'
-import { useAuth } from '@clerk/expo'
-import { useRouter } from 'expo-router'
-import { useEffect } from 'react'
+```tsx
+<AuthView isDismissible={false} />
+```
 
-export default function ProfileScreen() {
-  const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false })
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!isSignedIn) {
-      router.replace('/(auth)/sign-in')
-    }
-  }, [isSignedIn])
-
-  return <UserProfileView isDismissible={false} style={{ flex: 1 }} />
-}
+```tsx
+<UserProfileView isDismissible={false} style={{ flex: 1 }} />
 ```
 
 ## Web compatibility

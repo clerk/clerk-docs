@@ -838,6 +838,12 @@ async function main() {
   // declare the relevance settings we deliberately own — never a full settings snapshot, which
   // would also freeze Algolia's server-managed defaults.
   //
+  // Scope: records (above) are branch-scoped — tagged `branch:` and filtered by the client, so many
+  // branches share one index without colliding. Settings + synonyms (below) are index-WIDE; Algolia
+  // has no per-branch settings, so a run from any branch re-applies them to every branch's records in
+  // that index. Fine for these canonical codified values; to try *different* settings in isolation,
+  // point ALGOLIA_INDEX_NAME at a personal throwaway index (we don't spin up one per branch).
+  //
   // Searchable attributes — the search corpus and its attribute-level priority. Order matters: the
   // `attribute` ranking criterion (below) ranks by which attribute matched, in this order, so a
   // heading match (`hierarchy.lvlN`) outranks one only in `content` — the foundation the ranking

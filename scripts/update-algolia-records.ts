@@ -831,18 +831,22 @@ async function main() {
   const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
 
   // Search settings the docs search depends on, codified here (not the dashboard) so every
-  // index — prod, dev, and one-off test indexes — stays consistent and human-proof. This is the
-  // source of truth for `ranking`: tune it here, not in the dashboard (dashboard edits get
-  // reverted on the next index run).
+  // index — prod, dev, and one-off test indexes — stays consistent and human-proof. These are the
+  // source of truth: we overwrite them on every run, so any dashboard edit is reverted on the next
+  // index run. `setSettings` is a top-level partial merge — it only replaces the keys passed below
+  // and leaves everything else (e.g. `customRanking`, `searchableAttributes`) untouched, so we
+  // declare only the settings we deliberately own.
   //
-  // Faceting (additive merge — `setSettings` replaces the whole list, so we read + merge and
-  // never drop a facet the index already relies on). Required because facetFilters/optionalFilters
-  // on a non-faceted attribute fail or silently no-op:
-  //   - `branch`       — filtered by the search query and the stale-record cleanup
-  //   - `record_batch` — filtered by the stale-record cleanup
+  // Faceting — `filterOnly` (filter, no facet counts) since these are only ever used to filter,
+  // never shown as user-facing facets. Required: facetFilters/optionalFilters on a non-faceted
+  // attribute fail or silently no-op.
+  //   - `branch`       — facetFilter on the search query + the stale-record cleanup browse
+  //   - `record_batch` — facetFilter in the stale-record cleanup browse
   //   - `sdk`          — the active-SDK boost (optionalFilters)
-  // `availableSDKs` is only retrieved for display, never filtered, so it's intentionally omitted.
-  const requiredFacets = ['branch', 'record_batch', 'sdk']
+  // `availableSDKs` is deliberately NOT faceted: the client only retrieves it to render per-result
+  // SDK icons (Search.tsx `SDKsIcon`), never filters or counts on it, and retrieval is independent
+  // of faceting.
+  const attributesForFaceting = ['branch', 'record_batch', 'sdk'].map((attribute) => `filterOnly(${attribute})`)
   //
   // Ranking: `attribute`/`exact` are moved above `proximity` (vs Algolia's default order) so a
   // query that matches a page's title/heading outranks one that only matches the same words in
@@ -851,29 +855,11 @@ async function main() {
   // reference-name queries like `auth()` still win on their exact title match. See the design doc.
   const ranking = ['typo', 'geo', 'words', 'filters', 'attribute', 'exact', 'proximity', 'custom']
 
-  const settings = await algolia.getSettings({ indexName: ALGOLIA_INDEX_NAME })
-  const attributesForFaceting = settings.attributesForFaceting ?? []
-  // Strip any faceting modifier wrapper (filterOnly/searchable/afterDistinct) to compare on the
-  // bare attribute name. Nested modifiers aren't unwrapped — none are used on this index.
-  const facetedAttributes = new Set(attributesForFaceting.map((entry) => entry.replace(/^[a-zA-Z]+\((.*)\)$/, '$1')))
-  const missingFacets = requiredFacets.filter((attribute) => !facetedAttributes.has(attribute))
-  const rankingNeedsUpdate = JSON.stringify(settings.ranking) !== JSON.stringify(ranking)
-
-  if (missingFacets.length > 0 || rankingNeedsUpdate) {
-    if (missingFacets.length > 0)
-      console.log(`Registering missing facets on ${ALGOLIA_INDEX_NAME}: ${missingFacets.join(', ')}`)
-    if (rankingNeedsUpdate) console.log(`Updating ranking criteria on ${ALGOLIA_INDEX_NAME}`)
-    await algolia.setSettings({
-      indexName: ALGOLIA_INDEX_NAME,
-      indexSettings: {
-        attributesForFaceting: [
-          ...attributesForFaceting,
-          ...missingFacets.map((attribute) => `filterOnly(${attribute})`),
-        ],
-        ranking,
-      },
-    })
-  }
+  console.log(`Applying search settings (faceting + ranking) to ${ALGOLIA_INDEX_NAME}`)
+  await algolia.setSettings({
+    indexName: ALGOLIA_INDEX_NAME,
+    indexSettings: { attributesForFaceting, ranking },
+  })
 
   // Synonyms (codified, enforced — replaceExistingSynonyms) — see buildSynonyms above.
   const synonyms = await buildSynonyms()

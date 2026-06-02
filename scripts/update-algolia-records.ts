@@ -834,8 +834,26 @@ async function main() {
   // index — prod, dev, and one-off test indexes — stays consistent and human-proof. These are the
   // source of truth: we overwrite them on every run, so any dashboard edit is reverted on the next
   // index run. `setSettings` is a top-level partial merge — it only replaces the keys passed below
-  // and leaves everything else (e.g. `customRanking`, `searchableAttributes`) untouched, so we
-  // declare only the settings we deliberately own.
+  // and leaves everything else (typo tolerance, pagination, highlighting, etc.) untouched. We
+  // declare the relevance settings we deliberately own — never a full settings snapshot, which
+  // would also freeze Algolia's server-managed defaults.
+  //
+  // Searchable attributes — the search corpus and its attribute-level priority. Order matters: the
+  // `attribute` ranking criterion (below) ranks by which attribute matched, in this order, so a
+  // heading match (`hierarchy.lvlN`) outranks one only in `content` — the foundation the ranking
+  // reorder relies on. Mirrors the DocSearch crawler layout; `unordered(...)` ignores word position
+  // within an attribute. If a new searchable field is ever added to records, add it here too.
+  const searchableAttributes = [
+    'unordered(hierarchy.lvl0)',
+    'unordered(hierarchy.lvl1)',
+    'unordered(hierarchy.lvl2)',
+    'unordered(hierarchy.lvl3)',
+    'unordered(hierarchy.lvl4)',
+    'unordered(hierarchy.lvl5)',
+    'unordered(hierarchy.lvl6)',
+    'content',
+    'unordered(keywords)',
+  ]
   //
   // Faceting — `filterOnly` (filter, no facet counts) since these are only ever used to filter,
   // never shown as user-facing facets. Required: facetFilters/optionalFilters on a non-faceted
@@ -854,11 +872,18 @@ async function main() {
   // Quickstart surface above reference pages whose body merely mentions the phrase, while
   // reference-name queries like `auth()` still win on their exact title match. See the design doc.
   const ranking = ['typo', 'geo', 'words', 'filters', 'attribute', 'exact', 'proximity', 'custom']
+  //
+  // Custom ranking — the final tiebreaker (the `custom` criterion above). Matches the weights the
+  // indexer actually writes to each record's `weight` object: `pageRank` (frontmatter `search.rank`),
+  // `level` (heading depth), `position` (document order). `weight.popularity` is intentionally
+  // absent — it's never written to records, so a `desc(weight.popularity)` entry (leftover on some
+  // indexes) is dead config that ranks nothing.
+  const customRanking = ['desc(weight.pageRank)', 'desc(weight.level)', 'asc(weight.position)']
 
-  console.log(`Applying search settings (faceting + ranking) to ${ALGOLIA_INDEX_NAME}`)
+  console.log(`Applying search settings to ${ALGOLIA_INDEX_NAME}`)
   await algolia.setSettings({
     indexName: ALGOLIA_INDEX_NAME,
-    indexSettings: { attributesForFaceting, ranking },
+    indexSettings: { searchableAttributes, attributesForFaceting, ranking, customRanking },
   })
 
   // Synonyms (codified, enforced — replaceExistingSynonyms) — see buildSynonyms above.

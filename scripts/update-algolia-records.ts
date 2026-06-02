@@ -880,6 +880,10 @@ async function main() {
   // indexes) is dead config that ranks nothing.
   const customRanking = ['desc(weight.pageRank)', 'desc(weight.level)', 'asc(weight.position)']
 
+  // Settings deliberately do NOT forward to replicas, though synonyms (below) do. Synonyms should
+  // always be identical across replicas; settings bundle ranking/customRanking, which a standard
+  // replica may legitimately override for an alternate sort — forwarding would clobber it. No
+  // replicas today; if any are added, declare them in this script rather than blanket-forwarding.
   console.log(`Applying search settings to ${ALGOLIA_INDEX_NAME}`)
   await algolia.setSettings({
     indexName: ALGOLIA_INDEX_NAME,

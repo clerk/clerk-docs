@@ -4,13 +4,12 @@ description: Use Clerk machines to gate which agents can invoke which inside a r
 sdk: nextjs
 ---
 
-When you need to orchestrate agents inside a workflow context, you can use Clerk [machines](/docs/guides/development/machine-auth/overview) to keep the boundaries between them explicit. This page shows how to use M2M authentication for cross-agent communication.
+This page expands on [Agent configuration](/docs/guides/ai/vercel-ai-sdk/agents) and applies the same machine-identity pattern to agent-to-agent collaboration. When you need agents to call each other inside a workflow, use [machine scopes](/docs/guides/development/machine-auth/overview) to keep the boundaries between them explicit. This page shows how to use M2M authentication for cross-agent communication.
 
-## When to use machines with agents
+## When to use M2M for agents
 
 Represent each agent as a Clerk machine when you want any of the following:
 
-- A first-class identity per agent in Clerk, managed alongside your users and organizations.
 - A controlled list of which agents are allowed to communicate and the ability to manage those rules at runtime.
 - Short-lived, scoped tokens for cross-agent calls instead of shared long-lived secrets.
 - A clear failure signal when an unauthorized agent tries to invoke another.
@@ -19,7 +18,7 @@ If none of these apply, skip machines and let your agents call each other direct
 
 ## Setup agent machines
 
-For this guide, wire up two agents: a `parent-agent` that delegates work, and a `research-agent` (subagent) that performs the work. Create both machines and scope `parent-agent` to invoke `research-agent`. To configure an individual machine's model, tools, or role through token claims, see [Agents](/docs/guides/ai/vercel-ai-sdk/agents).
+For this guide, wire up two agents: a `research-agent` that delegates work, and a `summarizer-agent` (subagent) that performs the work. Create both machines and scope `research-agent` to invoke `summarizer-agent`.
 
 You can do this in the [Clerk Dashboard](https://dashboard.clerk.com/~/machines/configure), from your coding agent or terminal with the [Clerk CLI](/docs/cli):
 
@@ -30,28 +29,28 @@ You can do this in the [Clerk Dashboard](https://dashboard.clerk.com/~/machines/
     Create the two machines:
 
     ```
-    Create two machines in my Clerk app named "parent-agent" and "research-agent".
+    Create two machines in my Clerk app named "research-agent" and "summarizer-agent".
     ```
 
     Then scope them:
 
     ```
-    Add "research-agent" to "parent-agent"'s scopes so parent-agent can invoke research-agent.
+    Add "summarizer-agent" to "research-agent"'s scopes so research-agent can invoke summarizer-agent.
     ```
   </Tab>
 
   <Tab>
-    Create `research-agent` first (its ID is needed to scope `parent-agent`):
+    Create `summarizer-agent` first (its ID is needed to scope `research-agent`):
 
     ```bash {{ filename: 'terminal', prompt: '$' }}
-    clerk api /machines -d '{"name":"research-agent"}' --yes
+    clerk api /machines -d '{"name":"summarizer-agent"}' --yes
     ```
 
-    Then create `parent-agent` with `research-agent` in its scopes:
+    Then create `research-agent` with `summarizer-agent` in its scopes:
 
     ```bash {{ filename: 'terminal', prompt: '$' }}
     clerk api /machines \
-      -d '{"name":"parent-agent","scoped_machines":["<research_machine_id>"]}' \
+      -d '{"name":"research-agent","scoped_machines":["<summarizer_machine_id>"]}' \
       --yes
     ```
   </Tab>
@@ -62,10 +61,10 @@ You can do this in the [Clerk Dashboard](https://dashboard.clerk.com/~/machines/
 
     const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
-    const research = await clerk.machines.create({ name: 'research-agent' })
-    const parent = await clerk.machines.create({
-      name: 'parent-agent',
-      scopedMachines: [research.id],
+    const summarizer = await clerk.machines.create({ name: 'summarizer-agent' })
+    const research = await clerk.machines.create({
+      name: 'research-agent',
+      scopedMachines: [summarizer.id],
     })
     ```
   </Tab>
@@ -74,19 +73,19 @@ You can do this in the [Clerk Dashboard](https://dashboard.clerk.com/~/machines/
 Then add each machine's Secret Key to the environment where your workflow runs:
 
 ```env {{ filename: '.env' }}
-PARENT_AGENT_MACHINE_SECRET_KEY=ak_...
 RESEARCH_AGENT_MACHINE_SECRET_KEY=ak_...
+SUMMARIZER_AGENT_MACHINE_SECRET_KEY=ak_...
 ```
 
 See [Using M2M tokens](/docs/guides/development/machine-auth/m2m-tokens) for the full configuration reference.
 
 ## Run a subagent with M2M auth
 
-The parent mints a token with its machine secret. The tool verifies that token against the subagent's machine secret before invoking the [subagent](https://ai-sdk.dev/v7/docs/agents/subagents).
+The research agent mints a token with its machine secret. The tool verifies that token against the summarizer's machine secret before invoking the [subagent](https://ai-sdk.dev/v7/docs/agents/subagents).
 
-`research-agent` accepts tokens from `parent-agent` only because `research-agent` is in `parent-agent`'s scopes. Remove the scope, and the next token fails verification.
+`summarizer-agent` accepts tokens from `research-agent` only because `summarizer-agent` is in `research-agent`'s scopes. Remove the scope, and the next token fails verification.
 
-Set up a shared Clerk client module for the parent and the tool wrapper, then implement the tool and workflow files. The tool wrapper and the workflow file are version-specific:
+Set up a shared Clerk client module for the research agent and the tool wrapper, then implement the tool and workflow files. The tool wrapper and the workflow file are version-specific:
 
 <Tabs items={["AI SDK v6", "AI SDK v7"]}>
   <Tab>
@@ -97,12 +96,12 @@ Set up a shared Clerk client module for the parent and the tool wrapper, then im
         ```ts {{ filename: 'lib/clerk.ts' }}
         import { createClerkClient } from '@clerk/nextjs/server'
 
-        export const parentClerk = createClerkClient({
-          machineSecretKey: process.env.PARENT_AGENT_MACHINE_SECRET_KEY!,
+        export const researchAgentClerk = createClerkClient({
+          machineSecretKey: process.env.RESEARCH_AGENT_MACHINE_SECRET_KEY!,
         })
 
-        export const subagentClerk = createClerkClient({
-          machineSecretKey: process.env.RESEARCH_AGENT_MACHINE_SECRET_KEY!,
+        export const summarizerAgentClerk = createClerkClient({
+          machineSecretKey: process.env.SUMMARIZER_AGENT_MACHINE_SECRET_KEY!,
         })
         ```
       </Tab>
@@ -111,14 +110,14 @@ Set up a shared Clerk client module for the parent and the tool wrapper, then im
         ```ts {{ filename: 'lib/ai/tools.ts' }}
         import { generateText, tool } from 'ai'
         import { z } from 'zod'
-        import { subagentClerk } from '@/lib/clerk'
+        import { summarizerAgentClerk } from '@/lib/clerk'
 
-        export const researchTool = tool({
-          description: 'Delegate a research task to the research subagent.',
+        export const summarizeTool = tool({
+          description: 'Delegate a summarization task to the summarizer subagent.',
           inputSchema: z.object({ task: z.string() }),
           execute: async ({ task }, { experimental_context, abortSignal }) => {
             const { token } = experimental_context as { token: string }
-            await subagentClerk.m2m.verify({ token })
+            await summarizerAgentClerk.m2m.verify({ token })
 
             const result = await generateText({
               model: 'openai/gpt-5',
@@ -134,18 +133,18 @@ Set up a shared Clerk client module for the parent and the tool wrapper, then im
       <Tab>
         ```ts {{ filename: 'workflows/research.ts' }}
         import { generateText, stepCountIs } from 'ai'
-        import { parentClerk } from '@/lib/clerk'
-        import { researchTool } from '@/lib/ai/tools'
+        import { researchAgentClerk } from '@/lib/clerk'
+        import { summarizeTool } from '@/lib/ai/tools'
 
-        // Inside the workflow step that runs the parent:
-        const { token } = await parentClerk.m2m.createToken({
+        // Inside the workflow step that runs the research agent:
+        const { token } = await researchAgentClerk.m2m.createToken({
           secondsUntilExpiration: 60 * 5,
         })
 
         const result = await generateText({
           model: 'openai/gpt-5',
-          prompt: 'Research the latest news on the topic.',
-          tools: { research: researchTool },
+          prompt: 'Research the latest news on the topic and summarize key findings.',
+          tools: { summarize: summarizeTool },
           experimental_context: { token },
           stopWhen: stepCountIs(10),
         })
@@ -162,12 +161,12 @@ Set up a shared Clerk client module for the parent and the tool wrapper, then im
         ```ts {{ filename: 'lib/clerk.ts' }}
         import { createClerkClient } from '@clerk/nextjs/server'
 
-        export const parentClerk = createClerkClient({
-          machineSecretKey: process.env.PARENT_AGENT_MACHINE_SECRET_KEY!,
+        export const researchAgentClerk = createClerkClient({
+          machineSecretKey: process.env.RESEARCH_AGENT_MACHINE_SECRET_KEY!,
         })
 
-        export const subagentClerk = createClerkClient({
-          machineSecretKey: process.env.RESEARCH_AGENT_MACHINE_SECRET_KEY!,
+        export const summarizerAgentClerk = createClerkClient({
+          machineSecretKey: process.env.SUMMARIZER_AGENT_MACHINE_SECRET_KEY!,
         })
         ```
       </Tab>
@@ -176,15 +175,15 @@ Set up a shared Clerk client module for the parent and the tool wrapper, then im
         ```ts {{ filename: 'lib/ai/tools.ts' }}
         import { ToolLoopAgent, tool } from 'ai'
         import { z } from 'zod'
-        import { subagentClerk } from '@/lib/clerk'
+        import { summarizerAgentClerk } from '@/lib/clerk'
 
-        export function createResearchTool<TAgent extends ToolLoopAgent>(subagent: TAgent) {
+        export function createSummarizerTool<TAgent extends ToolLoopAgent>(subagent: TAgent) {
           return tool({
-            description: 'Delegate a research task to the research subagent.',
+            description: 'Delegate a summarization task to the summarizer subagent.',
             inputSchema: z.object({ task: z.string() }),
             contextSchema: z.custom<{ token: string }>(),
             execute: async ({ task }, { context, abortSignal }) => {
-              await subagentClerk.m2m.verify({ token: context.token })
+              await summarizerAgentClerk.m2m.verify({ token: context.token })
 
               const result = await subagent.generate({
                 prompt: task,
@@ -200,29 +199,29 @@ Set up a shared Clerk client module for the parent and the tool wrapper, then im
       <Tab>
         ```ts {{ filename: 'workflows/research.ts' }}
         import { ToolLoopAgent, stepCountIs } from 'ai'
-        import { parentClerk } from '@/lib/clerk'
-        import { createResearchTool } from '@/lib/ai/tools'
+        import { researchAgentClerk } from '@/lib/clerk'
+        import { createSummarizerTool } from '@/lib/ai/tools'
 
-        const researchSubagent = new ToolLoopAgent({
+        const summarizerSubagent = new ToolLoopAgent({
           model: 'openai/gpt-5',
-          instructions: 'You are a research agent. Summarize your findings.',
+          instructions: 'You are a summarization agent. Be concise.',
         })
 
-        const mainAgent = new ToolLoopAgent({
+        const researchAgent = new ToolLoopAgent({
           model: 'openai/gpt-5',
-          instructions: 'You delegate research tasks to specialized subagents.',
-          tools: { research: createResearchTool(researchSubagent) },
+          instructions: 'You orchestrate research by delegating summarization to specialized subagents.',
+          tools: { summarize: createSummarizerTool(summarizerSubagent) },
           stopWhen: stepCountIs(10),
         })
 
-        // Inside the workflow step that runs the parent:
-        const { token } = await parentClerk.m2m.createToken({
+        // Inside the workflow step that runs the research agent:
+        const { token } = await researchAgentClerk.m2m.createToken({
           secondsUntilExpiration: 60 * 5,
         })
 
-        const result = await mainAgent.generate({
-          prompt: 'Research the latest news on the topic.',
-          toolsContext: { research: { token } },
+        const result = await researchAgent.generate({
+          prompt: 'Research the latest news on the topic and summarize key findings.',
+          toolsContext: { summarize: { token } },
         })
         ```
       </Tab>
@@ -232,7 +231,7 @@ Set up a shared Clerk client module for the parent and the tool wrapper, then im
 
 ## Decouple agents at runtime
 
-Because each agent is a separate Clerk machine, you can revoke a parent's access to its subagent at any time without redeploying. Remove `research-agent` from `parent-agent`'s Scopes, and the next token the parent mints fails the subagent's `verify()` check.
+Because each agent is a separate Clerk machine, you can revoke the research agent's access to the summarizer at any time without redeploying. Remove `summarizer-agent` from `research-agent`'s Scopes, and the next token the research agent mints fails the summarizer's `verify()` check.
 
 You can manage scopes from the Clerk Dashboard or programmatically through the Clerk client using [`machines.createScope()`](/docs/reference/backend/machines/create-scope) or [`machines.deleteScope()`](/docs/reference/backend/machines/delete-scope).
 
@@ -247,7 +246,7 @@ The pattern above is applicable to most resumable workflow runners. Below are so
 
 ## Next steps
 
-- [Agents](/docs/guides/ai/vercel-ai-sdk/agents): configure each agent machine's model, tools, and role through M2M token claims.
+- [Agent configuration](/docs/guides/ai/vercel-ai-sdk/agents): configure each agent machine's model, tools, and role through M2M token claims.
 - [Using M2M tokens](/docs/guides/development/machine-auth/m2m-tokens): full reference for configuring machines, scopes, and token claims.
 - [Token formats](/docs/guides/development/machine-auth/token-formats): when to choose JWT M2M tokens (verifiable without a network call) over opaque ones.
 - [Authorizing tool calls](/docs/guides/ai/vercel-ai-sdk/authorizing-tool-calls): permission-gated tools inside a single agent's loop.

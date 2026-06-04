@@ -1,24 +1,18 @@
 ---
-title: Agents
+title: Agent configuration
 description: Represent AI services as Clerk machines and configure them at runtime through M2M token claims.
 sdk: nextjs
 ---
 
-A Clerk machine is an identity for an AI service. In a real AI app, that service is often an agent, but the same pattern applies to a standalone tool or a runnable workflow. Clerk is the source of truth for identity and the allowed relationships between these services. Your backend is the source of truth for each service's configuration, projected onto each minted M2M token as `claims`.
+A Clerk machine is an identity for an AI service. In a real AI application, that service is often an agent, but the same pattern applies to a standalone tool or a runnable workflow. Use Clerk as the source of truth for identity and the allowed relationships between these services.
 
 ## What a machine can represent
 
-- **An agent**, for example a research agent that delegates to subagents.
-- **A standalone tool**, like a code-execution service or a vector-search service that other agents invoke.
-- **A runnable workflow**, a long-running batch job orchestrated by an upstream caller.
+- **An agent**, for example an orchestration agent that delegates to subagents.
+- **A standalone tool**, like a code-execution service or a memory layer that other agents interact with.
+- **A runnable workflow**, a long-running job involving multiple agents.
 
-The rest of this page uses an agent as the example. The pattern applies equally to the other shapes.
-
-## Separation of concerns
-
-- **Clerk owns**: identity ([`machines.create`](/docs/reference/backend/machines/create)), scopes and allowed relationships ([`machines.createScope`](/docs/reference/backend/machines/create-scope), [`machines.deleteScope`](/docs/reference/backend/machines/delete-scope)), token issuance, and verification.
-- **Your backend owns**: per-machine configuration (model, allowed tools, role, budgets). Clerk doesn't persist this for machines yet.
-- **The M2M token is the carrier**: the parent reads your backend's config, attaches it as `claims`, mints, and hands it off. The agent runtime verifies the token and reads the claims back.
+The following sections use agent as the example.
 
 ## Set up the agent machine
 
@@ -30,36 +24,75 @@ RESEARCH_AGENT_MACHINE_SECRET_KEY=ak_...
 
 ## Configure the agent through organization metadata
 
-Store a map from machine ID to model name on a Clerk organization's `publicMetadata`:
+Store an array of agent configurations on a Clerk organization's `publicMetadata`:
 
 ```ts
 // organization.publicMetadata
 {
-  agents: {
-    mch_research: 'openai/gpt-5',
-    mch_summarizer: 'openai/gpt-4o-mini',
-  },
+  agents: [
+    {
+      machineId: 'mch_research',
+      model: 'openai/gpt-5',
+      instructions: 'You are a research assistant. Cite sources.',
+    },
+    {
+      machineId: 'mch_summarizer',
+      model: 'openai/gpt-4o-mini',
+      instructions: 'Summarize the input in three sentences.',
+    },
+  ],
 }
 ```
 
-Read it from the parent before minting:
+> [!WARNING]
+> Organization metadata is bounded (~8KB). In a real-world application, persist agent configurations in a more durable storage layer (your application database, a config service, etc.).
 
-```ts
-import { auth, clerkClient } from '@clerk/nextjs/server'
+Look up the matching entry and mint the token from a server action. The action takes the organization ID and machine ID as arguments, so it can be called from places that don't have a Clerk session (background jobs, workflow runners, internal cron):
 
-const { orgId } = await auth()
-const client = await clerkClient()
-const org = await client.organizations.getOrganization({ organizationId: orgId })
-const model = (org.publicMetadata.agents as Record<string, string>)[machineId]
+<Tabs items={["app/actions.ts", "lib/clerk.ts"]}>
+  <Tab>
+    ```ts {{ filename: 'app/actions.ts' }}
+    'use server'
 
-const { token } = await parentClerk.m2m.createToken({
-  claims: { model },
-  secondsUntilExpiration: 60 * 5,
-})
-```
+    import { clerkClient } from '@clerk/nextjs/server'
+    import { researchAgentClerk } from '@/lib/clerk'
 
-> [!NOTE]
-> Organization metadata is bounded (~8KB) and not indexed for queries. Fine for a handful of machines per org, with the upside that an admin can edit it from the Dashboard. For richer configs (allowed tools, role, budgets), reach for your application database. See [Beyond model](#beyond-model-richer-configs) below.
+    export type AgentConfig = {
+      machineId: string
+      model: string
+      instructions: string
+    }
+
+    export async function generateAgentTokenForOrg(
+      organizationId: string,
+      machineId: string,
+    ) {
+      const client = await clerkClient()
+      const org = await client.organizations.getOrganization({ organizationId })
+      const config = (org.publicMetadata.agents as AgentConfig[]).find(
+        (a) => a.machineId === machineId,
+      )
+
+      const { token } = await researchAgentClerk.m2m.createToken({
+        claims: { model: config.model, instructions: config.instructions },
+        secondsUntilExpiration: 60 * 5,
+      })
+
+      return token
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'lib/clerk.ts' }}
+    import { createClerkClient } from '@clerk/nextjs/server'
+
+    export const researchAgentClerk = createClerkClient({
+      machineSecretKey: process.env.RESEARCH_AGENT_MACHINE_SECRET_KEY!,
+    })
+    ```
+  </Tab>
+</Tabs>
 
 ## Read claims at the agent runtime
 
@@ -67,52 +100,19 @@ After verifying the M2M token, configure the agent from the claims:
 
 ```ts
 import { ToolLoopAgent } from 'ai'
+import type { AgentConfig } from '@/app/actions'
 
-const verified = await agentClerk.m2m.verify({ token: context.token })
-const { model } = verified.claims as { model: string }
+const verified = await researchAgentClerk.m2m.verify({ token: context.token })
+const { model, instructions } = verified.claims as AgentConfig
 
 const agent = new ToolLoopAgent({
   model,
-  instructions: 'You are a research assistant.',
+  instructions,
   tools: { /* ... */ },
 })
 ```
 
-Claims are arbitrary `Record<string, unknown>`. Clerk verifies the signature, not the shape. Parse defensively (with [zod](https://zod.dev) or similar) before passing to the agent runtime.
-
-## Update config without redeploying
-
-Edit the organization metadata from the Clerk Dashboard or via [`organizations.updateOrganization()`](/docs/reference/backend/organization/update-organization). The next token your backend mints carries the new model. The agent runtime picks it up on its next invocation, no restart required.
-
-## Beyond model: richer configs
-
-For richer per-machine configuration, use your application database as the source of truth. Keep a small `agent_configs` table keyed by `machineId`:
-
-```sql
-CREATE TABLE agent_configs (
-  machine_id TEXT PRIMARY KEY,
-  model TEXT NOT NULL,
-  allowed_tools TEXT[] NOT NULL,
-  role TEXT NOT NULL
-);
-```
-
-The mint step reads from the table instead of `publicMetadata`:
-
-```ts
-const config = await db.agentConfigs.findUnique({ where: { machineId } })
-
-const { token } = await parentClerk.m2m.createToken({
-  claims: {
-    model: config.model,
-    allowedTools: config.allowedTools,
-    role: config.role,
-  },
-  secondsUntilExpiration: 60 * 5,
-})
-```
-
-The claim shape grows, the verify-and-read pattern doesn't.
+Claims are arbitrary `Record<string, unknown>`. Parse defensively (with zod or similar) before passing to the agent runtime.
 
 ## Next steps
 

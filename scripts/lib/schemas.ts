@@ -49,6 +49,7 @@ export const icon = z.enum([
   'document',
   'elysia',
   'expressjs',
+  'flutter',
   'globe',
   'go',
   'home',

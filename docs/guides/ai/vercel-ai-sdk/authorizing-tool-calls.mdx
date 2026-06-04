@@ -1,0 +1,300 @@
+---
+title: Authorizing tool calls
+description: Authorize every tool the model can invoke against the signed-in user's Clerk permissions.
+sdk: nextjs
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Get started with Clerk and the Vercel AI SDK",
+      link: "/docs/guides/ai/vercel-ai-sdk/getting-started",
+      icon: "nextjs",
+    },
+  ]}
+/>
+
+For tool-calling, authentication isn't always enough. Sometimes you need to restrict tool invocations from unauthorized callers. This page covers authorization patterns for tool-calling.
+
+## Restrict tool usage with `has`
+
+Use [`has()`](/docs/guides/secure/authorization-checks) to check whether the caller has a given [permission](/docs/guides/organizations/control-access/roles-and-permissions), [plan](/docs/guides/billing/overview), or [feature](/docs/guides/secure/features). Share the helper with your tools via the AI SDK's tool context, then check it inside `execute` and return a helpful message for the model when the caller doesn't have access.
+
+<Tabs items={["Permission", "Plan", "Feature Flag"]}>
+  <Tab>
+    <Tabs items={["AI SDK v6", "AI SDK v7"]}>
+      <Tab>
+        ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+        import type { auth } from '@clerk/nextjs/server'
+        import { tool } from 'ai'
+        import { z } from 'zod'
+
+        type Auth = Awaited<ReturnType<typeof auth>>
+
+        const archiveProject = tool({
+          description: 'Archive a project in the current workspace.',
+          inputSchema: z.object({ projectId: z.string() }),
+          execute: async ({ projectId }, { experimental_context }) => {
+            const { has } = experimental_context as Pick<Auth, 'has'>
+
+            if (!has({ permission: 'org:project:archive' })) {
+              return { error: 'Not authorized to archive projects.' }
+            }
+
+            // Perform the archive in your data layer.
+            return { ok: true, projectId }
+          },
+        })
+        ```
+      </Tab>
+
+      <Tab>
+        ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+        import type { auth } from '@clerk/nextjs/server'
+        import { tool } from 'ai'
+        import { z } from 'zod'
+
+        type Auth = Awaited<ReturnType<typeof auth>>
+
+        const archiveProject = tool({
+          description: 'Archive a project in the current workspace.',
+          inputSchema: z.object({ projectId: z.string() }),
+          contextSchema: z.custom<{ has: Auth['has'] }>(),
+          execute: async ({ projectId }, { context }) => {
+            if (!context.has({ permission: 'org:project:archive' })) {
+              return { error: 'Not authorized to archive projects.' }
+            }
+
+            // Perform the archive in your data layer.
+            return { ok: true, projectId }
+          },
+        })
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
+
+  <Tab>
+    <Tabs items={["AI SDK v6", "AI SDK v7"]}>
+      <Tab>
+        ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+        import type { auth } from '@clerk/nextjs/server'
+        import { tool } from 'ai'
+        import { z } from 'zod'
+
+        type Auth = Awaited<ReturnType<typeof auth>>
+
+        const generateReport = tool({
+          description: 'Generate a detailed report on a topic.',
+          inputSchema: z.object({ topic: z.string() }),
+          execute: async ({ topic }, { experimental_context }) => {
+            const { has } = experimental_context as Pick<Auth, 'has'>
+
+            if (!has({ plan: 'pro' })) {
+              return { error: 'This tool requires an active subscription to the Pro plan. Direct the user to upgrade on the billing page.' }
+            }
+
+            // Generate the report in your data layer.
+            return { ok: true, topic }
+          },
+        })
+        ```
+      </Tab>
+
+      <Tab>
+        ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+        import type { auth } from '@clerk/nextjs/server'
+        import { tool } from 'ai'
+        import { z } from 'zod'
+
+        type Auth = Awaited<ReturnType<typeof auth>>
+
+        const generateReport = tool({
+          description: 'Generate a detailed report on a topic.',
+          inputSchema: z.object({ topic: z.string() }),
+          contextSchema: z.custom<{ has: Auth['has'] }>(),
+          execute: async ({ topic }, { context }) => {
+            if (!context.has({ plan: 'pro' })) {
+              return { error: 'This tool requires an active subscription to the Pro plan. Direct the user to upgrade on the billing page.' }
+            }
+
+            // Generate the report in your data layer.
+            return { ok: true, topic }
+          },
+        })
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
+
+  <Tab>
+    <Tabs items={["AI SDK v6", "AI SDK v7"]}>
+      <Tab>
+        ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+        import type { auth } from '@clerk/nextjs/server'
+        import { tool } from 'ai'
+        import { z } from 'zod'
+
+        type Auth = Awaited<ReturnType<typeof auth>>
+
+        const generateReport = tool({
+          description: 'Generate a detailed report on a topic.',
+          inputSchema: z.object({ topic: z.string() }),
+          execute: async ({ topic }, { experimental_context }) => {
+            const { has } = experimental_context as Pick<Auth, 'has'>
+
+            if (!has({ feature: 'reports' })) {
+              return { error: "Inform the user that they don't have access to the reports feature but can opt in by emailing support@acme.com." }
+            }
+
+            // Generate the report in your data layer.
+            return { ok: true, topic }
+          },
+        })
+        ```
+      </Tab>
+
+      <Tab>
+        ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+        import type { auth } from '@clerk/nextjs/server'
+        import { tool } from 'ai'
+        import { z } from 'zod'
+
+        type Auth = Awaited<ReturnType<typeof auth>>
+
+        const generateReport = tool({
+          description: 'Generate a detailed report on a topic.',
+          inputSchema: z.object({ topic: z.string() }),
+          contextSchema: z.custom<{ has: Auth['has'] }>(),
+          execute: async ({ topic }, { context }) => {
+            if (!context.has({ feature: 'reports' })) {
+              return { error: "Inform the user that they don't have access to the reports feature but can opt in by emailing support@acme.com." }
+            }
+
+            // Generate the report in your data layer.
+            return { ok: true, topic }
+          },
+        })
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
+</Tabs>
+
+## Add the tools to your route handler
+
+First, check if the user is authenticated with [`auth()`](/docs/reference/nextjs/app-router/auth). 
+Then, pass `has` and `userId` to your tools through `experimental_context` or `toolsContext` (depending on the AI SDK version).
+
+<Tabs items={["AI SDK v6", "AI SDK v7"]}>
+  <Tab>
+    ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+    import {
+      convertToModelMessages,
+      stepCountIs,
+      streamText,
+      type UIMessage,
+    } from 'ai'
+    import { archiveProject, generateReport } from './tools'
+    import { NextResponse } from 'next/server'
+
+    export async function POST(req: Request) {
+
+      const { has, userId, isAuthenticated } = await auth()
+
+      if (!isAuthenticated) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+        tools: {
+          generateReport,
+          archiveProject,
+        },
+        experimental_context: { has, userId },
+        stopWhen: stepCountIs(3),
+      })
+
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'app/api/chat/tools/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+    import {
+      convertToModelMessages,
+      stepCountIs,
+      streamText,
+      type UIMessage,
+    } from 'ai'
+    import { archiveProject, generateReport } from './tools'
+    import { NextResponse } from 'next/server'
+
+    export async function POST(req: Request) {
+
+      const { has, userId, isAuthenticated } = await auth()
+
+      if (!isAuthenticated) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+        tools: {
+          generateReport,
+          archiveProject,
+        },
+        toolsContext: {
+          archiveProject: { has, userId },
+        },
+        stopWhen: stepCountIs(3),
+      })
+
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Combining auth strategies
+
+Route guards and tool guards can be used together. Gating at the route level keeps unauthenticated callers from reaching the model and consuming tokens. Performing stricter checks inside tools keeps callers from triggering work they shouldn't run. See [Securing chat endpoints](/docs/guides/ai/vercel-ai-sdk/securing-chat-endpoints) for route-level options.
+
+## Tool approvals
+
+AI SDK v7 introduces `toolApproval`, a per-tool callback that decides whether each call gets approved, denied, or escalated to a human, based on the parsed tool input and runtime context. It runs before `execute`, so you can combine Clerk's `has()` with input thresholds without invoking the tool's side effect.
+
+```ts
+const transferFunds = tool({
+  description: 'Move funds between accounts.',
+  inputSchema: z.object({ amount: z.number(), recipient: z.string() }),
+  contextSchema: z.custom<{ has: Auth['has'] }>(),
+  execute: async ({ amount, recipient }) => {
+    // perform the transfer
+    return { ok: true, amount, recipient }
+  },
+  toolApproval: async ({ amount }, { runtimeContext }) => {
+    const { has } = runtimeContext as { has: Auth['has'] }
+    if (!has({ permission: 'finance:transfer' })) return 'denied'
+    if (amount > 10_000) return 'user-approval'
+    return 'approved'
+  },
+})
+```
+
+See the AI SDK [`toolApproval` reference](https://ai-sdk.dev/v7/docs/agents/tool-approvals#decide-based-on-tool-input) for the full approval flow.
+
+On AI SDK v6, you can approximate this by inspecting tool input inside `execute` and returning a structured error the model surfaces to the user. The key limitation: v6 can't pause the loop for human confirmation, so there's no equivalent of v7's `'user-approval'` return. For the v6 inline pattern, see the AI SDK [tools and tool-calling reference](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling).
+
+## Next steps
+
+- [Securing chat endpoints](/docs/guides/ai/vercel-ai-sdk/securing-chat-endpoints): role-based permissions, plan and feature gating.
+- [Agents](/docs/guides/ai/vercel-ai-sdk/agents): configure each agent machine's model, tools, and role through M2M token claims.
+- [Agent orchestration](/docs/guides/ai/vercel-ai-sdk/agent-orchestration): run long-lived agents in resumable workflows with a Clerk machine identity.
+- [Roles and permissions](/docs/guides/organizations/control-access/roles-and-permissions): full reference for Clerk's role and permission model.

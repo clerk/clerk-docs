@@ -618,74 +618,104 @@ function generateRecordsFromDoc(
 // tooltips are added; a curated list covers product-rename/phrasing synonyms that aren't glossary
 // definitions (e.g. "magic link" → "email link", "login" → "sign in"). Tooltip content is excluded
 // from the search index, so without these these terms would miss entirely.
-async function buildSynonyms(): Promise<SynonymHit[]> {
-  const isAcronym = (s: string) => /^[A-Z][A-Za-z0-9]{2,7}$/.test(s.trim())
-  const clean = (s: string) =>
-    s
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // strip markdown links: [text](url) -> text
-      .replace(/&/g, 'and')
-      .replace(/,/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
+//
+// The pure logic below (`buildSynonyms` + helpers) is split from the disk I/O (`readSynonyms`) so it
+// can be unit-tested without the filesystem — see `update-algolia-records.test.ts`.
 
+export type TooltipFile = {
+  /** The tooltip file name, e.g. `dkim.mdx`. Used only to derive a stable objectID. */
+  fileName: string
+  content: string
+}
+
+export const isAcronym = (s: string) => /^[A-Z][A-Za-z0-9]{2,7}$/.test(s.trim())
+
+export const cleanSynonym = (s: string) =>
+  s
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // strip markdown links: [text](url) -> text
+    .replace(/&/g, 'and')
+    .replace(/,/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+// Curated product-rename / phrasing synonyms (not glossary acronyms).
+export const CURATED_SYNONYMS: Record<string, string[]> = {
+  'magic-link': ['magic link', 'email link'],
+  i18n: ['i18n', 'internationalization', 'localization', 'l10n'],
+  login: ['login', 'log in', 'sign in', 'signin'],
+  logout: ['logout', 'log out', 'sign out'],
+  signup: ['signup', 'sign up', 'register', 'registration'],
+  'social-connection': ['social login', 'social connection'],
+  sso: ['SSO', 'single sign-on'],
+  rbac: ['RBAC', 'role-based access control'],
+  mfa: ['MFA', '2FA', 'multi-factor authentication', 'two-factor authentication'],
+  jwks: ['JWKS', 'JSON Web Key Set'],
+  org: ['org', 'organization'],
+}
+
+// one-way: searching "webauthn" should surface passkey docs, not the reverse.
+export const ONE_WAY_SYNONYMS: SynonymHit[] = [
+  { objectID: 'webauthn-passkey', type: 'oneWaySynonym', input: 'webauthn', synonyms: ['passkey', 'passkeys'] },
+]
+
+// Extract the first acronym ⇄ expansion pair from a single tooltip's markdown, or null if none.
+//
+//   Format A: **X (Y)** — one of X/Y is the acronym (e.g. "DKIM (DomainKeys Identified Mail)").
+//   Format B: **X** stands for 'Y' (e.g. "WYSIWYG stands for 'What You See Is What You Get'").
+export function extractTooltipSynonym(content: string): { acronym: string; expansion: string } | null {
+  for (const [, bold] of content.matchAll(/\*\*([^*]+?)\*\*/g)) {
+    const paren = cleanSynonym(bold).match(/^(.+?)\s*\(([^)]+)\)\s*(.*)$/)
+    if (!paren) continue
+    const left = paren[1].trim()
+    const right = `${paren[2]} ${paren[3]}`.trim()
+    if (isAcronym(left) && !isAcronym(right)) return { acronym: left, expansion: right }
+    if (isAcronym(right) && !isAcronym(left)) return { acronym: right, expansion: left }
+  }
+
+  const sf = content.match(/\*\*([^*]+?)\*\*\s+stands for\s+['"]([^'"]+)['"]/)
+  if (sf && isAcronym(sf[1].trim())) return { acronym: sf[1].trim(), expansion: cleanSynonym(sf[2]) }
+
+  return null
+}
+
+// Build the full set of synonyms from the tooltip glossary files plus the curated and one-way lists.
+export function buildSynonyms(tooltipFiles: TooltipFile[]): SynonymHit[] {
   const byId = new Map<string, SynonymHit>()
 
   // 1. Auto-extract acronym ⇄ expansion pairs from the tooltip glossary.
+  for (const { fileName, content } of tooltipFiles) {
+    if (!fileName.endsWith('.mdx')) continue
+    const pair = extractTooltipSynonym(content)
+    if (!pair) continue
+    const objectID = `tooltip-${pair.acronym.toLowerCase()}`
+    byId.set(objectID, { objectID, type: 'synonym', synonyms: [pair.acronym, pair.expansion] })
+  }
+
+  // 2. Curated product-rename / phrasing synonyms (not glossary acronyms).
+  for (const [objectID, synonyms] of Object.entries(CURATED_SYNONYMS)) {
+    byId.set(objectID, { objectID, type: 'synonym', synonyms })
+  }
+
+  return [...byId.values(), ...ONE_WAY_SYNONYMS]
+}
+
+// Reads the `_tooltips` glossary off disk and hands the file contents to `buildSynonyms`.
+async function readSynonyms(): Promise<SynonymHit[]> {
+  let tooltipFiles: TooltipFile[] = []
   try {
     const tooltipsDir = path.join(__dirname, '../docs/_tooltips')
-    for (const file of await fs.readdir(tooltipsDir)) {
-      if (!file.endsWith('.mdx')) continue
-      const text = await fs.readFile(path.join(tooltipsDir, file), 'utf-8')
-      const add = (acronym: string, expansion: string) => {
-        const objectID = `tooltip-${acronym.toLowerCase()}`
-        byId.set(objectID, { objectID, type: 'synonym', synonyms: [acronym, expansion] })
-      }
-      let matched = false
-      // Format A: **X (Y)** — one of X/Y is the acronym (e.g. "DKIM (DomainKeys Identified Mail)").
-      for (const [, bold] of text.matchAll(/\*\*([^*]+?)\*\*/g)) {
-        const paren = clean(bold).match(/^(.+?)\s*\(([^)]+)\)\s*(.*)$/)
-        if (!paren) continue
-        const left = paren[1].trim()
-        const right = `${paren[2]} ${paren[3]}`.trim()
-        if (isAcronym(left) && !isAcronym(right)) add(left, right)
-        else if (isAcronym(right) && !isAcronym(left)) add(right, left)
-        else continue
-        matched = true
-        break // first acronym pair per tooltip is enough
-      }
-      // Format B: **X** stands for 'Y' (e.g. "WYSIWYG stands for 'What You See Is What You Get'").
-      if (!matched) {
-        const sf = text.match(/\*\*([^*]+?)\*\*\s+stands for\s+['"]([^'"]+)['"]/)
-        if (sf && isAcronym(sf[1].trim())) add(sf[1].trim(), clean(sf[2]))
-      }
-    }
+    const fileNames = (await fs.readdir(tooltipsDir)).filter((file) => file.endsWith('.mdx'))
+    tooltipFiles = await Promise.all(
+      fileNames.map(async (fileName) => ({
+        fileName,
+        content: await fs.readFile(path.join(tooltipsDir, fileName), 'utf-8'),
+      })),
+    )
   } catch {
     console.warn('⚠︎ Could not read _tooltips for synonyms; using the curated list only')
   }
 
-  // 2. Curated product-rename / phrasing synonyms (not glossary acronyms).
-  const curated: Record<string, string[]> = {
-    'magic-link': ['magic link', 'email link'],
-    i18n: ['i18n', 'internationalization', 'localization', 'l10n'],
-    login: ['login', 'log in', 'sign in', 'signin'],
-    logout: ['logout', 'log out', 'sign out'],
-    signup: ['signup', 'sign up', 'register', 'registration'],
-    'social-connection': ['social login', 'social connection'],
-    sso: ['SSO', 'single sign-on'],
-    rbac: ['RBAC', 'role-based access control'],
-    mfa: ['MFA', '2FA', 'multi-factor authentication', 'two-factor authentication'],
-    jwks: ['JWKS', 'JSON Web Key Set'],
-    org: ['org', 'organization'],
-  }
-  for (const [objectID, synonyms] of Object.entries(curated)) {
-    byId.set(objectID, { objectID, type: 'synonym', synonyms })
-  }
-
-  // one-way: searching "webauthn" should surface passkey docs, not the reverse.
-  return [
-    ...byId.values(),
-    { objectID: 'webauthn-passkey', type: 'oneWaySynonym', input: 'webauthn', synonyms: ['passkey', 'passkeys'] },
-  ]
+  return buildSynonyms(tooltipFiles)
 }
 
 async function main() {
@@ -896,8 +926,8 @@ async function main() {
     indexSettings: { searchableAttributes, attributesForFaceting, ranking, customRanking },
   })
 
-  // Synonyms (codified, enforced — replaceExistingSynonyms) — see buildSynonyms above.
-  const synonyms = await buildSynonyms()
+  // Synonyms (codified, enforced — replaceExistingSynonyms) — see readSynonyms above.
+  const synonyms = await readSynonyms()
   console.log(`Setting ${synonyms.length} synonyms on ${ALGOLIA_INDEX_NAME}`)
   await algolia.saveSynonyms({
     indexName: ALGOLIA_INDEX_NAME,
@@ -961,4 +991,9 @@ async function main() {
   console.log('\n✓ Update complete!')
 }
 
-main()
+// Only run when executed directly (e.g. `bun ./scripts/update-algolia-records.ts`), not when this
+// module is imported — e.g. by `update-algolia-records.test.ts`, which needs the exported helpers.
+// `import.meta.main` is a bun runtime flag not present in the Node type defs, hence the cast.
+if ((import.meta as { main?: boolean }).main) {
+  main()
+}

@@ -67,6 +67,26 @@ type SearchRecord = {
   record_batch: string
 }
 
+// Dot-paths into a SearchRecord (e.g. `content`, `hierarchy.lvl0`, `weight.pageRank`). The Algolia
+// settings below reference record fields as bare strings; deriving the allowed strings from the
+// record shape makes a typo or a renamed/removed field a compile error instead of a silently broken
+// index. Scalars and arrays are leaves; nested objects recurse into `parent.child` paths.
+type Scalar = string | number | boolean | bigint | symbol | null | undefined
+type RecordPath<T> = {
+  [K in Extract<keyof T, string>]: NonNullable<T[K]> extends Scalar | ReadonlyArray<unknown>
+    ? K
+    : K | `${K}.${RecordPath<NonNullable<T[K]>>}`
+}[Extract<keyof T, string>]
+type SearchAttribute = RecordPath<SearchRecord>
+
+// Typed wrappers for Algolia's attribute modifiers. The argument is constrained to a real record
+// path, so the settings can only ever reference fields that exist.
+const plain = <T extends SearchAttribute>(attribute: T) => attribute
+const unordered = <T extends SearchAttribute>(attribute: T) => `unordered(${attribute})` as const
+const filterOnly = <T extends SearchAttribute>(attribute: T) => `filterOnly(${attribute})` as const
+const desc = <T extends SearchAttribute>(attribute: T) => `desc(${attribute})` as const
+const asc = <T extends SearchAttribute>(attribute: T) => `asc(${attribute})` as const
+
 const frontmatterSchema = z.object({
   title: z.string().optional(),
   description: z.string().nullable(),
@@ -880,15 +900,15 @@ async function main() {
   // reorder relies on. Mirrors the DocSearch crawler layout; `unordered(...)` ignores word position
   // within an attribute. If a new searchable field is ever added to records, add it here too.
   const searchableAttributes = [
-    'unordered(hierarchy.lvl0)',
-    'unordered(hierarchy.lvl1)',
-    'unordered(hierarchy.lvl2)',
-    'unordered(hierarchy.lvl3)',
-    'unordered(hierarchy.lvl4)',
-    'unordered(hierarchy.lvl5)',
-    'unordered(hierarchy.lvl6)',
-    'content',
-    'unordered(keywords)',
+    unordered('hierarchy.lvl0'),
+    unordered('hierarchy.lvl1'),
+    unordered('hierarchy.lvl2'),
+    unordered('hierarchy.lvl3'),
+    unordered('hierarchy.lvl4'),
+    unordered('hierarchy.lvl5'),
+    unordered('hierarchy.lvl6'),
+    plain('content'),
+    unordered('keywords'),
   ]
   //
   // Faceting — `filterOnly` (filter, no facet counts) since these are only ever used to filter,
@@ -900,7 +920,7 @@ async function main() {
   // `availableSDKs` is deliberately NOT faceted: the client only retrieves it to render per-result
   // SDK icons (Search.tsx `SDKsIcon`), never filters or counts on it, and retrieval is independent
   // of faceting.
-  const attributesForFaceting = ['branch', 'record_batch', 'sdk'].map((attribute) => `filterOnly(${attribute})`)
+  const attributesForFaceting = [filterOnly('branch'), filterOnly('record_batch'), filterOnly('sdk')]
   //
   // Ranking: `attribute`/`exact` are moved above `proximity` (vs Algolia's default order) so a
   // query that matches a page's title/heading outranks one that only matches the same words in
@@ -914,7 +934,19 @@ async function main() {
   // `level` (heading depth), `position` (document order). `weight.popularity` is intentionally
   // absent — it's never written to records, so a `desc(weight.popularity)` entry (leftover on some
   // indexes) is dead config that ranks nothing.
-  const customRanking = ['desc(weight.pageRank)', 'desc(weight.level)', 'asc(weight.position)']
+  const customRanking = [desc('weight.pageRank'), desc('weight.level'), asc('weight.position')]
+  //
+  // Deduplication — the linchpin of the per-SDK variant model. Each SDK variant of a page emits its
+  // own records sharing one `distinct_group` (canonical URL + anchor; see createRecord above).
+  // Collapsing each group to a single representative makes a page appear once instead of once per
+  // SDK, and the `sdk` optionalFilters boost lets the active SDK's variant win that collapse.
+  // `attributeForDistinct` is index-level only — it CANNOT be set per query — so it must be codified
+  // here; without it Algolia ignores `distinct` entirely and every page returns one result per SDK
+  // variant. `distinct: true` defaults dedup on at the index level so it's enforced even if a query
+  // omits the flag (the `clerk/clerk` client also passes `distinct: true`, but we don't rely on it).
+  // Both must stay in sync with the `distinct_group` field written to each record.
+  const attributeForDistinct = plain('distinct_group')
+  const distinct = true
 
   // Settings deliberately do NOT forward to replicas, though synonyms (below) do. Synonyms should
   // always be identical across replicas; settings bundle ranking/customRanking, which a standard
@@ -923,7 +955,14 @@ async function main() {
   console.log(`Applying search settings to ${ALGOLIA_INDEX_NAME}`)
   await algolia.setSettings({
     indexName: ALGOLIA_INDEX_NAME,
-    indexSettings: { searchableAttributes, attributesForFaceting, ranking, customRanking },
+    indexSettings: {
+      searchableAttributes,
+      attributesForFaceting,
+      ranking,
+      customRanking,
+      attributeForDistinct,
+      distinct,
+    },
   })
 
   // Synonyms (codified, enforced — replaceExistingSynonyms) — see readSynonyms above.

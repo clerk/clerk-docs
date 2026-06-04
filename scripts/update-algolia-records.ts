@@ -22,6 +22,7 @@ import { algoliasearch, type SynonymHit } from 'algoliasearch'
 import 'dotenv/config'
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import readdirp from 'readdirp'
@@ -721,19 +722,26 @@ export function buildSynonyms(tooltipFiles: TooltipFile[]): SynonymHit[] {
 
 // Reads the `_tooltips` glossary off disk and hands the file contents to `buildSynonyms`.
 async function readSynonyms(): Promise<SynonymHit[]> {
-  let tooltipFiles: TooltipFile[] = []
-  try {
-    const tooltipsDir = path.join(__dirname, '../docs/_tooltips')
-    const fileNames = (await fs.readdir(tooltipsDir)).filter((file) => file.endsWith('.mdx'))
-    tooltipFiles = await Promise.all(
-      fileNames.map(async (fileName) => ({
-        fileName,
-        content: await fs.readFile(path.join(tooltipsDir, fileName), 'utf-8'),
-      })),
-    )
-  } catch {
-    console.warn('⚠︎ Could not read _tooltips for synonyms; using the curated list only')
+  const tooltipsDir = path.join(__dirname, '../docs/_tooltips')
+
+  // A genuinely-absent directory is the only tolerable degrade-to-curated case (and the only one
+  // where dropping the tooltip-derived synonyms is *correct*), so check for it up front and bail.
+  // The reads below are deliberately left un-caught: saveSynonyms runs with replaceExistingSynonyms,
+  // so swallowing a transient/permission failure (EACCES, EMFILE from the concurrent reads, …) would
+  // silently wipe every branch's tooltip-derived synonyms index-wide (synonyms aren't branch-scoped).
+  // Anything other than "not there" should fail the run loudly, not quietly ship half the set.
+  if (!existsSync(tooltipsDir)) {
+    console.warn('⚠︎ _tooltips directory not found; using the curated synonym list only')
+    return buildSynonyms([])
   }
+
+  const fileNames = (await fs.readdir(tooltipsDir)).filter((file) => file.endsWith('.mdx'))
+  const tooltipFiles = await Promise.all(
+    fileNames.map(async (fileName) => ({
+      fileName,
+      content: await fs.readFile(path.join(tooltipsDir, fileName), 'utf-8'),
+    })),
+  )
 
   return buildSynonyms(tooltipFiles)
 }

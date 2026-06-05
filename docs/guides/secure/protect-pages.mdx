@@ -97,6 +97,79 @@ export default async function DashboardLayout({ children }: { children: React.Re
 > [!WARNING]
 > Layouts don't re-render on client-side navigation, so the session isn't re-checked on every route change. Treat a layout check as a convenience for the first load, **not** a security boundary. Always verify authentication (and authorization) in the page, Server Action, route handler, or data-access code that actually reads or mutates protected data. For more information, see the [Next.js docs](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks).
 
+## Migrating from middleware checks
+
+If you currently gate routes inside `clerkMiddleware()`, the move is mostly subtractive: relocate the auth check to the resource, then delete it from the callback. `clerkMiddleware()` stays, it's still required, and any non-auth work in your middleware (redirects, headers, geo) stays with it.
+
+### Replace a route matcher with a resource check
+
+Before, the route is matched and checked in the callback:
+
+```tsx {{ filename: 'middleware.ts (before)' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isProtected = createRouteMatcher(['/dashboard/:path*'])
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtected(req)) await auth.protect()
+})
+```
+
+After, the page enforces its own access and the matcher is gone:
+
+```tsx {{ filename: 'middleware.ts (after)' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+// Keep clerkMiddleware(); it's still required. Just remove the auth gating.
+export default clerkMiddleware()
+```
+
+```tsx {{ filename: 'app/dashboard/page.tsx (after)' }}
+import { auth } from '@clerk/nextjs/server'
+
+export default async function Page() {
+  await auth.protect()
+
+  return <h1>Dashboard</h1>
+}
+```
+
+Once the check lives on the resource, it's safe to delete the matcher and the `auth.protect()` call from the callback.
+
+### Protect a whole subtree
+
+A single matcher like `/dashboard/:path*` covered everything under `/dashboard` in one place. There's no single resource-level equivalent that is also a security boundary (a shared layout is a first-load convenience, not a boundary, see [the warning above](#protect-a-group-of-pages)). Put the boundary in a small shared helper and call it from each protected resource:
+
+```tsx {{ filename: 'app/lib/auth.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+export async function requireUser() {
+  const { userId } = await auth.protect()
+
+  return userId
+}
+```
+
+Call `requireUser()` at the top of each page and Server Action under the subtree. A layout can still handle the first-load redirect, but the per-resource call is what enforces access. In route handlers, `auth.protect()` responds with a `404` to unauthenticated requests; use the `auth()` and `isAuthenticated` check [shown above](#protect-a-route-handler) if you want to return a `401` instead.
+
+### Migrate "protect everything, allow a few public routes"
+
+If your middleware protects everything and allowlists public routes (the `!isPublicRoute` pattern), migrate in this order:
+
+1. **Add** resource-level checks (or `requireUser()`) to the routes that need them.
+1. **Verify** those routes still require sign-in.
+1. **Then** remove the gating from the middleware callback.
+
+> [!WARNING]
+> Add the resource checks first and remove the middleware gate last. If you remove the gate before the resources protect themselves, every route is briefly public.
+
+### Redirects, onboarding, and Roles
+
+- Cross-cutting redirects (incomplete [session tasks](/docs/guides/configure/session-tasks), [onboarding](/docs/guides/development/add-onboarding-flow)) can stay in middleware as a redirect convenience, as long as the real enforcement also runs at the resource.
+- For authorization (Role, Permission, Feature, or Plan), see [Authorization checks](/docs/guides/secure/authorization-checks).
+
+There's no codemod or lint rule for this yet; it's a manual move you can start today.
+
 ## Why not protect in middleware?
 
 It's tempting to gate routes inside `clerkMiddleware()` with `createRouteMatcher()`, but matching routes there means maintaining a second model of your routes, separate from the pages, handlers, and actions they map to. Clerk has to match the request URL the same way your framework and host route it, and keeping those two models in sync is fragile: as routes, rewrites, and hosting change, the matcher can drift from the real routing, and the check can fail to apply where you intend. This drift is hard to prevent and can be reintroduced by changes outside your control.

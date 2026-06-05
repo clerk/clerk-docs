@@ -7,7 +7,7 @@ sdk: astro
 This guide demonstrates how to protect pages and [endpoints](https://docs.astro.build/en/guides/endpoints/) in your Astro application by checking authentication **close to the resource being accessed** rather than in your middleware.
 
 > [!NOTE]
-> Astro has no built-in way to protect groups of routes, so you protect each page and endpoint individually. This is more verbose than a single middleware rule, but it keeps each resource responsible for its own access, which avoids the [structural problems with middleware-based auth checks](#why-not-protect-in-middleware).
+> Astro has no built-in way to protect groups of routes, so you protect each page and endpoint individually. This is more verbose than a single middleware rule, but it keeps each resource responsible for its own access, which avoids the [structural problems with middleware-based auth checks](#why-not-protect-in-middleware). You can cut the per-page boilerplate with a small [shared helper](#reduce-repetition).
 
 ## Protect a page
 
@@ -42,6 +42,37 @@ export async function GET({ locals }) {
 ```
 
 To also check whether a user is **authorized** (has a specific Role, Permission, Feature, or Plan), see [Authorization checks](/docs/guides/secure/authorization-checks).
+
+## Reduce repetition
+
+To avoid repeating the same check in every page, move it into a small helper. Because Astro only redirects when the frontmatter **returns** the redirect, the helper returns the `Response` and each page returns the helper's result.
+
+```ts {{ filename: 'src/lib/require-auth.ts' }}
+import type { AstroGlobal } from 'astro'
+
+// Returns a redirect Response when the user is signed out, or undefined when
+// they're signed in. The page must return this value for the redirect to run.
+export function requireAuth(context: AstroGlobal): Response | undefined {
+  const { isAuthenticated } = context.locals.auth()
+
+  if (!isAuthenticated) {
+    return context.redirect('/sign-in')
+  }
+}
+```
+
+Each protected page then becomes one import and one call:
+
+```astro {{ filename: 'src/pages/dashboard.astro' }}
+---
+import { requireAuth } from '../lib/require-auth'
+
+const redirect = requireAuth(Astro)
+if (redirect) return redirect
+---
+
+<h1>Dashboard</h1>
+```
 
 ## Why not protect in middleware?
 

@@ -48,6 +48,9 @@ type SearchRecord = {
     pageRank: number
     level: number
     position: number
+    // Order-of-magnitude popularity bucket derived from PostHog pageviews (see fetchPageViews).
+    // Used as a custom-ranking tie-breaker so popular pages get a gentle bump. 0 = no/unknown traffic.
+    popularity: number
   }
   hierarchy: {
     lvl0: string
@@ -91,6 +94,22 @@ const VERCEL_ENV = process.env.VERCEL_ENV as 'production' | 'preview' | 'develop
 // Parse command line arguments
 const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
+
+// PostHog popularity signal.
+// Reads a saved PostHog insight ("what users are viewing" — docs pageviews by path), re-runs its
+// query fresh each build, and bakes an order-of-magnitude "popularity" bucket into each record so
+// frequently-visited pages get a gentle ranking bump (see weight.popularity + customRanking).
+// The insight is the source of truth: tune its date range / filters / breakdown in PostHog and the
+// ranking follows. All optional: if creds are missing or any request fails we index with popularity
+// 0 everywhere and ranking is unchanged — the search index must never fail to build over this.
+const POSTHOG_API_KEY = process.env.DOCS_POSTHOG_API_KEY
+const POSTHOG_PROJECT_ID = process.env.DOCS_POSTHOG_PROJECT_ID
+const POSTHOG_HOST = (process.env.DOCS_POSTHOG_HOST ?? 'https://us.posthog.com').replace(/\/+$/, '')
+// Insight that defines "what users are viewing". https://us.posthog.com/project/86309/insights/MymhKcxH
+const POSTHOG_INSIGHT_ID = process.env.DOCS_POSTHOG_INSIGHT_ID ?? 'MymhKcxH'
+// Highest popularity bucket. Buckets are log10(views), so this caps the bump at ~10^MAX views.
+// Kept small on purpose: this is a tie-breaker nudge, not a re-sort by traffic.
+const POPULARITY_MAX_BUCKET = 4
 
 // Heading weights match Algolia DocSearch crawler configuration
 const HEADING_WEIGHTS: Record<string, number> = {
@@ -276,6 +295,7 @@ function generateRecordsFromDoc(
   },
   gitBranch: string,
   recordBatch: string,
+  popularity: number,
 ): SearchRecord[] {
   const records: SearchRecord[] = []
   const slugify = slugifyWithCounter()
@@ -324,6 +344,7 @@ function generateRecordsFromDoc(
         pageRank: doc.frontmatter.search?.rank ?? 0,
         level: HEADING_WEIGHTS[type] ?? 0,
         position: position++,
+        popularity,
       },
       hierarchy: { ...hierarchy },
       distinct_group,
@@ -605,6 +626,151 @@ function generateRecordsFromDoc(
   return records
 }
 
+/**
+ * Normalizes a URL or path to a comparable docs pathname: strips origin, query string, and hash,
+ * and removes a trailing slash. Used to match PostHog `pathname` values against built doc URLs.
+ */
+function normalizePathname(value: string): string {
+  let pathname = value.trim()
+
+  if (/^https?:\/\//i.test(pathname)) {
+    try {
+      pathname = new URL(pathname).pathname
+    } catch {
+      // not a parseable URL; fall through and treat the raw value as a path
+    }
+  }
+
+  pathname = pathname.split('#')[0].split('?')[0]
+
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    pathname = pathname.slice(0, -1)
+  }
+
+  return pathname
+}
+
+/**
+ * Converts a raw pageview count into a small, capped popularity bucket. Log10 so each bucket is an
+ * order of magnitude of traffic: a popular page bumps a notch above a quiet one, but a page with
+ * 50k views doesn't bury one with 5k. 0 (or unknown) views => 0.
+ */
+function popularityBucket(views: number): number {
+  if (!Number.isFinite(views) || views <= 0) return 0
+  return Math.min(POPULARITY_MAX_BUCKET, Math.floor(Math.log10(views)) + 1)
+}
+
+// A PostHog query node. Insights wrap their runnable query in a visualization node
+// (InsightVizNode / DataTableNode) whose `source` is the actual query (TrendsQuery, HogQLQuery, …).
+type PostHogQueryNode = {
+  kind?: string
+  source?: PostHogQueryNode
+  breakdownFilter?: Record<string, unknown>
+}
+
+/**
+ * Unwraps an insight's visualization node down to its runnable query, which is what the `/query/`
+ * endpoint expects (it can't execute the InsightVizNode/DataTableNode wrappers directly).
+ */
+function unwrapInsightQuery(query: PostHogQueryNode): PostHogQueryNode {
+  let node = query
+  while (node && typeof node === 'object' && node.source) {
+    node = node.source
+  }
+  return node
+}
+
+/**
+ * Reads the saved PostHog insight (the source of truth for "what users are viewing"), re-runs its
+ * query fresh, and returns a map of normalized pathname -> total views. Never throws: on missing
+ * credentials or any API failure it logs a warning and returns an empty map, so indexing proceeds
+ * with popularity 0.
+ */
+async function fetchPageViews(): Promise<Map<string, number>> {
+  const views = new Map<string, number>()
+
+  if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID) {
+    console.warn('⚠︎ Popularity signal disabled: set DOCS_POSTHOG_API_KEY and DOCS_POSTHOG_PROJECT_ID to enable')
+    return views
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${POSTHOG_API_KEY}`,
+  }
+  const projectApi = `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}`
+
+  try {
+    // 1. Read the insight definition (needs the `insight:read` scope).
+    const insightResponse = await fetch(`${projectApi}/insights/?short_id=${POSTHOG_INSIGHT_ID}`, { headers })
+    if (!insightResponse.ok) {
+      console.warn(
+        `⚠︎ Popularity signal skipped: could not read insight ${POSTHOG_INSIGHT_ID} (${insightResponse.status} ${insightResponse.statusText}); key needs the 'insight:read' scope`,
+      )
+      return views
+    }
+
+    const insightJson = (await insightResponse.json()) as {
+      results?: Array<{ name?: string; derived_name?: string; query?: PostHogQueryNode }>
+    }
+    const insight = insightJson.results?.[0]
+
+    if (!insight?.query) {
+      console.warn(`⚠︎ Popularity signal skipped: insight ${POSTHOG_INSIGHT_ID} has no query definition`)
+      return views
+    }
+
+    const query = unwrapInsightQuery(insight.query)
+
+    // Pull every path, not just the insight's display limit (a UI/perf setting, not relevant here).
+    if (query.breakdownFilter) {
+      query.breakdownFilter = { ...query.breakdownFilter, breakdown_limit: 10000 }
+    }
+
+    console.log(
+      `Running insight ${POSTHOG_INSIGHT_ID}${insight.name ? ` ("${insight.name}")` : ''} [${query.kind ?? 'unknown'}]`,
+    )
+
+    // 2. Execute the insight's query fresh (avoids stale cached results; needs the `query:read` scope).
+    const queryResponse = await fetch(`${projectApi}/query/`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query }),
+    })
+    if (!queryResponse.ok) {
+      console.warn(
+        `⚠︎ Popularity signal skipped: insight query failed (${queryResponse.status} ${queryResponse.statusText}); key needs the 'query:read' scope`,
+      )
+      return views
+    }
+
+    const data = (await queryResponse.json()) as {
+      results?: Array<{
+        label?: string
+        breakdown_value?: string | string[]
+        aggregated_value?: number
+        count?: number
+      }>
+    }
+
+    for (const row of data.results ?? []) {
+      const rawPath = Array.isArray(row.breakdown_value) ? row.breakdown_value[0] : row.breakdown_value ?? row.label
+      const count = row.aggregated_value ?? row.count ?? 0
+      if (typeof rawPath !== 'string' || rawPath.length === 0) continue
+      const pathname = normalizePathname(rawPath)
+      // The insight may include non-docs paths; only docs paths can match a record anyway.
+      if (!pathname.startsWith(BASE_DOCS_URL)) continue
+      views.set(pathname, (views.get(pathname) ?? 0) + count)
+    }
+
+    console.log(`✓ Fetched pageviews for ${views.size} docs paths from insight ${POSTHOG_INSIGHT_ID}`)
+  } catch (error) {
+    console.warn(`⚠︎ Popularity signal skipped: ${(error as Error).message}`)
+  }
+
+  return views
+}
+
 async function main() {
   if (VERCEL_ENV === 'preview') {
     if (DEBUG_SEARCH_BRANCH !== undefined) {
@@ -637,6 +803,10 @@ async function main() {
   })
 
   console.log(`Found ${mdxFiles.length} MDX files`)
+
+  // Pull popularity (pageviews per path) up front; looked up per doc by URL below.
+  const pageViews = await fetchPageViews()
+  const popularityHistogram = new Map<number, number>()
 
   const allRecords: SearchRecord[] = []
   let skipped = 0
@@ -712,6 +882,8 @@ async function main() {
     }
 
     const url = filePathToUrl(filePath, DIST_PATH)
+    const popularity = popularityBucket(pageViews.get(normalizePathname(url)) ?? 0)
+    popularityHistogram.set(popularity, (popularityHistogram.get(popularity) ?? 0) + 1)
 
     const records = generateRecordsFromDoc(
       {
@@ -722,6 +894,7 @@ async function main() {
       },
       gitBranch,
       recordBatch,
+      popularity,
     )
     allRecords.push(...records)
     processed++
@@ -729,6 +902,14 @@ async function main() {
 
   console.log(`✓ Processed ${processed} files, skipped ${skipped}`)
   console.log(`✓ Generated ${allRecords.length} search records`)
+
+  if (pageViews.size > 0) {
+    const summary = Array.from(popularityHistogram.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([bucket, count]) => `${bucket}:${count}`)
+      .join('  ')
+    console.log(`✓ Popularity buckets (bucket:pages) → ${summary}`)
+  }
 
   if (DRY_RUN) {
     await fs.mkdir(ALGOLIA_OUTPUT_DIR, { recursive: true })
@@ -746,6 +927,10 @@ async function main() {
     .parse(process.env)
 
   const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
+
+  // The popularity signal only takes effect if the index `customRanking` includes
+  // desc(weight.popularity) — ideally right after desc(weight.pageRank). This is managed manually
+  // per index in the Algolia dashboard (dev_docs is done; prod_docs still needs it), not here.
 
   // Push to Algolia
   console.log('\nPushing records to Algolia...')

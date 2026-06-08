@@ -4,7 +4,7 @@ description: Learn how to protect pages, route handlers, and Server Actions in y
 sdk: nextjs
 ---
 
-This guide demonstrates how to protect pages, route handlers, and Server Actions in your Next.js application by checking authentication **close to the resource being accessed** rather than in your middleware.
+This guide demonstrates how to protect pages, route handlers, and Server Actions in your Next.js application by checking authentication **close to the resource being accessed**.
 
 > [!TIP]
 > Protect access as close to the resource as possible, in the code that reads or mutates the data. See [why protecting close to the resource is simpler](#why-protect-close-to-the-resource).
@@ -138,7 +138,7 @@ Once the check lives on the resource, it's safe to delete the matcher and the `a
 
 ### Protect a whole subtree
 
-A single matcher like `/dashboard/:path*` covered everything under `/dashboard` in one place. There's no single resource-level equivalent that is also a security boundary (a shared layout is a first-load convenience, not a boundary, see [the warning above](#protect-a-group-of-pages)). Put the boundary in a small shared helper and call it from each protected resource:
+To protect everything under a path like `/dashboard`, put the check in a small shared helper and call it from each protected resource:
 
 ```tsx {{ filename: 'app/lib/auth.ts' }}
 import { auth } from '@clerk/nextjs/server'
@@ -150,7 +150,7 @@ export async function requireUser() {
 }
 ```
 
-Call `requireUser()` at the top of each page and Server Action under the subtree. A layout can still handle the first-load redirect, but the per-resource call is what enforces access. In route handlers, `auth.protect()` responds with a `404` to unauthenticated requests; use the `auth()` and `isAuthenticated` check [shown above](#protect-a-route-handler) if you want to return a `401` instead.
+Call `requireUser()` at the top of each page and Server Action under the subtree. The per-resource call is what enforces access. In route handlers, `auth.protect()` responds with a `404` to unauthenticated requests; use the `auth()` and `isAuthenticated` check [shown above](#protect-a-route-handler) if you want to return a `401` instead.
 
 ### Migrate "protect everything, allow a few public routes"
 
@@ -168,12 +168,10 @@ If your middleware protects everything and allowlists public routes (the `!isPub
 - Cross-cutting redirects (incomplete [session tasks](/docs/guides/configure/session-tasks), [onboarding](/docs/guides/development/add-onboarding-flow)) can stay in middleware as a redirect convenience, as long as the real enforcement also runs at the resource.
 - For authorization (Role, Permission, Feature, or Plan), see [Authorization checks](/docs/guides/secure/authorization-checks).
 
-There's no codemod or lint rule for this yet; it's a manual move you can start today.
-
 ## Why protect close to the resource?
 
 When the same code that reads or mutates the data also enforces access to it, authorization lives next to the thing it protects. There's one place to look and nothing to keep in sync.
 
-Gating routes inside `clerkMiddleware()` with `createRouteMatcher()` works, but it puts that decision in a separate model of your routes, apart from the pages, handlers, and actions they map to. Clerk matches the request URL the same way your framework and host route it, so that route model is one more thing to maintain as routes, rewrites, and hosting change. Keeping the check at the resource avoids that.
+Gating routes inside `clerkMiddleware()` with `createRouteMatcher()` puts that decision in a separate model of your routes, apart from the pages, handlers, and actions they map to. Clerk matches the request URL the same way your framework and host route it, so that route model is one more thing to maintain as routes, rewrites, and hosting change. Keeping the check at the resource avoids that.
 
 `clerkMiddleware()` is required, and it's the right place for redirects, headers, and other request handling.

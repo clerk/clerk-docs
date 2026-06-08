@@ -62,41 +62,29 @@ declare global {
 
 <Include src="_partials/middleware-auth-deprecation" />
 
-[`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) allows you to configure access to your routes with fine grained control. It also allows you to retrieve claims directly from the session and redirect your user accordingly.
+[`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) can read claims directly from the session, which makes it a convenient place to redirect signed-in users who haven't finished onboarding to the onboarding page.
 
-The following example demonstrates how to use `clerkMiddleware()` to redirect users based on their onboarding status. If the user is signed in and has not completed onboarding, they will be redirected to the onboarding page.
-
-Note that the following example protects all routes except one. This is so that any user visiting your application is forced to authenticate, and then forced to onboard. You can customize the array in the `createRouteMatcher()` function assigned to `isPublicRoute` to include any routes that should be accessible to all users, even unauthenticated ones.
+The following example redirects a signed-in user to `/onboarding` whenever their session shows `onboardingComplete` is not `true`. This redirect is a convenience, not an access boundary: enforce the `onboardingComplete` check (and authentication) at the resource, as shown in the next section.
 
 <Include src="_partials/nextjs/nextjs-15-callout" />
 
 ```tsx {{ filename: 'src/proxy.ts' }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { NextRequest, NextResponse } from 'next/server'
+import { clerkMiddleware } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
 
-const isOnboardingRoute = createRouteMatcher(['/onboarding'])
-const isPublicRoute = createRouteMatcher(['/public-route-example'])
+export default clerkMiddleware(async (auth, req) => {
+  const { isAuthenticated, sessionClaims } = await auth()
 
-export default clerkMiddleware(async (auth, req: NextRequest) => {
-  const { isAuthenticated, sessionClaims, redirectToSignIn } = await auth()
-
-  // For users visiting /onboarding, don't try to redirect
-  if (isAuthenticated && isOnboardingRoute(req)) {
-    return NextResponse.next()
+  // Convenience redirect: send signed-in users who haven't completed onboarding
+  // to the onboarding page. This is not an access boundary; enforce the
+  // `onboardingComplete` check at the resource (see the next section).
+  if (
+    isAuthenticated &&
+    !sessionClaims?.metadata?.onboardingComplete &&
+    req.nextUrl.pathname !== '/onboarding'
+  ) {
+    return NextResponse.redirect(new URL('/onboarding', req.url))
   }
-
-  // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!isAuthenticated && !isPublicRoute(req)) return redirectToSignIn({ returnBackUrl: req.url })
-
-  // Catch users who do not have `onboardingComplete: true` in their publicMetadata
-  // Redirect them to the /onboarding route to complete onboarding
-  if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
-    const onboardingUrl = new URL('/onboarding', req.url)
-    return NextResponse.redirect(onboardingUrl)
-  }
-
-  // If the user is signed in and the route is protected, let them view.
-  if (isAuthenticated && !isPublicRoute(req)) return NextResponse.next()
 })
 
 export const config = {

@@ -14,7 +14,7 @@ In this guide, you will learn how to:
 1. Configure your Middleware to read session data
 1. Update the user’s onboarding state
 
-For the sake of this guide, examples are written for Next.js App Router, but can be used with Next.js Pager Router as well. The examples have been pared down to the bare minimum to enable you to easily customize them to your needs.
+For the sake of this guide, examples are written for Next.js App Router, but can be used with Next.js Pages Router as well. The examples have been pared down to the bare minimum to enable you to easily customize them to your needs.
 
 > [!NOTE]
 > To see this guide in action, see the [repository](https://github.com/clerk/clerk-nextjs-onboarding-sample-app/tree/main).
@@ -60,29 +60,32 @@ declare global {
 
 ## Configure your Middleware to read session data
 
-<Include src="_partials/middleware-auth-deprecation" />
+[`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) allows you to configure access to your routes with fine grained control. It also allows you to retrieve claims directly from the session and redirect your user accordingly.
 
-[`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) can read claims directly from the session, which makes it a convenient place to redirect signed-in users who haven't finished onboarding to the onboarding page.
+The following example demonstrates how to use `clerkMiddleware()` to redirect users based on their onboarding status. If the user has not completed onboarding, they will be redirected to the onboarding page. This example protects the entire application, except for the `/onboarding` route.
 
-The following example redirects a signed-in user to `/onboarding` whenever their session shows `onboardingComplete` is not `true`. This redirect is a convenience, not an access boundary: enforce the `onboardingComplete` check (and authentication) at the resource, as shown in the next section.
+> [!IMPORTANT]
+> Enforce authentication and the `onboardingComplete` check at the resource, in the page, Route Handler, or Server Action that reads or mutates onboarding-gated data. See the [Collect user onboarding information](#collect-user-onboarding-information) section.
 
 <Include src="_partials/nextjs/nextjs-15-callout" />
 
-```tsx {{ filename: 'src/proxy.ts' }}
-import { clerkMiddleware } from '@clerk/nextjs/server'
-import { NextResponse } from 'next/server'
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-export default clerkMiddleware(async (auth, req) => {
+const isOnboardingRoute = createRouteMatcher(['/onboarding'])
+
+export default clerkMiddleware(async (auth, req: NextRequest) => {
   const { isAuthenticated, sessionClaims } = await auth()
 
-  // Convenience redirect: send signed-in users who haven't completed onboarding
-  // to the onboarding page. This is not an access boundary; enforce the
-  // `onboardingComplete` check at the resource (see the next section).
-  if (
-    isAuthenticated &&
-    !sessionClaims?.metadata?.onboardingComplete &&
-    req.nextUrl.pathname !== '/onboarding'
-  ) {
+  // For users visiting /onboarding, don't try to redirect
+  if (isOnboardingRoute(req)) {
+    return NextResponse.next()
+  }
+
+  // If user doesn't have `onboardingComplete: true` in their publicMetadata,
+  // redirect them to the /onboarding route to complete onboarding
+  if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
     return NextResponse.redirect(new URL('/onboarding', req.url))
   }
 })
@@ -96,29 +99,6 @@ export const config = {
     // Always run for Clerk-specific frontend API routes
     '/__clerk/(.*)',
   ],
-}
-```
-
-> [!IMPORTANT]
-> Enforce authentication and the `onboardingComplete` check at the resource, in the page, layout, route handler, or Server Action that reads or mutates onboarding-gated data. See [Protect pages and routes](/docs/guides/secure/protect-pages).
-
-### Create a layout for the `/onboarding` route
-
-You will need a layout for the `/onboarding` route that will redirect users to the homepage if they have already completed onboarding.
-
-1. In your `/app` directory, create an `/onboarding` folder.
-1. In your `/onboarding` directory, create a `layout.tsx` file and add the following code to the file. This file could also be expanded to handle multiple steps, if multiple steps are required for an onboarding flow.
-
-```tsx {{ filename: 'src/app/onboarding/layout.tsx' }}
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
-
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  if ((await auth()).sessionClaims?.metadata.onboardingComplete === true) {
-    redirect('/')
-  }
-
-  return <>{children}</>
 }
 ```
 
@@ -138,11 +118,11 @@ Each Clerk user has a `User` object that contains a `publicMetadata` property, w
 You can use the user's `publicMetadata` to track the user's onboarding state. To do this, you will create:
 
 - A process in your frontend with logic to collect and submit all the information for onboarding. In this guide, you will create a simple form.
-- A method in your backend to securely update the user's `publicMetadata`
+- A method in your backend to securely update the user's `publicMetadata`.
 
 ### Collect user onboarding information
 
-To collect the user's onboarding information, create a form that will be displayed on the `/onboarding` page. This form will collect the user's application name and application type. This is a very loose example — you can use this step to capture information from the user, sync user data to your database, have the user sign up to a course or subscription, or more.
+Create the `/onboarding` route with a form that collects the user's onboarding information. This example collects the user's application name and application type. This is a very loose example — you can use this step to capture information from the user, sync user data to your database, have the user sign up to a course or subscription, or more.
 
 1. In your `/onboarding` directory, create a `page.tsx` file.
 1. Add the following code to the file.
@@ -152,9 +132,9 @@ To collect the user's onboarding information, create a form that will be display
 >
 > ---
 >
-> You configured your app to track the user's onboarding status in their public metadata, which you stored as a session claim in the session token. When user data (such as metadata) is updated through the Clerk Backend API or a server action, the client may temporarily display stale values because the session token only refreshes automatically every \~60 seconds. This form calls `user.reload()` to force a token refresh so the client gets the updated information immediately instead of waiting for the next automatic refresh cycle. Learn more about [forcing a token refresh](/docs/guides/sessions/force-token-refresh#user-reload).
+> You configured your app to track the user's onboarding status in their public metadata, which you stored as a session claim in the session token. When user data (such as metadata) is updated through the Clerk Backend API or a Server Action, the client may temporarily display stale values because the session token only refreshes automatically every \~60 seconds. This form calls `user.reload()` to force a token refresh so the client gets the updated information immediately instead of waiting for the next automatic refresh cycle. Learn more about [forcing a token refresh](/docs/guides/sessions/force-token-refresh#user-reload).
 
-```tsx
+```tsx {{ filename: 'app/onboarding/page.tsx' }}
 'use client'
 
 import * as React from 'react'
@@ -162,10 +142,25 @@ import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { completeOnboarding } from './_actions'
 
-export default function OnboardingComponent() {
+export default function OnboardingForm() {
   const [error, setError] = React.useState('')
-  const { user } = useUser()
+  const { isLoaded, isSignedIn, user } = useUser()
   const router = useRouter()
+
+  // Handle loading state
+  if (!isLoaded) return <h1>Loading...</h1>
+
+  if (!isSignedIn) {
+    // Add logic to handle unauthenticated users
+    // This example renders a UI but you could also redirect to the sign-in page instead
+    return <h1>You must be signed in to view this page</h1>
+  }
+
+  if (user?.publicMetadata?.onboardingComplete === true) {
+    // Add logic to handle users who have already completed onboarding
+    // This example renders a UI but you could also redirect to the homepage instead
+    return <h1>You have already completed onboarding</h1>
+  }
 
   const handleSubmit = async (formData: FormData) => {
     const res = await completeOnboarding(formData)
@@ -208,7 +203,7 @@ Now that there is a form to collect the user's onboarding information, you need 
 1. In your `/onboarding` directory, create an `_actions.ts` file.
 1. Add the following code to the file. This file includes a method that will be called on form submission and will update the user's `publicMetadata` accordingly. The following example uses the [`clerkClient`](/docs/reference/backend/overview) wrapper to interact with the Backend API and update the user's `publicMetadata`.
 
-```tsx
+```tsx {{ filename: 'app/onboarding/_actions.ts' }}
 'use server'
 
 import { auth, clerkClient } from '@clerk/nextjs/server'

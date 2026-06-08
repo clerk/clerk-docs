@@ -7,7 +7,7 @@ sdk: nextjs
 This guide demonstrates how to protect pages, route handlers, and Server Actions in your Next.js application by checking authentication **close to the resource being accessed** rather than in your middleware.
 
 > [!TIP]
-> Protect access where the resource is read, not inside `clerkMiddleware()`. [Auth checks in the middleware layer are no longer recommended](#why-not-protect-in-middleware) because they're difficult to keep in sync with how your framework and host route requests.
+> Protect access as close to the resource as possible, in the code that reads or mutates the data. See [why protecting close to the resource is simpler](#why-protect-close-to-the-resource).
 
 To check whether a user is **authorized** (has a specific Role, Permission, Feature, or Plan) in addition to being signed in, see [Authorization checks](/docs/guides/secure/authorization-checks). This guide focuses on **authentication** (whether a user is signed in).
 
@@ -170,10 +170,10 @@ If your middleware protects everything and allowlists public routes (the `!isPub
 
 There's no codemod or lint rule for this yet; it's a manual move you can start today.
 
-## Why not protect in middleware?
+## Why protect close to the resource?
 
-It's tempting to gate routes inside `clerkMiddleware()` with `createRouteMatcher()`, but matching routes there means maintaining a second model of your routes, separate from the pages, handlers, and actions they map to. Clerk has to match the request URL the same way your framework and host route it, and keeping those two models in sync is fragile: as routes, rewrites, and hosting change, the matcher can drift from the real routing, and the check can fail to apply where you intend. This drift is hard to prevent and can be reintroduced by changes outside your control.
+When the same code that reads or mutates the data also enforces access to it, authorization lives next to the thing it protects. There's one place to look and nothing to keep in sync.
 
-Protecting close to the resource avoids this entire class of bug: the same code that reads or mutates the data also enforces access to it.
+Gating routes inside `clerkMiddleware()` with `createRouteMatcher()` works, but it puts that decision in a separate model of your routes, apart from the pages, handlers, and actions they map to. Clerk matches the request URL the same way your framework and host route it, so that route model is one more thing to maintain as routes, rewrites, and hosting change. Keeping the check at the resource avoids that.
 
-`clerkMiddleware()` itself is still required and fully supported. Only auth checks _inside_ the callback are discouraged.
+`clerkMiddleware()` itself is still required and fully supported, and remains the right place for redirects, headers, and other request handling.

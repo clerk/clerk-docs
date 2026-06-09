@@ -72,25 +72,30 @@ export default function Page() {
 <If sdk={["nextjs", "astro", "nuxt", "react-router", "tanstack-react-start"]}>
   ### Using middleware-based redirects
 
-  The [`createRouteMatcher()`](/docs/reference/nextjs/clerk-middleware#create-route-matcher) helper function can be used in your `clerkMiddleware()` to protect specific routes or route groups from users who have pending session tasks.
+  In your `clerkMiddleware()`, read the session status and redirect users with pending tasks to the task page. This example matches the request path to decide which routes require completed tasks.
 
   {/* TODO: Add example for Astro, Nuxt, React Router, and Tanstack React Start. */}
 
   ```tsx {{ filename: 'proxy.ts' }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  import { clerkMiddleware } from '@clerk/nextjs/server'
   import { NextRequest, NextResponse } from 'next/server'
 
-  // Set the routes that require session tasks
-  const requiresSessionTasks = createRouteMatcher(['/dashboard/:path*', '/forum/:path*'])
+  // Set the routes that require completed session tasks
+  const sessionTaskRoutes = ['/dashboard', '/forum']
 
   export default clerkMiddleware(async (auth, req: NextRequest) => {
     // Use the `auth()` helper to get the session status
     const { sessionStatus } = await auth()
 
+    const { pathname } = req.nextUrl
+    const requiresSessionTasks = sessionTaskRoutes.some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`),
+    )
+
     // Handle pending users
     // This example redirects pending users to the /session-tasks page
     // so they can fulfill the session tasks
-    if (sessionStatus === 'pending' && requiresSessionTasks(req)) {
+    if (sessionStatus === 'pending' && requiresSessionTasks) {
       const url = req.nextUrl.clone()
       url.pathname = '/session-tasks'
       return NextResponse.redirect(url)

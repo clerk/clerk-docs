@@ -107,6 +107,7 @@ export const parseInMarkdownFile =
       .use(remarkGfm)
       .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
       .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
+      .use(checkTooltips(config, tooltips, file, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links
       .use(() => (tree) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)

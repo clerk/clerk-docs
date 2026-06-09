@@ -859,11 +859,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             }),
           )
           .use(
-            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
-              foundTooltips.add(tooltip)
-            }),
-          )
-          .use(
             checkTypedoc(
               config,
               validatedTypedocs,
@@ -873,6 +868,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 foundTypedocs.add(typedoc)
               },
             ),
+          )
+          .use(
+            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
+              foundTooltips.add(tooltip)
+            }),
           )
           .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
           .use(
@@ -1041,8 +1041,8 @@ ${yaml.stringify({
               .use(remarkGfm)
               .use(validateLinks(config, routableDocsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
               .use(embedLinks(config, routableDocsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))

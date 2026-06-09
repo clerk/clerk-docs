@@ -9,6 +9,13 @@ This guide demonstrates how to protect pages, Route Handlers, and Server Actions
 > [!TIP]
 > To check whether a user is [**authorized** (has a specific Role, Permission, Feature, or Plan)](!authorization-check) in addition to being signed in, see [Authorization checks](/docs/guides/secure/authorization-checks). This guide focuses on **authentication** (whether a user is signed in).
 
+To protect your application, every resource that reads or mutates protected data needs its own check. In a Next.js app, that means:
+
+- **Server Components**: layouts and pages
+- **Route Handlers**: your internal Next.js API endpoints
+- **Server Actions**: these run as API endpoints, so protect them like any other handler
+- **External API endpoints** your app calls: these must enforce their own auth (see [Verifying OAuth access tokens](/docs/guides/development/verifying-oauth-access-tokens))
+
 ## Server-side
 
 [`auth()`](/docs/reference/nextjs/app-router/auth) is an App Router-specific helper that you can use inside of your Route Handlers, Server Components, and Server Actions.
@@ -54,7 +61,7 @@ The following examples demonstrate both methods.
 
 ### Protect a layout
 
-It's not recommended to perform authentication checks in a layout. Layouts don't re-render on client-side navigation, so the session isn't re-checked on every route change. For more information, see the [Next.js docs](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks).
+You can run an auth check in a layout the same way as in a page, and you should if the layout itself reads privileged data (for example, when prefetching). But a layout check alone isn't enough: layouts don't re-render on client-side navigation, so the session isn't re-checked on every route change. Protect each page (and every other resource that reads or mutates data) directly, and treat a layout check as an addition, not a replacement. For more information, see the [Next.js docs](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks).
 
 ### Protect a Route Handler
 
@@ -98,7 +105,7 @@ It's not recommended to perform authentication checks in a layout. Layouts don't
 
 ### Protect a Server Action
 
-Verify the user inside the action itself, before running any logic that depends on them being signed in.
+Server Actions run as API endpoints, so verify the user inside the action itself, before running any logic that depends on them being signed in.
 
 <Tabs items={["auth.protect()", "auth()"]}>
   <Tab>
@@ -136,7 +143,10 @@ Verify the user inside the action itself, before running any logic that depends 
 
 ## Client-side
 
-You can use the `isSignedIn` property from the [`useAuth()`](/docs/reference/hooks/use-auth) or [`useUser()`](/docs/reference/hooks/use-user) hook to protect your Client Components from unauthenticated users.
+On the client, you can read the `isSignedIn` property from the [`useAuth()`](/docs/reference/hooks/use-auth) or [`useUser()`](/docs/reference/hooks/use-user) hook to conditionally render UI based on whether the user is signed in.
+
+> [!WARNING]
+> A client-side check is a UX affordance, not a security boundary. By the time this code runs, the component has already been sent to the browser, so anything it contains is available to the user regardless of the check. Protect the data instead: guard the resources you pass to Client Components as props, and the Route Handlers or external API endpoints the client calls (see [Server-side](#server-side)).
 
 <CodeBlockTabs options={["useAuth()", "useUser()"]}>
   ```tsx {{ filename: 'app/example/page.tsx' }}

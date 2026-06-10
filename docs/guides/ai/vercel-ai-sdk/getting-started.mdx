@@ -1,0 +1,111 @@
+---
+title: Get started with Clerk and the Vercel AI SDK
+description: Authenticate users and protect AI API routes when using the Vercel AI SDK in a Next.js app.
+sdk: nextjs
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "A Clerk application is required",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Integrate Clerk into your Next.js application",
+      link: "/docs/nextjs/getting-started/quickstart",
+      icon: "nextjs",
+    },
+  ]}
+/>
+
+This guide shows how to combine Clerk authentication with the [Vercel AI SDK](https://sdk.vercel.ai) in a Next.js App Router app. Once integrated, you can support a variety of auth methods for invoking LLMs, personalize prompts with user (or organization) info, and gate AI tool calls using role-based access control (RBAC).
+
+> [!NOTE]
+> All code works with **AI SDK v6** and **v7** (canary).
+
+<Steps>
+  ## Install the Vercel AI SDK
+
+  This guide uses the [Vercel AI Gateway](https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway) to route model calls, but any [AI SDK provider](https://sdk.vercel.ai/providers/ai-sdk-providers) works the same way.
+
+  ```npm
+  npm install ai @ai-sdk/react zod
+  ```
+
+  Set the gateway API key in `.env.local` alongside your existing Clerk keys.
+
+  ```env
+  AI_GATEWAY_API_KEY=...
+  ```
+
+  ## Protect your AI API route
+
+  Create an API route that streams a model response, and call `await auth.protect()` before invoking the model. Unauthenticated API requests are rejected before they reach your provider.
+
+  ```ts {{ filename: 'app/api/chat/route.ts' }}
+  import { auth } from '@clerk/nextjs/server'
+  import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+
+  export async function POST(req: Request) {
+    await auth.protect()
+
+    const { messages }: { messages: UIMessage[] } = await req.json()
+
+    const result = streamText({
+      model: 'openai/gpt-5',
+      messages: await convertToModelMessages(messages),
+    })
+
+    return result.toUIMessageStreamResponse()
+  }
+  ```
+
+  Because this is an API route, unauthenticated calls receive a `404` rather than a redirect to the sign-in page.
+
+  For other ways to secure the chat endpoint, like role-based permissions or plan gating, see [Securing chat endpoints](/docs/guides/ai/vercel-ai-sdk/securing-chat-endpoints).
+
+  ## Wire up the client
+
+  On the client, use `useChat` from `@ai-sdk/react` and post to your protected route. Clerk's session cookie travels with same-origin requests automatically, so you don't need to attach a token.
+
+  ```tsx {{ filename: 'app/chat/page.tsx' }}
+  'use client'
+
+  import { useChat } from '@ai-sdk/react'
+  import { useState } from 'react'
+
+  export default function Chat() {
+    const { messages, sendMessage } = useChat()
+    const [input, setInput] = useState('')
+
+    return (
+      <div>
+        {messages.map((m) => (
+          <div key={m.id}>
+            <strong>{m.role}: </strong>
+            {m.parts.map((p, i) => (p.type === 'text' ? <span key={i}>{p.text}</span> : null))}
+          </div>
+        ))}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            sendMessage({ text: input })
+            setInput('')
+          }}
+        >
+          <input value={input} onChange={(e) => setInput(e.target.value)} />
+        </form>
+      </div>
+    )
+  }
+  ```
+
+  Gate the page so only signed-in users can see the form.
+</Steps>
+
+## Next steps
+
+- [Securing chat endpoints](/docs/guides/ai/vercel-ai-sdk/securing-chat-endpoints): role-based permissions, plan and feature gating.
+- [Enriching prompts and runtime context](/docs/guides/ai/vercel-ai-sdk/enriching-prompts-and-runtime-context): inject Clerk user, organization, and runtime data into prompts and tool context.
+- [Vercel AI SDK documentation](https://ai-sdk.dev/docs): full reference for streaming, tools, providers, and the `useChat` hook.

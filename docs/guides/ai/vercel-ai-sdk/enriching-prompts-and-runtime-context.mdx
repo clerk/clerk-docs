@@ -1,0 +1,156 @@
+---
+title: Enriching prompts and runtime context
+description: Pass Clerk user, organization, and runtime data into your AI SDK calls — into prompts the model reads and into context only your tools see.
+sdk: nextjs
+---
+
+Inject Clerk session and organization data into the prompts your model reads. Pass tokens and permission helpers through runtime context that only your tools see.
+
+## Enriching prompts with session data
+
+The following examples assume a human user is calling the model with a valid session token.
+
+<Tabs items={["User Info", "Organization Info"]}>
+  <Tab>
+    Use [`currentUser()`](/docs/reference/nextjs/app-router/current-user) to read the caller's profile and inject the relevant fields into the prompt.
+
+    ```ts
+    const user = await currentUser()
+    const firstName = user?.firstName
+
+    const result = streamText({
+      model: 'openai/gpt-5',
+      instructions: [
+        `You are assisting ${firstName ?? 'a signed-in user'}.`,
+        'Reply concisely and address them by name when natural.',
+      ].join('\n'),
+      messages: [],
+    })
+    ```
+
+    In AI SDK v6, the parameter is `system` instead of `instructions`.
+  </Tab>
+
+  <Tab>
+    Read the active organization context from [`auth()`](/docs/reference/nextjs/app-router/auth): `orgId`, `orgSlug`, and `orgRole`. For richer details like the organization's name, fetch the organization with [`getOrganization()`](/docs/reference/backend/organization/get-organization).
+
+    ```ts
+    const { orgId, orgRole } = await auth()
+    const client = await clerkClient()
+
+    let prompt = 'You are assisting a signed-in user.'
+
+    if (orgId) {
+      const org = await client.organizations.getOrganization({ organizationId: orgId })
+      prompt += ` They are active in ${org.name} as ${orgRole ?? 'a member'}.`
+    }
+
+    const result = streamText({
+      model: 'openai/gpt-5',
+      instructions: prompt,
+      messages: [],
+    })
+    ```
+
+    In AI SDK v6, the parameter is `system` instead of `instructions`.
+  </Tab>
+</Tabs>
+
+## Enriching runtime and tool context
+
+Pass M2M tokens, API keys, permission helpers, or request IDs to your tools without exposing them to the model. AI SDK v6 ships this as a single experimental field; v7 promotes it to typed `runtimeContext` and `toolsContext`. Both are shown below.
+
+<Tabs items={["AI SDK v6", "AI SDK v7"]}>
+  <Tab>
+    In AI SDK v6, all tools share a single untyped [`experimental_context`](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling#context-experimental) field.
+
+    ```ts {{ filename: 'app/api/chat/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+    import { convertToModelMessages, streamText, tool, type UIMessage } from 'ai'
+    import { z } from 'zod'
+
+    const logEvent = tool({
+      description: 'Record a product analytics event.',
+      inputSchema: z.object({ event: z.string() }),
+      execute: async ({ event }, { experimental_context }) => {
+        const ctx = experimental_context as { userId: string | null; orgId: string | null }
+        // await analytics.track({ event, userId: ctx.userId, orgId: ctx.orgId })
+        return { ok: true, event, by: ctx.userId }
+      },
+    })
+
+    export async function POST(req: Request) {
+      await auth.protect()
+      const { userId, orgId } = await auth()
+      const { messages }: { messages: UIMessage[] } = await req.json()
+
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+        tools: { logEvent },
+        experimental_context: { userId, orgId },
+      })
+
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+
+    Cast `experimental_context` to your expected shape inside `execute`; the SDK doesn't validate it for you.
+  </Tab>
+
+  <Tab>
+    v7 splits context into two fields:
+
+    - [`runtimeContext`](https://ai-sdk.dev/v7/docs/ai-sdk-core/tools-and-tool-calling#runtime-context) — shared across every step of the run. Available in `prepareStep`, lifecycle callbacks (`onStepFinish`, `onEnd`), and step results.
+    - `toolsContext` — a map keyed by tool name. Each tool declares a `contextSchema` that validates its slice; the tool reads it as `{ context }` inside `execute`.
+
+    ```ts {{ filename: 'app/api/chat/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+    import { convertToModelMessages, streamText, tool, type UIMessage } from 'ai'
+    import { z } from 'zod'
+
+    type Auth = Awaited<ReturnType<typeof auth>>
+
+    const archiveProject = tool({
+      description: 'Archive a project.',
+      inputSchema: z.object({ projectId: z.string() }),
+      contextSchema: z.custom<{ has: Auth['has'] }>(),
+      execute: async ({ projectId }, { context }) => {
+        if (!context.has({ permission: 'org:project:archive' })) {
+          return { error: 'Not authorized.' }
+        }
+        return { ok: true, projectId }
+      },
+    })
+
+    export async function POST(req: Request) {
+      await auth.protect()
+      const { userId, orgId, has } = await auth()
+      const { messages }: { messages: UIMessage[] } = await req.json()
+
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+        runtimeContext: { userId, orgId },
+        tools: { archiveProject },
+        toolsContext: {
+          archiveProject: { has },
+        },
+        prepareStep: async ({ runtimeContext }) => {
+          // runtimeContext is available here for logging or step-shaping.
+          console.log('Step starting', runtimeContext)
+          return {}
+        },
+      })
+
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+
+    See the AI SDK official docs on [Runtime and tool context](https://ai-sdk.dev/v7/docs/ai-sdk-core/runtime-and-tool-context) for the full matrix of context types and where each context is available.
+  </Tab>
+</Tabs>
+
+## Next steps
+
+- [Runtime and tool context (Vercel AI SDK)](https://ai-sdk.dev/v7/docs/ai-sdk-core/runtime-and-tool-context): canonical reference for v7's context model.

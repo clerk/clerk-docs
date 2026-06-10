@@ -1,0 +1,281 @@
+---
+title: Securing chat endpoints
+description: Secure your chat endpoint with Clerk and gate access by permission, feature, or plan.
+sdk: nextjs
+---
+
+This page covers the patterns you'll most often need to secure chat endpoints for AI applications. It assumes you've already followed [Get started with Clerk and the Vercel AI SDK](/docs/guides/ai/vercel-ai-sdk/getting-started) and have a working `/api/chat` route.
+
+## Standard route guarding
+
+The default pattern. Call [`await auth.protect()`](/docs/reference/nextjs/app-router/auth) to reject unauthenticated callers before the model runs. Use this when only signed-in users should be able to use the chat.
+
+```ts {{ filename: 'app/api/chat/route.ts' }}
+import { auth } from '@clerk/nextjs/server'
+import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+
+export async function POST(req: Request) {
+  await auth.protect()
+
+  const { messages }: { messages: UIMessage[] } = await req.json()
+
+  const result = streamText({
+    model: 'openai/gpt-5',
+    messages: await convertToModelMessages(messages),
+  })
+
+  return result.toUIMessageStreamResponse()
+}
+```
+
+## Stricter checks with `has()`
+
+`auth.protect()` is enough when you're guarding the route at the session level. For fine-grained checks, like authorizing a specific action, use [`has()`](/docs/guides/secure/authorization-checks) with a [permission](/docs/guides/organizations/control-access/roles-and-permissions), [feature](/docs/guides/secure/features), or [plan](/docs/guides/billing/overview). Return a `403` when the check fails so the model is never invoked for unauthorized callers.
+
+### Permissions
+
+For this guide, create the following permission in the [Clerk Dashboard](https://dashboard.clerk.com/), or from your agent or terminal with the [Clerk CLI](/docs/cli):
+
+<Tabs items={["Agent Prompt", "Clerk CLI", "Backend API"]}>
+  <Tab>
+    Use these prompts with an agent when you have the [Clerk CLI](/docs/cli) installed.
+
+    Create the permission:
+
+    ```
+    Create a permission in my Clerk app with key `org:chat:send`, name "Send chat messages", and description "Permission to send messages in chat."
+    ```
+
+    Then attach it to the admin role:
+
+    ```
+    Attach the `org:chat:send` permission to the admin role.
+    ```
+  </Tab>
+
+  <Tab>
+    Create the permission:
+
+    ```bash {{ filename: 'terminal', prompt: '$' }}
+    clerk api /organization_permissions \
+      -d '{"name":"Send chat messages","key":"org:chat:send","description":"Permission to send messages in chat."}' \
+      --yes
+    ```
+
+    Look up the admin role ID and the new permission ID:
+
+    ```bash {{ filename: 'terminal', prompt: '$' }}
+    clerk api /organization_roles
+    clerk api /organization_permissions
+    ```
+
+    Attach the permission to the admin role:
+
+    ```bash {{ filename: 'terminal', prompt: '$' }}
+    clerk api /organization_roles/<role_id>/permissions/<permission_id> -X POST --yes
+    ```
+  </Tab>
+
+  <Tab>
+    The Backend SDK doesn't ship a typed wrapper for organization permissions yet, so hit the [Backend API](/docs/reference/backend-api) directly.
+
+    Create the permission:
+
+    ```ts
+    await fetch('https://api.clerk.com/v1/organization_permissions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Send chat messages',
+        key: 'org:chat:send',
+        description: 'Permission to send messages in chat.',
+      }),
+    })
+    ```
+
+    Then `POST /v1/organization_roles/<role_id>/permissions/<permission_id>` (with the same headers) to attach it to the admin role.
+  </Tab>
+</Tabs>
+
+To check the permission in your route handler:
+
+```ts {{ filename: 'app/api/chat/route.ts', mark: [[8, 10]] }}
+import { auth } from '@clerk/nextjs/server'
+import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+import { NextResponse } from 'next/server'
+
+export async function POST(req: Request) {
+  const { has } = await auth.protect()
+
+  if (!has({ permission: 'org:chat:send' })) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { messages }: { messages: UIMessage[] } = await req.json()
+
+  const result = streamText({
+    model: 'openai/gpt-5',
+    messages: await convertToModelMessages(messages),
+  })
+
+  return result.toUIMessageStreamResponse()
+}
+```
+
+Now only roles with this permission assigned can reach the model. Every other request returns `403` before the model is ever called.
+
+### Features or plans
+
+To restrict endpoints to users with specific features or billing plans, create them the same way as the permission above (in the Dashboard or with the [Clerk CLI](/docs/cli)), then check them with `has()`:
+
+<Tabs items={["Feature", "Plan"]}>
+  <Tab>
+    ```ts
+    import { NextResponse } from 'next/server'
+
+    if (!has({ feature: 'chat' })) {
+      return NextResponse.json({ error: 'Upgrade required' }, { status: 403 })
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts
+    import { NextResponse } from 'next/server'
+
+    if (!has({ plan: 'pro' })) {
+      return NextResponse.json({ error: 'Upgrade required' }, { status: 403 })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Machine token authentication
+
+If your goal is to authenticate requests that don't come from human users (CLIs, agents, servers, etc.), set up your endpoint to support [machine tokens](/docs/guides/development/machine-auth/overview). Simply swap `auth.protect()` for `auth({ acceptsToken })` and specify which token type the route should accept.
+
+### API keys
+
+Authenticate programmatic calls to your chat endpoint with Clerk [API Keys](/docs/guides/development/machine-auth/api-keys), scoped to either a user or an organization.
+
+```ts {{ filename: 'app/api/chat/route.ts' }}
+import { auth } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
+
+const { isAuthenticated, userId, orgId } = await auth({ acceptsToken: 'api_key' })
+
+if (!isAuthenticated) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+}
+```
+
+> [!NOTE]
+> `userId` and `orgId` are mutually exclusive on an API key auth: exactly one is populated based on the key's subject, the other is `null`. Narrow on whichever you expect.
+
+See [Verifying API keys](/docs/guides/development/verifying-api-keys) for the full reference.
+
+#### Scopes
+
+When creating new API keys, you can attach an array of custom scopes that act as per-key entitlements.
+
+> [!NOTE]
+> API Key scopes are **separate from Clerk's permission system**. Because they're arbitrary strings, they can't be checked with `has()`.
+
+For this guide, mint an API key with a `chat:send` scope in the [Clerk Dashboard](https://dashboard.clerk.com/), or from your agent or terminal with the [Clerk CLI](/docs/cli):
+
+<Tabs items={["Agent Prompt", "Clerk CLI", "Backend API"]}>
+  <Tab>
+    Use this prompt with an agent when you have the [Clerk CLI](/docs/cli) installed.
+
+    ```
+    Create an API key in my Clerk app with name "Chat API key", subject "<user_id>", and scopes ["chat:send"].
+    ```
+  </Tab>
+
+  <Tab>
+    ```bash {{ filename: 'terminal', prompt: '$' }}
+    clerk api /api_keys \
+      -d '{"name":"Chat API key","subject":"<user_id>","scopes":["chat:send"]}' \
+      --yes
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts
+    const apiKey = await clerkClient.apiKeys.create({
+      name: 'Chat API key',
+      subject: userId,
+      scopes: ['chat:send'],
+    })
+    ```
+  </Tab>
+</Tabs>
+
+Then require that scope on the chat route:
+
+```ts {{ filename: 'app/api/chat/route.ts', mark: [[10, 12]] }}
+import { auth } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
+
+const { isAuthenticated, scopes } = await auth({ acceptsToken: 'api_key' })
+
+if (!isAuthenticated) {
+  return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+}
+
+if (!scopes?.includes('chat:send')) {
+  return NextResponse.json({ error: 'API key has invalid scopes' }, { status: 403 })
+}
+```
+
+### M2M tokens
+
+Use [M2M tokens](/docs/guides/development/machine-auth/m2m-tokens) when the chat endpoint is being called by another service within your own infrastructure (a worker, an internal agent runner, a scheduled job).
+
+Set `CLERK_MACHINE_SECRET_KEY` in your environment:
+
+```env {{ filename: '.env' }}
+CLERK_MACHINE_SECRET_KEY=...
+```
+
+Then verify the M2M token in your route handler:
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
+
+const { isAuthenticated } = await auth({ acceptsToken: 'm2m_token' })
+
+if (!isAuthenticated) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+}
+```
+
+### Multi-token
+
+The same route can accept several token types at once. Branch on `tokenType` when the application logic differs by caller (for example, scope checks on an API key vs. permission checks on a session).
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
+
+const { isAuthenticated, tokenType, userId } = await auth({
+  acceptsToken: ['session_token', 'api_key', 'm2m_token'],
+})
+
+if (!isAuthenticated) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+}
+
+if (tokenType === 'api_key') {
+  // Use API key specific context
+}
+```
+
+## Next steps
+
+- [Roles and permissions](/docs/guides/organizations/control-access/roles-and-permissions): full reference for Clerk's role and permission model.
+- [Clerk Billing](/docs/guides/billing/overview): set up plans and features that the `has()` helper can check against.

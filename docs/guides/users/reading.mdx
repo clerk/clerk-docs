@@ -17,7 +17,7 @@ Clerk provides a set of [hooks and helpers](/docs/reference/nextjs/overview#clie
 
 [`auth()`](/docs/reference/nextjs/app-router/auth) and [`currentUser()`](/docs/reference/nextjs/app-router/current-user) are App Router-specific helpers that you can use inside of your Route Handlers, Server Components, and Server Actions.
 
-- The `auth()` helper will return the [`Auth`](/docs/reference/backend/types/auth-object) object of the currently active user, which includes the `isAuthenticated` property to protect your content from unauthenticated users.
+- The `auth.protect()` method can be used to perform authentication checks. See the [guide on protecting content from unauthenticated users](/docs/guides/secure/protect-content) for other methods for protecting content. You can also protect content by performing [authorization checks](!authorization-check).
 - The `currentUser()` helper will return the [Backend `User`](/docs/reference/backend/types/backend-user) object of the currently active user, which includes helpful information like the user's name or email address. **It does count towards the [Backend API request rate limit](/docs/guides/how-clerk-works/system-limits)** so it's recommended to use the [`useUser()`](/docs/reference/hooks/use-user) hook on the client side when possible and only use `currentUser()` when you specifically need user data in a server context. For more information on this helper, see the [`currentUser()`](/docs/reference/nextjs/app-router/current-user) reference.
 
 The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth) helper to protect the route from unauthenticated users and the `currentUser()` helper to access the Backend `User` object for the authenticated user.
@@ -31,15 +31,8 @@ The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth
     import { auth, currentUser } from '@clerk/nextjs/server'
 
     export default async function Page() {
-      // Use `auth()` to access `isAuthenticated` - if false, the user is not signed in
-      const { isAuthenticated } = await auth()
-
-      // Protect the page from unauthenticated users
-      if (!isAuthenticated) {
-        // Add logic to handle the unauthenticated user
-        // This example renders a UI but you could also redirect to the sign-in page instead
-        return <div>You must be signed in to view this page</div>
-      }
+      // Use `auth.protect()` to redirect the user to the sign-in page if they are not signed in
+      await auth.protect()
 
       // Use `currentUser()` to get the Backend `User` object
       const user = await currentUser()
@@ -56,14 +49,8 @@ The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth
     import { auth, currentUser } from '@clerk/nextjs/server'
 
     export async function createPost(formData: FormData) {
-      // Use `auth()` to access `userId` and `isAuthenticated` - if false, the user is not signed in
-      const { isAuthenticated, userId } = await auth()
-
-      // Protect the Server Action from unauthenticated users
-      if (!isAuthenticated) {
-        // Add logic to handle the unauthenticated user:
-        throw new Error('You must be signed in to create a post.')
-      }
+      // Use `auth.protect()` to return a `404` error for unauthenticated requests
+      await auth.protect()
 
       // Use `currentUser()` to get the Backend `User` object
       const user = await currentUser()
@@ -82,14 +69,8 @@ The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth
     import { currentUser, auth } from '@clerk/nextjs/server'
 
     export async function GET() {
-      // Use `auth()` to access `isAuthenticated` - if false, the user is not signed in
-      const { isAuthenticated } = await auth()
-
-      // Protect the route from unauthenticated users
-      if (!isAuthenticated) {
-        // Add logic to handle the unauthenticated user:
-        return new NextResponse('Unauthorized', { status: 401 })
-      }
+      // Use `auth.protect()` to return a `404` error for unauthenticated requests
+      await auth.protect()
 
       // Use `currentUser()` to get the Backend `User` object
       const user = await currentUser()

@@ -55,13 +55,99 @@ For non-auth path logic in your proxy, use the framework's native matching (`con
 
 ## Protecting routes
 
-`clerkMiddleware()` doesn't protect routes by default, and adding auth checks to it is no longer recommended. Enforce authentication and authorization as close to the resource as possible, in the page, Route Handler, Server Action, or other server-side code that reads or mutates the data.
+**Protect access as close to the resource as possible**, in the code that reads or mutates the data. This way, the same code that touches the data also enforces who can reach it.
 
-- To require a signed-in user, see [Protect content from unauthenticated users](/docs/guides/secure/protect-content).
-- To require a specific Role, Permission, Feature, or Plan, see [Authorization checks](/docs/guides/secure/authorization-checks).
+- To require a signed-in user, see the [guide on protecting content from unauthenticated users](/docs/guides/secure/protect-content).
+- To require a specific Role, Permission, Feature, or Plan, see the [guide on authorization checks](/docs/guides/secure/authorization-checks).
 - For machine requests (API keys, OAuth tokens, machine tokens), check the token type in the Route Handler with [`auth({ acceptsToken })`](/docs/reference/nextjs/app-router/auth#verify-machine-requests).
 
-If you currently gate routes inside `clerkMiddleware()`, see [Migrating from middleware-based auth checks](/docs/guides/secure/protect-content#migrating-from-middleware-based-auth-checks).
+### Migrating from middleware-based auth checks
+
+If you're currently protecting routes in `clerkMiddleware()`, this approach is no longer recommended. Middleware is the wrong layer to decide who may see a resource: to gate a route there, Clerk has to match the request URL the same way your framework and host route it, which means maintaining a second model of your routes, separate from the pages, handlers, and actions they map to. That model has to stay in sync as routes, rewrites, and hosting change, and when it drifts, the check can fail to apply where you intend.
+
+To migrate away from this approach:
+
+- Move the authentication or [authorization check](!authorization-check) into the resource: Add the resource checks first and remove the middleware gate last. If you remove the gate before the resources protect themselves, every route is briefly unprotected.
+- Keep `clerkMiddleware()`: It's required for Clerk configuration and is still the right place for redirects, headers, and other request handling.
+
+The line to hold: if deleting a piece of middleware would leave a resource unprotected, it was a gate and belongs at the resource. A cross-cutting redirect for incomplete [session tasks](/docs/guides/configure/session-tasks) or [onboarding](/docs/guides/development/add-onboarding-flow) can stay in middleware on that basis: the redirect only sends the user somewhere useful first while the resource runs the auth check.
+
+### Example
+
+The following example shows how to migrate a middleware-based auth check to a resource-based auth check. This example performs [an authentication check on the resource using the `auth.protect()` method](/docs/guides/secure/protect-content#protect-a-page), but this principle applies to any authentication or authorization check that you want to move to the resource.
+
+<Include src="_partials/nextjs/nextjs-15-callout" />
+
+If you had your `clerkMiddleware()` protecting a route:
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isProtected = createRouteMatcher(['/dashboard/:path*'])
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtected(req)) await auth.protect()
+})
+```
+
+You would move the auth check into the page itself:
+
+```tsx {{ filename: 'app/dashboard/page.tsx' }}
+import { auth } from '@clerk/nextjs/server'
+
+export default async function Page() {
+  await auth.protect()
+
+  return <h1>Dashboard</h1>
+}
+```
+
+And then update your `clerkMiddleware()` to remove the auth check:
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+// Keep clerkMiddleware(); it's still required. Only remove the auth gating.
+export default clerkMiddleware()
+```
+
+### Protect a whole subtree
+
+If you were using `createRouteMatcher()` to protect an entire subtree, replicating that exact behavior isn't recommended. Auth checks need to be applied directly within each resource you want to protect. However, to make auth checks easier to manage, you can put the check in a small shared helper and call it from each protected resource.
+
+The following example shows a `requireUser()` helper that uses [`auth.protect()`](/docs/guides/secure/protect-content) to perform its auth check.
+
+```tsx {{ filename: 'app/lib/auth.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+export async function requireUser() {
+  // Redirects to the sign-in route if the user is not signed in
+  const { userId } = await auth.protect()
+
+  return userId
+}
+```
+
+Then call it from each resource in the subtree:
+
+```tsx {{ filename: 'app/dashboard/page.tsx' }}
+import { requireUser } from '../lib/auth'
+
+export default async function Page() {
+  // Use the created helper to perform the auth check
+  const userId = await requireUser()
+
+  return <h1>Dashboard</h1>
+}
+```
+
+### Migrate "protect everything, allow a few public routes"
+
+If your middleware protects everything and allowlists public routes (the `!isPublicRoute` pattern), migrate in this order:
+
+1. **Add** resource-level checks (or `requireUser()`) to the routes that need them.
+1. **Verify** those routes still require sign-in.
+1. **Then** remove the gating from the middleware callback.
 
 ## Debug your Middleware
 

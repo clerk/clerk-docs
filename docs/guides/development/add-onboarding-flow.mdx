@@ -12,6 +12,7 @@ In this guide, you will learn how to:
 
 1. Add custom claims to your session token
 1. Configure your Middleware to read session data
+1. Enforce the onboarding requirement at the resource
 1. Update the user’s onboarding state
 
 For the sake of this guide, examples are written for Next.js App Router, but can be used with Next.js Pages Router as well. The examples have been pared down to the bare minimum to enable you to easily customize them to your needs.
@@ -65,21 +66,19 @@ declare global {
 The following example uses `clerkMiddleware()` to redirect authenticated users who haven't completed onboarding to the `/onboarding` route. This is a convenience redirect, not an access boundary.
 
 > [!IMPORTANT]
-> Enforce authentication and the `onboardingComplete` check at the resource, in the page, Route Handler, or Server Action that reads or mutates onboarding-gated data. See the [Collect user onboarding information](#collect-user-onboarding-information) section.
+> Enforce authentication and the `onboardingComplete` check at the resource, in the page, Route Handler, or Server Action that reads or mutates onboarding-gated data. See the [Enforce onboarding at the resource](#enforce-onboarding-at-the-resource) section.
 
 <Include src="_partials/nextjs/nextjs-15-callout" />
 
 ```tsx {{ filename: 'proxy.ts' }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
-
-const isOnboardingRoute = createRouteMatcher(['/onboarding'])
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
   const { isAuthenticated, sessionClaims } = await auth()
 
   // For users visiting /onboarding, don't try to redirect
-  if (isOnboardingRoute(req)) {
+  if (req.nextUrl.pathname === '/onboarding') {
     return NextResponse.next()
   }
 
@@ -109,6 +108,29 @@ To ensure a smooth onboarding flow, add redirect URL's to your environment varia
 ```env {{ filename: '.env' }}
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
+```
+
+## Enforce onboarding at the resource
+
+The middleware redirect above is a convenience. The enforcement lives at the resource: any page, Route Handler, or Server Action that depends on completed onboarding should check the `onboardingComplete` claim itself, so that removing the middleware redirect never exposes it.
+
+```tsx {{ filename: 'app/dashboard/page.tsx' }}
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function DashboardPage() {
+  const { isAuthenticated, sessionClaims, redirectToSignIn } = await auth()
+
+  // Protect the page from unauthenticated users
+  if (!isAuthenticated) return redirectToSignIn()
+
+  // Enforce the onboarding requirement at the resource
+  if (!sessionClaims?.metadata?.onboardingComplete) {
+    redirect('/onboarding')
+  }
+
+  return <p>Dashboard</p>
+}
 ```
 
 ## Use `publicMetadata` to track user onboarding state

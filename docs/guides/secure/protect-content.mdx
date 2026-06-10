@@ -114,7 +114,7 @@ Server Actions run as API endpoints, so verify the user inside the action itself
     import { auth } from '@clerk/nextjs/server'
 
     export async function createPost(formData: FormData) {
-      // Returns a `404` error for unauthenticated requests
+      // Returns a `401` error for unauthenticated requests
       const { userId } = await auth.protect()
 
       // Add your Server Action logic using the `userId`
@@ -200,15 +200,17 @@ Auth checks inside `clerkMiddleware()` are no longer recommended. Middleware is 
 
 If you're currently protecting routes in `clerkMiddleware()`, move the auth check into the resource. **Keep `clerkMiddleware()`**, it's required for Clerk configuration and is still the right place for redirects, headers, and other request handling. For [checking authorization](!authorization-check) (Roles, Permissions, Features, or Plans), see the [Authorization checks](/docs/guides/secure/authorization-checks) guide.
 
-The line to hold: the resource must enforce access on its own, so that removing any middleware logic never exposes it. A cross-cutting redirect for incomplete [session tasks](/docs/guides/configure/session-tasks) or [onboarding](/docs/guides/development/add-onboarding-flow) can stay in middleware on that basis, the resource still runs the check, the redirect just sends the user somewhere useful first. If deleting a piece of middleware would leave a resource unprotected, it was a gate and belongs at the resource.
+The line to hold: the resource must enforce access on its own, so that removing any middleware logic never exposes it. A cross-cutting redirect for incomplete [session tasks](/docs/guides/configure/session-tasks) or [onboarding](/docs/guides/development/add-onboarding-flow) can stay in middleware on that basis, the resource still runs the check, the redirect only sends the user somewhere useful first. If deleting a piece of middleware would leave a resource unprotected, it was a gate and belongs at the resource.
 
 ### Example
 
 The following example shows how to migrate a middleware-based auth check to a resource-based auth check. This example protects the route with `auth.protect()`, but this principle applies to any auth check you want to move to the resource.
 
+<Include src="_partials/nextjs/nextjs-15-callout" />
+
 If you had your `clerkMiddleware()` protecting a route:
 
-```tsx {{ filename: 'middleware.ts' }}
+```tsx {{ filename: 'proxy.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isProtected = createRouteMatcher(['/dashboard/:path*'])
@@ -232,10 +234,10 @@ export default async function Page() {
 
 And then update your `clerkMiddleware()` to remove the auth check:
 
-```tsx {{ filename: 'middleware.ts' }}
+```tsx {{ filename: 'proxy.ts' }}
 import { clerkMiddleware } from '@clerk/nextjs/server'
 
-// Keep clerkMiddleware(); it's still required. Just remove the auth gating.
+// Keep clerkMiddleware(); it's still required. Only remove the auth gating.
 export default clerkMiddleware()
 ```
 
@@ -260,6 +262,19 @@ export async function requireUser() {
 }
 ```
 
+Then call it from each resource in the subtree:
+
+```tsx {{ filename: 'app/dashboard/page.tsx' }}
+import { requireUser } from '../lib/auth'
+
+export default async function Page() {
+  // Redirects to the sign-in route if the user is not signed in
+  const userId = await requireUser()
+
+  return <h1>Dashboard</h1>
+}
+```
+
 ### Migrate "protect everything, allow a few public routes"
 
 If your middleware protects everything and allowlists public routes (the `!isPublicRoute` pattern), migrate in this order:
@@ -267,6 +282,3 @@ If your middleware protects everything and allowlists public routes (the `!isPub
 1. **Add** resource-level checks (or `requireUser()`) to the routes that need them.
 1. **Verify** those routes still require sign-in.
 1. **Then** remove the gating from the middleware callback.
-
-> [!WARNING]
-> Add the resource checks first and remove the middleware gate last. If you remove the gate before the resources protect themselves, every route is briefly public.

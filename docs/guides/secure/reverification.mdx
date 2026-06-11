@@ -53,14 +53,14 @@ If you are performing a sensitive action on the server side, use the [`auth.has(
 
   If the user hasn't verified their credentials within that time period, return `reverificationErrorResponse` to trigger the reverification flow.
 
-  In the following example, your `/reverification-example` endpoint will check if a user has verified their credentials within the past 10 minutes. If they haven't, the endpoint returns the `reverificationErrorResponse` error, which is a `403 Forbidden` error.
+  In the following example, your `/api/reverification-example` endpoint will check if a user has verified their credentials within the past 10 minutes. If they haven't, the endpoint returns the `reverificationErrorResponse` error, which is a `403 Forbidden` error.
 
   ```ts {{ filename: 'app/api/reverification-example/route.ts' }}
   import { auth, reverificationErrorResponse } from '@clerk/nextjs/server'
   // If your SDK doesn't export `reverificationErrorResponse`, import it from `@clerk/shared/authorization-errors`
-  import { NextRequest, NextResponse } from 'next/server'
+  import { NextResponse } from 'next/server'
 
-  export const POST = async (req: NextRequest) => {
+  export const POST = async () => {
     // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
     // Accessing the `Auth` object differs depending on the SDK you're using
     // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
@@ -75,19 +75,17 @@ If you are performing a sensitive action on the server side, use the [`auth.has(
     }
 
     // If the user has verified credentials, return a successful response
-    return new NextResponse({ success: true })
+    return NextResponse.json({ success: true })
   }
   ```
 </If>
 
 <If sdk="ruby">
-  To handle reverification on the server-side, use the `clerk_user_needs_reverification` helper to check if the user has verified their credentials within a specific time period. Pass a configuration to set the time period you would like. You can pass one of the following configurations: `strict_mfa`, `strict`, `moderate`, and `lax`. See the [reference doc](/docs/reference/ruby/overview#reverification) for details on each configuration.
-
-  If the user hasn't verified their credentials within that time period, use `clerk_render_reverification` to return a `403 forbidden` error that the client reads to initiate the reverification flow.
+  To handle reverification on the server-side, use the `require_reverification!` controller helper. It halts the request and responds with a `403 Forbidden` error that the client reads to initiate the reverification flow. Pass a [`Clerk::StepUp::Preset`](/docs/reference/ruby/overview#reverification) constant — one of `STRICT_MFA`, `STRICT`, `MODERATE`, or `LAX` — to set the time period.
 
   ```ruby {{ filename: 'app/controllers/home_controller.rb' }}
   class HomeController < ApplicationController
-    before_action :require_reverification, only: :foo
+    before_action :require_moderate_reverification!, only: :foo
 
     def foo
       render json: { success: "true" }
@@ -95,10 +93,8 @@ If you are performing a sensitive action on the server side, use the [`auth.has(
 
     private
 
-    # will halt the request and respond with a JSON that Clerk.js
-    # will read and kickstart a reverification flow
-    def require_reverification
-      clerk_render_reverification(Clerk::StepUp::PRESETS[:moderate]) if clerk_user_needs_reverification?(Clerk::StepUp::PRESETS[:moderate])
+    def require_moderate_reverification!
+      require_reverification!(Clerk::StepUp::Preset::MODERATE)
     end
   end
   ```
@@ -129,10 +125,10 @@ After setting up reverification on the server-side, you must handle reverificati
 </If>
 
 <If sdk="ruby">
-  ```tsx {{ filename: 'src/pages/transfer.tsx', collapsible: true }}
+  ```tsx {{ filename: 'src/components/TransferButton.tsx', collapsible: true }}
   import { useReverification } from '@clerk/react'
 
-  export default function TransferMoney({ amount_in_cents }: { amount_in_cents: number }) {
+  export function TransferButton({ amount_in_cents }: { amount_in_cents: number }) {
     const transferMoney = useReverification(
       async () =>
         await fetch('/api/reverification-example', {

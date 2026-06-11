@@ -1,0 +1,193 @@
+---
+title: Protect content from unauthenticated users
+description: Learn how to protect pages, Route Handlers, and Server Actions from unauthenticated users in your Clerk + Next.js application.
+sdk: nextjs
+---
+
+This guide demonstrates how to protect pages, Route Handlers, and Server Actions from unauthenticated users in your Next.js application.
+
+To protect your application, every resource that reads or mutates protected data needs its own check. In a Next.js app, this means protecting:
+
+- **Server Components**: Layouts and pages
+- **Route Handlers**: Your internal Next.js API endpoints
+- **Server Actions**: These run as API endpoints, so protect them like any other handler.
+- **External API endpoints** your app calls: These endpoints must enforce their own authentication.
+
+> [!TIP]
+> To check whether a user is [**authorized** (has a specific Role, Permission, Feature, or Plan)](!authorization-check) in addition to being signed in, see [Authorization checks](/docs/guides/secure/authorization-checks). This guide focuses on **authentication** (whether a user is signed in).
+
+## Server-side
+
+[`auth()`](/docs/reference/nextjs/app-router/auth) is an App Router-specific helper that you can use inside of your Route Handlers, Server Components, and Server Actions.
+
+Use [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) to redirect unauthenticated users to the sign-in route, or use [`auth()`](/docs/reference/nextjs/app-router/auth) and check `isAuthenticated` yourself if you want more control over the response.
+
+The following examples demonstrate both methods.
+
+### Protect a page
+
+<Tabs items={["auth.protect()", "auth()"]}>
+  <Tab>
+    ```tsx {{ filename: 'app/example/page.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export default async function Page() {
+      // Redirects to the sign-in route if the user is not signed in
+      await auth.protect()
+
+      return <h1>Hello world</h1>
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/example/page.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export default async function Page() {
+      const { isAuthenticated, redirectToSignIn } = await auth()
+
+      if (!isAuthenticated) {
+        // Add logic to handle the unauthenticated user
+        // This example uses the `redirectToSignIn()` method to redirect the user to the sign-in page
+        return redirectToSignIn()
+      }
+
+      return <h1>Hello world</h1>
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Protect a layout
+
+You can run an auth check in a layout the same way as in a page, and you should if the layout itself reads privileged data (for example, when prefetching). But a layout check alone isn't enough: layouts don't re-render on client-side navigation, so the session isn't re-checked on every route change. Protect each page (and every other resource that reads or mutates data) directly, and treat a layout check as an addition, not a replacement. For more information, see the [Next.js docs](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks).
+
+### Protect a Route Handler
+
+<Tabs items={["auth.protect()", "auth()"]}>
+  <Tab>
+    For non-document requests, such as API requests, [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) does not redirect the user to the sign-in page. Instead, it returns:
+
+    - A `404` error for unauthenticated requests with session token type.
+    - A `401` error for unauthenticated requests with machine token types.
+
+    ```tsx {{ filename: 'app/api/me/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export const GET = async () => {
+      // Returns a `404` error for unauthenticated requests
+      const { userId } = await auth.protect()
+
+      return Response.json({ userId })
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/api/me/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export const GET = async () => {
+      const { isAuthenticated, userId } = await auth()
+
+      if (!isAuthenticated) {
+        // Add logic to handle the unauthenticated user
+        // This example returns an 'Unauthorized' error with a 401 status code
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      return Response.json({ userId })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Protect a Server Action
+
+Server Actions run as API endpoints, so verify the user inside the action itself, before running any logic that depends on them being signed in.
+
+<Tabs items={["auth.protect()", "auth()"]}>
+  <Tab>
+    ```tsx {{ filename: 'app/actions.ts' }}
+    'use server'
+    import { auth } from '@clerk/nextjs/server'
+
+    export async function createPost(formData: FormData) {
+      // Redirects to the sign-in route if the user is not signed in
+      const { userId } = await auth.protect()
+
+      // Add your Server Action logic using the `userId`
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/actions.ts' }}
+    'use server'
+    import { auth } from '@clerk/nextjs/server'
+
+    export async function createPost(formData: FormData) {
+      const { isAuthenticated, userId } = await auth()
+
+      if (!isAuthenticated) {
+        // Add logic to handle the unauthenticated user:
+        throw new Error('You must be signed in to create a post.')
+      }
+
+      // Add your Server Action logic using the `userId`
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Client-side
+
+On the client, you can read the `isSignedIn` property from the [`useAuth()`](/docs/reference/hooks/use-auth) or [`useUser()`](/docs/reference/hooks/use-user) hook to conditionally render UI based on whether the user is signed in.
+
+> [!WARNING]
+> A client-side check is a UX affordance, not a security boundary. By the time this code runs, the component has already been sent to the browser, so anything it contains is available to the user regardless of the check. Protect the data instead: guard the resources you pass to Client Components as props, and the Route Handlers or external API endpoints the client calls (see [Server-side](#server-side)).
+
+<CodeBlockTabs options={["useAuth()", "useUser()"]}>
+  ```tsx {{ filename: 'app/example/page.tsx' }}
+  'use client'
+
+  import { useAuth } from '@clerk/nextjs'
+
+  export default function Page() {
+    const { isLoaded, isSignedIn } = useAuth()
+
+    // Handle loading state
+    if (!isLoaded) return <h1>Loading...</h1>
+
+    if (!isSignedIn) {
+      // Add logic to handle the unauthenticated user
+      // This example renders a UI but you could also redirect to the sign-in page instead
+      return <h1>You must be signed in to view this page</h1>
+    }
+
+    return <h1>Hello world</h1>
+  }
+  ```
+
+  ```tsx {{ filename: 'app/example/page.tsx' }}
+  'use client'
+
+  import { useUser } from '@clerk/nextjs'
+
+  export default function Page() {
+    const { isSignedIn, isLoaded } = useUser()
+
+    // Handle loading state
+    if (!isLoaded) return <h1>Loading...</h1>
+
+    if (!isSignedIn) {
+      // Add logic to handle the unauthenticated user
+      // This example renders a UI but you could also redirect to the sign-in page instead
+      return <h1>You must be signed in to view this page</h1>
+    }
+
+    return <h1>Hello world</h1>
+  }
+  ```
+</CodeBlockTabs>

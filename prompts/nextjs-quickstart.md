@@ -1,6 +1,6 @@
-# Add Clerk Authentication
+# Add Clerk Authentication to Next.js
 
-Set up Clerk authentication with the Clerk CLI.
+Set up Clerk authentication in this Next.js project with the Clerk CLI.
 
 ## Quick Setup
 
@@ -10,7 +10,7 @@ Before running any commands, present the user with a preliminary setup checklist
 Here's what I'll do to get you set up with Clerk.
 
 1. Install or update the Clerk CLI
-2. Set up Clerk in this project, or scaffold a new app with Clerk if this directory is empty
+2. Set up Clerk in this project, or scaffold a new Next.js app with Clerk if this directory is empty
 3. Start your app with Clerk installed.
 
 Shall I proceed?
@@ -50,20 +50,31 @@ clerk auth login
 
 ## Step 3: Initialize Clerk
 
-From the project root, run:
+If this is an existing Next.js project, run:
 
 ```bash
-clerk init --framework next --pm npm
+clerk init
 ```
 
-`clerk init --framework next --pm npm` can scaffold a fresh Next.js project in an empty directory. In an existing Next.js project, it installs the correct Clerk SDK and applies framework-specific setup when supported, such as providers, middleware, auth routes, and environment configuration.
+`clerk init` is the default setup action after `clerk auth login`. It detects the framework and package manager, installs the correct Clerk SDK, and applies Next.js-specific setup such as providers, middleware, auth routes, and environment configuration. Do not pass `--framework` or `--pm` for existing projects unless the user explicitly wants to override detection or the CLI asks for those values. Do not list apps or ask which Clerk app to use before running it.
 
-`clerk init` is the default setup action after `clerk auth login`. Do not list apps or ask which Clerk app to use before running it.
+If the directory is empty, ask the user which package manager they want to use. If they have no preference, use npm. Then scaffold a fresh Next.js app:
+
+```bash
+clerk init --framework next --pm <package-manager>
+```
+
+If the directory is not truly empty and contains a lockfile or package manager config, use these signals to choose the package manager:
+
+- `pnpm-lock.yaml` -> `pnpm`
+- `yarn.lock` -> `yarn`
+- `bun.lock` or `bun.lockb` -> `bun`
+- `package-lock.json` -> `npm`
 
 Do not add `--app` by default. Only pass `--app <application_id>` when the user already provided an app ID or explicitly wants to link this project to a specific existing Clerk application:
 
 ```bash
-clerk init --framework next --pm npm --app <application_id>
+clerk init --app <application_id>
 ```
 
 Do not choose a Clerk application for the user. Only list available apps if the user explicitly wants to link to an existing Clerk application but has not provided an app ID, or if `clerk init` explicitly asks for an existing application ID:
@@ -76,48 +87,40 @@ Show the user the app names and application IDs, then ask which app to use.
 
 ## Step 4: Fall back to docs when init is incomplete
 
-If `clerk init` reports that the framework is unsupported, cannot be detected, or does not support full scaffolding, follow the official quickstart instead.
-
-`clerk init` currently has full scaffolding for Next.js, Astro, Nuxt, TanStack Start, React Router, Vue, React, and JavaScript/Vite. It can detect Expo, Express, and Fastify, but may direct you to docs for the remaining integration steps.
-
-| Dependency | Quickstart |
-|------------|-----------|
-| `next` | https://clerk.com/docs/nextjs/getting-started/quickstart |
-| `@remix-run/react` | https://clerk.com/docs/remix/getting-started/quickstart |
-| `astro` | https://clerk.com/docs/astro/getting-started/quickstart |
-| `nuxt` | https://clerk.com/docs/nuxt/getting-started/quickstart |
-| `react-router` | https://clerk.com/docs/react-router/getting-started/quickstart |
-| `@tanstack/react-start` | https://clerk.com/docs/tanstack-react-start/getting-started/quickstart |
-| `react` | https://clerk.com/docs/react/getting-started/quickstart |
-| `vue` | https://clerk.com/docs/vue/getting-started/quickstart |
-| `vite` or vanilla JS | https://clerk.com/docs/js-frontend/getting-started/quickstart |
-| `express` | https://clerk.com/docs/expressjs/getting-started/quickstart |
-| `fastify` | https://clerk.com/docs/fastify/getting-started/quickstart |
-| `expo` | https://clerk.com/docs/expo/getting-started/quickstart |
-
-Other platforms: Chrome Extension, Android, and iOS at https://clerk.com/docs/llms.txt
+If `clerk init` reports an error or does not finish the setup, follow the official quickstart instead: https://clerk.com/docs/nextjs/getting-started/quickstart
 
 ## Step 5: Ensure clear auth controls are visible
 
 Make sure the app has clear sign-in, sign-up, and signed-in user controls so the user can create and recognize their first account. Integrate them into the existing layout, navigation, or landing screen so they feel natural and polished.
 
-For Next.js App Router, use Clerk components from `@clerk/nextjs` such as `SignInButton`, `SignUpButton`, `Show`, and `UserButton`. Show sign-in and sign-up actions when signed out, and a user button when signed in:
+Use Clerk components from `@clerk/nextjs` such as `SignInButton`, `SignUpButton`, `Show`, and `UserButton`. Show sign-in and sign-up actions when signed out, and a user button when signed in. For example, in `app/layout.tsx`:
 
 ```tsx
-import { SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs'
+import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs'
 
-<>
-  <Show when="signed-out">
-    <SignInButton />
-    <SignUpButton />
-  </Show>
-  <Show when="signed-in">
-    <UserButton />
-  </Show>
-</>
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <ClerkProvider>
+          <header>
+            <Show when="signed-out">
+              <SignInButton />
+              <SignUpButton />
+            </Show>
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
+          </header>
+          {children}
+        </ClerkProvider>
+      </body>
+    </html>
+  )
+}
 ```
 
-For other frameworks, use the equivalent Clerk components or helpers. If clear auth controls already exist, reuse or adapt them instead of duplicating them.
+If clear auth controls already exist, reuse or adapt them instead of duplicating them.
 
 ## Step 6: Verify the setup
 
@@ -137,13 +140,10 @@ If `components.json` exists in the project root and Clerk components are used:
 npm install @clerk/ui
 ```
 
-Apply the theme in your provider:
-```tsx
-import { shadcn } from '@clerk/ui/themes'
-<ClerkProvider appearance={{ theme: shadcn }}>{children}</ClerkProvider>
-```
+Apply the theme in `app/layout.tsx`: import `shadcn` from `@clerk/ui/themes` and set `appearance={{ theme: shadcn }}` on `<ClerkProvider>`.
 
 Add to global CSS:
+
 ```css
 @import '@clerk/ui/themes/shadcn.css';
 ```

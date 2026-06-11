@@ -10,8 +10,9 @@ Before running any commands, present the user with a preliminary setup checklist
 Here's what I'll do to get you set up with Clerk.
 
 1. Install or update the Clerk CLI
-2. Set up Clerk in this project, or scaffold a new Next.js app with Clerk if this directory is empty
-3. Start your app with Clerk installed.
+2. Sign in to Clerk (opens your browser)
+3. Set up Clerk in this project, or scaffold a new Next.js app with Clerk if this directory is empty
+4. Start your app with Clerk installed.
 
 Shall I proceed?
 ```
@@ -21,7 +22,7 @@ Shall I proceed?
 From the project root, check whether the Clerk CLI is already available:
 
 ```bash
-command -v clerk && clerk --version
+command -v clerk && clerk --version || echo "Clerk CLI not installed"
 ```
 
 If `clerk` is available, make sure it is up to date:
@@ -64,12 +65,12 @@ If the directory is empty, ask the user which package manager they want to use. 
 clerk init --framework next --pm <package-manager>
 ```
 
-If the directory is not truly empty and contains a lockfile or package manager config, use these signals to choose the package manager:
+If the directory has no project yet but contains a leftover lockfile or package manager config, use these signals to choose the package manager instead of asking:
 
-- `pnpm-lock.yaml` -> `pnpm`
-- `yarn.lock` -> `yarn`
-- `bun.lock` or `bun.lockb` -> `bun`
-- `package-lock.json` -> `npm`
+- `pnpm-lock.yaml` → `pnpm`
+- `yarn.lock` → `yarn`
+- `bun.lock` or `bun.lockb` → `bun`
+- `package-lock.json` → `npm`
 
 Do not add `--app` by default. Only pass `--app <application_id>` when the user already provided an app ID or explicitly wants to link this project to a specific existing Clerk application:
 
@@ -85,9 +86,9 @@ clerk apps list --json
 
 Show the user the app names and application IDs, then ask which app to use.
 
-## Step 4: Fall back to docs when init is incomplete
+## Step 4: Fall back to manual setup when init is incomplete
 
-If `clerk init` reports an error or does not finish the setup, follow the official quickstart instead: https://clerk.com/docs/nextjs/getting-started/quickstart
+If `clerk init` reports an error or does not finish the setup, finish manually: install `@clerk/nextjs`, create a middleware file that calls `clerkMiddleware()` from `@clerk/nextjs/server` (see Critical rules for the filename), and wrap the app with `<ClerkProvider>` as shown in Step 5. Full quickstart (returns this prompt when fetched as markdown): https://clerk.com/docs/nextjs/getting-started/quickstart
 
 ## Step 5: Ensure clear auth controls are visible
 
@@ -97,6 +98,7 @@ Use Clerk components from `@clerk/nextjs` such as `SignInButton`, `SignUpButton`
 
 ```tsx
 import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs'
+import './globals.css'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -134,7 +136,7 @@ Then start the app, confirm the sign-in, sign-up, and signed-in user controls ar
 
 ## Step 7: If using shadcn/ui
 
-If `components.json` exists in the project root and Clerk components are used:
+If `components.json` exists in the project root and Clerk components are used, install `@clerk/ui` with the project's package manager:
 
 ```bash
 npm install @clerk/ui
@@ -150,7 +152,8 @@ Add to global CSS:
 
 ## Critical rules
 
-- Next.js 15+: `auth()` is async. Always `await auth()`
+- Name the middleware file by the `next` version in `package.json`: `proxy.ts` on Next.js 16+, `middleware.ts` on 15 and below. The contents are identical
+- `auth()` from `@clerk/nextjs/server` is async. Always `await auth()`
 - `ClerkProvider` goes inside `<body>`, not wrapping `<html>`
 - Never expose `CLERK_SECRET_KEY` in client code
 - Use `@clerk/nextjs`, not `@clerk/clerk-react`

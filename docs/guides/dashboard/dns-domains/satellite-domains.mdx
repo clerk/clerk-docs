@@ -15,13 +15,11 @@ description: Learn how to share sessions across different domains by adding sate
 <Include src="_partials/advanced-feature-callout" />
 
 > [!WARNING]
-> This guide addresses authentication across different domains with shared sessions. For example, `example-site.com` and `example-site-admin.com`.
+> This guide addresses authentication across different domains with shared sessions. For example, `example-site.com` and `example-site-admin.com`. This is not to be confused with [authentication across subdomains](/docs/guides/development/deployment/production#authentication-across-subdomains) with shared sessions, which works by default with Clerk.
 >
-> It is not recommended to use **passkeys** as a form of authentication. Learn more about [domain restrictions for passkeys](/docs/guides/development/custom-flows/authentication/passkeys#domain-restrictions-for-passkeys).
->
-> [Authentication across subdomains](/docs/guides/development/deployment/production#authentication-across-subdomains) with shared sessions works by default with Clerk.
+> It is not recommended to use **passkeys** as a form of authentication when sharing sessions across different domains. Learn more about [domain restrictions for passkeys](/docs/guides/development/custom-flows/authentication/passkeys#domain-restrictions-for-passkeys).
 
-Clerk supports sharing sessions across different domains by adding one or many satellite domains to an application.
+Clerk supports sharing sessions across different domains by adding one or many "satellite" domains to an application.
 
 Your "primary" domain is where the authentication state lives, and satellite domains are able to securely read that state from the primary domain, enabling a seamless authentication flow across domains.
 
@@ -38,41 +36,41 @@ The syncing behavior between satellite and primary domains is controlled by the 
 With `satelliteAutoSync: false` (the default), satellite domains do not automatically sync authentication state with the primary domain when a user visits the page. This means there is no upfront performance cost for users visiting a satellite domain. Authentication state is only synced when a user initiates a sign-in or sign-up action:
 
 1. When a user selects "Sign in" on the satellite domain, they are redirected to the primary domain.
-1. If the user is already signed in on the primary domain, they are immediately redirected back to the satellite domain with the existing auth state — no additional user action is required.
-1. If the user is not signed in on the primary domain, they complete the sign-in (or sign-up) flow there and are then redirected back to the satellite domain.
+   - If the user is already signed in on the primary domain, they are immediately redirected back to the satellite domain with the existing auth state — no additional user action is required.
+   - If the user is not signed in on the primary domain, they complete the sign-in (or sign-up) flow there and are then redirected back to the satellite domain.
 1. After the initial sync, signing out from either domain signs out from all domains.
 
-See [Using `satelliteAutoSync: false` (default) with sign-in/sign-up links](#using-satellite-auto-sync-false-default-with-sign-in-sign-up-links) for setup.
+See [Build sign-in and sign-up links](#build-sign-in-and-sign-up-links) for setup.
 
-If you set `satelliteAutoSync: true`, the satellite domain will automatically redirect to the primary domain on first load to sync authentication state, even if the user has no session. This matches the original Core 2 behavior and is useful if you want users who are already signed in on the primary domain to be automatically recognized on the satellite without needing to select "Sign in". However, this comes with a performance cost since every first visit triggers a redirect.
+If you set `satelliteAutoSync: true`, the satellite domain **will automatically redirect to the primary domain on first load** to sync authentication state, even if the user has no session. This matches the original [Core 2](/docs/guides/development/upgrading/upgrade-guides/core-2) behavior and is useful if you want users who are already signed in on the primary domain to be automatically recognized on the satellite without needing to select "Sign in". However, this comes with a performance cost since every first visit triggers a redirect.
 
-### Using `satelliteAutoSync: false` (default) with sign-in/sign-up links
+### Build sign-in and sign-up links
 
 When `satelliteAutoSync` is `false` (the default), you must ensure your sign-in and sign-up links on the satellite domain use [`Clerk.buildSignInUrl()`](/docs/reference/objects/clerk#build-sign-in-url) and [`Clerk.buildSignUpUrl()`](/docs/reference/objects/clerk#build-sign-up-url) instead of hardcoded URLs. These methods automatically append the `__clerk_synced=false` sync trigger parameter to the redirect URL. This parameter tells the satellite app to sync the session when the user returns from the primary domain.
 
-<CodeBlockTabs options={["Vanilla JS", "React"]}>
-  ```js
-  // Vanilla JS satellite app
-  const signInBtn = document.getElementById('sign-in')
-  signInBtn.addEventListener('click', () => {
-    window.location.href = Clerk.buildSignInUrl()
-  })
-  ```
+> [!IMPORTANT]
+> If you hardcode sign-in URLs (e.g., `<a href="https://primary.dev/sign-in">`) instead of using `buildSignInUrl()`, the sync trigger parameter will not be added. As a result, when the user returns to the satellite after signing in, the session will not be recognized.
 
+<If sdk={['chrome-extension', 'expo', 'nextjs', 'react', 'react-router', 'tanstack-react-start']}>
   ```tsx
-  // React satellite app
-  import { useClerk } from '@clerk/clerk-react'
-
+  // Example sign-in button in the satellite app
   function SignInButton() {
     const { buildSignInUrl } = useClerk()
 
     return <a href={buildSignInUrl()}>Sign in</a>
   }
   ```
-</CodeBlockTabs>
+</If>
 
-> [!IMPORTANT]
-> If you hardcode sign-in URLs (e.g., `<a href="https://primary.dev/sign-in">`) instead of using `buildSignInUrl()`, the sync trigger parameter will not be added. As a result, when the user returns to the satellite after signing in, the session will not be recognized.
+<If notSdk={['chrome-extension', 'expo', 'nextjs', 'react', 'react-router', 'tanstack-react-start']}>
+  ```js
+  // Example sign-in button in the satellite app
+  const signInBtn = document.getElementById('sign-in')
+  signInBtn.addEventListener('click', () => {
+    window.location.href = Clerk.buildSignInUrl()
+  })
+  ```
+</If>
 
 ## How to add satellite domains
 
@@ -144,10 +142,10 @@ When `satelliteAutoSync` is `false` (the default), you must ensure your sign-in 
         <Tab>
           Add the following environment variables to your primary domain application. Your [Publishable Key](!publishable-key) and [Secret Key](!secret-key) can always be retrieved from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
 
-          > [!NOTE]
-          > In development, your [Publishable Key](!publishable-key) and [Secret Key](!secret-key) will start with `pk_test_` and `sk_test_` respectively. In production, they will start with `pk_live_` and `sk_live_` respectively.
-
           ```env {{ filename: '.env' }}
+          # In development, your API keys will start with with `pk_test_` and `sk_test_`.
+          # In production, your API keys will start with with `pk_live_` and `sk_live_`.
+          # Ensure you load the correct keys.
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
           CLERK_SECRET_KEY={{secret}}
           NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
@@ -190,12 +188,9 @@ When `satelliteAutoSync` is `false` (the default), you must ensure your sign-in 
         <Tab>
           Add the following environment variables to your satellite domain application. Your [Publishable Key](!publishable-key) and [Secret Key](!secret-key) can always be retrieved from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
 
-          > [!NOTE]
-          > In development, your [Publishable Key](!publishable-key) and [Secret Key](!secret-key) will start with `pk_test_` and `sk_test_` respectively. In production, they will start with `pk_live_` and `sk_live_` respectively.
-
           <CodeBlockTabs options={["Development", "Production"]}>
             ```env {{ filename: '.env' }}
-            # In development, your API keys will start with with `pk_test_` and `sk_test_` respectively. 
+            # In development, your API keys will start with with `pk_test_` and `sk_test_` respectively.
             # Ensure you load the correct keys.
             NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
             CLERK_SECRET_KEY={{secret}}
@@ -238,542 +233,540 @@ When `satelliteAutoSync` is `false` (the default), you must ensure your sign-in 
 
       Use the following tabs to see the setup for your app type:
 
-      <Tabs items={["Next.js", "JavaScript"]}>
-        <Tab>
-          In a Next.js setup, configure [`<ClerkProvider>`](/docs/reference/components/clerk-provider) in both your primary and satellite apps, then update [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) in the satellite app. If your framework does not provide equivalent middleware or request handling for satellite domains, use the environment variable setup instead.
+      <If notSdk="js-frontend">
+        In a Next.js setup, configure [`<ClerkProvider>`](/docs/reference/components/clerk-provider) in both your primary and satellite apps, then update [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) in the satellite app. If your framework does not provide equivalent middleware or request handling for satellite domains, use the environment variable setup instead.
 
-          > [!IMPORTANT]
-          > You should set your `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in your environment variables even if you're using props to configure satellite domains.
+        > [!IMPORTANT]
+        > You should set your `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in your environment variables even if you're using props to configure satellite domains.
 
-          <Tabs items={["Primary app", "Satellite app"]}>
-            <Tab>
-              In the Next.js project associated with your primary domain, configure your `<ClerkProvider>` as shown in the following example:
+        <Tabs items={["Primary app", "Satellite app"]}>
+          <Tab>
+            In the Next.js project associated with your primary domain, configure your `<ClerkProvider>` as shown in the following example:
 
-              <CodeBlockTabs options={["Development", "Production"]}>
-                <CodeBlockTabs options={["App Router", "Pages Router"]}>
-                  ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 14]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
+            <CodeBlockTabs options={["Development", "Production"]}>
+              <CodeBlockTabs options={["App Router", "Pages Router"]}>
+                ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 14]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
 
-                  export default function RootLayout({ children }: { children: React.ReactNode }) {
-                    const primarySignInUrl = '/sign-in'
-                    const primarySignUpUrl = '/sign-up'
-                    const satelliteUrl = 'http://localhost:3001'
+                export default function RootLayout({ children }: { children: React.ReactNode }) {
+                  const primarySignInUrl = '/sign-in'
+                  const primarySignUpUrl = '/sign-up'
+                  const satelliteUrl = 'http://localhost:3001'
 
-                    return (
-                      <html lang="en">
-                        <body>
-                          <ClerkProvider
-                            signInUrl={primarySignInUrl}
-                            signUpUrl={primarySignUpUrl}
-                            allowedRedirectOrigins={[satelliteUrl]}
-                          >
-                            <p>Primary Next.js app</p>
-                            {children}
-                          </ClerkProvider>
-                        </body>
-                      </html>
-                    )
-                  }
-                  ```
-
-                  ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 13]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
-                  import Head from 'next/head'
-
-                  export default function App({ Component, pageProps }) {
-                    const primarySignInUrl = '/sign-in'
-                    const primarySignUpUrl = '/sign-up'
-                    const satelliteUrl = 'http://localhost:3001'
-
-                    return (
-                      <ClerkProvider
-                        signInUrl={primarySignInUrl}
-                        signUpUrl={primarySignUpUrl}
-                        allowedRedirectOrigins={[satelliteUrl]}
-                        {...pageProps}
-                      >
-                        <Head>
-                          <title>Primary Next.js app</title>
-                          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                        </Head>
-                        <Component {...pageProps} />
-                      </ClerkProvider>
-                    )
-                  }
-                  ```
-                </CodeBlockTabs>
-
-                <CodeBlockTabs options={["App Router", "Pages Router"]}>
-                  ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 14]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
-
-                  export default function RootLayout({ children }: { children: React.ReactNode }) {
-                    const primarySignInUrl = '/sign-in'
-                    const primarySignUpUrl = '/sign-up'
-                    const satelliteUrl = 'https://satellite.dev'
-
-                    return (
-                      <html lang="en">
-                        <body>
-                          <ClerkProvider
-                            signInUrl={primarySignInUrl}
-                            signUpUrl={primarySignUpUrl}
-                            allowedRedirectOrigins={[satelliteUrl]}
-                          >
-                            <p>Primary Next.js app</p>
-                            {children}
-                          </ClerkProvider>
-                        </body>
-                      </html>
-                    )
-                  }
-                  ```
-
-                  ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 13]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
-                  import Head from 'next/head'
-
-                  export default function App({ Component, pageProps }) {
-                    const primarySignInUrl = '/sign-in'
-                    const primarySignUpUrl = '/sign-up'
-                    const satelliteUrl = 'https://satellite.dev'
-
-                    return (
-                      <ClerkProvider
-                        signInUrl={primarySignInUrl}
-                        signUpUrl={primarySignUpUrl}
-                        allowedRedirectOrigins={[satelliteUrl]}
-                        {...pageProps}
-                      >
-                        <Head>
-                          <title>Primary Next.js app</title>
-                          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                        </Head>
-                        <Component {...pageProps} />
-                      </ClerkProvider>
-                    )
-                  }
-                  ```
-                </CodeBlockTabs>
-              </CodeBlockTabs>
-            </Tab>
-
-            <Tab>
-              In the Next.js project associated with your satellite domain, configure your `<ClerkProvider>` as shown in the following example:
-
-              <CodeBlockTabs options={["Development", "Production"]}>
-                <CodeBlockTabs options={["App Router", "Pages Router"]}>
-                  ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 15]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
-
-                  export default function RootLayout({ children }: { children: React.ReactNode }) {
-                    const primarySignInUrl = 'http://localhost:3000/sign-in'
-                    const primarySignUpUrl = 'http://localhost:3000/sign-up'
-                    const satelliteDomain = 'localhost:3001'
-
-                    return (
-                      <html lang="en">
-                        <body>
-                          <ClerkProvider
-                            isSatellite
-                            domain={satelliteDomain}
-                            signInUrl={primarySignInUrl}
-                            signUpUrl={primarySignUpUrl}
-                          >
-                            <title>Satellite Next.js app</title>
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                            {children}
-                          </ClerkProvider>
-                        </body>
-                      </html>
-                    )
-                  }
-                  ```
-
-                  ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 14]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
-                  import Head from 'next/head'
-
-                  export default function App({ Component, pageProps }) {
-                    const primarySignInUrl = 'http://localhost:3000/sign-in'
-                    const primarySignUpUrl = 'http://localhost:3000/sign-up'
-                    const satelliteDomain = 'localhost:3001'
-
-                    return (
-                      <ClerkProvider
-                        isSatellite
-                        domain={satelliteDomain}
-                        signInUrl={primarySignInUrl}
-                        signUpUrl={primarySignUpUrl}
-                        {...pageProps}
-                      >
-                        <Head>
-                          <title>Satellite Next.js app</title>
-                          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                        </Head>
-                        <Component {...pageProps} />
-                      </ClerkProvider>
-                    )
-                  }
-                  ```
-                </CodeBlockTabs>
-
-                <CodeBlockTabs options={["App Router", "Pages Router"]}>
-                  ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 15]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
-
-                  export default function RootLayout({ children }: { children: React.ReactNode }) {
-                    const primarySignInUrl = 'https://primary.dev/sign-in'
-                    const primarySignUpUrl = 'https://primary.dev/sign-up'
-                    const satelliteDomain = 'satellite.dev'
-
-                    return (
-                      <html lang="en">
-                        <body>
-                          <ClerkProvider
-                            isSatellite
-                            domain={satelliteDomain}
-                            signInUrl={primarySignInUrl}
-                            signUpUrl={primarySignUpUrl}
-                          >
-                            <title>Satellite Next.js app</title>
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                            {children}
-                          </ClerkProvider>
-                        </body>
-                      </html>
-                    )
-                  }
-                  ```
-
-                  ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 14]] }}
-                  import { ClerkProvider } from '@clerk/nextjs'
-                  import Head from 'next/head'
-
-                  export default function App({ Component, pageProps }) {
-                    const primarySignInUrl = 'https://primary.dev/sign-in'
-                    const primarySignUpUrl = 'https://primary.dev/sign-up'
-                    const satelliteDomain = 'satellite.dev'
-
-                    return (
-                      <ClerkProvider
-                        isSatellite
-                        domain={satelliteDomain}
-                        signInUrl={primarySignInUrl}
-                        signUpUrl={primarySignUpUrl}
-                        {...pageProps}
-                      >
-                        <Head>
-                          <title>Satellite Next.js app</title>
-                          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                        </Head>
-                        <Component {...pageProps} />
-                      </ClerkProvider>
-                    )
-                  }
-                  ```
-                </CodeBlockTabs>
-              </CodeBlockTabs>
-
-              And the middleware associated with your satellite domain should look like this:
-
-              <Include src="_partials/nextjs/nextjs-15-callout" />
-
-              <CodeBlockTabs options={["Development", "Production"]}>
-                ```ts {{ filename: 'proxy.ts', mark: [[3, 13]] }}
-                import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-                // Set the necessary options for a satellite application
-                const options = {
-                  isSatellite: true,
-                  signInUrl: 'http://localhost:3000/sign-in',
-                  signUpUrl: 'http://localhost:3000/sign-up',
-                  domain: 'localhost:3001',
-
-                  // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
-                  // This adds a redirect on every first visit, which comes with a performance cost.
-                  // satelliteAutoSync: true,
-                }
-
-                export default clerkMiddleware(async (auth, req) => {}, options)
-
-                export const config = {
-                  matcher: [
-                    // Skip Next.js internals and all static files, unless found in search params
-                    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-                    // Always run for API routes
-                    '/(api|trpc)(.*)',
-                    // Always run for Clerk-specific frontend API routes
-                    '/__clerk/(.*)',
-                  ],
+                  return (
+                    <html lang="en">
+                      <body>
+                        <ClerkProvider
+                          signInUrl={primarySignInUrl}
+                          signUpUrl={primarySignUpUrl}
+                          allowedRedirectOrigins={[satelliteUrl]}
+                        >
+                          <p>Primary Next.js app</p>
+                          {children}
+                        </ClerkProvider>
+                      </body>
+                    </html>
+                  )
                 }
                 ```
 
-                ```ts {{ filename: 'proxy.ts', mark: [[3, 13]] }}
-                import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+                ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 13]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
+                import Head from 'next/head'
 
-                // Set the necessary options for a satellite application
-                const options = {
-                  isSatellite: true,
-                  signInUrl: 'https://primary.dev/sign-in',
-                  signUpUrl: 'https://primary.dev/sign-up',
-                  domain: 'satellite.dev',
+                export default function App({ Component, pageProps }) {
+                  const primarySignInUrl = '/sign-in'
+                  const primarySignUpUrl = '/sign-up'
+                  const satelliteUrl = 'http://localhost:3001'
 
-                  // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
-                  // This adds a redirect on every first visit, which comes with a performance cost.
-                  // satelliteAutoSync: true,
-                }
-
-                export default clerkMiddleware(async (auth, req) => {}, options)
-
-                export const config = {
-                  matcher: [
-                    // Skip Next.js internals and all static files, unless found in search params
-                    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-                    // Always run for API routes
-                    '/(api|trpc)(.*)',
-                    // Always run for Clerk-specific frontend API routes
-                    '/__clerk/(.*)',
-                  ],
+                  return (
+                    <ClerkProvider
+                      signInUrl={primarySignInUrl}
+                      signUpUrl={primarySignUpUrl}
+                      allowedRedirectOrigins={[satelliteUrl]}
+                      {...pageProps}
+                    >
+                      <Head>
+                        <title>Primary Next.js app</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                      </Head>
+                      <Component {...pageProps} />
+                    </ClerkProvider>
+                  )
                 }
                 ```
               </CodeBlockTabs>
-            </Tab>
-          </Tabs>
-        </Tab>
 
-        <Tab>
-          Use the following tabs to choose whether your JavaScript app initializes Clerk with the npm package or a `<script>` tag.
+              <CodeBlockTabs options={["App Router", "Pages Router"]}>
+                ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 14]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
 
-          <Tabs items={["NPM module", "<script>"]}>
-            <Tab>
-              For apps that initialize Clerk with `@clerk/clerk-js`, configure constructor options in `new Clerk()` and runtime options in [`clerk.load()`](/docs/reference/objects/clerk#load).
+                export default function RootLayout({ children }: { children: React.ReactNode }) {
+                  const primarySignInUrl = '/sign-in'
+                  const primarySignUpUrl = '/sign-up'
+                  const satelliteUrl = 'https://satellite.dev'
 
-              <Tabs items={["Primary app", "Satellite app"]}>
-                <Tab>
-                  In the JavaScript app associated with your primary domain, configure Clerk as shown in the following example:
+                  return (
+                    <html lang="en">
+                      <body>
+                        <ClerkProvider
+                          signInUrl={primarySignInUrl}
+                          signUpUrl={primarySignUpUrl}
+                          allowedRedirectOrigins={[satelliteUrl]}
+                        >
+                          <p>Primary Next.js app</p>
+                          {children}
+                        </ClerkProvider>
+                      </body>
+                    </html>
+                  )
+                }
+                ```
 
-                  <CodeBlockTabs options={["Development", "Production"]}>
-                    ```js {{ filename: 'src/main.js' }}
-                      import { Clerk } from '@clerk/clerk-js'
+                ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 13]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
+                import Head from 'next/head'
 
-                      // In development, your API keys will start with with `pk_test_` and `sk_test_` respectively. Ensure you load the correct keys.
-                      const clerk = new Clerk('{{pub_key}}')
+                export default function App({ Component, pageProps }) {
+                  const primarySignInUrl = '/sign-in'
+                  const primarySignUpUrl = '/sign-up'
+                  const satelliteUrl = 'https://satellite.dev'
 
-                      await clerk.load({
-                        ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +   signInUrl: '/sign-in',
-                    +   signUpUrl: '/sign-up',
-                    +   allowedRedirectOrigins: ['http://localhost:3001'],
-                      })
-                    ```
+                  return (
+                    <ClerkProvider
+                      signInUrl={primarySignInUrl}
+                      signUpUrl={primarySignUpUrl}
+                      allowedRedirectOrigins={[satelliteUrl]}
+                      {...pageProps}
+                    >
+                      <Head>
+                        <title>Primary Next.js app</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                      </Head>
+                      <Component {...pageProps} />
+                    </ClerkProvider>
+                  )
+                }
+                ```
+              </CodeBlockTabs>
+            </CodeBlockTabs>
+          </Tab>
 
-                    ```js {{ filename: 'src/main.js' }}
-                      import { Clerk } from '@clerk/clerk-js'
+          <Tab>
+            In the Next.js project associated with your satellite domain, configure your `<ClerkProvider>` as shown in the following example:
 
-                      // In production, your API keys will start with with `pk_live_` and `sk_live_` respectively. Ensure you load the correct keys.
-                      const clerk = new Clerk('pk_live_xxxxx')
+            <CodeBlockTabs options={["Development", "Production"]}>
+              <CodeBlockTabs options={["App Router", "Pages Router"]}>
+                ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 15]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
 
-                      await clerk.load({
-                        ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +   signInUrl: '/sign-in',
-                    +   signUpUrl: '/sign-up',
-                    +   allowedRedirectOrigins: ['https://satellite.dev'],
-                      })
-                    ```
-                  </CodeBlockTabs>
+                export default function RootLayout({ children }: { children: React.ReactNode }) {
+                  const primarySignInUrl = 'http://localhost:3000/sign-in'
+                  const primarySignUpUrl = 'http://localhost:3000/sign-up'
+                  const satelliteDomain = 'localhost:3001'
 
-                  Your sign-in and sign-up flows should run on the primary app, and the URLs you pass to the satellite app as `signInUrl` and `signUpUrl` must point to those primary-app routes.
-                </Tab>
+                  return (
+                    <html lang="en">
+                      <body>
+                        <ClerkProvider
+                          isSatellite
+                          domain={satelliteDomain}
+                          signInUrl={primarySignInUrl}
+                          signUpUrl={primarySignUpUrl}
+                        >
+                          <title>Satellite Next.js app</title>
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                          {children}
+                        </ClerkProvider>
+                      </body>
+                    </html>
+                  )
+                }
+                ```
 
-                <Tab>
-                  In the JavaScript app associated with your satellite domain, use the same [Publishable Key](!publishable-key) as the primary app, then configure Clerk as shown in the following example:
+                ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 14]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
+                import Head from 'next/head'
 
-                  <CodeBlockTabs options={["Development", "Production"]}>
-                    ```js {{ filename: 'src/main.js' }}
-                      import { Clerk } from '@clerk/clerk-js'
+                export default function App({ Component, pageProps }) {
+                  const primarySignInUrl = 'http://localhost:3000/sign-in'
+                  const primarySignUpUrl = 'http://localhost:3000/sign-up'
+                  const satelliteDomain = 'localhost:3001'
 
-                      // In development, your API keys will start with with `pk_test_` and `sk_test_` respectively. Ensure you load the correct keys.
-                      const clerk = new Clerk('{{pub_key}}', {
-                    +   domain: 'localhost:3001',
-                      })
+                  return (
+                    <ClerkProvider
+                      isSatellite
+                      domain={satelliteDomain}
+                      signInUrl={primarySignInUrl}
+                      signUpUrl={primarySignUpUrl}
+                      {...pageProps}
+                    >
+                      <Head>
+                        <title>Satellite Next.js app</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                      </Head>
+                      <Component {...pageProps} />
+                    </ClerkProvider>
+                  )
+                }
+                ```
+              </CodeBlockTabs>
 
-                      await clerk.load({
-                        ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +   isSatellite: true,
-                    +   signInUrl: 'http://localhost:3000/sign-in',
-                    +   signUpUrl: 'http://localhost:3000/sign-up',
+              <CodeBlockTabs options={["App Router", "Pages Router"]}>
+                ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], [12, 15]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
 
-                        // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
-                        // satelliteAutoSync: true,
-                      })
-                    ```
+                export default function RootLayout({ children }: { children: React.ReactNode }) {
+                  const primarySignInUrl = 'https://primary.dev/sign-in'
+                  const primarySignUpUrl = 'https://primary.dev/sign-up'
+                  const satelliteDomain = 'satellite.dev'
 
-                    ```js {{ filename: 'src/main.js' }}
-                      import { Clerk } from '@clerk/clerk-js'
+                  return (
+                    <html lang="en">
+                      <body>
+                        <ClerkProvider
+                          isSatellite
+                          domain={satelliteDomain}
+                          signInUrl={primarySignInUrl}
+                          signUpUrl={primarySignUpUrl}
+                        >
+                          <title>Satellite Next.js app</title>
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                          {children}
+                        </ClerkProvider>
+                      </body>
+                    </html>
+                  )
+                }
+                ```
 
-                      // In production, your API keys will start with with `pk_live_` and `sk_live_` respectively. Ensure you load the correct keys.
-                      const clerk = new Clerk('pk_live_xxxxx', {
-                    +   domain: 'satellite.dev',
-                      })
+                ```jsx {{ filename: '_app.tsx', mark: [[5, 7], [11, 14]] }}
+                import { ClerkProvider } from '@clerk/nextjs'
+                import Head from 'next/head'
 
-                      await clerk.load({
-                        ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +   isSatellite: true,
-                    +   signInUrl: 'https://primary.dev/sign-in',
-                    +   signUpUrl: 'https://primary.dev/sign-up',
+                export default function App({ Component, pageProps }) {
+                  const primarySignInUrl = 'https://primary.dev/sign-in'
+                  const primarySignUpUrl = 'https://primary.dev/sign-up'
+                  const satelliteDomain = 'satellite.dev'
 
-                        // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
-                        // satelliteAutoSync: true,
-                      })
-                    ```
-                  </CodeBlockTabs>
+                  return (
+                    <ClerkProvider
+                      isSatellite
+                      domain={satelliteDomain}
+                      signInUrl={primarySignInUrl}
+                      signUpUrl={primarySignUpUrl}
+                      {...pageProps}
+                    >
+                      <Head>
+                        <title>Satellite Next.js app</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                      </Head>
+                      <Component {...pageProps} />
+                    </ClerkProvider>
+                  )
+                }
+                ```
+              </CodeBlockTabs>
+            </CodeBlockTabs>
 
-                  Add sign-in and sign-up links to your satellite app using [`clerk.buildSignInUrl()`](/docs/reference/objects/clerk#build-sign-in-url) and [`clerk.buildSignUpUrl()`](/docs/reference/objects/clerk#build-sign-up-url) instead of hardcoding primary-domain URLs. These helpers add the sync trigger parameter required for the default `satelliteAutoSync: false` flow. See [Using `satelliteAutoSync: false` (default) with sign-in/sign-up links](#using-satellite-auto-sync-false-default-with-sign-in-sign-up-links) for details.
+            And the middleware associated with your satellite domain should look like this:
+
+            <Include src="_partials/nextjs/nextjs-15-callout" />
+
+            <CodeBlockTabs options={["Development", "Production"]}>
+              ```ts {{ filename: 'proxy.ts', mark: [[3, 13]] }}
+              import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+              // Set the necessary options for a satellite application
+              const options = {
+                isSatellite: true,
+                signInUrl: 'http://localhost:3000/sign-in',
+                signUpUrl: 'http://localhost:3000/sign-up',
+                domain: 'localhost:3001',
+
+                // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
+                // This adds a redirect on every first visit, which comes with a performance cost.
+                // satelliteAutoSync: true,
+              }
+
+              export default clerkMiddleware(async (auth, req) => {}, options)
+
+              export const config = {
+                matcher: [
+                  // Skip Next.js internals and all static files, unless found in search params
+                  '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+                  // Always run for API routes
+                  '/(api|trpc)(.*)',
+                  // Always run for Clerk-specific frontend API routes
+                  '/__clerk/(.*)',
+                ],
+              }
+              ```
+
+              ```ts {{ filename: 'proxy.ts', mark: [[3, 13]] }}
+              import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+              // Set the necessary options for a satellite application
+              const options = {
+                isSatellite: true,
+                signInUrl: 'https://primary.dev/sign-in',
+                signUpUrl: 'https://primary.dev/sign-up',
+                domain: 'satellite.dev',
+
+                // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
+                // This adds a redirect on every first visit, which comes with a performance cost.
+                // satelliteAutoSync: true,
+              }
+
+              export default clerkMiddleware(async (auth, req) => {}, options)
+
+              export const config = {
+                matcher: [
+                  // Skip Next.js internals and all static files, unless found in search params
+                  '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+                  // Always run for API routes
+                  '/(api|trpc)(.*)',
+                  // Always run for Clerk-specific frontend API routes
+                  '/__clerk/(.*)',
+                ],
+              }
+              ```
+            </CodeBlockTabs>
+          </Tab>
+        </Tabs>
+      </If>
+
+      <If sdk="js-frontend">
+        Use the following tabs to choose whether your JavaScript app initializes Clerk with the npm package or a `<script>` tag.
+
+        <Tabs items={["npm module", "<script>"]}>
+          <Tab>
+            For apps that initialize Clerk with `@clerk/clerk-js`, configure constructor options in `new Clerk()` and runtime options in [`clerk.load()`](/docs/reference/objects/clerk#load).
+
+            <Tabs items={["Primary app", "Satellite app"]}>
+              <Tab>
+                In the JavaScript app associated with your primary domain, configure Clerk as shown in the following example:
+
+                <CodeBlockTabs options={["Development", "Production"]}>
+                  ```js {{ filename: 'src/main.js' }}
+                    import { Clerk } from '@clerk/clerk-js'
+
+                    // In development, your API keys will start with with `pk_test_` and `sk_test_` respectively. Ensure you load the correct keys.
+                    const clerk = new Clerk('{{pub_key}}')
+
+                    await clerk.load({
+                      ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +   signInUrl: '/sign-in',
+                  +   signUpUrl: '/sign-up',
+                  +   allowedRedirectOrigins: ['http://localhost:3001'],
+                    })
+                  ```
 
                   ```js {{ filename: 'src/main.js' }}
-                  document.getElementById('app').innerHTML = `
-                    <a href="${clerk.buildSignInUrl()}">Sign in</a>
-                    <a href="${clerk.buildSignUpUrl()}">Sign up</a>
-                  `
+                    import { Clerk } from '@clerk/clerk-js'
+
+                    // In production, your API keys will start with with `pk_live_` and `sk_live_` respectively. Ensure you load the correct keys.
+                    const clerk = new Clerk('pk_live_xxxxx')
+
+                    await clerk.load({
+                      ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +   signInUrl: '/sign-in',
+                  +   signUpUrl: '/sign-up',
+                  +   allowedRedirectOrigins: ['https://satellite.dev'],
+                    })
+                  ```
+                </CodeBlockTabs>
+
+                Your sign-in and sign-up flows should run on the primary app, and the URLs you pass to the satellite app as `signInUrl` and `signUpUrl` must point to those primary-app routes.
+              </Tab>
+
+              <Tab>
+                In the JavaScript app associated with your satellite domain, use the same [Publishable Key](!publishable-key) as the primary app, then configure Clerk as shown in the following example:
+
+                <CodeBlockTabs options={["Development", "Production"]}>
+                  ```js {{ filename: 'src/main.js' }}
+                    import { Clerk } from '@clerk/clerk-js'
+
+                    // In development, your API keys will start with with `pk_test_` and `sk_test_` respectively. Ensure you load the correct keys.
+                    const clerk = new Clerk('{{pub_key}}', {
+                  +   domain: 'localhost:3001',
+                    })
+
+                    await clerk.load({
+                      ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +   isSatellite: true,
+                  +   signInUrl: 'http://localhost:3000/sign-in',
+                  +   signUpUrl: 'http://localhost:3000/sign-up',
+
+                      // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
+                      // satelliteAutoSync: true,
+                    })
                   ```
 
-                  > [!NOTE]
-                  > If you enable `satelliteAutoSync: true`, hardcoded primary sign-in or sign-up URLs can still work because the satellite app syncs automatically on first load.
-                </Tab>
-              </Tabs>
-            </Tab>
+                  ```js {{ filename: 'src/main.js' }}
+                    import { Clerk } from '@clerk/clerk-js'
 
-            <Tab>
-              For apps that initialize Clerk via a `<script>` tag, configure constructor options on the ClerkJS script and runtime options in Clerk's [`load()`](/docs/reference/objects/clerk#load) method.
+                    // In production, your API keys will start with with `pk_live_` and `sk_live_` respectively. Ensure you load the correct keys.
+                    const clerk = new Clerk('pk_live_xxxxx', {
+                  +   domain: 'satellite.dev',
+                    })
 
-              <Include src="_partials/javascript/data-clerk-prefix-callout" />
+                    await clerk.load({
+                      ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +   isSatellite: true,
+                  +   signInUrl: 'https://primary.dev/sign-in',
+                  +   signUpUrl: 'https://primary.dev/sign-up',
 
-              <Tabs items={["Primary app", "Satellite app"]}>
-                <Tab>
-                  In the JavaScript app associated with your primary domain, keep your existing Clerk `<script>` tags from the quickstart and update `Clerk.load()` as shown in the following example:
+                      // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
+                      // satelliteAutoSync: true,
+                    })
+                  ```
+                </CodeBlockTabs>
 
-                  <CodeBlockTabs options={["Development", "Production"]}>
-                    ```html {{ filename: 'index.html' }}
-                      <script>
-                        window.addEventListener('load', async function () {
-                          await Clerk.load({
-                            ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +       signInUrl: '/sign-in',
-                    +       signUpUrl: '/sign-up',
-                    +       allowedRedirectOrigins: ['http://localhost:3001'],
-                          })
+                Add sign-in and sign-up links to your satellite app using [`clerk.buildSignInUrl()`](/docs/reference/objects/clerk#build-sign-in-url) and [`clerk.buildSignUpUrl()`](/docs/reference/objects/clerk#build-sign-up-url) instead of hardcoding primary-domain URLs. These helpers add the sync trigger parameter required for the default `satelliteAutoSync: false` flow. See [Build sign-in and sign-up links](#build-sign-in-and-sign-up-links) for more information.
+
+                ```js {{ filename: 'src/main.js' }}
+                document.getElementById('app').innerHTML = `
+                  <a href="${clerk.buildSignInUrl()}">Sign in</a>
+                  <a href="${clerk.buildSignUpUrl()}">Sign up</a>
+                `
+                ```
+
+                > [!NOTE]
+                > If you enable `satelliteAutoSync: true`, hardcoded primary sign-in or sign-up URLs can still work because the satellite app syncs automatically on first load.
+              </Tab>
+            </Tabs>
+          </Tab>
+
+          <Tab>
+            For apps that initialize Clerk via a `<script>` tag, configure constructor options on the ClerkJS script and runtime options in Clerk's [`load()`](/docs/reference/objects/clerk#load) method.
+
+            <Include src="_partials/javascript/data-clerk-prefix-callout" />
+
+            <Tabs items={["Primary app", "Satellite app"]}>
+              <Tab>
+                In the JavaScript app associated with your primary domain, keep your existing Clerk `<script>` tags from the quickstart and update `Clerk.load()` as shown in the following example:
+
+                <CodeBlockTabs options={["Development", "Production"]}>
+                  ```html {{ filename: 'index.html' }}
+                    <script>
+                      window.addEventListener('load', async function () {
+                        await Clerk.load({
+                          ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +       signInUrl: '/sign-in',
+                  +       signUpUrl: '/sign-up',
+                  +       allowedRedirectOrigins: ['http://localhost:3001'],
                         })
-                      </script>
-                    ```
-
-                    ```html {{ filename: 'index.html' }}
-                      <script>
-                        window.addEventListener('load', async function () {
-                          await Clerk.load({
-                            ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +       signInUrl: '/sign-in',
-                    +       signUpUrl: '/sign-up',
-                    +       allowedRedirectOrigins: ['https://satellite.dev'],
-                          })
-                        })
-                      </script>
-                    ```
-                  </CodeBlockTabs>
-
-                  Your sign-in and sign-up flows should run on the primary app, and the URLs you pass to the satellite app as `signInUrl` and `signUpUrl` must point to those primary-app routes.
-                </Tab>
-
-                <Tab>
-                  In the JavaScript app associated with your satellite domain, add `data-clerk-domain` to the ClerkJS script tag and set `isSatellite` in Clerk's [`load()`](/docs/reference/objects/clerk#load) method as shown in the following example:
-
-                  <CodeBlockTabs options={["Development", "Production"]}>
-                    ```html {{ filename: 'index.html' }}
-                      <script
-                        defer
-                        crossorigin="anonymous"
-                        src="https://{{fapi_url}}/npm/@clerk/ui@1/dist/ui.browser.js"
-                        type="text/javascript"
-                      ></script>
-
-                      <script
-                        defer
-                        crossorigin="anonymous"
-                        data-clerk-publishable-key="{{pub_key}}"
-                    +   data-clerk-domain="localhost:3001"
-                        src="https://{{fapi_url}}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
-                        type="text/javascript"
-                      ></script>
-
-                      <script>
-                        window.addEventListener('load', async function () {
-                          await Clerk.load({
-                            ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +       isSatellite: true,
-                    +       signInUrl: 'http://localhost:3000/sign-in',
-                    +       signUpUrl: 'http://localhost:3000/sign-up',
-
-                            // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
-                            // satelliteAutoSync: true,
-                          })
-                        })
-                      </script>
-                    ```
-
-                    ```html {{ filename: 'index.html' }}
-                      <script
-                        defer
-                        crossorigin="anonymous"
-                        src="https://{{fapi_url}}/npm/@clerk/ui@1/dist/ui.browser.js"
-                        type="text/javascript"
-                      ></script>
-
-                      <script
-                        defer
-                        crossorigin="anonymous"
-                        data-clerk-publishable-key="{{pub_key}}"
-                    +   data-clerk-domain="satellite.dev"
-                        src="https://{{fapi_url}}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
-                        type="text/javascript"
-                      ></script>
-
-                      <script>
-                        window.addEventListener('load', async function () {
-                          await Clerk.load({
-                            ui: { ClerkUI: window.__internal_ClerkUICtor },
-                    +       isSatellite: true,
-                    +       signInUrl: 'https://primary.dev/sign-in',
-                    +       signUpUrl: 'https://primary.dev/sign-up',
-
-                            // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
-                            // satelliteAutoSync: true,
-                          })
-                        })
-                      </script>
-                    ```
-                  </CodeBlockTabs>
-
-                  Add sign-in and sign-up links to your satellite app using [`Clerk.buildSignInUrl()`](/docs/reference/objects/clerk#build-sign-in-url) and [`Clerk.buildSignUpUrl()`](/docs/reference/objects/clerk#build-sign-up-url) instead of hardcoding primary-domain URLs. These helpers add the sync trigger parameter required for the default `satelliteAutoSync: false` flow. See [Using `satelliteAutoSync: false` (default) with sign-in/sign-up links](#using-satellite-auto-sync-false-default-with-sign-in-sign-up-links) for details.
+                      })
+                    </script>
+                  ```
 
                   ```html {{ filename: 'index.html' }}
-                  <script>
-                    window.addEventListener('load', async function () {
-                      document.getElementById('app').innerHTML = `
-                        <a href="${Clerk.buildSignInUrl()}">Sign in</a>
-                        <a href="${Clerk.buildSignUpUrl()}">Sign up</a>
-                      `
-                    })
-                  </script>
+                    <script>
+                      window.addEventListener('load', async function () {
+                        await Clerk.load({
+                          ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +       signInUrl: '/sign-in',
+                  +       signUpUrl: '/sign-up',
+                  +       allowedRedirectOrigins: ['https://satellite.dev'],
+                        })
+                      })
+                    </script>
+                  ```
+                </CodeBlockTabs>
+
+                Your sign-in and sign-up flows should run on the primary app, and the URLs you pass to the satellite app as `signInUrl` and `signUpUrl` must point to those primary-app routes.
+              </Tab>
+
+              <Tab>
+                In the JavaScript app associated with your satellite domain, add `data-clerk-domain` to the ClerkJS script tag and set `isSatellite` in Clerk's [`load()`](/docs/reference/objects/clerk#load) method as shown in the following example:
+
+                <CodeBlockTabs options={["Development", "Production"]}>
+                  ```html {{ filename: 'index.html' }}
+                    <script
+                      defer
+                      crossorigin="anonymous"
+                      src="https://{{fapi_url}}/npm/@clerk/ui@1/dist/ui.browser.js"
+                      type="text/javascript"
+                    ></script>
+
+                    <script
+                      defer
+                      crossorigin="anonymous"
+                      data-clerk-publishable-key="{{pub_key}}"
+                  +   data-clerk-domain="localhost:3001"
+                      src="https://{{fapi_url}}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+                      type="text/javascript"
+                    ></script>
+
+                    <script>
+                      window.addEventListener('load', async function () {
+                        await Clerk.load({
+                          ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +       isSatellite: true,
+                  +       signInUrl: 'http://localhost:3000/sign-in',
+                  +       signUpUrl: 'http://localhost:3000/sign-up',
+
+                          // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
+                          // satelliteAutoSync: true,
+                        })
+                      })
+                    </script>
                   ```
 
-                  > [!NOTE]
-                  > If you enable `satelliteAutoSync: true`, hardcoded primary sign-in or sign-up URLs can still work because the satellite app syncs automatically on first load.
-                </Tab>
-              </Tabs>
-            </Tab>
-          </Tabs>
-        </Tab>
-      </Tabs>
+                  ```html {{ filename: 'index.html' }}
+                    <script
+                      defer
+                      crossorigin="anonymous"
+                      src="https://{{fapi_url}}/npm/@clerk/ui@1/dist/ui.browser.js"
+                      type="text/javascript"
+                    ></script>
+
+                    <script
+                      defer
+                      crossorigin="anonymous"
+                      data-clerk-publishable-key="{{pub_key}}"
+                  +   data-clerk-domain="satellite.dev"
+                      src="https://{{fapi_url}}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+                      type="text/javascript"
+                    ></script>
+
+                    <script>
+                      window.addEventListener('load', async function () {
+                        await Clerk.load({
+                          ui: { ClerkUI: window.__internal_ClerkUICtor },
+                  +       isSatellite: true,
+                  +       signInUrl: 'https://primary.dev/sign-in',
+                  +       signUpUrl: 'https://primary.dev/sign-up',
+
+                          // satelliteAutoSync defaults to false. Uncomment below to automatically sync auth state on first load.
+                          // satelliteAutoSync: true,
+                        })
+                      })
+                    </script>
+                  ```
+                </CodeBlockTabs>
+
+                Add sign-in and sign-up links to your satellite app using [`Clerk.buildSignInUrl()`](/docs/reference/objects/clerk#build-sign-in-url) and [`Clerk.buildSignUpUrl()`](/docs/reference/objects/clerk#build-sign-up-url) instead of hardcoding primary-domain URLs. These helpers add the sync trigger parameter required for the default `satelliteAutoSync: false` flow. See [Build sign-in and sign-up links](#build-sign-in-and-sign-up-links) for more information.
+
+                ```html {{ filename: 'index.html' }}
+                <script>
+                  window.addEventListener('load', async function () {
+                    document.getElementById('app').innerHTML = `
+                      <a href="${Clerk.buildSignInUrl()}">Sign in</a>
+                      <a href="${Clerk.buildSignUpUrl()}">Sign up</a>
+                    `
+                  })
+                </script>
+                ```
+
+                > [!NOTE]
+                > If you enable `satelliteAutoSync: true`, hardcoded primary sign-in or sign-up URLs can still work because the satellite app syncs automatically on first load.
+              </Tab>
+            </Tabs>
+          </Tab>
+        </Tabs>
+      </If>
     </Tab>
   </Tabs>
 

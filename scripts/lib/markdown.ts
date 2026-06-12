@@ -9,7 +9,7 @@
 // - validates (but does not embed) the partials and typedocs
 // - extracts the headings and validates that they are unique
 
-import { slugifyWithCounter } from '@sindresorhus/slugify'
+import { slugifyWithCounter } from './utils/slugify'
 import { toString } from 'mdast-util-to-string'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'

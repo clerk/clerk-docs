@@ -9,14 +9,16 @@
 // - validates (but does not embed) the partials and typedocs
 // - extracts the headings and validates that they are unique
 
-import { slugifyWithCounter } from '@sindresorhus/slugify'
+import { slugifyWithCounter } from './utils/slugify'
 import { toString } from 'mdast-util-to-string'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
+import type { Root } from 'mdast'
 import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
+import { VFile } from 'vfile'
 import { type BuildConfig } from './config'
 import { errorMessages, safeFail, safeMessage, type WarningsSection } from './error-messages'
 import { readMarkdownFile, type DocsFile } from './io'
@@ -99,9 +101,13 @@ export const parseInMarkdownFile =
         value: fileContent,
       })
 
+    if (node === undefined) {
+      throw new Error(errorMessages['doc-parse-failed'](file.href))
+    }
+
     // This needs to be done separately as some further validation expects the partials to not be embedded
     // but we need to embed it to get all the headings to check
-    await remark()
+    const embedProcessor = remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
       .use(remarkGfm)
@@ -165,14 +171,11 @@ export const parseInMarkdownFile =
           },
         )
       })
-      .process({
-        path: file.relativeFilePath,
-        value: fileContent,
-      })
 
-    if (node === undefined) {
-      throw new Error(errorMessages['doc-parse-failed'](file.href))
-    }
+    await embedProcessor.run(
+      structuredClone(node) as Root,
+      new VFile({ path: file.relativeFilePath, value: fileContent }),
+    )
 
     if (frontmatter === undefined) {
       throw new Error(errorMessages['frontmatter-parse-failed'](file.href))

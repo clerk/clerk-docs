@@ -50,6 +50,7 @@ import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import yaml from 'yaml'
 import { z } from 'zod'
+import type { Root } from 'mdast'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -104,6 +105,8 @@ import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { getRoutableDocHref } from './lib/utils/getRoutableDocHref'
 import { existsSync } from 'node:fs'
+
+const stringSchema = z.string()
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -223,7 +226,7 @@ async function main() {
     },
   })
 
-  const store = createBlankStore()
+  const store = createBlankStore(config.flags.watch)
 
   const output = await build(config, store)
 
@@ -613,7 +616,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         let node: Node | null = null
         const links: Set<string> = new Set()
 
-        const vfile = await remark()
+        const inputFile = new VFile({ path: partial.vfile.path, value: partial.content })
+        const processor = remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(remarkGfm)
@@ -625,7 +629,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(() => (tree) => {
             node = tree
           })
-          .process({ path: partial.vfile.path, value: partial.content })
+        const tree = processor.parse(inputFile)
+        node = tree
+        await processor.run(tree, inputFile)
 
         if (node === null) {
           throw new Error(errorMessages['partial-parse-error'](partial.path))
@@ -634,7 +640,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return {
           ...partial,
           node: partial.node, // Use the embedded node (with nested includes)
-          vfile, // Use the vfile from validation
+          vfile: inputFile, // Use the vfile from validation
           links,
         }
       } catch (error) {
@@ -659,7 +665,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         let node: Node | null = null
         const links: Set<string> = new Set()
 
-        const vfile = await remark()
+        const processor = remark()
           .use(remarkMdx)
           .use(remarkGfm)
           .use(
@@ -670,7 +676,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(() => (tree, vfile) => {
             node = tree
           })
-          .process(tooltip.vfile)
+        const tree = processor.parse(tooltip.vfile)
+        node = tree
+        await processor.run(tree, tooltip.vfile)
 
         if (node === null) {
           throw new Error(errorMessages['tooltip-parse-error'](tooltip.path))
@@ -678,7 +686,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
         return {
           ...tooltip,
-          vfile,
+          vfile: tooltip.vfile,
           node: node as Node,
           links,
         }
@@ -701,7 +709,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           let node: Node | null = null
           const links: Set<string> = new Set()
 
-          const vfile = await remark()
+          const processor = remark()
             .use(remarkMdx)
             .use(remarkGfm)
             .use(
@@ -712,7 +720,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             .use(() => (tree, vfile) => {
               node = tree
             })
-            .process(typedoc.vfile)
+          const tree = processor.parse(typedoc.vfile)
+          node = tree
+          await processor.run(tree, typedoc.vfile)
 
           if (node === null) {
             throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
@@ -720,7 +730,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           return {
             ...typedoc,
-            vfile,
+            vfile: typedoc.vfile,
             node: node as Node,
             links,
           }
@@ -729,7 +739,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             let node: Node | null = null
             const links: Set<string> = new Set()
 
-            const vfile = await remark()
+            const processor = remark()
               .use(
                 validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
                   links.add(linkInTypedoc)
@@ -738,7 +748,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               .use(() => (tree, vfile) => {
                 node = tree
               })
-              .process(typedoc.vfile)
+            const tree = processor.parse(typedoc.vfile)
+            node = tree
+            await processor.run(tree, typedoc.vfile)
 
             if (node === null) {
               throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
@@ -746,7 +758,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
             return {
               ...typedoc,
-              vfile,
+              vfile: typedoc.vfile,
               node: node as Node,
               links,
             }
@@ -1007,7 +1019,7 @@ ${yaml.stringify({
           if (doc.file.filePathInDocsFolder.endsWith(`.${targetSdk}.mdx`)) return null
 
           // if the doc has distinct version, we want to use those instead of the "generic" sdk scoped version
-          const { fileContent, sourceFile } = (() => {
+          const { fileContent, sourceFile, sourceNode } = (() => {
             if (doc.distinctSDKVariants?.includes(targetSdk)) {
               const distinctSDKVariant = docsMap.get(`${doc.file.href}.${targetSdk}`)
 
@@ -1015,12 +1027,14 @@ ${yaml.stringify({
                 return {
                   fileContent: distinctSDKVariant.fileContent,
                   sourceFile: `/docs/${distinctSDKVariant.file.filePathInDocsFolder}`,
+                  sourceNode: distinctSDKVariant.node,
                 }
               }
             }
             return {
               fileContent: doc.fileContent,
               sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
+              sourceNode: doc.node,
             }
           })()
           const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
@@ -1034,8 +1048,8 @@ ${yaml.stringify({
               ? doc.file.href
               : scopeHrefToSDK(config)(doc.file.href, ':sdk:')
 
-          const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
-            remark()
+          const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () => {
+            const processor = remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
               .use(remarkGfm)
@@ -1059,11 +1073,12 @@ ${yaml.stringify({
                   sourceFile: sourceFile,
                 }),
               )
-              .process({
-                path: doc.file.filePath,
-                value: fileContent,
-              }),
-          )
+
+            const inputFile = new VFile({ path: doc.file.filePath, value: fileContent })
+            const tree = await processor.run(structuredClone(sourceNode) as Root, inputFile)
+            inputFile.value = processor.stringify(tree as Root, inputFile)
+            return inputFile
+          })
 
           // For single SDK documents or documents with SDK already in path, write to root path
           if (hrefAlreadyContainsSdk || isSingleSdkDocument) {
@@ -1111,7 +1126,7 @@ ${yaml.stringify({
         true,
         'docs',
         doc.file.filePath,
-        z.string(),
+        stringSchema,
       )
 
       if (sdkProp === undefined) return
@@ -1124,7 +1139,7 @@ ${yaml.stringify({
     })
 
     for (const sdk of availableSDKs) {
-      const vfile = await remark()
+      const headingProcessor = remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
         .use(remarkGfm)
@@ -1139,7 +1154,7 @@ ${yaml.stringify({
               false,
               'docs',
               doc.file.filePath,
-              z.string(),
+              stringSchema,
             )
             if (!sdkProp) return true
 
@@ -1151,12 +1166,10 @@ ${yaml.stringify({
           })
         })
         .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
-        .process({
-          path: doc.file.filePath,
-          value: String(doc.vfile),
-        })
 
-      headingValidationVFiles.push(vfile)
+      const headingFile = new VFile({ path: doc.file.filePath, value: String(doc.vfile) })
+      await headingProcessor.run(structuredClone(doc.node) as Root, headingFile)
+      headingValidationVFiles.push(headingFile)
     }
   }
 

@@ -47,6 +47,8 @@ import type { DocsFile } from './io'
 import { extractComponentPropValueFromNode } from './utils/extractComponentPropValueFromNode'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+
 export const checkPrompts =
   (config: BuildConfig, prompts: Prompt[], file: DocsFile, options: { reportWarnings: boolean; update: boolean }) =>
   () =>
@@ -64,7 +66,7 @@ export const checkPrompts =
         false,
         'docs',
         file.filePath,
-        z.string(),
+        stringSchema,
       )
 
       if (promptSrc === undefined) return node

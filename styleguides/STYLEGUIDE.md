@@ -67,7 +67,7 @@ Keep lowercase:
 - **Bold UI labels** that mirror Clerk Dashboard text exactly, even when the Dashboard uses lowercase. For example, **Create first organization automatically**.
 - **Component-rendered text**, such as button labels and default values. For example, the `<OrganizationSwitcher />` component's "Create an organization" button and the "My organization" fallback name.
 - **Code**, including inline code, code blocks, prop values, string literals, URL paths, and API field or parameter names.
-- **`invitation(s)` and `webhook(s)`**, which aren't treated as feature proper nouns, even in phrases like "Organization invitation" and "webhook event".
+- **`invitation(s)`, `membership(s)`, and `webhook(s)`**, which aren't treated as feature proper nouns, even in phrases like "Organization invitation", "Organization membership", and "webhook event". Note that "Membership Request" _is_ a proper noun, per the list above.
 - **Compound adjectives** built on industry terms, like "role-based access control".
 
 ### Use "sign in" instead of "log in"

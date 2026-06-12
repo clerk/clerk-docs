@@ -105,6 +105,8 @@ import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { getRoutableDocHref } from './lib/utils/getRoutableDocHref'
 import { existsSync } from 'node:fs'
 
+const stringSchema = z.string()
+
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
   main()
@@ -1111,7 +1113,7 @@ ${yaml.stringify({
         true,
         'docs',
         doc.file.filePath,
-        z.string(),
+        stringSchema,
       )
 
       if (sdkProp === undefined) return
@@ -1139,7 +1141,7 @@ ${yaml.stringify({
               false,
               'docs',
               doc.file.filePath,
-              z.string(),
+              stringSchema,
             )
             if (!sdkProp) return true
 

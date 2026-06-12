@@ -9,6 +9,8 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+
 /**
  * Extracts list of allowed SDKs from the `sdk` and `notSdk` props of the <If /> component
  */
@@ -73,7 +75,7 @@ export const validateIfComponents =
         false,
         'docs',
         filePath,
-        z.string(),
+        stringSchema,
       )
       const notSdk = extractComponentPropValueFromNode(
         config,
@@ -84,7 +86,7 @@ export const validateIfComponents =
         false,
         'docs',
         filePath,
-        z.string(),
+        stringSchema,
       )
       const ignoreSdkWarning = extractComponentPropValueFromNode(
         config,

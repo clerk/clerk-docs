@@ -20,6 +20,8 @@ import { extractComponentPropValueFromNode } from './utils/extractComponentPropV
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   // Read all partials from the docs directory, including:
   // 1. Global partials in /docs/_partials/
@@ -111,7 +113,7 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
           false,
           'partials',
           filePath,
-          z.string(),
+          stringSchema,
         )
 
         if (!partialSrc) return
@@ -184,7 +186,7 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
                 false,
                 'partials',
                 filePath,
-                z.string(),
+                stringSchema,
               )
 
               if (partialSrc) {

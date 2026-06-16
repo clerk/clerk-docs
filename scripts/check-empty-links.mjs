@@ -20,7 +20,9 @@ const remarkPluginCheckEmptyLinks = () => (tree, file) => {
     }
 
     if (node.type === 'mdxJsxTextElement' || node.type === 'mdxJsxFlowElement') {
-      const hrefAttribute = node.attributes?.find?.((attribute) => attribute.type === 'mdxJsxAttribute' && attribute.name === 'href')
+      const hrefAttribute = node.attributes?.find?.(
+        (attribute) => attribute.type === 'mdxJsxAttribute' && attribute.name === 'href',
+      )
 
       if (hrefAttribute && isEmptyString(hrefAttribute.value)) {
         const elementName = node.name || 'JSX element'

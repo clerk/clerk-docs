@@ -14,7 +14,7 @@ import reporter from 'vfile-reporter'
  * It provides friendly feedback about any empty links found and suggests how to fix them.
  *
  * Usage:
- *   npx tsx scripts/check-empty-links.ts
+ *   node ./scripts/check-empty-links.mjs
  *   npm run lint:check-empty-links
  */
 
@@ -22,7 +22,29 @@ function isEmptyString(value) {
   return typeof value === 'string' && value.trim() === ''
 }
 
-// Plugin to check emtpy links in markdown and MDX files
+// Resolves a JSX attribute to its static string value, or undefined if it isn't
+// a static string. Covers plain strings (`href="..."`) and string/template
+// expressions with no interpolation (`href={''}`, `href={``}`). Genuinely
+// dynamic values (`href={someVar}`) return undefined so they aren't flagged.
+function staticAttributeValue(attribute) {
+  if (typeof attribute.value === 'string') {
+    return attribute.value
+  }
+
+  const expression = attribute.value?.data?.estree?.body?.[0]?.expression
+
+  if (expression?.type === 'Literal' && typeof expression.value === 'string') {
+    return expression.value
+  }
+
+  if (expression?.type === 'TemplateLiteral' && expression.expressions.length === 0) {
+    return expression.quasis.map((quasi) => quasi.value.cooked).join('')
+  }
+
+  return undefined
+}
+
+// Plugin to check empty links in markdown and MDX files
 const remarkPluginCheckEmptyLinks = () => (tree, file) => {
   visit(tree, (node) => {
     if (node.type === 'link' || node.type === 'image' || node.type === 'definition') {
@@ -36,7 +58,7 @@ const remarkPluginCheckEmptyLinks = () => (tree, file) => {
         (attribute) => attribute.type === 'mdxJsxAttribute' && attribute.name === 'href',
       )
 
-      if (hrefAttribute && isEmptyString(hrefAttribute.value)) {
+      if (hrefAttribute && isEmptyString(staticAttributeValue(hrefAttribute))) {
         const elementName = node.name || 'JSX element'
         file.message(`Empty href attribute on <${elementName}>`, node)
       }

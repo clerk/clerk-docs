@@ -7,6 +7,17 @@ import remarkMdx from 'remark-mdx'
 import { visit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 
+/**
+ * Check Empty Links Script
+ *
+ * This script checks for empty links in markdown and MDX files.
+ * It provides friendly feedback about any empty links found and suggests how to fix them.
+ *
+ * Usage:
+ *   npx tsx scripts/check-empty-links.ts
+ *   npm run lint:check-empty-links
+ */
+
 function isEmptyString(value) {
   return typeof value === 'string' && value.trim() === ''
 }

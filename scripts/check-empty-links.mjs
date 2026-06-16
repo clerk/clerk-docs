@@ -11,6 +11,7 @@ function isEmptyString(value) {
   return typeof value === 'string' && value.trim() === ''
 }
 
+// Plugin to check emtpy links in markdown and MDX files
 const remarkPluginCheckEmptyLinks = () => (tree, file) => {
   visit(tree, (node) => {
     if (node.type === 'link' || node.type === 'image' || node.type === 'definition') {

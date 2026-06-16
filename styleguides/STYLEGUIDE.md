@@ -51,13 +51,24 @@ When writing titles that contain component references in MDX pages, wrap the com
 
 ### Capitalize Clerk feature proper nouns
 
-Clerk's own product and feature names are proper nouns — capitalize them consistently (for example, "Organization", "Billing", and "Agent Tasks"). This follows the same reasoning as the Next.js convention above. Use judgment; this isn't an exhaustive list, but when a name refers to a specific Clerk feature, treat it as a proper noun.
+Clerk's own product and feature names are proper nouns — capitalize them consistently. This follows the same reasoning as the Next.js convention above. Use judgment; this isn't an exhaustive list, but when a name refers to a specific Clerk feature, treat it as a proper noun.
+
+Terms treated as proper nouns include: Agent Task, Billing, Feature, Membership Request, Organization, Organization ID (when it refers to a Clerk Organization's ID, e.g. `org_xxx`), Permission, Plan, Role, Role Set, and Subscription.
 
 > ❌
 > Create an agent task to test your authentication flows.
 
 > ✅
 > Create an Agent Task to test your authentication flows.
+
+Keep lowercase:
+
+- **Generic usage**, where the word doesn't refer to the Clerk feature. For example, "your organization's directory service" (the reader's company), "billing information" (payment details like invoices and payment methods), and Clerk's own pricing tiers ("the Hobby plan", "the application's Clerk plan").
+- **Bold UI labels** that mirror Clerk Dashboard text exactly, even when the Dashboard uses lowercase. For example, **Create first organization automatically**.
+- **Component-rendered text**, such as button labels and default values. For example, the `<OrganizationSwitcher />` component's "Create an organization" button and the "My organization" fallback name.
+- **Code**, including inline code, code blocks, prop values, string literals, URL paths, and API field or parameter names.
+- **`invitation(s)`, `membership(s)`, and `webhook(s)`**, which aren't treated as feature proper nouns, even in phrases like "Organization invitation", "Organization membership", and "webhook event". Note that "Membership Request" _is_ a proper noun, per the list above.
+- **Compound adjectives** built on industry terms, like "role-based access control".
 
 ### Use "sign in" instead of "log in"
 

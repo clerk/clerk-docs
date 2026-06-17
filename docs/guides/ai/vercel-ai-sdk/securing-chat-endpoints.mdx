@@ -8,25 +8,53 @@ This page covers the patterns you'll most often need to secure chat endpoints fo
 
 ## Standard route guarding
 
-The default pattern. Call [`await auth.protect()`](/docs/reference/nextjs/app-router/auth) to reject unauthenticated callers before the model runs. Use this when only signed-in users should be able to use the chat.
+Two ways to reject unauthenticated callers. [`auth.protect()`](/docs/reference/nextjs/app-router/auth) returns a `404` (Next.js' default for API routes). `auth()` with an explicit `isAuthenticated` check lets you return `401`, which API clients and agents usually expect.
 
-```ts {{ filename: 'app/api/chat/route.ts' }}
-import { auth } from '@clerk/nextjs/server'
-import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+<Tabs items={["auth.protect()", "auth() + isAuthenticated"]}>
+  <Tab>
+    ```ts {{ filename: 'app/api/chat/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+    import { streamText, convertToModelMessages, type UIMessage } from 'ai'
 
-export async function POST(req: Request) {
-  await auth.protect()
+    export async function POST(req: Request) {
+      await auth.protect()
 
-  const { messages }: { messages: UIMessage[] } = await req.json()
+      const { messages }: { messages: UIMessage[] } = await req.json()
 
-  const result = streamText({
-    model: 'openai/gpt-5',
-    messages: await convertToModelMessages(messages),
-  })
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+      })
 
-  return result.toUIMessageStreamResponse()
-}
-```
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'app/api/chat/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+    import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+    import { NextResponse } from 'next/server'
+
+    export async function POST(req: Request) {
+      const { isAuthenticated } = await auth()
+      if (!isAuthenticated) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const { messages }: { messages: UIMessage[] } = await req.json()
+
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+      })
+
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+  </Tab>
+</Tabs>
 
 ## Stricter checks with `has()`
 
@@ -102,28 +130,61 @@ For this guide, create the following permission in the [Clerk Dashboard](https:/
 
 To check the permission in your route handler:
 
-```ts {{ filename: 'app/api/chat/route.ts', mark: [[8, 10]] }}
-import { auth } from '@clerk/nextjs/server'
-import { streamText, convertToModelMessages, type UIMessage } from 'ai'
-import { NextResponse } from 'next/server'
+<Tabs items={["auth.protect()", "auth() + isAuthenticated"]}>
+  <Tab>
+    ```ts {{ filename: 'app/api/chat/route.ts', mark: [[8, 10]] }}
+    import { auth } from '@clerk/nextjs/server'
+    import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+    import { NextResponse } from 'next/server'
 
-export async function POST(req: Request) {
-  const { has } = await auth.protect()
+    export async function POST(req: Request) {
+      const { has } = await auth.protect()
 
-  if (!has({ permission: 'org:chat:send' })) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+      if (!has({ permission: 'org:chat:send' })) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
 
-  const { messages }: { messages: UIMessage[] } = await req.json()
+      const { messages }: { messages: UIMessage[] } = await req.json()
 
-  const result = streamText({
-    model: 'openai/gpt-5',
-    messages: await convertToModelMessages(messages),
-  })
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+      })
 
-  return result.toUIMessageStreamResponse()
-}
-```
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'app/api/chat/route.ts', mark: [[8, 14]] }}
+    import { auth } from '@clerk/nextjs/server'
+    import { streamText, convertToModelMessages, type UIMessage } from 'ai'
+    import { NextResponse } from 'next/server'
+
+    export async function POST(req: Request) {
+      const { isAuthenticated, has } = await auth()
+
+      if (!isAuthenticated) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      if (!has({ permission: 'org:chat:send' })) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      const { messages }: { messages: UIMessage[] } = await req.json()
+
+      const result = streamText({
+        model: 'openai/gpt-5',
+        messages: await convertToModelMessages(messages),
+      })
+
+      return result.toUIMessageStreamResponse()
+    }
+    ```
+  </Tab>
+</Tabs>
 
 Now only roles with this permission assigned can reach the model. Every other request returns `403` before the model is ever called.
 
@@ -153,9 +214,24 @@ To restrict endpoints to users with specific features or billing plans, create t
   </Tab>
 </Tabs>
 
+For finer-grained checks inside individual AI SDK tools, see [Authorizing tool calls](/docs/guides/ai/vercel-ai-sdk/authorizing-tool-calls).
+
 ## Machine token authentication
 
 If your goal is to authenticate requests that don't come from human users (CLIs, agents, servers, etc.), set up your endpoint to support [machine tokens](/docs/guides/development/machine-auth/overview). Simply swap `auth.protect()` for `auth({ acceptsToken })` and specify which token type the route should accept.
+
+> [!IMPORTANT]
+> Clerk's default middleware (`proxy.ts` / `middleware.ts`) treats unauthenticated requests as session callers and may redirect them. When the route handler does its own auth (`auth({ acceptsToken })`), mark the route as public in middleware so non-session callers reach the handler:
+>
+> ```ts {{ filename: 'proxy.ts' }}
+> import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+>
+> const isPublicRoute = createRouteMatcher(['/api/chat'])
+>
+> export default clerkMiddleware(async (auth, req) => {
+>   if (!isPublicRoute(req)) await auth.protect()
+> })
+> ```
 
 ### API keys
 
@@ -275,7 +351,12 @@ if (tokenType === 'api_key') {
 }
 ```
 
+## A reusable wrapper
+
+The patterns above unfold the auth, scope, and permission checks inline so you can see what's happening. For a typed `withAuth(handler, options)` wrapper that runs the right checks per token type and converts auth failures to the correct HTTP response, see [`requireChatAuth` in the companion repo](https://github.com/clerk/ai-sdk-examples/blob/main/src/lib/clerk/index.ts).
+
 ## Next steps
 
+- [Authorizing tool calls](/docs/guides/ai/vercel-ai-sdk/authorizing-tool-calls): authorize each tool the model can invoke against the user's permissions.
 - [Roles and permissions](/docs/guides/organizations/control-access/roles-and-permissions): full reference for Clerk's role and permission model.
 - [Clerk Billing](/docs/guides/billing/overview): set up plans and features that the `has()` helper can check against.

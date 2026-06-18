@@ -1,193 +1,585 @@
 ---
 title: Organization management
-description: Manage Organizations, Memberships, invitations, and domains with the Clerk Android SDK.
+description: Manage Organizations, memberships, invitations, requests, suggestions, and domains with the Clerk Android SDK.
 sdk: android
 ---
 
-Use Clerk's Organization resources to manage members, invitations, and Organization settings.
+Use Clerk's Android Organization APIs to create and manage Organizations, switch the [Active Organization](!active-organization), and build custom Organization flows. Organization methods return `ClerkResult`, so handle both `ClerkResult.Success` and `ClerkResult.Failure`.
+
+```kotlin
+import com.clerk.api.network.serialization.ClerkResult
+import com.clerk.api.organizations.Organization
+
+when (val result = Organization.create(name = "Acme", slug = "acme")) {
+    is ClerkResult.Success -> {
+        val organization = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Show an error state.
+    }
+}
+```
+
+## Active organization
+
+The [Active Organization](!active-organization) is stored on `Session.lastActiveOrganizationId` for the current session. Use [`Clerk.organization`](/docs/reference/native-mobile/clerk#access-the-active-organization-state) to read the Active Organization and `Clerk.organizationMembership` to read the signed-in user's Active Organization membership.
+
+<Include src="_partials/android/active-organization-description" />
+
+### Select an Organization
+
+<Include src="_partials/android/select-organization" />
+
+### Select the Personal Account
+
+<Include src="_partials/android/select-personal-account" />
 
 ## Organization
 
-`Organization` represents a Clerk Organization and provides member, invitation, and domain management helpers. You can access an Organization from `organizationMembership.organization` when working with Memberships.
+`Organization` represents a Clerk Organization and provides helpers for profile, role, membership, invitation, request, and domain management.
 
-### Update Organization
+### Create or get an Organization
 
 ```kotlin
-val updatedOrganization = organization.update(
-    name = "Acme",
-    slug = "acme"
-)
+when (val result = Organization.create(name = "Acme", slug = "acme")) {
+    is ClerkResult.Success -> {
+        val organization = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = Organization.get(id = "org_123")) {
+    is ClerkResult.Success -> {
+        val organization = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Delete Organization
+### Update an Organization
 
 ```kotlin
-val deletedOrganization = organization.destroy()
+when (val result = organization.update(name = "Acme, Inc.", slug = "acme-inc")) {
+    is ClerkResult.Success -> {
+        val updatedOrganization = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Set Organization logo
+### Delete an Organization
 
 ```kotlin
-val updatedOrganization = organization.setLogo(imageData = imageData)
+when (val result = organization.delete()) {
+    is ClerkResult.Success -> {
+        val deletedObject = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Get Roles
+### Manage the Organization logo
 
 ```kotlin
-val roles = organization.getRoles()
-val admin = roles.data.firstOrNull { it.key == "org:admin" }
+when (val result = organization.updateLogo(file = logoFile)) {
+    is ClerkResult.Success -> {
+        val updatedOrganization = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = organization.deleteLogo()) {
+    is ClerkResult.Success -> {
+        val updatedOrganization = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### List all Memberships
+### Reload an Organization
 
 ```kotlin
-val memberships = organization.getMemberships()
+when (val result = organization.reload()) {
+    is ClerkResult.Success -> {
+        val refreshedOrganization = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Add member
+### List Roles
 
 ```kotlin
-val membership = organization.addMember(
-    userId = userId,
-    role = "org:member"
-)
+when (val result = organization.getRoles()) {
+    is ClerkResult.Success -> {
+        val roles = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = organization.getRolesPaginated(limit = 20, offset = 0)) {
+    is ClerkResult.Success -> {
+        val roles = result.value.data
+        val totalCount = result.value.totalCount
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Update member Role
+## Memberships
+
+Use membership APIs to list members, add members, update Roles, remove members, and check Organization Permissions.
+
+### List Organization memberships
 
 ```kotlin
-val updatedMembership = organization.updateMember(
-    userId = userId,
-    role = "org:admin"
-)
+when (
+    val result = organization.getOrganizationMemberships(
+        query = "jane",
+        role = "org:member",
+        limit = 20,
+        offset = 0,
+    )
+) {
+    is ClerkResult.Success -> {
+        val memberships = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Remove member
+### Create or remove a membership
 
 ```kotlin
-val removedMembership = organization.removeMember(userId = userId)
+when (val result = organization.createMembership(role = "org:member", userId = userId)) {
+    is ClerkResult.Success -> {
+        val organizationMembership = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = organization.removeMember(userId = userId)) {
+    is ClerkResult.Success -> {
+        val removedMembership = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### List all invitations
+### Update or delete a membership
+
+`OrganizationMembership` also provides helpers for updating a member's role in the Organization and deleting the membership.
 
 ```kotlin
-val invitations = organization.getInvitations()
+when (val result = organizationMembership.updateMembership(userId = userId, role = "org:admin")) {
+    is ClerkResult.Success -> {
+        val updatedMembership = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = organizationMembership.delete()) {
+    is ClerkResult.Success -> {
+        val deletedObject = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Invite member
+### Check membership Permissions
+
+`OrganizationMembership` provides the `hasPermission()` method, along with the convenience properties below for checking [Clerk System Permissions](/docs/guides/organizations/control-access/roles-and-permissions#system-permissions):
+
+- `canManageProfile`
+- `canDeleteOrganization`
+- `canReadMemberships`
+- `canManageMemberships`
+- `canReadDomains`
+- `canManageDomains`
+- `canReadBilling`
+- `canManageBilling`
+- `canReadApiKeys`
+- `canManageApiKeys`
 
 ```kotlin
-val invitation = organization.inviteMember(
-    emailAddress = "new@acme.com",
-    role = "org:member"
-)
+if (organizationMembership.canManageMemberships) {
+    // Show member management actions.
+}
+
+if (organizationMembership.hasPermission("org:sys_domains:manage")) {
+    // Show domain management actions.
+}
 ```
 
-### Create domain
+## Invitations
+
+Use invitation APIs to invite users to an Organization, list invitations, bulk-create invitations, and revoke invitations.
+
+### Create or list invitations
 
 ```kotlin
-val domain = organization.createDomain(domainName = "acme.com")
+when (
+    val result = organization.createInvitation(
+        emailAddress = "new@acme.com",
+        role = "org:member",
+    )
+) {
+    is ClerkResult.Success -> {
+        val invitation = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (
+    val result = organization.getInvitations(
+        limit = 20,
+        offset = 0,
+        status = OrganizationInvitation.Status.Pending,
+    )
+) {
+    is ClerkResult.Success -> {
+        val invitations = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### List all domains
+### Bulk-create invitations
 
 ```kotlin
-val domains = organization.getDomains()
+when (
+    val result = organization.bulkCreateInvitations(
+        emailAddresses = listOf("one@acme.com", "two@acme.com"),
+        role = "org:member",
+    )
+) {
+    is ClerkResult.Success -> {
+        val invitations = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Get a domain
+### Revoke an invitation
+
+`OrganizationInvitation` also provides a helper for revoking an invitation.
 
 ```kotlin
-val domain = organization.getDomain(domainId)
+when (val result = invitation.revoke()) {
+    is ClerkResult.Success -> {
+        val revokedInvitation = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### List all Membership Requests
+## Membership Requests
+
+Use Membership Request APIs to list, accept, and reject requests to join an Organization.
+
+### List Membership Requests
 
 ```kotlin
-val requests = organization.getMembershipRequests()
+when (val result = organization.getMembershipRequests(limit = 20, offset = 0, status = "pending")) {
+    is ClerkResult.Success -> {
+        val requests = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-## Organization Membership
+### Accept or reject a Membership Request
 
-`OrganizationMembership` represents a user's Membership within an Organization. You can access a Membership from `user.organizationMemberships` or from `organization.getMemberships(...)`.
-
-### Update Role
+`OrganizationMembershipRequest` also provides helpers for accepting and rejecting Membership Requests.
 
 ```kotlin
-val updatedMembership = membership.update(role = "org:admin")
+when (val result = membershipRequest.accept()) {
+    is ClerkResult.Success -> {
+        val acceptedRequest = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = membershipRequest.reject()) {
+    is ClerkResult.Success -> {
+        val rejectedRequest = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Remove Membership
+## Domains
+
+Use Organization domain APIs to create, list, retrieve, verify, update, and delete Verified Domains.
+
+### Create or list domains
 
 ```kotlin
-val deletedMembership = membership.destroy()
+when (val result = organization.createDomain(name = "acme.com")) {
+    is ClerkResult.Success -> {
+        val domain = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = organization.getDomains(limit = 20, offset = 0)) {
+    is ClerkResult.Success -> {
+        val domains = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-## Organization invitation
-
-`OrganizationInvitation` represents an invitation sent to join an Organization. You can access an invitation from `organization.getInvitations(...)`.
-
-### Revoke invitation
+### Get or delete a domain
 
 ```kotlin
-val revokedInvitation = organizationInvitation.revoke()
+when (val result = organization.getDomain(domainId = domainId)) {
+    is ClerkResult.Success -> {
+        val domain = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = organization.deleteDomain(domainId = domainId)) {
+    is ClerkResult.Success -> {
+        val deletedObject = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-## User Organization invitation
+`OrganizationDomain` also provides helpers for deleting a domain, verifying affiliation, and updating the enrollment mode.
 
-`UserOrganizationInvitation` represents an invitation sent to the current user. You can access an invitation from `user.getOrganizationInvitations(...)`.
+- `domain.delete()`
+- `domain.prepareAffiliationVerification(affiliationEmailAddress)`
+- `domain.attemptAffiliationVerification(code)`
+- `domain.sendEmailCode(affiliationEmailAddress)`
+- `domain.verifyCode(code)`
+- `domain.updateEnrollmentMode(enrollmentMode, deletePending)`
 
-### Accept invitation
+### Delete a domain
+
+Use `domain.delete()` when you already have an `OrganizationDomain` instance. To delete a domain directly from the parent `Organization` by ID, use [`organization.deleteDomain()`](#get-or-delete-a-domain) instead.
 
 ```kotlin
-val acceptedInvitation = userOrganizationInvitation.accept()
+when (val result = domain.delete()) {
+    is ClerkResult.Success -> {
+        val deletedObject = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-## Organization domain
-
-`OrganizationDomain` represents a verified email domain for an Organization. You can access a domain from `organization.getDomains(...)` or `organization.getDomain(domainId)`.
-
-### Send domain verification email
+### Prepare or attempt affiliation verification
 
 ```kotlin
-var organizationDomain = organization.createDomain(domainName = "acme.com")
-organizationDomain = organizationDomain.sendEmailCode(affiliationEmailAddress = "admin@acme.com")
+when (val result = domain.prepareAffiliationVerification(affiliationEmailAddress = "admin@acme.com")) {
+    is ClerkResult.Success -> {
+        val preparedDomain = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = domain.attemptAffiliationVerification(code = "123456")) {
+    is ClerkResult.Success -> {
+        val verifiedDomain = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Verify domain code
+### Send and verify a domain email code
 
 ```kotlin
-organizationDomain = organizationDomain.verifyCode("123456")
+when (val result = domain.sendEmailCode(affiliationEmailAddress = "admin@acme.com")) {
+    is ClerkResult.Success -> {
+        val preparedDomain = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = domain.verifyCode(code = "123456")) {
+    is ClerkResult.Success -> {
+        val verifiedDomain = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Delete domain
+### Update a domain's enrollment mode
 
 ```kotlin
-val deletedDomain = organizationDomain.delete()
+when (
+    val result = domain.updateEnrollmentMode(
+        enrollmentMode = OrganizationDomain.EnrollmentMode.AutomaticInvitation,
+        deletePending = false,
+    )
+) {
+    is ClerkResult.Success -> {
+        val updatedDomain = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-## Membership Request
+## User Organization helpers
 
-`OrganizationMembershipRequest` represents a user's request to join an Organization. You can access a Membership Request from `organization.getMembershipRequests(...)`.
+`User` also provides helpers for listing Organization invitations, suggestions, memberships, and creation defaults. Companion methods on `User` fetch data for the current session, and instance methods on `user` do the same for that user.
 
-### Accept Request
+### List Organization invitations
 
 ```kotlin
-val acceptedRequest = membershipRequest.accept()
+when (val result = User.getOrganizationInvitations(limit = 20, offset = 0, status = "pending")) {
+    is ClerkResult.Success -> {
+        val invitations = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = user.getOrganizationInvitations(limit = 20, offset = 0, status = "pending")) {
+    is ClerkResult.Success -> {
+        val invitations = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-### Reject Request
+`UserOrganizationInvitation` also provides a helper for accepting an invitation.
 
 ```kotlin
-val rejectedRequest = membershipRequest.reject()
+when (val result = userOrganizationInvitation.accept()) {
+    is ClerkResult.Success -> {
+        val acceptedInvitation = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```
 
-## Organization Suggestion
-
-`OrganizationSuggestion` represents a suggested Organization the user can join. You can access an Organization Suggestion from `user.getOrganizationSuggestions(...)`.
-
-### Accept Suggestion
+### List Organization suggestions
 
 ```kotlin
-val acceptedSuggestion = organizationSuggestion.accept()
+when (val result = User.getOrganizationSuggestions(limit = 20, offset = 0, status = "pending")) {
+    is ClerkResult.Success -> {
+        val suggestions = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+
+when (val result = user.getOrganizationSuggestions(statuses = listOf("pending"))) {
+    is ClerkResult.Success -> {
+        val suggestions = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+```
+
+`OrganizationSuggestion` also provides a helper for accepting a suggestion.
+
+```kotlin
+when (val result = organizationSuggestion.accept()) {
+    is ClerkResult.Success -> {
+        val acceptedSuggestion = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+```
+
+### List Organization memberships
+
+```kotlin
+when (val result = user.getOrganizationMemberships(limit = 20, offset = 0)) {
+    is ClerkResult.Success -> {
+        val memberships = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
+```
+
+### Get Organization creation defaults
+
+```kotlin
+when (val result = user.getOrganizationCreationDefaults()) {
+    is ClerkResult.Success -> {
+        val creationDefaults = result.value
+    }
+    is ClerkResult.Failure -> {
+        // Handle the failure.
+    }
+}
 ```

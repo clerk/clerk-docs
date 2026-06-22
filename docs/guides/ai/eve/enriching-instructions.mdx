@@ -1,0 +1,141 @@
+---
+title: Enriching instructions
+description: Build Eve dynamic instructions that personalize the system prompt per session from the authenticated Clerk caller, without any helper packages.
+sdk: nextjs
+---
+
+Personalize an Eve agent's system prompt per session from the authenticated Clerk caller. This page walks through two patterns: a minimal instructions file and emitting every attribute.
+
+> [!TIP]
+> Skip the manual setup — install the `clerkInstructions()` helper via shadcn.
+
+```bash {{ filename: 'terminal', prompt: '$' }}
+bunx --bun shadcn@latest add clerk/eve-agents/auth
+```
+
+## Build it from scratch
+
+Eve's [dynamic instructions](https://eve.dev/docs/guides/dynamic-capabilities#dynamic-instructions) rebuild the system prompt on every `session.started` event. Read the Clerk principal off `ctx.session.auth.current` and the prompt becomes per-caller.
+
+### A minimal dynamic instructions file
+
+```ts {{ filename: 'agent/instructions.ts' }}
+import { defineDynamic, defineInstructions } from 'eve/instructions'
+
+export default defineDynamic({
+  events: {
+    'session.started': (_event, ctx) => {
+      const auth = ctx.session.auth.current
+
+      const sections = ['You are a helpful assistant.']
+
+      if (auth?.principalType === 'user' && auth.attributes.name) {
+        sections.push(
+          `You are speaking with ${auth.attributes.name}. Address them by name when it feels natural.`
+        )
+      }
+
+      return defineInstructions({ markdown: sections.join('\n\n') })
+    },
+  },
+})
+```
+
+`ctx.session.auth.current` is `null` when no caller authenticated, so guard with `auth?.` before reading attributes.
+
+### Inlining every attribute
+
+To reflect every attribute (org id, role, permissions, etc.), import a `formatAuthAttributes` helper into the instructions file and pass it the current auth context. The helper itself lives in `agent/lib/utils.ts` and emits one `key: value` line per non-empty entry.
+
+<Tabs items={["agent/instructions.ts", "agent/lib/utils.ts"]}>
+  <Tab>
+    ```ts {{ filename: 'agent/instructions.ts' }}
+    import { defineDynamic, defineInstructions } from 'eve/instructions'
+    import { formatAuthAttributes } from './lib/utils'
+
+    export default defineDynamic({
+      events: {
+        'session.started': (_event, ctx) => {
+          const userInfo = formatAuthAttributes(ctx.session.auth.current)
+
+          const sections = [
+            'You are a helpful assistant.',
+            userInfo &&
+              `Use the following info about the caller to personalize your response:\n${userInfo}`,
+          ].filter(Boolean) as string[]
+
+          return defineInstructions({ markdown: sections.join('\n\n') })
+        },
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'agent/lib/utils.ts' }}
+    import type { SessionAuthContext } from 'eve/context'
+
+    export function formatAuthAttributes(auth: SessionAuthContext | null): string {
+      if (!auth) return ''
+
+      const lines: string[] = []
+      for (const [key, value] of Object.entries(auth.attributes)) {
+        const stringValue =
+          typeof value === 'string'
+            ? value
+            : Array.isArray(value) && value.length > 0
+              ? value.join(', ')
+              : ''
+        if (stringValue) lines.push(`${key}: ${stringValue}`)
+      }
+
+      return lines.join('\n')
+    }
+    ```
+  </Tab>
+</Tabs>
+
+For a signed-in user with an org membership the prompt picks up:
+
+```text
+You are a helpful assistant.
+
+Use the following info about the caller to personalize your response:
+tokenType: session_token
+orgId: org_123
+role: org:admin
+permissions: org:projects:archive, org:projects:read
+name: Nicolas
+```
+
+Unauthenticated requests get an empty `userInfo`, so the section is filtered out.
+
+### Per-turn context from the browser
+
+Dynamic instructions are generated once per session. For per-turn context, pass user info to eve's [`clientContext`](https://eve.dev/docs/guides/frontend/overview#attach-page-context-per-turn).
+
+```tsx {{ filename: 'components/chat/chat.tsx' }}
+import { useAuth, useUser } from '@clerk/nextjs'
+import { useEveAgent } from 'eve/client/react'
+
+export function Chat() {
+  const { user } = useUser()
+  const { orgId } = useAuth()
+
+  const agent = useEveAgent({
+    prepareSend: input => ({
+      ...input,
+      clientContext: {
+        user: user?.fullName ?? null,
+        orgId: orgId ?? null,
+      },
+    }),
+  })
+  // ...
+}
+```
+
+## Next steps
+
+- [Custom channel auth](/docs/guides/ai/eve/custom-channel-auth) — produce the principal these instructions read.
+- [Authorizing tool calls](/docs/guides/ai/eve/authorize-tool-calls) — gate the tools the personalized agent can invoke.

@@ -198,9 +198,6 @@ async function main() {
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
-        'shared/o-auth-application-namespace.mdx': ['link-doc-not-found'],
-        'shared/o-auth-consent-info.mdx': ['link-doc-not-found'],
-        'shared/use-o-auth-consent-return.mdx': ['link-doc-not-found'],
         'shared/organization-resource/methods/attempt-ownership-verification.mdx': ['link-doc-not-found'],
         'shared/organization-resource/methods/prepare-ownership-verification.mdx': ['link-doc-not-found'],
       },

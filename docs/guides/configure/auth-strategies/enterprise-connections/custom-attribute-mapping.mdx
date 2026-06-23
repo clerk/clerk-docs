@@ -1,6 +1,6 @@
 ---
 title: Custom Attribute Mapping
-description: Learn how to sync custom attributes from your Identity Provider to Clerk's public metadata, shared across SSO and Directory Sync connections.
+description: Learn how to sync custom attributes, including multi-valued attributes, from your Identity Provider to Clerk's public metadata, shared across SSO and Directory Sync connections.
 ---
 
 Custom attribute mapping lets you sync additional user data from your Identity Provider (IdP) (such as department, employee ID, or cost center) into Clerk's `publicMetadata`. Attribute definitions are configured at the **enterprise connection level** and are shared between your SSO connection (SAML) and your Directory Sync (SCIM) connection, so the same attributes are available regardless of how a user authenticates or is provisioned.
@@ -32,9 +32,24 @@ For example, if you define a custom attribute with the key `department`, it will
 1. In the **Custom attributes** section, select **Create custom attribute**.
 1. In the **Key** field, enter the `publicMetadata` key where this value will be stored (e.g., `department`).
 1. In the **Display name** field, enter a human-readable name (e.g., `Department`).
+1. If your IdP can send more than one value for this attribute (e.g., a user's `groups` or `roles`), enable **Allow multiple values**. See [Multi-valued attributes](#multi-valued-attributes) for how this changes the stored value. Leave it disabled for single-value attributes like `department`.
 1. Select **Create attribute**.
 
 Once defined, the attribute appears in the **Attribute mapping** card on both the **SSO** tab and — if Directory Sync is enabled — the **Directory sync** tab, ready to be mapped to IdP-specific claim paths or SCIM schema attributes.
+
+### Multi-valued attributes
+
+By default, a custom attribute holds a single value. When your IdP sends the same attribute more than once in a SAML assertion — common for `groups`, `roles`, or `teams` — Clerk keeps only one value and stores it as a string. In SAML and SCIM, these are commonly called multi-valued attributes. To capture every value, enable **Allow multiple values** when you define or edit the attribute.
+
+The setting controls the shape of the value Clerk writes to `publicMetadata`:
+
+- **Disabled (default):** Clerk stores a single value as a string. For example, `publicMetadata.department` is `"Engineering"`.
+- **Enabled:** Clerk collects every value the IdP sends for that attribute and stores them as an array of strings. For example, `publicMetadata.groups` is `["engineering", "platform", "sre"]`. A single value is still stored as a one-element array (`["engineering"]`). Blank values are dropped from the array; if the IdP sends the attribute with no usable values, Clerk stores an empty array (`[]`).
+
+Clerk applies the mapping each time a user signs in through the connection, so existing users pick up the new shape on their next sign-in.
+
+> [!NOTE]
+> The attribute definition — including the **Allow multiple values** setting — is shared between your SAML (SSO) and SCIM (Directory Sync) connections. For SCIM, values already follow the shape of the JSON your IdP sends, so an attribute that resolves to a JSON array is stored as an array regardless of this setting. The setting matters most for SAML, where a repeated assertion would otherwise collapse to a single value.
 
 ## Map attributes for SSO connections
 

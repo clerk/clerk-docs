@@ -197,7 +197,10 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {},
+      typedoc: {
+        'shared/organization-resource/methods/attempt-ownership-verification.mdx': ['link-doc-not-found'],
+        'shared/organization-resource/methods/prepare-ownership-verification.mdx': ['link-doc-not-found'],
+      },
       partials: {},
       tooltips: {},
     },

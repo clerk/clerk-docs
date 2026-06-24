@@ -38,12 +38,131 @@ The fastest way to add Clerk to Next.js is the [Clerk CLI](/docs/cli). A single 
 
   ## Review what `clerk init` set up
 
-  When `clerk init` finishes, your app is ready to authenticate users. Here's what it added:
+  `clerk init` generates the same setup you'd otherwise build by hand in the [manual guide](/docs/getting-started/quickstart/manual). Here's each piece it added, and the code it wrote.
 
-  - **`.env.local`** — your Clerk [publishable and secret keys](/docs/guides/development/clerk-environment-variables), pulled from the application you connected to.
-  - **`proxy.ts`** (or `middleware.ts` on Next.js 15 and earlier) — adds [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) with route protection. By default, every route except `/sign-in` and `/sign-up` requires the user to be signed in. Edit the `isPublicRoute` matcher to change which routes are public.
-  - **`app/layout.tsx`** — wraps your app's root layout in [`<ClerkProvider>`](/docs/reference/components/clerk-provider), which makes Clerk's [components](/docs/reference/components/overview) and hooks available throughout your app. When `clerk init` creates a new app, it also adds a header with Clerk's [`<SignInButton>`](/docs/reference/components/unstyled/sign-in-button), [`<SignUpButton>`](/docs/reference/components/unstyled/sign-up-button), and [`<UserButton>`](/docs/reference/components/user/user-button).
-  - **`app/sign-in` and `app/sign-up`** — dedicated pages rendering Clerk's [`<SignIn />`](/docs/reference/components/authentication/sign-in) and [`<SignUp />`](/docs/reference/components/authentication/sign-up) components.
+  ### Environment variables
+
+  Your Clerk [publishable and secret keys](/docs/guides/development/clerk-environment-variables) are pulled from the application you connected to, alongside the URLs for the sign-in and sign-up pages.
+
+  ```sh {{ filename: '.env.local' }}
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_SECRET_KEY={{secret}}
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+  NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/
+  NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/
+  ```
+
+  ### Middleware
+
+  A `proxy.ts` file (or `middleware.ts` on Next.js 15 and earlier) adds [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware). By default, it protects every route except `/sign-in` and `/sign-up` — unauthenticated visitors are redirected to the sign-in page. Edit the `isPublicRoute` matcher to change which routes are public.
+
+  ```tsx {{ filename: 'proxy.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+  const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+
+  export default clerkMiddleware(async (auth, request) => {
+    if (!isPublicRoute(request)) {
+      await auth.protect()
+    }
+  })
+
+  export const config = {
+    matcher: [
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+
+  ### `<ClerkProvider>` in your root layout
+
+  Your `app/layout.tsx` is wrapped with [`<ClerkProvider>`](/docs/reference/components/clerk-provider), which provides session and user context to Clerk's components and hooks throughout your app.
+
+  ```tsx {{ filename: 'app/layout.tsx', mark: [2, 9] }}
+  import type { Metadata } from 'next'
+  import { ClerkProvider } from '@clerk/nextjs'
+  // ...your existing imports, fonts, and metadata
+
+  export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+    return (
+      <html lang="en">
+        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+          <ClerkProvider>{children}</ClerkProvider>
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  ### Sign-in and sign-up pages
+
+  Dedicated pages render Clerk's [`<SignIn />`](/docs/reference/components/authentication/sign-in) and [`<SignUp />`](/docs/reference/components/authentication/sign-up) components on catch-all routes.
+
+  ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+  import { SignIn } from '@clerk/nextjs'
+
+  export default function SignInPage() {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <SignIn />
+      </div>
+    )
+  }
+  ```
+
+  ```tsx {{ filename: 'app/sign-up/[[...sign-up]]/page.tsx' }}
+  import { SignUp } from '@clerk/nextjs'
+
+  export default function SignUpPage() {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <SignUp />
+      </div>
+    )
+  }
+  ```
+
+  ## Add Clerk's components to your app
+
+  > [!NOTE]
+  > If `clerk init` created a new app for you, it already added the header below to your layout — you can skip ahead. If you ran it in an existing app, add Clerk's components wherever you want users to sign in, sign up, and manage their account.
+
+  Add a header to `app/layout.tsx` with Clerk's [prebuilt components](/docs/reference/components/overview):
+
+  ```tsx {{ filename: 'app/layout.tsx', mark: [2, [10, 18]] }}
+  import type { Metadata } from 'next'
+  import { ClerkProvider, Show, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs'
+  // ...your existing imports, fonts, and metadata
+
+  export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+    return (
+      <html lang="en">
+        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+          <ClerkProvider>
+            <header className="flex h-16 items-center justify-end gap-4 border-b px-4">
+              <Show when="signed-out">
+                <SignInButton />
+                <SignUpButton />
+              </Show>
+              <Show when="signed-in">
+                <UserButton />
+              </Show>
+            </header>
+            {children}
+          </ClerkProvider>
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  This example uses the following components:
+
+  - [`<Show when="signed-out">`](/docs/reference/components/control/show) and [`<Show when="signed-in">`](/docs/reference/components/control/show) render their children only when the user is signed out or signed in, respectively.
+  - [`<SignInButton />`](/docs/reference/components/unstyled/sign-in-button) and [`<SignUpButton />`](/docs/reference/components/unstyled/sign-up-button) link to the `/sign-in` and `/sign-up` pages that `clerk init` created.
+  - [`<UserButton />`](/docs/reference/components/user/user-button) shows the signed-in user's avatar and opens an account-management dropdown.
 
   <Include src="_partials/quickstarts/run-project-step" />
 

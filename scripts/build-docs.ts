@@ -861,8 +861,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
-      const vfile = await coreDocCache(doc.file.filePath, async () =>
-        remark()
+      const vfile = await coreDocCache(doc.file.filePath, async () => {
+        const processor = remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(remarkGfm)
@@ -921,8 +921,13 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
             }),
           )
-          .process(doc.vfile),
-      )
+
+        const inputFile = new VFile({ path: doc.vfile.path, value: doc.fileContent })
+        inputFile.messages.push(...doc.vfile.messages)
+        const tree = await processor.run(structuredClone(doc.node) as Root, inputFile)
+        inputFile.value = processor.stringify(tree as Root, inputFile)
+        return inputFile
+      })
 
       const partialsLinks = validatedPartials
         .filter((partial) => foundPartials.has(`_partials/${partial.path}`))

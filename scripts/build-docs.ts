@@ -41,6 +41,7 @@ import path from 'node:path'
 import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
+import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
 import symlinkDir from 'symlink-dir'
 import { Node } from 'unist'
@@ -196,7 +197,10 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {},
+      typedoc: {
+        'shared/organization-resource/methods/attempt-ownership-verification.mdx': ['link-doc-not-found'],
+        'shared/organization-resource/methods/prepare-ownership-verification.mdx': ['link-doc-not-found'],
+      },
       partials: {},
       tooltips: {},
     },
@@ -611,6 +615,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
+          .use(remarkGfm)
           .use(
             validateLinks(config, routableDocsMap, partial.path, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
@@ -655,6 +660,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
         const vfile = await remark()
           .use(remarkMdx)
+          .use(remarkGfm)
           .use(
             validateLinks(config, routableDocsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
               links.add(linkInTooltip)
@@ -696,6 +702,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(remarkMdx)
+            .use(remarkGfm)
             .use(
               validateLinks(config, routableDocsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
@@ -832,6 +839,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
+          .use(remarkGfm)
           .use(
             validateLinks(
               config,
@@ -850,11 +858,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             }),
           )
           .use(
-            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
-              foundTooltips.add(tooltip)
-            }),
-          )
-          .use(
             checkTypedoc(
               config,
               validatedTypedocs,
@@ -864,6 +867,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 foundTypedocs.add(typedoc)
               },
             ),
+          )
+          .use(
+            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
+              foundTooltips.add(tooltip)
+            }),
           )
           .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
           .use(
@@ -1029,10 +1037,11 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
+              .use(remarkGfm)
               .use(validateLinks(config, routableDocsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
               .use(embedLinks(config, routableDocsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
@@ -1117,6 +1126,7 @@ ${yaml.stringify({
       const vfile = await remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
+        .use(remarkGfm)
         .use(() => (inputTree) => {
           return mdastFilter(inputTree, (node) => {
             const sdkProp = extractComponentPropValueFromNode(
@@ -1160,12 +1170,17 @@ ${yaml.stringify({
   const mdxFilePaths = mdxFiles
     .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
     .filter((filePath) => !filePath.includes(config.partialsFolderName)) // Exclude partials
-    .map((path) => ({
-      path,
-      url: `${config.baseDocsLink}${removeMdxSuffix(path)
+    .map((path) => {
+      const slug = removeMdxSuffix(path)
         .replace(/^index$/, '') // remove root index
-        .replace(/\/index$/, '')}`, // remove /index from the end,
-    }))
+        .replace(/\/index$/, '') // remove /index from the end
+
+      // Strip the trailing slash from baseDocsLink when the page is the root
+      // index, so the canonical URL is `/docs` rather than `/docs/`.
+      const base = slug === '' ? config.baseDocsLink.replace(/\/$/, '') : config.baseDocsLink
+
+      return { path, url: `${base}${slug}` }
+    })
 
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 
@@ -1188,7 +1203,7 @@ ${yaml.stringify({
   abortSignal?.throwIfAborted()
 
   if (config.llms?.fullPath || config.llms?.overviewPath) {
-    const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
+    const outputtedDocsFiles = listOutputDocsFiles(store.writtenFiles, mdxFilePaths)
 
     if (config.llms?.fullPath) {
       const llmsFull = await generateLLMsFull(outputtedDocsFiles)
@@ -1196,7 +1211,7 @@ ${yaml.stringify({
     }
 
     if (config.llms?.overviewPath) {
-      const llms = await generateLLMs(outputtedDocsFiles)
+      const llms = await generateLLMs(outputtedDocsFiles, config.validSdks)
       await writeFile(config.llms.overviewPath, llms)
     }
   }

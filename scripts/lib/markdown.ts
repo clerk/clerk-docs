@@ -11,14 +11,12 @@
 
 import { slugifyWithCounter } from './utils/slugify'
 import { toString } from 'mdast-util-to-string'
+import path from 'node:path'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
-import type { Root } from 'mdast'
 import { Node } from 'unist'
-import { visit as mdastVisit } from 'unist-util-visit'
-import { VFile } from 'vfile'
 import { type BuildConfig } from './config'
 import { errorMessages, safeFail, safeMessage, type WarningsSection } from './error-messages'
 import { readMarkdownFile, type DocsFile } from './io'
@@ -28,11 +26,154 @@ import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatt
 import { Prompt, checkPrompts } from './prompts'
 import type { SDK } from './schemas'
 import { markDocumentDirty, type Store } from './store'
-import { documentHasIfComponents } from './utils/documentHasIfComponents'
+import { extractComponentPropValueFromNode } from './utils/extractComponentPropValueFromNode'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
+import { findComponent } from './utils/findComponent'
+import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { checkTooltips } from './plugins/checkTooltips'
+import { z } from 'zod'
 
 const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
+const stringSchema = z.string()
+
+type MarkdownResource = { path: string; content: string; node: Node }
+
+const getChildren = (node: Node): Node[] => {
+  const children = (node as { children?: unknown }).children
+  return Array.isArray(children) ? (children.filter((child) => typeof child === 'object' && child !== null) as Node[]) : []
+}
+
+const resolvePartialPath = (file: DocsFile, partialSrc: string) => {
+  if (partialSrc.startsWith('./') || partialSrc.startsWith('../')) {
+    const docDir = path.dirname(file.filePathInDocsFolder)
+    return path.normalize(path.join(docDir, `${removeMdxSuffix(partialSrc)}.mdx`)).replace(/\\/g, '/')
+  }
+
+  if (partialSrc.startsWith('_partials/')) {
+    return `${removeMdxSuffix(partialSrc)}.mdx`
+  }
+
+  return undefined
+}
+
+const walkExpandedMarkdownTree = (
+  config: BuildConfig,
+  file: DocsFile,
+  node: Node,
+  resources: {
+    partialsByPath: ReadonlyMap<string, MarkdownResource>
+    tooltipsByPath: ReadonlyMap<string, MarkdownResource>
+    typedocsByPath: ReadonlyMap<string, MarkdownResource>
+  },
+  visitor: (node: Node) => void,
+  activeResourceStack = new Set<string>(),
+) => {
+  const partialSrc = extractComponentPropValueFromNode(
+    config,
+    node,
+    undefined,
+    'Include',
+    'src',
+    false,
+    'docs',
+    file.filePath,
+    stringSchema,
+  )
+
+  if (partialSrc !== undefined) {
+    const partialPath = resolvePartialPath(file, partialSrc)
+    const partial = partialPath ? resources.partialsByPath.get(partialPath) : undefined
+    const stackKey = partialPath ? `partial:${partialPath}` : undefined
+
+    if (partial && stackKey && !activeResourceStack.has(stackKey)) {
+      activeResourceStack.add(stackKey)
+      walkExpandedMarkdownTree(config, file, partial.node, resources, visitor, activeResourceStack)
+      activeResourceStack.delete(stackKey)
+    }
+    return
+  }
+
+  const typedocSrc = extractComponentPropValueFromNode(
+    config,
+    node,
+    undefined,
+    'Typedoc',
+    'src',
+    false,
+    'docs',
+    file.filePath,
+    stringSchema,
+  )
+
+  if (typedocSrc !== undefined) {
+    const typedocPath = `${removeMdxSuffix(typedocSrc)}.mdx`
+    const typedoc = resources.typedocsByPath.get(typedocPath)
+    const stackKey = `typedoc:${typedocPath}`
+
+    if (typedoc && !activeResourceStack.has(stackKey)) {
+      activeResourceStack.add(stackKey)
+      walkExpandedMarkdownTree(config, file, typedoc.node, resources, visitor, activeResourceStack)
+      activeResourceStack.delete(stackKey)
+    }
+    return
+  }
+
+  const tooltipSrc =
+    node.type === 'link' &&
+    'url' in node &&
+    typeof node.url === 'string' &&
+    node.url.startsWith('!') &&
+    'children' in node
+      ? removeMdxSuffix(node.url.substring(1))
+      : undefined
+
+  if (tooltipSrc !== undefined) {
+    visitor(node)
+
+    for (const child of getChildren(node)) {
+      walkExpandedMarkdownTree(config, file, child, resources, visitor, activeResourceStack)
+    }
+
+    const tooltipPath = `_tooltips/${tooltipSrc}.mdx`
+    const tooltip = resources.tooltipsByPath.get(tooltipPath)
+    const stackKey = `tooltip:${tooltipPath}`
+
+    if (tooltip && !activeResourceStack.has(stackKey)) {
+      activeResourceStack.add(stackKey)
+      walkExpandedMarkdownTree(config, file, tooltip.node, resources, visitor, activeResourceStack)
+      activeResourceStack.delete(stackKey)
+    }
+    return
+  }
+
+  visitor(node)
+
+  for (const child of getChildren(node)) {
+    walkExpandedMarkdownTree(config, file, child, resources, visitor, activeResourceStack)
+  }
+}
+
+const expandedMarkdownTreeHasIfComponents = (
+  config: BuildConfig,
+  file: DocsFile,
+  node: Node,
+  resources: {
+    partialsByPath: ReadonlyMap<string, MarkdownResource>
+    tooltipsByPath: ReadonlyMap<string, MarkdownResource>
+    typedocsByPath: ReadonlyMap<string, MarkdownResource>
+  },
+) => {
+  let found = false
+
+  walkExpandedMarkdownTree(config, file, node, resources, (currentNode) => {
+    if (found) return
+    if (findComponent(currentNode, 'If') !== undefined) {
+      found = true
+    }
+  })
+
+  return found
+}
 
 export const parseInMarkdownFile =
   (config: BuildConfig, store: Store) =>
@@ -105,77 +246,55 @@ export const parseInMarkdownFile =
       throw new Error(errorMessages['doc-parse-failed'](file.href))
     }
 
-    // This needs to be done separately as some further validation expects the partials to not be embedded
-    // but we need to embed it to get all the headings to check
-    const embedProcessor = remark()
-      .use(remarkFrontmatter)
-      .use(remarkMdx)
-      .use(remarkGfm)
-      .use(checkPartials(config, partialsByPath, file, { reportWarnings: false, embed: true }))
-      .use(checkTypedoc(config, typedocsByPath, file.filePath, { reportWarnings: false, embed: true }))
-      .use(checkTooltips(config, tooltipsByPath, file, { reportWarnings: false, embed: true }))
-      // extract out the headings to check hashes in links
-      .use(() => (tree) => {
-        const documentContainsIfComponent = documentHasIfComponents(tree)
+    const headingResources = { partialsByPath, tooltipsByPath, typedocsByPath }
+    const documentContainsIfComponent = expandedMarkdownTreeHasIfComponents(config, file, node, headingResources)
 
-        mdastVisit(
-          tree,
-          (node) => {
-            if (node.type !== 'text') return false
-            if (!('value' in node)) return false
-            if (typeof node.value !== 'string') return false
-            const lines = node.value.split('\n')
-            const callout = lines[0]
-            return calloutRegex.test(callout)
-          },
-          (node) => {
-            const callout = calloutRegex.exec((node as any).value.split('\n')[0].trim())
+    walkExpandedMarkdownTree(config, file, node, headingResources, (currentNode) => {
+      if (currentNode.type !== 'text') return
+      if (!('value' in currentNode)) return
+      if (typeof currentNode.value !== 'string') return
+      const lines = currentNode.value.split('\n')
+      const callout = lines[0]
+      if (!calloutRegex.test(callout)) return
 
-            if (callout === null) {
-              throw new Error(`Invalid callout: ${node}`)
-            }
+      const match = calloutRegex.exec(callout.trim())
 
-            const id = callout[2]?.trim()
+      if (match === null) {
+        throw new Error(`Invalid callout: ${currentNode}`)
+      }
 
-            if (id !== undefined) {
-              if (documentContainsIfComponent === false && headingsHashes.has(id)) {
-                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
-              }
+      const id = match[2]?.trim()
 
-              headingsHashes.add(id)
-            }
-          },
-        )
+      if (id !== undefined) {
+        if (documentContainsIfComponent === false && headingsHashes.has(id)) {
+          safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
+        }
 
-        mdastVisit(
-          tree,
-          (node) => node.type === 'heading',
-          (node) => {
-            const id = extractHeadingFromHeadingNode(node)
+        headingsHashes.add(id)
+      }
+    })
 
-            if (id !== undefined) {
-              if (documentContainsIfComponent === false && headingsHashes.has(id)) {
-                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
-              }
+    walkExpandedMarkdownTree(config, file, node, headingResources, (currentNode) => {
+      if (currentNode.type !== 'heading') return
 
-              headingsHashes.add(id)
-            } else {
-              const slug = slugify(toString(node).trim())
+      const id = extractHeadingFromHeadingNode(currentNode)
 
-              if (documentContainsIfComponent === false && headingsHashes.has(slug)) {
-                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, slug])
-              }
+      if (id !== undefined) {
+        if (documentContainsIfComponent === false && headingsHashes.has(id)) {
+          safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
+        }
 
-              headingsHashes.add(slug)
-            }
-          },
-        )
-      })
+        headingsHashes.add(id)
+      } else {
+        const slug = slugify(toString(currentNode).trim())
 
-    await embedProcessor.run(
-      structuredClone(node) as Root,
-      new VFile({ path: file.relativeFilePath, value: fileContent }),
-    )
+        if (documentContainsIfComponent === false && headingsHashes.has(slug)) {
+          safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, slug])
+        }
+
+        headingsHashes.add(slug)
+      }
+    })
 
     if (frontmatter === undefined) {
       throw new Error(errorMessages['frontmatter-parse-failed'](file.href))

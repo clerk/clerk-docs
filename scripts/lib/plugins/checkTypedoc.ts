@@ -61,15 +61,7 @@ export const checkTypedoc =
           return u('paragraph', [])
         }
         if (options.reportWarnings === true && !silenceTypedocErrors) {
-          safeMessage(
-            config,
-            vfile,
-            filePath,
-            'docs',
-            'typedoc-not-found',
-            [typedocPath],
-            node.position,
-          )
+          safeMessage(config, vfile, filePath, 'docs', 'typedoc-not-found', [typedocPath], node.position)
         }
         return node
       }

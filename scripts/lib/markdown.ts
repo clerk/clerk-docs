@@ -40,7 +40,9 @@ type MarkdownResource = { path: string; content: string; node: Node }
 
 const getChildren = (node: Node): Node[] => {
   const children = (node as { children?: unknown }).children
-  return Array.isArray(children) ? (children.filter((child) => typeof child === 'object' && child !== null) as Node[]) : []
+  return Array.isArray(children)
+    ? (children.filter((child) => typeof child === 'object' && child !== null) as Node[])
+    : []
 }
 
 const resolvePartialPath = (file: DocsFile, partialSrc: string) => {

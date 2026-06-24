@@ -23,8 +23,8 @@ export const checkPartials =
     partialsByPath: ReadonlyMap<
       string,
       {
-      node: Node
-      path: string
+        node: Node
+        path: string
       }
     >,
     file: DocsFile,

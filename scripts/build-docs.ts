@@ -405,7 +405,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             const inManifest = docsInManifest.has(file.href)
 
             const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(file, partialsByPath, tooltipsByPath, typedocsByPath, promptsByPath, inManifest, 'docs'),
+              parseMarkdownFile(
+                file,
+                partialsByPath,
+                tooltipsByPath,
+                typedocsByPath,
+                promptsByPath,
+                inManifest,
+                'docs',
+              ),
             )
 
             docsMap.set(file.href, markdownFile)
@@ -879,9 +887,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(
-            checkPartials(config, validatedPartialsByPath, doc.file, { reportWarnings: false, embed: true }, (partial) => {
-              foundPartials.add(partial)
-            }),
+            checkPartials(
+              config,
+              validatedPartialsByPath,
+              doc.file,
+              { reportWarnings: false, embed: true },
+              (partial) => {
+                foundPartials.add(partial)
+              },
+            ),
           )
           .use(
             checkTypedoc(
@@ -895,9 +909,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(
-            checkTooltips(config, validatedTooltipsByPath, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
-              foundTooltips.add(tooltip)
-            }),
+            checkTooltips(
+              config,
+              validatedTooltipsByPath,
+              doc.file,
+              { reportWarnings: false, embed: true },
+              (tooltip) => {
+                foundTooltips.add(tooltip)
+              },
+            ),
           )
           .use(checkPrompts(config, promptsByPath, doc.file, { reportWarnings: false, update: true }))
           .use(

@@ -19,8 +19,8 @@ export const checkTooltips =
     tooltipsByPath: ReadonlyMap<
       string,
       {
-      node: Node
-      path: string
+        node: Node
+        path: string
       }
     >,
     file: DocsFile,

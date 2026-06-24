@@ -48,6 +48,7 @@ import { extractComponentPropValueFromNode } from './utils/extractComponentPropV
 import { z } from 'zod'
 
 const stringSchema = z.string()
+const booleanSchema = z.boolean()
 
 export const checkPrompts =
   (config: BuildConfig, prompts: Prompt[], file: DocsFile, options: { reportWarnings: boolean; update: boolean }) =>
@@ -96,7 +97,7 @@ export const checkPrompts =
         false,
         'docs',
         file.filePath,
-        z.boolean(),
+        booleanSchema,
       )
 
       if (embedPrompt === true) {

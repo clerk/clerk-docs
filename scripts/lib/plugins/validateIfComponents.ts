@@ -10,6 +10,7 @@ import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 import { z } from 'zod'
 
 const stringSchema = z.string()
+const booleanSchema = z.boolean()
 
 /**
  * Extracts list of allowed SDKs from the `sdk` and `notSdk` props of the <If /> component
@@ -97,7 +98,7 @@ export const validateIfComponents =
         false,
         'docs',
         filePath,
-        z.boolean(),
+        booleanSchema,
       )
 
       const allowedSdks = extractSDKsFromIfComponent(config, node, vfile, filePath, sdk, notSdk)

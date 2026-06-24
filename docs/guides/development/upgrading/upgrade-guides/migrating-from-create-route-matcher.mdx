@@ -31,191 +31,188 @@ Use the following guides to learn how to protect different types of resources:
 
 ## Migration guide
 
-To migrate away from Middleware-based auth checks, follow this outline:
-
-- Optional: Set up the `@clerk/eslint-plugin` and the `require-auth-protection` lint rule
-- Identify the pages, Route Handlers, and Server Functions that need protection
-- For each resource:
-  - Server-side resource: Add an explicit auth guard with the correct response
-  - Client-side resource: Verify that it has a signed-out UI state or redirect
-  - Remove the gate in Middleware
-  - Test the resource when unauthenticated
-    - Is it protected?
-    - Does it have the expected user experience?
-- Verify that you are no longer using `createRouteMatcher()`
-
 For smaller applications, you can migrate all resources in one pass. For larger applications, migrate one slice of your application at a time.
 
 Don't remove `clerkMiddleware()` entirely during this migration. It's still required for Clerk to work correctly, and you can keep any non-auth logic inside the Proxy callback.
 
-### Identify resources that need protection
+<Steps>
+  ## Identify a slice of your application to migrate
 
-Start by identifying what needs protection. If you set up the lint rule, the `protected` and `public` patterns already represent that split. Otherwise, use your current `createRouteMatcher()` patterns as a starting point.
+  Choose a route, route group, or feature area to migrate first. Within that slice, identify every resource that needs protection. You can use your current `createRouteMatcher()` patterns as a starting point.
 
-In folders that require signed-in users:
+  For routes that require signed-in users, check the following files:
 
-- Protect all `layout`, `template`, `default`, and `page` files
-  - Protecting only layout files isn't enough, because they don't always re-render when pages do
-- Protect `loading` and `error` files only if they access sensitive resources
-  - These files are usually mostly static and often don't need protection, but there are exceptions
-- Protect exports from `route` files
-  - All functions named as HTTP verbs turn into Route Handlers, so protect them
+  - Protect all `layout`, `template`, `default`, and `page` files
+    - Protecting only layout files isn't enough, because they don't always re-render when pages do
+  - Protect `loading` and `error` files only if they access sensitive resources
+    - These files are usually mostly static and often don't need protection, but there are exceptions
+  - Protect exports from `route` files
+    - All functions named as HTTP verbs turn into Route Handlers, so protect them
 
-Server Functions need protection regardless of where they are located, so audit them separately.
+  Server Functions need protection regardless of where they are located, so audit them separately.
 
-### Migrate a single server resource
+  ## Add auth checks to server resources
 
-The following example shows how to migrate a Middleware-based auth check to a resource-based auth check. This example performs [an authentication check on the resource](/docs/guides/secure/protect-content#protect-a-page), but the same principle applies to any authentication or authorization check that you want to move to the resource.
+  The following example shows how to migrate a Middleware-based auth check to a resource-based auth check. This example performs [an authentication check on the resource](/docs/guides/secure/protect-content#protect-a-page), but the same principle applies to any authentication or authorization check that you want to move to the resource.
 
-<Include src="_partials/nextjs/nextjs-15-callout" />
+  <Include src="_partials/nextjs/nextjs-15-callout" />
 
-If `clerkMiddleware()` protects a route:
+  If `clerkMiddleware()` protects a route:
 
-```tsx {{ filename: 'proxy.ts' }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  ```tsx {{ filename: 'proxy.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-const isProtected = createRouteMatcher(['/dashboard/:path*'])
+  const isProtected = createRouteMatcher(['/dashboard/:path*'])
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtected(req)) await auth.protect()
-})
-```
-
-Move the auth check into each protected resource:
-
-<CodeBlockTabs options={["Server Component", "Route Handler", "Server Function", "Pages Router"]}>
-  ```tsx {{ filename: 'app/dashboard/page.tsx' }}
-  import { auth } from '@clerk/nextjs/server'
-
-  export default async function Page() {
-    await auth.protect()
-
-    return <h1>Dashboard</h1>
-  }
+  export default clerkMiddleware(async (auth, req) => {
+    if (isProtected(req)) await auth.protect()
+  })
   ```
 
-  ```tsx {{ filename: 'app/api/dashboard/route.ts' }}
-  import { auth } from '@clerk/nextjs/server'
+  Move the auth check into each protected resource:
 
-  export async function GET() {
-    const { userId } = await auth.protect()
+  <CodeBlockTabs options={["Server Component", "Route Handler", "Server Function", "Pages Router"]}>
+    ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
 
-    return Response.json({ userId })
-  }
-  ```
+    export default async function Page() {
+      await auth.protect()
 
-  ```tsx {{ filename: 'app/dashboard/actions.ts' }}
-  'use server'
+      return <h1>Dashboard</h1>
+    }
+    ```
 
-  import { auth } from '@clerk/nextjs/server'
+    ```tsx {{ filename: 'app/api/dashboard/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
 
-  export async function updateDashboard() {
-    const { userId } = await auth.protect()
+    export async function GET() {
+      const { userId } = await auth.protect()
 
-    // Add your Server Function logic using the `userId`
-  }
-  ```
+      return Response.json({ userId })
+    }
+    ```
 
-  ```tsx {{ filename: 'pages/dashboard.tsx' }}
-  import { buildClerkProps, getAuth } from '@clerk/nextjs/server'
-  import type { GetServerSideProps } from 'next'
+    ```tsx {{ filename: 'app/dashboard/actions.ts' }}
+    'use server'
 
-  export const getServerSideProps: GetServerSideProps = async (ctx) => {
-    const { isAuthenticated } = getAuth(ctx.req)
+    import { auth } from '@clerk/nextjs/server'
 
-    if (!isAuthenticated) {
-      return {
-        redirect: {
-          destination: '/sign-in',
-          permanent: false,
-        },
+    export async function updateDashboard() {
+      const { userId } = await auth.protect()
+
+      // Add your Server Function logic using the `userId`
+    }
+    ```
+
+    ```tsx {{ filename: 'pages/dashboard.tsx' }}
+    import { buildClerkProps, getAuth } from '@clerk/nextjs/server'
+    import type { GetServerSideProps } from 'next'
+
+    export const getServerSideProps: GetServerSideProps = async (ctx) => {
+      const { isAuthenticated } = getAuth(ctx.req)
+
+      if (!isAuthenticated) {
+        return {
+          redirect: {
+            destination: '/sign-in',
+            permanent: false,
+          },
+        }
       }
+
+      return { props: { ...buildClerkProps(ctx.req) } }
     }
 
-    return { props: { ...buildClerkProps(ctx.req) } }
-  }
-
-  export default function Page() {
-    return <h1>Dashboard</h1>
-  }
-  ```
-</CodeBlockTabs>
-
-If a protected resource needs custom handling for unauthenticated requests, use `auth()` directly instead of `auth.protect()`:
-
-<CodeBlockTabs options={["Server Component", "Route Handler"]}>
-  ```tsx {{ filename: 'app/dashboard/page.tsx' }}
-  import { auth } from '@clerk/nextjs/server'
-
-  export default async function Page() {
-    const { isAuthenticated, userId } = await auth()
-
-    if (!isAuthenticated) {
-      return <p>You must sign in to view this page.</p>
+    export default function Page() {
+      return <h1>Dashboard</h1>
     }
+    ```
+  </CodeBlockTabs>
 
-    return <h1>Dashboard for {userId}</h1>
-  }
-  ```
+  If a protected resource needs custom handling for unauthenticated requests, use `auth()` directly instead of `auth.protect()`:
 
-  ```tsx {{ filename: 'app/api/dashboard/route.ts' }}
-  import { auth } from '@clerk/nextjs/server'
+  <CodeBlockTabs options={["Server Component", "Route Handler"]}>
+    ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
 
-  export async function GET() {
-    const { isAuthenticated, userId } = await auth()
+    export default async function Page() {
+      const { isAuthenticated, userId } = await auth()
 
-    if (!isAuthenticated) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      if (!isAuthenticated) {
+        return <p>You must sign in to view this page.</p>
+      }
+
+      return <h1>Dashboard for {userId}</h1>
     }
+    ```
 
-    return Response.json({ userId })
+    ```tsx {{ filename: 'app/api/dashboard/route.ts' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export async function GET() {
+      const { isAuthenticated, userId } = await auth()
+
+      if (!isAuthenticated) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      return Response.json({ userId })
+    }
+    ```
+  </CodeBlockTabs>
+
+  ## Preserve signed-out UX for client-only routes
+
+  If a route only uses Client Components, the protected resource is often an API endpoint that the client calls. If the Middleware gate previously redirected signed-out users before that call happened, removing it without adding a signed-out state can make the UX worse. For example, a page that previously redirected might now show a generic error page instead.
+
+  Use client-side controls such as [`<Show when="signed-out">`](/docs/reference/components/control/show) to render sign-in prompts or other signed-out experiences where appropriate.
+
+  One way to preserve the previous UX is to render signed-out handling from the shared layout for the affected routes. Keep this logic in a Client Component so it can respond to client-side auth state changes.
+
+  ```tsx {{ filename: 'app/dashboard/layout.tsx' }}
+  import SignedOutRedirect from './SignedOutRedirect'
+
+  export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    return <SignedOutRedirect>{children}</SignedOutRedirect>
   }
   ```
-</CodeBlockTabs>
 
-Then update `clerkMiddleware()` to remove the auth check:
+  ```tsx {{ filename: 'app/dashboard/SignedOutRedirect.tsx' }}
+  'use client'
 
-```tsx {{ filename: 'proxy.ts' }}
-import { clerkMiddleware } from '@clerk/nextjs/server'
+  import { RedirectToSignIn, Show } from '@clerk/nextjs'
 
-// Keep clerkMiddleware(); it's still required. Only remove the auth gating.
-export default clerkMiddleware()
-```
+  export default function SignedOutRedirect({ children }: { children: React.ReactNode }) {
+    return (
+      <>
+        <Show when="signed-in">{children}</Show>
+        <Show when="signed-out">
+          <RedirectToSignIn />
+        </Show>
+      </>
+    )
+  }
+  ```
 
-### Handle client-only routes
+  Use this pattern in the layout for the affected route or route group, rather than in a root layout that also renders public pages. This preserves the signed-out experience, but it doesn't replace auth checks in the API endpoints the client calls.
 
-If a route only uses Client Components, the protected resource is often an API endpoint that the client calls. If the Middleware gate previously redirected signed-out users before that call happened, removing it without adding a signed-out state can make the UX worse. For example, a page that previously redirected might now show a generic error page instead.
+  ## Remove the Middleware gate
 
-Use client-side controls such as [`<Show when="signed-out">`](/docs/reference/components/control/show) to render sign-in prompts or other signed-out experiences where appropriate.
+  After the server resources and signed-out states are handled, remove the matching auth check from `clerkMiddleware()`:
 
-One way to preserve the previous UX is to render signed-out handling from the shared layout for the affected routes. Keep this logic in a Client Component so it can respond to client-side auth state changes.
+  ```tsx {{ filename: 'proxy.ts' }}
+  import { clerkMiddleware } from '@clerk/nextjs/server'
 
-```tsx {{ filename: 'app/dashboard/layout.tsx' }}
-import SignedOutRedirect from './SignedOutRedirect'
+  // Keep clerkMiddleware(); it's still required. Only remove the auth gating.
+  export default clerkMiddleware()
+  ```
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <SignedOutRedirect>{children}</SignedOutRedirect>
-}
-```
+  ## Test and repeat
 
-```tsx {{ filename: 'app/dashboard/SignedOutRedirect.tsx' }}
-'use client'
+  Test the migrated slice while signed out. Verify that protected resources reject unauthenticated requests and that pages still show the expected signed-out experience.
 
-import { RedirectToSignIn, Show } from '@clerk/nextjs'
-
-export default function SignedOutRedirect({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <Show when="signed-in">{children}</Show>
-      <Show when="signed-out">
-        <RedirectToSignIn />
-      </Show>
-    </>
-  )
-}
-```
-
-Use this pattern in the layout for the affected route or route group, rather than in a root layout that also renders public pages. This preserves the signed-out experience, but it doesn't replace auth checks in the API endpoints the client calls.
+  Repeat until you are no longer using `createRouteMatcher()`.
+</Steps>
 
 ## Motivations for deprecating `createRouteMatcher()`
 

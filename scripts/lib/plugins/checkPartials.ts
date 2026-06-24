@@ -20,10 +20,13 @@ const stringSchema = z.string()
 export const checkPartials =
   (
     config: BuildConfig,
-    partials: {
+    partialsByPath: ReadonlyMap<
+      string,
+      {
       node: Node
       path: string
-    }[],
+      }
+    >,
     file: DocsFile,
     options: {
       reportWarnings: boolean
@@ -73,11 +76,10 @@ export const checkPartials =
         resolvedPartialPath = `${removeMdxSuffix(partialSrc)}.mdx`
       }
 
-      // Find the partial in the partials array
-      // Partials are stored with their path relative to the docs folder
+      // Find the partial by its path relative to the docs folder.
       // Global partials: "_partials/billing/enable-billing.mdx"
       // Relative partials: "billing/_partials/local.mdx"
-      const partial = partials.find((partial) => partial.path === resolvedPartialPath)
+      const partial = partialsByPath.get(resolvedPartialPath)
 
       if (partial === undefined) {
         if (options.reportWarnings === true) {

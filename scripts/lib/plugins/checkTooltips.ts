@@ -16,10 +16,13 @@ import { u as mdastBuilder } from 'unist-builder'
 export const checkTooltips =
   (
     config: BuildConfig,
-    tooltips: {
+    tooltipsByPath: ReadonlyMap<
+      string,
+      {
       node: Node
       path: string
-    }[],
+      }
+    >,
     file: DocsFile,
     options: {
       reportWarnings: boolean
@@ -51,7 +54,8 @@ export const checkTooltips =
       // We need to remove the ! to get the file path e.g. 'content'
       const tooltipSrc = url.substring(1)
 
-      const tooltip = tooltips.find((tooltip) => tooltip.path === `_tooltips/${removeMdxSuffix(tooltipSrc)}.mdx`)
+      const tooltipPath = `_tooltips/${removeMdxSuffix(tooltipSrc)}.mdx`
+      const tooltip = tooltipsByPath.get(tooltipPath)
 
       if (tooltip === undefined) {
         if (options.reportWarnings === true) {

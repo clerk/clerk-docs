@@ -62,7 +62,7 @@ export const validateIfComponents =
     config: BuildConfig,
     filePath: string,
     doc: { file: { href: string }; sdk?: SDK[] },
-    flatSDKScopedManifest: ManifestItem[],
+    manifestItemsByHref: ReadonlyMap<string, readonly ManifestItem[]>,
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
@@ -114,7 +114,7 @@ export const validateIfComponents =
       // If the `ignoreSdkWarning` prop is true, skip the validation checks
       if (ignoreSdkWarning === true) return
 
-      const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
+      const manifestItems = manifestItemsByHref.get(doc.file.href) ?? []
 
       const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
 

@@ -21,7 +21,7 @@ const stringSchema = z.string()
 export const checkTypedoc =
   (
     config: BuildConfig,
-    typedocs: { path: string; node: Node }[],
+    typedocsByPath: ReadonlyMap<string, { path: string; node: Node }>,
     filePath: string,
     options: { reportWarnings: boolean; embed: boolean },
     foundTypedoc?: (typedoc: string) => void,
@@ -53,7 +53,8 @@ export const checkTypedoc =
         }
       }
 
-      const typedoc = typedocs.find(({ path }) => path === `${removeMdxSuffix(typedocSrc)}.mdx`)
+      const typedocPath = `${removeMdxSuffix(typedocSrc)}.mdx`
+      const typedoc = typedocsByPath.get(typedocPath)
 
       if (typedoc === undefined) {
         if (silenceTypedocErrors && options.embed === true) {
@@ -66,14 +67,14 @@ export const checkTypedoc =
             filePath,
             'docs',
             'typedoc-not-found',
-            [`${removeMdxSuffix(typedocSrc)}.mdx`],
+            [typedocPath],
             node.position,
           )
         }
         return node
       }
 
-      foundTypedoc?.(`${removeMdxSuffix(typedocSrc)}.mdx`)
+      foundTypedoc?.(typedocPath)
 
       if (options.embed === true) {
         return Object.assign(node, typedoc.node)

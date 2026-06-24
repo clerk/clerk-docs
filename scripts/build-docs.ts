@@ -326,16 +326,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
+  const partialsByPath = new Map(partials.map((partial) => [partial.path, partial]))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
   const cachedTooltipsSize = store.tooltips.size
   const tooltips = await getTooltipsMarkdown((await getTooltipsFolder()).map((item) => item.path))
+  const tooltipsByPath = new Map(tooltips.map((tooltip) => [tooltip.path, tooltip]))
   console.info(`✓ Loaded in ${tooltips.length} tooltips (${cachedTooltipsSize} cached)`)
 
   abortSignal?.throwIfAborted()
 
   const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
+  const typedocsByPath = new Map(typedocs.map((typedoc) => [typedoc.path, typedoc]))
   console.info(
     config.flags.silenceTypedocErrors
       ? `✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached, typedoc errors silenced)`
@@ -343,6 +346,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
 
   abortSignal?.throwIfAborted()
+
+  const promptsByPath = new Map(prompts.map((prompt) => [prompt.filePath, prompt]))
 
   const docsMap: DocsMap = new Map()
   const docsInManifest = new Set<string>()
@@ -381,7 +386,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         }
 
         const markdownFile = await markdownCache(file.filePath, () =>
-          parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
+          parseMarkdownFile(file, partialsByPath, tooltipsByPath, typedocsByPath, promptsByPath, inManifest, 'docs'),
         )
 
         if (sdkMatch) {
@@ -400,7 +405,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             const inManifest = docsInManifest.has(file.href)
 
             const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
+              parseMarkdownFile(file, partialsByPath, tooltipsByPath, typedocsByPath, promptsByPath, inManifest, 'docs'),
             )
 
             docsMap.set(file.href, markdownFile)
@@ -606,6 +611,12 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   abortSignal?.throwIfAborted()
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
+  const manifestItemsByHref = flatSDKScopedManifest.reduce((itemsByHref, item) => {
+    const items = itemsByHref.get(item.href) ?? []
+    items.push(item)
+    itemsByHref.set(item.href, items)
+    return itemsByHref
+  }, new Map<string, typeof flatSDKScopedManifest>())
 
   abortSignal?.throwIfAborted()
 
@@ -648,6 +659,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       }
     }),
   )
+  const validatedPartialsByPath = new Map(validatedPartials.map((partial) => [partial.path, partial]))
   console.info(`✓ Validated all partials`)
 
   abortSignal?.throwIfAborted()
@@ -695,6 +707,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       }
     }),
   )
+  const validatedTooltipsByPath = new Map(validatedTooltips.map((tooltip) => [tooltip.path, tooltip]))
   console.info(`✓ Validated all tooltips`)
 
   abortSignal?.throwIfAborted()
@@ -771,6 +784,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     ),
   )
   const validatedTypedocs = validatedTypedocsRaw.filter((t): t is NonNullable<typeof t> => t !== null)
+  const validatedTypedocsByPath = new Map(validatedTypedocs.map((typedoc) => [typedoc.path, typedoc]))
   console.info(`✓ Validated all typedocs`)
 
   abortSignal?.throwIfAborted()
@@ -865,14 +879,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(
-            checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
+            checkPartials(config, validatedPartialsByPath, doc.file, { reportWarnings: false, embed: true }, (partial) => {
               foundPartials.add(partial)
             }),
           )
           .use(
             checkTypedoc(
               config,
-              validatedTypedocs,
+              validatedTypedocsByPath,
               doc.file.filePath,
               { reportWarnings: false, embed: true },
               (typedoc) => {
@@ -881,11 +895,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(
-            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
+            checkTooltips(config, validatedTooltipsByPath, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
               foundTooltips.add(tooltip)
             }),
           )
-          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
+          .use(checkPrompts(config, promptsByPath, doc.file, { reportWarnings: false, update: true }))
           .use(
             embedLinks(
               config,
@@ -898,7 +912,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               undefined, // No target SDK for core documents
             ),
           )
-          .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
+          .use(validateIfComponents(config, doc.file.filePath, doc, manifestItemsByHref))
           .use(
             insertFrontmatter({
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
@@ -1053,10 +1067,10 @@ ${yaml.stringify({
               .use(remarkMdx)
               .use(remarkGfm)
               .use(validateLinks(config, routableDocsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-              .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
-              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(checkPartials(config, partialsByPath, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkTypedoc(config, typedocsByPath, doc.file.filePath, { reportWarnings: true, embed: true }))
+              .use(checkTooltips(config, tooltipsByPath, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkPrompts(config, promptsByPath, doc.file, { reportWarnings: true, update: true }))
               .use(embedLinks(config, routableDocsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))

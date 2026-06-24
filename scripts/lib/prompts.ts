@@ -51,7 +51,12 @@ const stringSchema = z.string()
 const booleanSchema = z.boolean()
 
 export const checkPrompts =
-  (config: BuildConfig, prompts: Prompt[], file: DocsFile, options: { reportWarnings: boolean; update: boolean }) =>
+  (
+    config: BuildConfig,
+    promptsByPath: ReadonlyMap<string, Prompt>,
+    file: DocsFile,
+    options: { reportWarnings: boolean; update: boolean },
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
     if (config.prompts === null) return
@@ -79,7 +84,7 @@ export const checkPrompts =
         return node
       }
 
-      const prompt = prompts.find((prompt) => prompt.filePath === promptSrc)
+      const prompt = promptsByPath.get(promptSrc)
 
       if (prompt === undefined) {
         if (options.reportWarnings === true) {

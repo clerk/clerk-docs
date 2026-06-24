@@ -38,10 +38,10 @@ export const parseInMarkdownFile =
   (config: BuildConfig, store: Store) =>
   async (
     file: DocsFile & { content?: string },
-    partials: { path: string; content: string; node: Node }[],
-    tooltips: { path: string; content: string; node: Node }[],
-    typedocs: { path: string; content: string; node: Node }[],
-    prompts: Prompt[],
+    partialsByPath: ReadonlyMap<string, { path: string; content: string; node: Node }>,
+    tooltipsByPath: ReadonlyMap<string, { path: string; content: string; node: Node }>,
+    typedocsByPath: ReadonlyMap<string, { path: string; content: string; node: Node }>,
+    promptsByPath: ReadonlyMap<string, Prompt>,
     inManifest: boolean,
     section: WarningsSection,
   ) => {
@@ -81,21 +81,21 @@ export const parseInMarkdownFile =
         }),
       )
       .use(
-        checkPartials(config, partials, file, { reportWarnings: true, embed: false }, (partial) => {
+        checkPartials(config, partialsByPath, file, { reportWarnings: true, embed: false }, (partial) => {
           markDirty(file.filePath, partial)
         }),
       )
       .use(
-        checkTooltips(config, tooltips, file, { reportWarnings: true, embed: false }, (tooltip) => {
+        checkTooltips(config, tooltipsByPath, file, { reportWarnings: true, embed: false }, (tooltip) => {
           markDirty(file.filePath, tooltip)
         }),
       )
       .use(
-        checkTypedoc(config, typedocs, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
+        checkTypedoc(config, typedocsByPath, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
           markDirty(file.filePath, typedoc)
         }),
       )
-      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false }))
+      .use(checkPrompts(config, promptsByPath, file, { reportWarnings: true, update: false }))
       .process({
         path: file.relativeFilePath,
         value: fileContent,
@@ -111,9 +111,9 @@ export const parseInMarkdownFile =
       .use(remarkFrontmatter)
       .use(remarkMdx)
       .use(remarkGfm)
-      .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
-      .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
-      .use(checkTooltips(config, tooltips, file, { reportWarnings: false, embed: true }))
+      .use(checkPartials(config, partialsByPath, file, { reportWarnings: false, embed: true }))
+      .use(checkTypedoc(config, typedocsByPath, file.filePath, { reportWarnings: false, embed: true }))
+      .use(checkTooltips(config, tooltipsByPath, file, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links
       .use(() => (tree) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)

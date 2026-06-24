@@ -1,0 +1,391 @@
+---
+title: '`@clerk/eslint-plugin`'
+description: Learn how to use Clerk's ESLint plugin to find unprotected Next.js resources.
+sdk: nextjs
+---
+
+`@clerk/eslint-plugin` provides lint rules for Clerk patterns across JavaScript frameworks. It currently includes one Next.js App Router rule, `@clerk/next/require-auth-protection`, which helps verify that resources in protected folders guard themselves.
+
+The rule is designed for apps that protect resources directly with [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect), or with an equivalent `auth()` check, instead of relying on Middleware-based route matching.
+
+> [!NOTE]
+> The `require-auth-protection` rule is experimental. Pin the package version if you try it, as breaking changes might ship in minor versions before `v1`.
+
+> [!IMPORTANT]
+> The rule configuration declares intent for tooling. It doesn't protect anything at runtime. A resource is only protected when it calls `await auth.protect()` or performs an equivalent auth check.
+>
+> This rule verifies that protected resources require authentication. It doesn't verify that your authorization logic uses the correct Role, Permission, Feature, or Plan. For more guidance on protecting resources, see [Protect content from unauthenticated users](/docs/guides/secure/protect-content).
+
+> [!TIP]
+> Migrating away from Middleware-based auth checks? See the [migration guide](/docs/guides/development/upgrading/upgrade-guides/migrating-from-create-route-matcher) for a step-by-step flow that uses this rule and the bulk fixer.
+
+## Setup
+
+Install `@clerk/eslint-plugin` as a development dependency:
+
+```npm
+npm install --save-dev @clerk/eslint-plugin
+```
+
+The plugin requires ESLint `>=9` and the flat config format. It can also run with Oxlint when configured as a JavaScript plugin. The rule has ESLint as a peer dependency for the bulk auto-fixer to work.
+
+Configure the plugin in your lint config. The following examples protect all resources by default and opt out public sign-in and sign-up routes:
+
+<CodeBlockTabs options={["ESLint", "Oxlint"]}>
+  ```js {{ filename: 'eslint.config.mjs' }}
+  import clerkNext from '@clerk/eslint-plugin/next'
+
+  export default [
+    {
+      plugins: { '@clerk/next': clerkNext },
+      rules: {
+        '@clerk/next/require-auth-protection': [
+          'error',
+          {
+            protected: ['**'],
+            public: ['src/app/sign-in/**', 'src/app/sign-up/**'],
+          },
+        ],
+      },
+    },
+  ]
+  ```
+
+  ```json {{ filename: '.oxlintrc.json' }}
+  {
+    "jsPlugins": [
+      {
+        "name": "@clerk/next",
+        "specifier": "@clerk/eslint-plugin/next"
+      }
+    ],
+    "rules": {
+      "@clerk/next/require-auth-protection": [
+        "error",
+        {
+          "protected": ["**"],
+          "public": ["src/app/sign-in/**", "src/app/sign-up/**"]
+        }
+      ]
+    }
+  }
+  ```
+</CodeBlockTabs>
+
+Adapt the `protected` and `public` paths to your application structure.
+
+## Rule options
+
+The `@clerk/next/require-auth-protection` rule accepts one options object.
+
+<Properties>
+  - `protected`
+  - `string[]`
+
+  Required. Project-relative folder globs whose resources must be guarded.
+
+  ---
+
+  - `public?`
+  - `string[]`
+
+  Project-relative folder globs that are exempt. Defaults to `[]`.
+
+  ---
+
+  - `resources?`
+  - `{ routeHandlers?: boolean, serverFunctions?: boolean, serverComponentEntrypoints?: boolean }`
+
+  Resource groups to check. All resource groups are enabled by default.
+
+  - `routeHandlers`: Checks HTTP method exports in `route` files.
+  - `serverFunctions`: Checks exported Server Functions in `'use server'` files and inline Server Functions.
+  - `serverComponentEntrypoints`: Checks default exports from `page`, `layout`, `template`, and `default` files.
+
+  ---
+
+  - `mixedScopeLayouts?`
+  - `'auto' | string[]`
+
+  Layouts and templates that intentionally wrap both protected and public descendants. Defaults to `'auto'`, which skips these files silently. Set this option to an array to require each mixed-scope layout or template folder to be acknowledged explicitly. This makes the rule warn when when it detects new unacknowledged mixed-scope layouts, for example when adding a new public descendant to a previously protected folder.
+
+  ---
+
+  - `rootDir?`
+  - `string`
+
+  Project root used to resolve project-relative folder globs. Defaults to the nearest ancestor `eslint.config.*` file, then ESLint's current working directory. Set this to `import.meta.dirname` or to an application directory when config auto-discovery doesn't match your project structure. Relative paths are resolved against `cwd`.
+</Properties>
+
+## Path matching
+
+`protected` and `public` patterns are folder globs relative to `rootDir`. Use `app/**` for a root `app` directory, `src/app/**` for a `src/app` directory, and `src/**` or `shared/**` for other project folders.
+
+Globs support a small syntax:
+
+- `*` matches one path segment.
+- `**` matches any number of path segments.
+
+Patterns must use `/` separators, must be relative, and can't contain empty path segments, `.` segments, `..` segments, or brace expansion.
+
+When a folder matches both `protected` and `public`, the most specific pattern wins. If both patterns have the same specificity, `protected` wins.
+
+Clerk recommends protecting all resources by default, then exempting public routes:
+
+```js
+const clerkProtection = {
+  protected: ['**'],
+  public: ['src/app/sign-in/**', 'src/app/sign-up/**', 'src/actions/public/**'],
+}
+```
+
+You can make the default public and opt into protected folders, but Clerk doesn't recommend using `public: ['**']`. Doing so can hide Server Functions in shared folders from the rule.
+
+If you need a public default for routes, prefer a narrower public pattern:
+
+```js
+const clerkProtection = {
+  public: ['src/app/**'],
+  protected: [
+    // Protect everything outside src/app/.
+    '**',
+    // Opt into protection for part of src/app/.
+    'src/app/(dashboard)/**',
+  ],
+}
+```
+
+## Monorepos
+
+If each application has its own `eslint.config.*` file, the rule can usually resolve paths without extra configuration.
+
+If your monorepo has a single top-level ESLint config, define the rule once for each application and set `rootDir` to that application's root:
+
+```js {{ filename: 'eslint.config.mjs' }}
+import clerkNext from '@clerk/eslint-plugin/next'
+
+export default [
+  {
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    plugins: { '@clerk/next': clerkNext },
+    rules: {
+      '@clerk/next/require-auth-protection': [
+        'error',
+        {
+          rootDir: 'apps/web',
+          protected: ['**'],
+          public: ['src/app/sign-in/**', 'src/app/sign-up/**'],
+        },
+      ],
+    },
+  },
+]
+```
+
+## What the rule checks
+
+Within folders configured as protected, the rule checks the following resources when their resource group is enabled:
+
+- `serverComponentEntrypoints`: Default exports from `page`, `layout`, `template`, and `default` files.
+- `routeHandlers`: HTTP method exports from `route` files, such as `GET`, `POST`, `PUT`, and `DELETE`.
+- `serverFunctions`: All exports from files with `'use server'` at the top, and all inline functions with `'use server'` at the top of the function body.
+
+The rule doesn't check:
+
+- Files with `'use client'` at the top.
+- `loading` or `error` files.
+- Arbitrary Server Components that are imported into pages.
+- External API endpoints called by your application.
+
+Client Components aren't checked because they don't have privileged access to resources by themselves. Protect the resources they receive as props and the Route Handlers or external API endpoints they call.
+
+The rule only verifies whether a resource has a protection check. You're still responsible for verifying that the check enforces the correct authorization requirements.
+
+## What counts as protected
+
+The rule accepts a narrow set of protection patterns. The most direct pattern is `auth.protect()` at the top of the relevant function:
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export default async function Page() {
+  await auth.protect()
+
+  // A narrower Role or Permission check also works.
+  await auth.protect({ role: 'org:admin' })
+}
+```
+
+It also accepts an early-exit check derived from `auth()` that returns, throws, or redirects signed-out users:
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export default async function Page() {
+  const { isAuthenticated, redirectToSignIn } = await auth()
+
+  if (!isAuthenticated) return redirectToSignIn()
+
+  // ...
+}
+```
+
+General protection must happen at the top of the function, after directives and TypeScript-only declarations. For custom checks, the `auth()` destructure must be immediately followed by the unauthenticated guard. Additional authorization checks can happen later in the function.
+
+## Wrapped or imported handlers
+
+The rule doesn't follow protection across files or through wrapper calls. For example, it can't verify that a handler is protected when you re-export it from another file, or when you wrap it with a helper such as `withAuth(handler)`.
+
+If the resource is already protected by code the rule can't inspect, add an ESLint disable comment with a reason:
+
+```ts
+// eslint-disable-next-line @clerk/next/require-auth-protection -- Protected by withAuth().
+export const POST = withAuth(handler)
+```
+
+For imported handlers, either add a local wrapper that calls `await auth.protect()`, or disable the rule after verifying that the imported handler protects itself:
+
+```ts
+// eslint-disable-next-line @clerk/next/require-auth-protection -- `handler` calls auth.protect().
+export { handler as GET } from './handler'
+```
+
+## Editor suggestions
+
+When the rule finds an unprotected resource, it offers an editor quick-fix suggestion that inserts `await auth.protect()` at the top of the function. When needed, the suggestion also makes the function `async` and adds `import { auth } from '@clerk/nextjs/server'`.
+
+These suggestions are opt-in. They appear in your editor's quick-fix menu and aren't applied by `eslint --fix`, because adding a protection check changes runtime behavior.
+
+## Bulk auto-fixer
+
+The package includes a bulk auto-fixer for migrations or large cleanups. It runs ESLint with your existing config, respects your `protected`, `public`, and `resources` options, and applies the rule's `await auth.protect()` suggestion anywhere it can do so safely.
+
+> [!WARNING]
+> Applying these fixes changes your application's runtime behavior. It enforces authentication where there potentially was none, and it might override custom auth checks that were already in place. Review the changes and test your application after running the fixer.
+
+Run the fixer with `npx`:
+
+```npm
+# Fix everything under the current directory.
+npx clerk-next-fix-auth-protection
+
+# Preview without writing files.
+npx clerk-next-fix-auth-protection --dry-run
+
+# Scope fixes to a specific path or glob.
+npx clerk-next-fix-auth-protection "src/**"
+```
+
+The command exits with a non-zero status when:
+
+- `--dry-run` reports changes that would be made.
+- Some resources need manual attention.
+
+Resources can require manual attention when the rule can't safely add a protection check, such as imported or wrapped exports, or mixed-scope layouts that require explicit acknowledgement.
+
+### CLI options
+
+```txt
+clerk-next-fix-auth-protection [patterns...] [options]
+```
+
+<Properties>
+  - `patterns`
+  - `string[]`
+
+  Files, directories, or globs to scan. Defaults to `['.']`.
+
+  ---
+
+  - `--dry-run`
+  - `boolean`
+
+  Reports what would change without writing files.
+
+  ---
+
+  - `-h`, `--help`
+  - `boolean`
+
+  Shows command help.
+</Properties>
+
+### Programmatic API
+
+You can also run the same fixer from a Node script:
+
+```ts
+import { fixAuthProtection } from '@clerk/eslint-plugin/next/fix-auth-protection'
+
+const { fixed, unresolved } = await fixAuthProtection({
+  patterns: ['src/**'],
+  dryRun: false,
+})
+```
+
+`fixAuthProtection()` accepts the following options:
+
+<Properties>
+  - `patterns?`
+  - `string[]`
+
+  Files, directories, or globs to scan. Defaults to `['.']`.
+
+  ---
+
+  - `cwd?`
+  - `string`
+
+  Working directory that ESLint resolves config and files against. Defaults to `process.cwd()`.
+
+  ---
+
+  - `dryRun?`
+  - `boolean`
+
+  Computes changes without writing them to disk.
+
+  ---
+
+  - `eslint?`
+  - `ESLint`
+
+  Advanced option for passing a preconfigured ESLint instance. If omitted, the fixer creates an ESLint instance using the provided `cwd`.
+
+  ---
+
+  - `onConfigResolved?`
+  - `(configFilePath: string | undefined) => void`
+
+  Called before scanning with the ESLint config file path that will be used.
+
+  ---
+
+  - `onScanComplete?`
+  - `(fileCount: number) => void`
+
+  Called after linting finishes and before per-file fixing begins.
+
+  ---
+
+  - `onFileFixed?`
+  - `(file: FixedFile) => void`
+
+  Called after each file is fixed, or after each file that would be fixed in dry-run mode.
+</Properties>
+
+`fixAuthProtection()` returns:
+
+<Properties>
+  - `fixed`
+  - `{ filePath: string, protections: number }[]`
+
+  Files that were modified, or that would be modified in dry-run mode.
+
+  ---
+
+  - `unresolved`
+  - `{ filePath: string, issues: { line: number, column: number, message: string }[] }[]`
+
+  Files with flagged resources that have no safe automatic fix.
+</Properties>

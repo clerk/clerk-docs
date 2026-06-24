@@ -91,7 +91,10 @@ export async function createConfig(config: BuildConfigOptions) {
   }
 
   const changeTempDist = async () => {
-    const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
+    const distFinalPath = resolve(config.distPath)
+    const tempDistParent = config.flags?.watch ? os.tmpdir() : path.dirname(distFinalPath)
+    await fs.mkdir(tempDistParent, { recursive: true })
+    const tempDist = await fs.mkdtemp(path.join(tempDistParent, '.clerk-docs-dist-'))
 
     return {
       basePath: config.basePath,
@@ -114,7 +117,7 @@ export async function createConfig(config: BuildConfigOptions) {
       changeTempDist,
 
       distFinalRelativePath: config.distPath,
-      distFinalPath: resolve(config.distPath),
+      distFinalPath,
 
       typedocRelativePath: find(config.localTypedocOverridePath, config.typedocPath),
       typedocPath: resolve(find(config.localTypedocOverridePath, config.typedocPath)),

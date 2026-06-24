@@ -1339,10 +1339,18 @@ ${yaml.stringify({
     if (existsSync(config.distFinalPath)) {
       await fs.rm(config.distFinalPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
-    // Copy over our new dist folder from temp
-    await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
-    // Remove the temp dist folder
-    await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    // Move the completed temp dist into place. The temp directory is normally
+    // created next to the final dist so this is an atomic metadata operation;
+    // keep a cross-device fallback for unusual environments.
+    try {
+      await fs.rename(config.distTempPath, config.distFinalPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EXDEV') {
+        throw error
+      }
+      await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
+      await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
   }
 
   abortSignal?.throwIfAborted()

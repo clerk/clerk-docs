@@ -1,0 +1,48 @@
+---
+title: Clerk Hono SDK
+description: The Clerk Hono SDK provides a powerful set of tools and utilities to seamlessly integrate authentication, user management, and Organization management into your Hono application.
+sdk: hono
+---
+
+The Clerk Hono SDK provides a powerful set of tools and utilities to seamlessly integrate authentication, user management, and Organization management into your Hono application. Refer to the [quickstart](/docs/hono/getting-started/quickstart) to get started.
+
+## `clerkMiddleware()`
+
+The `clerkMiddleware()` middleware checks the request's cookies and headers for a session JWT and, if found, makes the [`Auth`](/docs/reference/backend/types/auth-object) object available through [`getAuth()`](/docs/reference/hono/get-auth). It also attaches the Clerk Backend API client to the Hono context under the `clerk` key. See the [reference doc](/docs/reference/hono/clerk-middleware) for more information.
+
+## `getAuth()`
+
+The `getAuth()` helper retrieves authentication state from the Hono context. It returns the [`Auth` object](/docs/reference/backend/types/auth-object){{ target: '_blank' }}, which includes helpful authentication information like the user's ID, session ID, and Organization ID. It's also useful for protecting routes. See the [reference doc](/docs/reference/hono/get-auth) for more information.
+
+## `clerk`
+
+<Include src="_partials/clerk-client-overview-section" />
+
+### Example: Use `clerk` to get a user's information
+
+The following example uses the `clerk` context value to get information about the currently signed-in user. If the user is authenticated, their `userId` is passed to [`clerk.users.getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} to get the current user's [`User`](/docs/reference/objects/user){{ target: '_blank' }} object. If not authenticated, the request is rejected with a `401` status code.
+
+```ts
+import { clerkMiddleware, getAuth } from '@clerk/hono'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+
+const app = new Hono()
+
+app.use('*', clerkMiddleware())
+
+app.get('/user', async (c) => {
+  const { isAuthenticated, userId } = getAuth(c)
+
+  if (!isAuthenticated) {
+    throw new HTTPException(401, { message: 'User not authenticated' })
+  }
+
+  const clerk = c.get('clerk')
+  const user = await clerk.users.getUser(userId)
+
+  return c.json(user)
+})
+
+export default app
+```

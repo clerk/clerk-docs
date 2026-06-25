@@ -13,6 +13,7 @@ export const VALID_SDKS = [
   'ios',
   'expressjs',
   'fastify',
+  'hono',
   'react-router',
   'tanstack-react-start',
   'go',

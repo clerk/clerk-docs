@@ -248,42 +248,63 @@ export default defineTool({
 
 #### The dashboard `/connect/[provider]` route
 
-The challenge URL points at a dashboard page that runs Clerk's frontend [`createExternalAccount`](/docs/reference/objects/user#create-external-account) and redirects back to the `return` URL. Making the route dynamic on `[provider]` lets one page handle every provider you pass to `clerkConnect`.
+The challenge URL points at a dashboard page that runs Clerk's frontend connect flow — [`createExternalAccount`](/docs/reference/objects/user#create-external-account), or `reauthorize` when the provider's already connected but missing a scope — and redirects back to the `return` URL. Making the route dynamic on `[provider]` lets one page handle every provider you pass to `clerkConnect`.
 
 ```tsx {{ filename: 'app/connect/[provider]/page.tsx' }}
 'use client'
 
-import { useUser } from '@clerk/nextjs'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
+import { useReverification, useUser } from '@clerk/nextjs'
+import type { OAuthStrategy } from '@clerk/types'
+import { useParams, useSearchParams } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
 
 export default function ConnectProviderPage() {
   const { user, isLoaded } = useUser()
   const { provider } = useParams<{ provider: string }>()
   const params = useSearchParams()
-  const router = useRouter()
+  const [error, setError] = useState<string>()
+  const started = useRef(false)
+
+  // createExternalAccount can require step-up reverification.
+  const createExternalAccount = useReverification(
+    (args: Parameters<NonNullable<typeof user>['createExternalAccount']>[0]) =>
+      user?.createExternalAccount(args),
+  )
 
   useEffect(() => {
-    if (!isLoaded || !user) return
+    if (!isLoaded || !user || started.current) return
+    started.current = true
 
-    const returnUrl = params.get('return')
-    const additionalScopes = params.get('scopes')?.split(' ') ?? []
+    const returnUrl = params.get('return') ?? '/'
+    const additionalScopes = params.get('scopes')?.split(' ').filter(Boolean) ?? []
     const oidcPrompt = params.get('prompt') ?? undefined
+    const strategy = `oauth_${provider}` as OAuthStrategy
+    const existing = user.externalAccounts.find((a) => a.provider === provider)
 
-    user
-      .createExternalAccount({
-        strategy: `oauth_${provider}` as `oauth_${string}`,
-        additionalScopes,
-        oidcPrompt,
-        redirectUrl: returnUrl ?? '/',
-      })
-      .then((account) => {
-        const redirectUrl = account.verification?.externalVerificationRedirectURL
-        if (redirectUrl) router.push(redirectUrl.toString())
-      })
-  }, [isLoaded, user, params, provider, router])
+    void (async () => {
+      try {
+        // If the provider's already connected but without the scope (e.g. the
+        // user signed in with GitHub), reauthorize to add it — a fresh
+        // createExternalAccount would fail or loop.
+        const account =
+          existing && additionalScopes.length
+            ? await existing.reauthorize({ additionalScopes, redirectUrl: returnUrl, oidcPrompt })
+            : await createExternalAccount({ strategy, additionalScopes, redirectUrl: returnUrl, oidcPrompt })
 
-  return <p>Connecting {provider}…</p>
+        const url = account?.verification?.externalVerificationRedirectURL
+        if (url) {
+          // Full-page navigation; router.push is unreliable for cross-origin URLs.
+          window.location.href = url.href
+          return
+        }
+        setError('Clerk did not return a verification URL.')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    })()
+  }, [isLoaded, user, provider, params, createExternalAccount])
+
+  return <p>{error ? `Connection failed: ${error}` : `Connecting ${provider}…`}</p>
 }
 ```
 

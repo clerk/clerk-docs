@@ -4,9 +4,9 @@ description: Learn how to migrate away from Middleware-based auth checks with cr
 sdk: nextjs
 ---
 
-This guide describes how to migrate away from Middleware-based auth checks with `createRouteMatcher()` and move protection to individual pages, API routes, and Server Functions. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable.
+This guide describes how to migrate away from Middleware-based auth checks with `createRouteMatcher()` and move protection to individual pages, Route Handlers, and Server Functions (including Server Actions). Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable.
 
-Clerk is deprecating `createRouteMatcher()` and recommends protecting individual resources instead of relying on Middleware-based authentication checks, to learn more about why we made this decision, see [Motivations](#motivations-for-deprecating-create-route-matcher) at the end of this page.
+Clerk is deprecating `createRouteMatcher()` and recommends protecting individual resources instead of relying on Middleware-based authentication checks. To learn more about why Clerk made this decision, see [Motivations](#motivations-for-deprecating-create-route-matcher) at the end of this page.
 
 > [!TIP]
 > To help protect all resources, Clerk has launched [`@clerk/eslint-plugin`](/docs/reference/nextjs/eslint-plugin), which includes `@clerk/next/require-auth-protection`, a lint rule that warns you when a resource is missing required protection.
@@ -31,17 +31,21 @@ Use the following guides to learn how to protect different types of resources:
 > [!TIP]
 > Before you start the migration, verify that all relevant Server Functions are protected. These are already unprotected by Middleware, so this step helps you start the migration from a safer baseline.
 >
-> The lint rule can help with this step, or you can search your codebase for `'use server'` to find your Server Functions.
+> The lint rule can help with this step when its `protected` globs cover where your Server Functions live, or you can search your codebase for `'use server'` to find them.
 
 ## Migration guide
 
 For smaller applications, you can migrate all resources in one pass. For larger applications, migrate one slice of your application at a time.
 
-Don't remove `clerkMiddleware()` entirely during this migration. It's still required for Clerk to work correctly, and you can keep any non-auth logic inside the Proxy callback.
+Don't remove `clerkMiddleware()` entirely during this migration. It's still required for Clerk to work correctly, and you can keep any non-auth logic inside the `clerkMiddleware()` callback.
+
+The line to hold: if deleting a piece of `clerkMiddleware()` logic would leave a resource unprotected, it was a gate and belongs at the resource. A cross-cutting redirect for incomplete [session tasks](/docs/guides/configure/session-tasks) or [onboarding](/docs/guides/development/add-onboarding-flow) can stay in `clerkMiddleware()` on that basis: the redirect only sends the user somewhere useful first, while the resource still runs the auth check.
+
+<Include src="_partials/nextjs/nextjs-15-callout" />
 
 <Tabs items={["Use the lint rule", "Migrate manually"]}>
   <Tab>
-    We recommend using the lint rule during migration because it has a bulk fixer CLI. You can also migrate manually if you prefer.
+    Clerk recommends using the lint rule during migration because it has a bulk fixer CLI. You can also migrate manually if you prefer.
 
     The lint rule checks App Router resources. If you use the Pages Router, migrate those routes manually.
 
@@ -121,7 +125,7 @@ Don't remove `clerkMiddleware()` entirely during this migration. It's still requ
 
       If the resource is already protected by a wrapper or by code in another file, the rule can't currently verify that protection. In that case, add an ESLint disable comment with a reason:
 
-      ```tsx
+      ```ts
       // eslint-disable-next-line @clerk/next/require-auth-protection -- Protected by withAuth().
       export const POST = withAuth(handler)
       ```
@@ -275,7 +279,7 @@ Don't remove `clerkMiddleware()` entirely during this migration. It's still requ
   </Tab>
 
   <Tab>
-    Even if you prefer to migrate manually, we still recommend installing the lint rule to help ensure your resources stay protected over time.
+    Even if you prefer to migrate manually, Clerk still recommends installing the lint rule to help ensure your resources stay protected over time.
 
     <Steps>
       ## Identify a slice of your application to migrate
@@ -296,8 +300,6 @@ Don't remove `clerkMiddleware()` entirely during this migration. It's still requ
       ## Add auth checks to server resources
 
       The following example shows how to migrate a Middleware-based auth check to a resource-based auth check. This example performs [an authentication check on the resource](/docs/guides/secure/protect-content#protect-a-page), but the same principle applies to any authentication or authorization check that you want to move to the resource.
-
-      <Include src="_partials/nextjs/nextjs-15-callout" />
 
       If `clerkMiddleware()` protects a route:
 
@@ -462,7 +464,7 @@ Don't remove `clerkMiddleware()` entirely during this migration. It's still requ
 
 Moving signed-out UX handling out of Middleware can raise a natural performance question: "Will signed-out users now have to wait longer for the redirect to happen, especially if it happens in a Client Component?"
 
-This is a fair concern. If this is something you want to optimize for, first follow this migration guide to ensure your application behaves correctly even without a Proxy redirect. After that, you can add back an early redirect to the Proxy as a pure performance optimization.
+This is a fair concern. If this is something you want to optimize for, first follow this migration guide to ensure your application behaves correctly even without an early redirect in `clerkMiddleware()`. After that, you can add back an early redirect in `clerkMiddleware()` as a pure performance optimization.
 
 ```tsx {{ filename: 'proxy.ts' }}
 import { clerkMiddleware } from '@clerk/nextjs/server'
@@ -482,9 +484,9 @@ export default clerkMiddleware(async (auth, req) => {
 Keep the resource-level auth checks in place. This redirect should be safe to remove without exposing protected data. Removing it might affect performance, but it shouldn't change access control or the signed-out user experience.
 
 > [!WARNING]
-> Adding the redirect back to the Proxy can make it harder to determine if the base resources are correctly protected.
+> Adding the redirect back to `clerkMiddleware()` can make it harder to determine if the base resources are correctly protected.
 >
-> If you add the redirect behavior back to the Proxy, you should have a strategy for verifying the base resources are also protected, for example by using the `require-auth-protection` lint rule or by setting up auth tests that skip the Proxy redirect.
+> If you add the redirect behavior back to `clerkMiddleware()`, you should have a strategy for verifying the base resources are also protected, for example by using the `require-auth-protection` lint rule or by setting up auth tests that skip the redirect.
 
 ## Motivations for deprecating `createRouteMatcher()`
 
@@ -495,13 +497,13 @@ The reasons for deprecating `createRouteMatcher()` are a mix of existing concern
 
 One main concern has always been that Middleware-level auth gating can lead to a false sense of security. It can be tempting to think, "I'm already guarding my entire application in Middleware, so I'm safe by default." In reality, Middleware checks can be bypassed in several ways, leaving resources unprotected.
 
-Server Functions are one example. It can be tempting to think these are protected by Middleware checks, but they're called _by id_, not by path. If a Server Function that lives in `/protected/server-functions.ts` is called while visiting `/public/`, Middleware sees `/public/` and lets the request through, even if `/protected/:path*` is protected.
+Server Functions are one example. It can be tempting to think these are protected by Middleware checks, but they're called _by ID_, not by path. If a Server Function that lives in `/protected/server-functions.ts` is called while visiting `/public/`, Middleware sees `/public/` and lets the request through, even if `/protected/:path*` is protected.
 
-Another example is the mapping of regular expressions first to urls and then to folders. Regular expressions have subtle caveats, and a mistake can leave a resource unprotected.
+Another example is the mapping of regular expressions first to URLs and then to folders. Regular expressions have subtle caveats, and a mistake can leave a resource unprotected.
 
 Differences between how `createRouteMatcher()` parses a path and how the framework resolves it can also lead to dangerous gaps. If Clerk normalizes a path one way and treats it as public, but the framework normalizes it differently and renders a protected path, that creates a bypass. This is what happened in the [GHSA-vqx2-fgx2-5wq9](https://github.com/clerk/javascript/security/advisories/GHSA-vqx2-fgx2-5wq9) vulnerability. Future framework changes to path interpretation can also introduce new vulnerabilities, which isn't a sustainable model without first-class framework support.
 
-On top of these concerns, several framework-level Proxy and Middleware bypasses have been disclosed recently. In these cases, the request never goes through `createRouteMatcher()` at all, and all auth gating at the Middleware level is bypassed.
+On top of these concerns, several framework-level Middleware bypasses have been disclosed recently. In these cases, the request never goes through `createRouteMatcher()` at all, and all auth gating at the Middleware level is bypassed.
 
 Together, these concerns led Clerk to deprecate `createRouteMatcher()` and recommend moving away from Middleware-level auth gating.
 

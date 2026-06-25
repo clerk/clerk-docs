@@ -49,10 +49,10 @@ app.listen(PORT, () => {
 
 ### Example: Protect a route based on authorization status
 
-The following example demonstrates how to use [`requireAuth()`](/docs/reference/express/require-auth) and `getAuth()` together. `requireAuth()` protects the route based on _authentication_ status while `getAuth()` protects the route based on _authorization_ status. It also demonstrates how to use both `clerkMiddleware()` and `requireAuth()` together, as `clerkMiddleware()` will provide authentication state to routes that don't use `requireAuth()`.
+The following example uses `getAuth()` to protect the route based on _authentication_ and _authorization_ status.
 
 ```js
-import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+import { clerkMiddleware, getAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
@@ -61,22 +61,21 @@ const PORT = 3000
 // Apply `clerkMiddleware()` to all routes
 app.use(clerkMiddleware())
 
-// Use `getAuth()` to protect a route based on authorization status
-const hasPermission = (req, res, next) => {
+app.get('/path', (req, res) => {
   const auth = getAuth(req)
 
-  // Handle if the user is not authorized
+  // Handle if the user is not authenticated
+  if (!auth.userId) {
+    return res.status(401).send('Unauthorized')
+  }
+
+  // Handle if the user is authenticated but not authorized
   if (!auth.has({ permission: 'org:admin:example' })) {
     return res.status(403).send('Forbidden')
   }
 
-  return next()
-}
-
-// Use `requireAuth()` to protect a route based on authentication status
-// If user is not authenticated, requireAuth() will redirect back to the homepage
-// Then, use the `hasPermission` function created above to protect the route based on authorization status
-app.get('/path', requireAuth(), hasPermission, (req, res) => res.json(req.auth))
+  return res.json(auth)
+})
 
 // Start the server and listen on the specified port
 app.listen(PORT, () => {

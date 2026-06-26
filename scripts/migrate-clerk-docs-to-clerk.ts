@@ -1564,7 +1564,8 @@ async function createNewMigration(
     body += formatSourcePrMigrationAppendix(sourceMeta)
   }
 
-  const newBranch = config.targetBranch ?? (await ensureBranchNameAvailable(clerkWorkPath, buildMigrationBranchName(headRef)))
+  const newBranch =
+    config.targetBranch ?? (await ensureBranchNameAvailable(clerkWorkPath, buildMigrationBranchName(headRef)))
   stepLog('Migrating current branch into clerk', { headRef, baseRef, newBranch, clerkWorkPath })
 
   const { tempClonePath, remoteName } = await setupFilterRepoRemote(config, filterRepo, clerkWorkPath, headRef)

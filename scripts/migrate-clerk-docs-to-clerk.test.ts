@@ -24,6 +24,7 @@ import {
   parseConfig,
   parseGhPrViewForMigration,
   parseSemverLoose,
+  resolveMigrationBranchName,
   reviewRequestToHandle,
   rewritePrRefsInCommitMessage,
   runCommand,
@@ -293,6 +294,24 @@ describe('parseConfig', () => {
     expect(config.allowClerkDocsMain).toBe(true)
   })
 
+  test('parseConfig defaults targetBranch to undefined when no flag is passed', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts']
+    const config = parseConfig()
+    expect(config.targetBranch).toBeUndefined()
+  })
+
+  test('parseConfig reads --target-branch into targetBranch', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--target-branch', 'nick/my-new-branch']
+    const config = parseConfig()
+    expect(config.targetBranch).toBe('nick/my-new-branch')
+  })
+
+  test('parseConfig accepts the --clerk-target-branch alias', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-target-branch', 'nick/my-new-branch']
+    const config = parseConfig()
+    expect(config.targetBranch).toBe('nick/my-new-branch')
+  })
+
   test('parseConfig rejects invalid --pr values', () => {
     process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--pr', 'zero']
     expect(() => parseConfig()).toThrow('--pr must be a positive integer')
@@ -413,6 +432,16 @@ describe('buildMigrationBranchName', () => {
   test('is a pure function of its input (no hidden state)', () => {
     const name = 'any-branch'
     expect(buildMigrationBranchName(name)).toBe(buildMigrationBranchName(name))
+  })
+})
+
+describe('resolveMigrationBranchName', () => {
+  test('falls back to the canonical name when no target branch is set', () => {
+    expect(resolveMigrationBranchName({ targetBranch: undefined }, 'feat/foo')).toBe('feat/foo-docs-migration')
+  })
+
+  test('uses the explicit target branch verbatim when provided', () => {
+    expect(resolveMigrationBranchName({ targetBranch: 'nick/my-new-branch' }, 'feat/foo')).toBe('nick/my-new-branch')
   })
 })
 

@@ -42,6 +42,12 @@ interface CliConfig {
   /** Branch in clerk (see --clerk-repo) to check out and open the new PR against; default main */
   clerkBaseBranch: string
   /**
+   * Override the clerk-side branch name to migrate into (e.g. `nick/my-new-branch`).
+   * When unset, defaults to `${headRef}-docs-migration`. Used for both create and update mode:
+   * if the named branch already exists on clerk the run updates it instead of creating a new one.
+   */
+  targetBranch?: string
+  /**
    * Create or update the migrated branch locally but do not push, open PRs, or comment on the source PR.
    * In update mode this means the existing clerk branch is checked out and re-merged locally only.
    */
@@ -351,6 +357,7 @@ Optional:
   --clerk-path <path>         Path to the local clerk (default: clones into a temp directory)
   --clerk-repo <owner/repo>   Target PR repo (default: clerk/clerk)
   --clerk-base <branch>       Branch in clerk to base the new PR on (default: main)
+  --target-branch <branch>    Clerk-side branch name to migrate into, e.g. nick/my-new-branch (default: <docs-branch>-docs-migration). If that branch already exists on clerk, the run updates it instead of creating a new branch.
   --allow-dirty-clerk         Skip clean-tree preflight for local clerk (only applies with --clerk-path); uncommitted changes stay in your working tree and are not included in the PR
 
   --docs-path <path>          Path to the clerk-docs repo (default: cwd)
@@ -431,6 +438,7 @@ const migrateCliSchema = z.object({
   clerkDocsPath: z.string().min(1),
   clerkDocsBaseBranch: z.string().min(1).optional(),
   clerkBaseBranch: z.string().min(1),
+  targetBranch: z.string().min(1).optional(),
   localOnly: z.boolean(),
   dryRun: z.boolean(),
   allowDirtyClerk: z.boolean(),
@@ -456,6 +464,14 @@ function sanitizeBranchForPath(branch: string): string {
 /** Canonical name for the clerk-side branch that mirrors a clerk-docs branch. */
 function buildMigrationBranchName(headRef: string): string {
   return `${headRef}-docs-migration`
+}
+
+/**
+ * The clerk-side branch this run targets: the explicit `--target-branch` if provided,
+ * otherwise the canonical `${headRef}-docs-migration`.
+ */
+function resolveMigrationBranchName(config: Pick<CliConfig, 'targetBranch'>, headRef: string): string {
+  return config.targetBranch ?? buildMigrationBranchName(headRef)
 }
 
 /**
@@ -558,6 +574,7 @@ function parseConfig(): CliConfig {
     clerkDocsPath: path.resolve(expandHome(getArgAliases(['--docs-path', '--clerk-docs-path']) ?? process.cwd())),
     clerkDocsBaseBranch: getArgAliases(['--docs-base', '--clerk-docs-base']),
     clerkBaseBranch: getArg('--clerk-base') ?? 'main',
+    targetBranch: getArgAliases(['--target-branch', '--clerk-target-branch']),
     localOnly: hasFlag('--local-only'),
     dryRun: hasFlag('--dry-run'),
     allowDirtyClerk: hasFlag('--allow-dirty-clerk'),
@@ -1519,7 +1536,7 @@ async function createNewMigration(
   if (config.dryRun) {
     infoLog('Dry-run (create mode): would filter-repo, merge, push, open new PR', {
       clerkWorkPath: clerkWorkPath || '(would clone clerk to temp)',
-      suggestedBranch: buildMigrationBranchName(headRef),
+      suggestedBranch: resolveMigrationBranchName(config, headRef),
       clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
       gitignore:
         'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
@@ -1535,7 +1552,7 @@ async function createNewMigration(
           : 'would leave source clerk-docs PR open (--no-close-source-pr)'
         : 'n/a',
     })
-    return { newBranch: buildMigrationBranchName(headRef), clerkPrUrl: '(dry-run)' }
+    return { newBranch: resolveMigrationBranchName(config, headRef), clerkPrUrl: '(dry-run)' }
   }
 
   const sourceMeta =
@@ -1547,7 +1564,7 @@ async function createNewMigration(
     body += formatSourcePrMigrationAppendix(sourceMeta)
   }
 
-  const newBranch = await ensureBranchNameAvailable(clerkWorkPath, buildMigrationBranchName(headRef))
+  const newBranch = config.targetBranch ?? (await ensureBranchNameAvailable(clerkWorkPath, buildMigrationBranchName(headRef)))
   stepLog('Migrating current branch into clerk', { headRef, baseRef, newBranch, clerkWorkPath })
 
   const { tempClonePath, remoteName } = await setupFilterRepoRemote(config, filterRepo, clerkWorkPath, headRef)
@@ -1789,6 +1806,7 @@ function printRunIntro(config: CliConfig): void {
     `- clerk repo: ${formatRepoSlug(config.clerkRepo)}`,
     `- clerk-docs repo: ${formatRepoSlug(config.clerkDocsRepo)}`,
     `- clerk base branch: ${config.clerkBaseBranch}`,
+    `- target branch in clerk: ${config.targetBranch ?? '(default: <docs-branch>-docs-migration)'}`,
     `- local-only (skip push/PR): ${config.localOnly ? 'yes' : 'no'}`,
     `- close source clerk-docs PR after migration: ${config.closeSourcePr ? 'yes' : 'no (--no-close-source-pr)'}`,
     `- merge origin/main into clerk-docs branch first: ${config.mergeMain ? 'yes' : 'no (--no-merge-main)'}`,
@@ -1911,7 +1929,7 @@ async function main(): Promise<void> {
       )
     }
 
-    const migrationBranchName = buildMigrationBranchName(clerkDocsBranch)
+    const migrationBranchName = resolveMigrationBranchName(config, clerkDocsBranch)
     const existingMigration = await findExistingClerkMigration(config, migrationBranchName)
     const migrationMode = classifyExistingMigration(existingMigration)
     if (migrationMode === 'abort-closed' && existingMigration?.pr) {
@@ -2063,6 +2081,7 @@ export {
   rewritePrRefsInCommitMessage,
   buildPrRefsRewriteCallback,
   buildMigrationBranchName,
+  resolveMigrationBranchName,
   classifyExistingMigration,
   formatUpdateMergeConflictHints,
   formatClosedPrAbortMessage,

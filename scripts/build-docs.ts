@@ -108,6 +108,17 @@ import { existsSync } from 'node:fs'
 
 const stringSchema = z.string()
 
+// Matches backslashes so Windows-style path separators can be normalized to '/'.
+const backslashRegex = /\\/g
+// Matches a slug consisting solely of the literal word "index" (the root index page).
+const rootIndexRegex = /^index$/
+// Matches a trailing "/index" segment so it can be stripped from a slug.
+const trailingIndexRegex = /\/index$/
+// Matches a single trailing slash.
+const trailingSlashRegex = /\/$/
+// Matches the empty start of a string that does not already begin with '/', used to prefix one.
+const missingLeadingSlashRegex = /^(?!\/)/
+
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
   main()
@@ -1181,16 +1192,16 @@ ${yaml.stringify({
     alwaysStat: false,
   })
   const mdxFilePaths = mdxFiles
-    .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
+    .map((entry) => entry.path.replace(backslashRegex, '/')) // Replace backslashes with forward slashes
     .filter((filePath) => !filePath.includes(config.partialsFolderName)) // Exclude partials
     .map((path) => {
       const slug = removeMdxSuffix(path)
-        .replace(/^index$/, '') // remove root index
-        .replace(/\/index$/, '') // remove /index from the end
+        .replace(rootIndexRegex, '') // remove root index
+        .replace(trailingIndexRegex, '') // remove /index from the end
 
       // Strip the trailing slash from baseDocsLink when the page is the root
       // index, so the canonical URL is `/docs` rather than `/docs/`.
-      const base = slug === '' ? config.baseDocsLink.replace(/\/$/, '') : config.baseDocsLink
+      const base = slug === '' ? config.baseDocsLink.replace(trailingSlashRegex, '') : config.baseDocsLink
 
       return { path, url: `${base}${slug}` }
     })
@@ -1267,7 +1278,7 @@ ${yaml.stringify({
 
   for (const vfile of allVFiles) {
     // Normalize path: core VFiles use "docs/..." while SDK-specific use "/docs/..."
-    const filePath = String(vfile.path ?? '').replace(/^(?!\/)/, '/')
+    const filePath = String(vfile.path ?? '').replace(missingLeadingSlashRegex, '/')
     const existing = seenPaths.get(filePath)
 
     if (!existing) {

@@ -8,33 +8,27 @@ export const getLastCommitDate = (config: BuildConfig) => {
   }
 
   const git = simpleGit(config.docsPath)
+  const repoRoot = path.dirname(config.docsPath)
   let mapPromise: Promise<Map<string, Date>> | undefined
 
   const getDateMap = () => {
     mapPromise ??= (async () => {
-      const repoRoot = (await git.raw(['rev-parse', '--show-toplevel'])).trim()
-      const logOutput = await git.raw(['log', '--name-only', '--pretty=format:%x00%aI'])
+      // `--name-status` makes simple-git populate `commit.diff.files`, so we get the
+      // changed paths per commit as typed objects instead of parsing raw git output.
+      const log = (
+        await git.log<{ date: string }>({
+          format: { date: '%aI' },
+          '--name-status': null,
+        })
+      ).all.map((commit) => ({ files: commit.diff?.files ?? [], date: new Date(commit.date) }))
+
       const dateMap = new Map<string, Date>()
 
-      for (const entry of logOutput.split('\0')) {
-        if (entry.length === 0) continue
-
-        const newlineIndex = entry.indexOf('\n')
-        if (newlineIndex === -1) {
-          // Author date line
-          continue
-        }
-
-        const dateStr = entry.slice(0, newlineIndex)
-        const paths = entry
-          .slice(newlineIndex + 1)
-          .split('\n')
-          .filter(Boolean)
-
-        for (const filePath of paths) {
-          const absolutePath = path.resolve(repoRoot, filePath)
+      for (const commit of log) {
+        for (const file of commit.files) {
+          const absolutePath = path.resolve(repoRoot, file.file)
           if (!dateMap.has(absolutePath)) {
-            dateMap.set(absolutePath, new Date(dateStr))
+            dateMap.set(absolutePath, commit.date)
           }
         }
       }

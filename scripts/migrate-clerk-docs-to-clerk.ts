@@ -1731,7 +1731,15 @@ async function updateExistingMigration(
     // To merge against the migration branch we need enough history to resolve the common ancestor;
     // `--unshallow` is the safest option and is a no-op on non-shallow clones.
     await runCommand('git', ['fetch', '--unshallow', 'origin'], clerkWorkPath, { allowFailure: true })
-    await runCommand('git', ['fetch', 'origin', migrationBranch], clerkWorkPath)
+    // Temp clones use `--single-branch`, so origin's fetch refspec only tracks baseRef. Fetch the
+    // migration branch with an explicit refspec so `origin/${migrationBranch}` actually gets created
+    // (a bare `git fetch origin ${migrationBranch}` would only update FETCH_HEAD, and the checkout below
+    // would then fail with "origin/${migrationBranch} is not a commit").
+    await runCommand(
+      'git',
+      ['fetch', 'origin', `${migrationBranch}:refs/remotes/origin/${migrationBranch}`],
+      clerkWorkPath,
+    )
     await runCommand('git', ['checkout', '-B', migrationBranch, `origin/${migrationBranch}`], clerkWorkPath)
 
     const merge = await runCommand(

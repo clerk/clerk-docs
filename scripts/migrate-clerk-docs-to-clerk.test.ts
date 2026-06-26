@@ -7,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import {
   assertGitFilterRepoVersionOutput,
   assertSemverAtLeast,
+  buildBaseMergeIntoMigrationArgs,
   buildClosePrCommandArgs,
+  buildFetchBranchRefspecArgs,
   buildMigrationBranchName,
   buildPrRefsRewriteCallback,
   canCommentOnPrInRepo,
@@ -565,5 +567,40 @@ describe('buildClosePrCommandArgs', () => {
     const args = buildClosePrCommandArgs(7, 'acme/docs')
     expect(args[2]).toBe('7')
     expect(typeof args[2]).toBe('string')
+  })
+})
+
+describe('buildFetchBranchRefspecArgs', () => {
+  test('uses an explicit refspec so origin/<branch> is created in a single-branch clone', () => {
+    expect(buildFetchBranchRefspecArgs('migrate-clerk-docs')).toEqual([
+      'fetch',
+      'origin',
+      'migrate-clerk-docs:refs/remotes/origin/migrate-clerk-docs',
+    ])
+  })
+
+  test('preserves slashes in branch names like nick/my-new-branch', () => {
+    expect(buildFetchBranchRefspecArgs('nick/my-new-branch')).toEqual([
+      'fetch',
+      'origin',
+      'nick/my-new-branch:refs/remotes/origin/nick/my-new-branch',
+    ])
+  })
+})
+
+describe('buildBaseMergeIntoMigrationArgs', () => {
+  test('merges origin/<base> into the migration branch with a descriptive message', () => {
+    expect(buildBaseMergeIntoMigrationArgs('nick/local-clerk-docs', 'migrate-clerk-docs')).toEqual([
+      'merge',
+      'origin/nick/local-clerk-docs',
+      '-m',
+      'Merge clerk base nick/local-clerk-docs into migrate-clerk-docs',
+    ])
+  })
+
+  test('does not pass --allow-unrelated-histories (migration branch descends from the base)', () => {
+    expect(buildBaseMergeIntoMigrationArgs('main', 'feat/foo-docs-migration')).not.toContain(
+      '--allow-unrelated-histories',
+    )
   })
 })

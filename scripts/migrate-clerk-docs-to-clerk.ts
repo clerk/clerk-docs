@@ -241,7 +241,7 @@ const migrationErrorDefinitions = {
   },
   'update-merge-conflict': {
     message: (params: { branch: string; workspacePath: string; isTemporary: boolean; remoteName: string }): string =>
-      `Merge conflict while updating existing migration branch "${params.branch}". New clerk-docs changes conflict with the existing branch state in clerk.`,
+      `Merge conflict while updating existing migration branch "${params.branch}". The latest clerk base or new clerk-docs changes conflict with the existing branch state in clerk.`,
     hints: (params: {
       branch: string
       workspacePath: string
@@ -1434,6 +1434,25 @@ function buildClosePrCommandArgs(prNumber: number, repo: string): string[] {
 }
 
 /**
+ * `git fetch` args that materialize `origin/<branch>` even in a `--single-branch` clone.
+ * The explicit `branch:refs/remotes/origin/branch` refspec is required because a bare
+ * `git fetch origin <branch>` would only update FETCH_HEAD, leaving `origin/<branch>` undefined
+ * and breaking a subsequent `git checkout`/`git merge origin/<branch>`.
+ */
+function buildFetchBranchRefspecArgs(branch: string): string[] {
+  return ['fetch', 'origin', `${branch}:refs/remotes/origin/${branch}`]
+}
+
+/**
+ * `git merge` args used in update mode to pull the latest clerk base into the migration branch.
+ * Ordinary merge (no `--allow-unrelated-histories`): the migration branch descends from the base,
+ * and it's a no-op when the base hasn't moved.
+ */
+function buildBaseMergeIntoMigrationArgs(baseRef: string, migrationBranch: string): string[] {
+  return ['merge', `origin/${baseRef}`, '-m', `Merge clerk base ${baseRef} into ${migrationBranch}`]
+}
+
+/**
  * Close the source clerk-docs PR after the backlink comment has been posted.
  * Idempotent in spirit: if the PR is already closed, `gh pr close` exits non-zero and the caller logs a warning.
  * Skips the close in dry-run mode.
@@ -1685,10 +1704,12 @@ async function createNewMigration(
 /**
  * Update an already-migrated branch with new commits from clerk-docs.
  * - Checks out the existing migration branch in the clerk workspace.
+ * - Merges the latest clerk base (`--clerk-base`) into the migration branch so re-runs carry base
+ *   updates through, not just new docs commits (no-op when the base hasn't moved).
  * - Merges the freshly-rewritten clerk-docs history on top (filter-repo is deterministic, so only
  *   the new commits are actually merged).
- * - On conflict: leaves the working tree conflicted and preserves the filter-repo remote + temp clone
- *   so the user can finish manually or abort and re-run. On any other error or success: cleans up.
+ * - On conflict (base or docs): leaves the working tree conflicted and preserves the filter-repo remote
+ *   + temp clone so the user can finish manually or abort and re-run. On any other error or success: cleans up.
  * - Skips `gh pr create` and the source-PR backlink comment (the marker is already on the source PR).
  */
 async function updateExistingMigration(
@@ -1705,6 +1726,7 @@ async function updateExistingMigration(
     infoLog('Dry-run (update mode): would filter-repo, merge new commits onto existing branch, push', {
       migrationBranch,
       existingPr: existing.pr?.url ?? '(none)',
+      baseMerge: `would merge latest clerk base "${config.clerkBaseBranch}" into ${migrationBranch} (no-op if base unchanged)`,
       gitignore:
         'would re-run gitignore cleanup; idempotent after first migration (commits only if anything actually changed)',
       clerkPrCreate: 'skipped in update mode (re-uses existing PR, or leaves branch PR-less if none exists yet)',
@@ -1736,12 +1758,30 @@ async function updateExistingMigration(
     // migration branch with an explicit refspec so `origin/${migrationBranch}` actually gets created
     // (a bare `git fetch origin ${migrationBranch}` would only update FETCH_HEAD, and the checkout below
     // would then fail with "origin/${migrationBranch} is not a commit").
-    await runCommand(
-      'git',
-      ['fetch', 'origin', `${migrationBranch}:refs/remotes/origin/${migrationBranch}`],
-      clerkWorkPath,
-    )
+    await runCommand('git', buildFetchBranchRefspecArgs(migrationBranch), clerkWorkPath)
     await runCommand('git', ['checkout', '-B', migrationBranch, `origin/${migrationBranch}`], clerkWorkPath)
+
+    // Pull the latest clerk base into the migration branch so re-runs carry base updates through,
+    // not just new docs commits. The migration branch descends from baseRef, so this is an ordinary
+    // merge (no --allow-unrelated-histories) and a no-op when the base hasn't moved. Fetch with an
+    // explicit refspec for the same single-branch-clone reason as the migration branch fetch above.
+    const baseRef = config.clerkBaseBranch
+    await runCommand('git', buildFetchBranchRefspecArgs(baseRef), clerkWorkPath)
+    const baseMerge = await runCommand(
+      'git',
+      buildBaseMergeIntoMigrationArgs(baseRef, migrationBranch),
+      clerkWorkPath,
+      { allowFailure: true },
+    )
+    if (baseMerge.code !== 0) {
+      preserveOnExit = true
+      throwMigrationError('update-merge-conflict', {
+        branch: migrationBranch,
+        workspacePath: clerkWorkPath,
+        isTemporary: clerkWorkspace.isTemporary,
+        remoteName,
+      })
+    }
 
     const merge = await runCommand(
       'git',
@@ -2096,6 +2136,8 @@ export {
   formatClosedPrAbortMessage,
   formatMigrationNoticeCommentBody,
   buildClosePrCommandArgs,
+  buildFetchBranchRefspecArgs,
+  buildBaseMergeIntoMigrationArgs,
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

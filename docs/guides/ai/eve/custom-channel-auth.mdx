@@ -1,10 +1,10 @@
 ---
 title: Custom channel auth
-description: Build an Eve channel AuthFn that verifies Clerk callers from scratch — basic session auth, multi-token acceptance, and mapping Clerk auth to eve principal attributes.
+description: Build an eve channel AuthFn that verifies Clerk callers from scratch — session auth, multi-token acceptance, and mapping Clerk auth to eve principal attributes.
 sdk: nextjs
 ---
 
-Verify Clerk callers in your Eve agent's channel. This page breaks down how to secure your eve auth channel with Clerk and accept requests from web sessions, API keys, and other machine tokens.
+Verify Clerk callers at your eve agent's channel boundary — accept web sessions, API keys, and machine tokens, and map each to an eve principal your tools and instructions can read.
 
 > [!TIP]
 > Skip the manual setup — install the configurable `clerkAuth()` helper via shadcn.
@@ -13,9 +13,9 @@ Verify Clerk callers in your Eve agent's channel. This page breaks down how to s
 bunx --bun shadcn@latest add clerk/eve-agents/auth
 ```
 
-## Build it from scratch
+Everything below builds the channel `AuthFn` from scratch: session verification first, then multi-token support and attribute mapping.
 
-Eve channels authorize inbound requests through a list of [`AuthFn` callbacks](https://eve.dev/docs/guides/auth-and-route-protection). Each entry receives the request, returns an eve principal to accept, or returns `null` to skip to the next entry.
+An eve channel authorizes inbound requests through a list of [`AuthFn` callbacks](https://eve.dev/docs/guides/auth-and-route-protection). Each entry receives the request, returns an eve principal to accept, or returns `null` to skip to the next entry.
 
 ```ts
 import type { AuthFn } from 'eve/channels/auth'
@@ -25,11 +25,11 @@ const myAuth: AuthFn<Request> = async (request) => {
 }
 ```
 
-### Basic: verify a Clerk session
+## Verify a Clerk session
 
 Hand the `Request` to Clerk's [`authenticateRequest()`](/docs/reference/backend/authenticate-request) and map the verified state to an eve principal.
 
-```ts {{ filename: 'agent/channels/eve.ts' }}
+```ts {{ filename: 'agent/channels/eve.ts', mark: [12] }}
 import { createClerkClient } from '@clerk/backend'
 import type { AuthFn } from 'eve/channels/auth'
 import { eveChannel } from 'eve/channels/eve'
@@ -64,7 +64,7 @@ export default eveChannel({
 
 The returned object is what every downstream piece (instructions, tools, subagents) reads as `ctx.session.auth.current`.
 
-### Reject vs. fall through
+## Reject vs. fall through
 
 Returning `null` skips this authenticator and passes the request to the next entry in the channel's auth chain. If no entry accepts, the request is rejected. Throw [`UnauthenticatedError`](https://eve.dev/docs/guides/auth-and-route-protection) instead to short-circuit the chain with a `401` — useful when Clerk is a required authentication strategy.
 
@@ -79,11 +79,11 @@ if (!state?.isAuthenticated) {
 }
 ```
 
-### Multi-token: accept session, API key, M2M, and OAuth
+## Accept multiple token types
 
 Pass an array to [`acceptsToken`](/docs/reference/backend/authenticate-request#authenticate-request-options) to verify more than one Clerk token type in the same call. Switch on `auth.tokenType` to branch on what authenticated.
 
-```ts {{ filename: 'agent/channels/eve.ts' }}
+```ts {{ filename: 'agent/channels/eve.ts', mark: [4, 5] }}
 const clerkAuth: AuthFn<Request> = async (request) => {
   const state = await clerk
     .authenticateRequest(request, {
@@ -117,11 +117,11 @@ const clerkAuth: AuthFn<Request> = async (request) => {
 }
 ```
 
-`machineSecretKey` is required when accepting `m2m_token` — Clerk uses it to verify the inbound token. See [API keys & M2M](/docs/guides/ai/eve/api-keys-and-m2m) for setup.
+`machineSecretKey` is required when accepting `m2m_token`. Clerk uses it to verify the inbound token. See [API keys & M2M](/docs/guides/ai/eve/api-keys-and-m2m) for setup.
 
-### Adding attributes
+## Add attributes
 
-[Attributes](https://eve.dev/docs/guides/auth-and-route-protection) is a free-form object made accessible as shared auth context in instructions, tools, and subagents. Customize the context you make available by extracting from the Clerk auth object.
+[Attributes](https://eve.dev/docs/guides/auth-and-route-protection) is a free-form object exposed as shared auth context in instructions, tools, and subagents. Customize it by pulling fields off the Clerk auth object.
 
 Session token:
 
@@ -142,7 +142,7 @@ const name = auth.sessionClaims?.name
 if (typeof name === 'string') attributes.name = name
 ```
 
-Machine variants — all share `scopes`, with additional fields specific to each token type:
+Machine variants all share `scopes`, with additional fields specific to each token type:
 
 ```ts
 const attributes: Record<string, string | readonly string[]> = {
@@ -171,9 +171,9 @@ Summary by token type:
 | `m2m_token` | `machine` | `scopes` |
 | `oauth_token` | `machine` | `scopes`, `userId`, `clientId` |
 
-See [Enriching instructions](/docs/guides/ai/eve/enriching-instructions) and [Authorizing tool calls](/docs/guides/ai/eve/authorize-tool-calls) for how to read these downstream.
+See [Enrich instructions](/docs/guides/ai/eve/enriching-instructions) and [Authorize tool calls](/docs/guides/ai/eve/authorize-tool-calls) for how to read these downstream.
 
-### Composing with other authenticators
+## Compose with other authenticators
 
 Add other entries to the `auth` chain. Each runs in order; the first non-null wins.
 
@@ -186,10 +186,10 @@ export default eveChannel({
 ```
 
 > [!CAUTION]
-> Omitting [`localDev()`](https://eve.dev/docs/guides/auth-and-route-protection#localdev) means unauthenticated requests get a real `401` on localhost. Useful for testing real auth flows; just remember the agent won't be reachable from your browser without signing in.
+> Omitting [`localDev()`](https://eve.dev/docs/guides/auth-and-route-protection#localdev) means unauthenticated requests get a real `401` on localhost. Useful for testing real auth flows. Remember the agent won't be reachable from your browser without signing in.
 
-## Next steps
+## Related guides
 
 - [API keys & M2M](/docs/guides/ai/eve/api-keys-and-m2m) — API key auth and agent-to-agent M2M.
-- [Enriching instructions](/docs/guides/ai/eve/enriching-instructions) — read the principal inside dynamic instructions.
-- [Authorizing tool calls](/docs/guides/ai/eve/authorize-tool-calls) — gate tool invocations against permissions on the principal.
+- [Enrich instructions](/docs/guides/ai/eve/enriching-instructions) — read the principal inside dynamic instructions.
+- [Authorize tool calls](/docs/guides/ai/eve/authorize-tool-calls) — gate tool invocations against permissions on the principal.

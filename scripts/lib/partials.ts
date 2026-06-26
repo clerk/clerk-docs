@@ -126,7 +126,9 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
 
         if (partialSrc.startsWith('./') || partialSrc.startsWith('../')) {
           const parentDir = path.dirname(filePath)
-          nestedPath = path.normalize(path.join(parentDir, `${removeMdxSuffix(partialSrc)}.mdx`)).replace(backslashRegex, '/')
+          nestedPath = path
+            .normalize(path.join(parentDir, `${removeMdxSuffix(partialSrc)}.mdx`))
+            .replace(backslashRegex, '/')
         } else if (partialSrc.startsWith('_partials/')) {
           nestedPath = `${removeMdxSuffix(partialSrc)}.mdx`
         } else {

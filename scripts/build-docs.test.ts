@@ -2604,6 +2604,51 @@ description: Quickstart page
     )
   })
 
+  test('should error on duplicate heading contributed by an embedded partial in a core doc with <If /> components', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/dup-heading.mdx',
+        content: `# Partial Heading {{ id: 'shared-id' }}`,
+      },
+      {
+        // Core doc (no `sdk` frontmatter) that contains an <If /> component, so
+        // heading validation only happens in the dedicated <If /> pass. The
+        // authored heading collides with a heading embedded from a partial.
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+# Authored Heading {{ id: 'shared-id' }}
+
+<Include src="_partials/dup-heading" />
+
+<If sdk="react">
+  Conditional content
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toContain(
+      'Doc "/docs/quickstart.mdx" contains a duplicate heading id "shared-id", please ensure all heading ids are unique',
+    )
+  })
+
   test('Should support id in a call out block', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -5764,7 +5809,7 @@ title: Original Title
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -5836,7 +5881,7 @@ sdk: react, nextjs
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -5911,7 +5956,7 @@ sdk: react, nextjs
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -5986,7 +6031,7 @@ sdk: react, nextjs
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6048,7 +6093,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6100,7 +6145,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6159,7 +6204,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6248,7 +6293,7 @@ title: Page B
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6404,7 +6449,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6430,6 +6475,241 @@ sdk: react
     // Check updated content
     const updatedContent = await readFile(pathJoin('./dist/cached-doc.mdx'))
     expect(updatedContent).toContain('Updated Content')
+  })
+
+  test('should update doc content when an embedded tooltip changes', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+        }),
+      },
+      {
+        path: './docs/cached-doc.mdx',
+        content: `---
+title: Original Title
+description: x
+---
+
+[Tooltip](!ABC)`,
+      },
+      {
+        path: './docs/_tooltips/ABC.mdx',
+        content: `Original tooltip content`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+      tooltips: {
+        inputPath: '../docs/_tooltips',
+        outputPath: './_tooltips',
+      },
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    // Check initial content
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain('Original tooltip content')
+
+    // Update the tooltip content
+    await fs.writeFile(pathJoin('./docs/_tooltips/ABC.mdx'), `Updated tooltip content`)
+
+    invalidate(pathJoin('./docs/_tooltips/ABC.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(config, store)
+
+    // Check updated content
+    const updatedContent = await readFile(pathJoin('./dist/cached-doc.mdx'))
+    expect(updatedContent).toContain('Updated tooltip content')
+    expect(updatedContent).not.toContain('Original tooltip content')
+  })
+
+  test('should re-collapse a doc when an SDK variant file is deleted', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, expo
+---
+
+Documentation specific to Next.js and Expo`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'expo'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build - the react variant makes the doc available for react too
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(true)
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo,react\n')
+
+    // Delete the react variant
+    await fs.rm(pathJoin('./docs/api-doc.react.mdx'))
+
+    invalidate(pathJoin('./docs/api-doc.react.mdx'))
+
+    // Second build with same store (should re-collapse the doc back to nextjs/expo)
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(false)
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo\n')
+  })
+
+  test('should expand a doc when a new SDK variant file is added', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, expo
+---
+
+Documentation specific to Next.js and Expo`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'expo'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build - no react variant yet
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(false)
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo\n')
+
+    // Add a new react variant
+    await fs.writeFile(
+      pathJoin('./docs/api-doc.react.mdx'),
+      `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+    )
+
+    invalidate(pathJoin('./docs/api-doc.react.mdx'))
+
+    // Second build with same store (should expand the doc to include react)
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(true)
+    expect(await readFile(pathJoin('./dist/react/api-doc.mdx'))).toContain('Documentation specific to React.js')
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo,react\n')
+  })
+
+  test('should reflect manifest changes on rebuild with the same store', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Doc A', href: '/docs/doc-a' }]],
+        }),
+      },
+      {
+        path: './docs/doc-a.mdx',
+        content: `---
+title: Doc A
+description: x
+---
+
+# Doc A`,
+      },
+      {
+        path: './docs/doc-b.mdx',
+        content: `---
+title: Doc B
+description: x
+---
+
+# Doc B`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build - doc-b exists on disk but isn't in the manifest yet
+    await build(config, store)
+
+    const firstManifest = await readFile(pathJoin('./dist/manifest.json'))
+    expect(firstManifest).toContain('/docs/doc-a')
+    expect(firstManifest).not.toContain('/docs/doc-b')
+
+    // Add doc-b to the manifest
+    await fs.writeFile(
+      pathJoin('./docs/manifest.json'),
+      JSON.stringify({
+        navigation: [
+          [
+            { title: 'Doc A', href: '/docs/doc-a' },
+            { title: 'Doc B', href: '/docs/doc-b' },
+          ],
+        ],
+      }),
+    )
+
+    invalidate(pathJoin('./docs/manifest.json'))
+
+    // Second build with same store (should reflect the updated manifest)
+    await build(config, store)
+
+    const secondManifest = await readFile(pathJoin('./dist/manifest.json'))
+    expect(secondManifest).toContain('/docs/doc-a')
+    expect(secondManifest).toContain('/docs/doc-b')
   })
 })
 
@@ -8119,7 +8399,7 @@ description: x
       basePath: tempDir,
       validSdks: ['react', 'nextjs', 'expo'],
     })
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const invalidate = invalidateFile(store, config)
 
     await build(config, store)

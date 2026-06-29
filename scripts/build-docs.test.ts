@@ -2604,6 +2604,51 @@ description: Quickstart page
     )
   })
 
+  test.only('should error on duplicate heading contributed by an embedded partial in a core doc with <If /> components', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/dup-heading.mdx',
+        content: `# Partial Heading {{ id: 'shared-id' }}`,
+      },
+      {
+        // Core doc (no `sdk` frontmatter) that contains an <If /> component, so
+        // heading validation only happens in the dedicated <If /> pass. The
+        // authored heading collides with a heading embedded from a partial.
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+# Authored Heading {{ id: 'shared-id' }}
+
+<Include src="_partials/dup-heading" />
+
+<If sdk="react">
+  Conditional content
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toContain(
+      'Doc "/docs/quickstart.mdx" contains a duplicate heading id "shared-id", please ensure all heading ids are unique',
+    )
+  })
+
   test('Should support id in a call out block', async () => {
     const { tempDir } = await createTempFiles([
       {

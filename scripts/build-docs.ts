@@ -1136,6 +1136,12 @@ ${yaml.stringify({
         .use(remarkFrontmatter)
         .use(remarkMdx)
         .use(remarkGfm)
+        // Re-embed partials/typedocs/tooltips so heading uniqueness is validated
+        // against the fully embedded page (matching the core-docs pass), not just
+        // the authored tree. Warnings are reported elsewhere, so silence them here.
+        .use(checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }))
+        .use(checkTypedoc(config, validatedTypedocs, doc.file.filePath, { reportWarnings: false, embed: true }))
+        .use(checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }))
         .use(() => (inputTree) => {
           return mdastFilter(inputTree, (node) => {
             const sdkProp = extractComponentPropValueFromNode(

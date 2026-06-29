@@ -737,12 +737,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             let node: Node | null = null
             const links: Set<string> = new Set()
 
-            const processor = remark()
-              .use(
-                validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-                  links.add(linkInTypedoc)
-                }),
-              )
+            const processor = remark().use(
+              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+                links.add(linkInTypedoc)
+              }),
+            )
             const tree = processor.parse(typedoc.vfile)
             node = await processor.run(tree, typedoc.vfile)
 

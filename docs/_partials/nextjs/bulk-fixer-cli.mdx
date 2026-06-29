@@ -1,0 +1,65 @@
+> [!WARNING]
+> Applying these fixes changes your application's runtime behavior. It enforces authentication where there potentially was none, and it might override custom authentication checks that were already in place. Review the changes and test your application after running the Bulk Fixer CLI.
+
+Run the fixer with `npx`:
+
+```npm
+# Fix everything under the current directory.
+npx clerk-next-fix-auth-protection
+
+# Preview without writing files.
+npx clerk-next-fix-auth-protection --dry-run
+
+# Scope fixes to a specific path or glob.
+npx clerk-next-fix-auth-protection "src/**"
+```
+
+The command exits with a non-zero status when:
+
+- `--dry-run` reports changes that would be made.
+- Some resources need manual attention.
+
+The following examples demonstrate the resource-based checks that the Bulk Fixer CLI inserts. When a user isn't authenticated, [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) redirects them to the sign-in page for document requests (such as pages), returns a `401` for Server Actions, and returns a `404` for other non-document requests (such as Route Handlers). If you want [more control over the response](/docs/guides/secure/protect-content#server-side), or if you want to perform [authorization checks](!authorization-check) instead, adjust resources manually.
+
+<CodeBlockTabs options={["Server Component", "Route Handler", "Server Function"]}>
+  ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+  + import { auth } from '@clerk/nextjs/server'
+
+    export default async function Page() {
+  +   await auth.protect()
+
+      return <h1>Dashboard</h1>
+    }
+  ```
+
+  ```tsx {{ filename: 'app/api/dashboard/route.ts' }}
+  + import { auth } from '@clerk/nextjs/server'
+
+    export async function GET() {
+  +   await auth.protect()
+
+      return Response.json({ ok: true })
+    }
+  ```
+
+  ```tsx {{ filename: 'app/dashboard/actions.ts' }}
+    'use server'
+
+  + import { auth } from '@clerk/nextjs/server'
+
+    export async function updateDashboard() {
+  +   await auth.protect()
+
+      // Add your Server Function logic
+    }
+  ```
+</CodeBlockTabs>
+
+The Bulk Fixer CLI will warn about resources that require manual attention, such as imported or wrapped exports, or mixed-scope layouts that require explicit acknowledgement. Add protection manually to those resources when they still need it.
+
+If the resource is already protected by a wrapper or by code in another file, the rule can't currently verify that protection. In that case, add an ESLint disable comment with a reason:
+
+```ts
+// eslint-disable-next-line @clerk/next/require-auth-protection -- Protected by withAuth().
+export const POST = withAuth(handler)
+```

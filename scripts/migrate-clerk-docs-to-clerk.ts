@@ -21,6 +21,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import readline from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'step'
@@ -31,6 +32,15 @@ type RepoSlug = readonly [owner: string, name: string]
 
 function formatRepoSlug(slug: RepoSlug): string {
   return `${slug[0]}/${slug[1]}`
+}
+
+/**
+ * True when the clerk-docs project directory sits *below* the git root rather than being it.
+ * In a standalone clerk-docs checkout these are the same path; after migration into clerk/clerk the
+ * docs live at `<clerk>/clerk-docs`, so the git root is an ancestor — the signal we refuse on.
+ */
+function gitRootIsAboveDocsProject(docsProjectDir: string, gitRoot: string): boolean {
+  return path.resolve(gitRoot) !== path.resolve(docsProjectDir)
 }
 
 interface CliConfig {
@@ -230,6 +240,14 @@ const migrationErrorDefinitions = {
     message: (resolvedPath: string): string => `Clerk path is not a directory (from --clerk-path): ${resolvedPath}`,
     hints: (_resolvedPath: string): readonly string[] => [
       'Pass the root directory of the clerk git checkout, not a file.',
+    ],
+  },
+  'running-inside-enclosing-repo': {
+    message: (params: { docsProjectDir: string; gitRoot: string }): string =>
+      `Refusing to run: clerk-docs lives at ${params.docsProjectDir}, but the enclosing git repository is ${params.gitRoot}. ` +
+      `This script is kept in clerk-docs/scripts and ships into clerk/clerk after migration — it looks like you're running the copy inside clerk, which would rewrite clerk's own history into clerk-docs/.`,
+    hints: (_params: { docsProjectDir: string; gitRoot: string }): readonly string[] => [
+      'Run this from a standalone clerk-docs checkout (where clerk-docs is the git root), not from the clerk-docs/ directory inside clerk.',
     ],
   },
   'migration-branch-pr-closed': {
@@ -985,6 +1003,25 @@ async function assertGitRepo(repoPath: string, label: string): Promise<void> {
 
 async function getCurrentBranch(repoPath: string): Promise<string> {
   return (await runCommand('git', ['branch', '--show-current'], repoPath)).stdout.trim()
+}
+
+/**
+ * Guard against accidentally running the copy of this script that ships into clerk/clerk under
+ * clerk-docs/scripts. This script always lives at `<docs-root>/scripts/`, so its project dir is the
+ * clerk-docs root in a standalone checkout but a nested subdir once migrated into clerk. If the git
+ * root is above that project dir, we're inside clerk — abort before rewriting clerk's own history.
+ */
+async function assertNotRunningInsideClerk(): Promise<void> {
+  const docsProjectDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+  const result = await runCommand('git', ['-C', docsProjectDir, 'rev-parse', '--show-toplevel'], process.cwd(), {
+    allowFailure: true,
+  })
+  if (result.code !== 0) return
+  const gitRoot = result.stdout.trim()
+  if (gitRootIsAboveDocsProject(docsProjectDir, gitRoot)) {
+    throwMigrationError('running-inside-enclosing-repo', { docsProjectDir, gitRoot })
+  }
+  infoLog('clerk-docs is its own git root (not nested inside clerk)', { docsProjectDir })
 }
 
 async function assertCleanWorkingTree(repoPath: string, label: string): Promise<void> {
@@ -1946,6 +1983,7 @@ async function main(): Promise<void> {
     await assertGhAuthenticated()
     await assertGithubRepoMigrationAccess(config)
     await assertGitRepo(config.clerkDocsPath, 'clerk-docs')
+    await assertNotRunningInsideClerk()
     if (config.allowDirtyClerkDocs) {
       warnLog(
         'Bypassing clean-working-tree check for clerk-docs due to --allow-dirty-docs. Only committed history is migrated (filter-repo reads commits, not the working tree), but the upcoming `git merge origin/main` can still abort if your local edits conflict with incoming changes.',
@@ -2123,6 +2161,7 @@ export {
   parseSemverLoose,
   isSemverAtLeast,
   assertSemverAtLeast,
+  gitRootIsAboveDocsProject,
   canPushToRepo,
   canReadRepo,
   canCommentOnPrInRepo,

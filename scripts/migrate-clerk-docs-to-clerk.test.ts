@@ -21,6 +21,7 @@ import {
   formatMigrationNoticeCommentBody,
   formatSourcePrMigrationAppendix,
   formatUpdateMergeConflictHints,
+  gitRootIsAboveDocsProject,
   isSemverAtLeast,
   lineIgnoresSymlinkedClerkDocsRoot,
   parseConfig,
@@ -180,6 +181,20 @@ describe('permissions and repo slug helpers', () => {
     expect(canReadRepo({ pull: true })).toBe(true)
     expect(canCommentOnPrInRepo({ triage: true })).toBe(true)
     expect(canCommentOnPrInRepo({ pull: true })).toBe(false)
+  })
+})
+
+describe('gitRootIsAboveDocsProject', () => {
+  test('false when clerk-docs is its own git root (standalone checkout)', () => {
+    expect(gitRootIsAboveDocsProject('/Users/me/dev/clerk-docs', '/Users/me/dev/clerk-docs')).toBe(false)
+  })
+
+  test('true when the git root is an ancestor (clerk-docs nested inside clerk after migration)', () => {
+    expect(gitRootIsAboveDocsProject('/Users/me/dev/clerk/clerk-docs', '/Users/me/dev/clerk')).toBe(true)
+  })
+
+  test('normalizes paths before comparing (trailing slash is irrelevant)', () => {
+    expect(gitRootIsAboveDocsProject('/Users/me/dev/clerk-docs/', '/Users/me/dev/clerk-docs')).toBe(false)
   })
 })
 

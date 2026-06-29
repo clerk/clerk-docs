@@ -33,7 +33,7 @@ Use the following guides to learn how to protect different types of resources:
 To help with the migration, Clerk has launched [`@clerk/eslint-plugin`](/docs/reference/nextjs/eslint-plugin), which includes `@clerk/next/require-auth-protection`, a lint rule that warns you when a resource is missing required protection. The package also includes the Bulk Fixer CLI, which can automatically add protection to your resources. You can also migrate manually if you prefer. Use the following tabs to choose your migration method.
 
 > [!WARNING]
-> The lint rule only works with App Router resources; if you use Pages Router, migrate those routes manually.
+> The lint rule only works with App Router resources. To protect Pages Router routes, use [`getAuth()`](/docs/reference/nextjs/pages-router/get-auth) in `getServerSideProps`.
 
 <Tabs items={["Use the lint rule", "Migrate manually"]}>
   <Tab>
@@ -69,7 +69,7 @@ To help with the migration, Clerk has launched [`@clerk/eslint-plugin`](/docs/re
                     resources: {
                       routeHandlers: true,
                       serverFunctions: true,
-                      serverComponentEntrypoints: false, // Temporarily skip Server Component entrypoints so you can focus on Route Handlers and Server Functions first.
+                      serverComponentEntrypoints: false, // Skip for now.
                     },
                   },
                 ],
@@ -84,11 +84,23 @@ To help with the migration, Clerk has launched [`@clerk/eslint-plugin`](/docs/re
         <Tab>
           If you're migrating the whole application at once, you can set `protected` to include all route groups:
 
-          ```js
-          const clerkProtection = {
-            protected: ['**'],
-            public: ['src/app/sign-in/**', 'src/app/sign-up/**'],
-          }
+          ```js {{ filename: 'eslint.config.mjs' }}
+          import clerkNext from '@clerk/eslint-plugin/next'
+
+          export default [
+            {
+              plugins: { '@clerk/next': clerkNext },
+              rules: {
+                '@clerk/next/require-auth-protection': [
+                  'error',
+                  {
+                    protected: ['**'],
+                    public: ['src/app/sign-in/**', 'src/app/sign-up/**'],
+                  },
+                ],
+              },
+            },
+          ]
           ```
         </Tab>
       </Tabs>
@@ -105,7 +117,7 @@ To help with the migration, Clerk has launched [`@clerk/eslint-plugin`](/docs/re
 
       <Include src="./_partials/preserve-signed-out-ux" />
 
-      ## Remove the Middleware gate
+      ## Remove the Middleware authentication checks
 
       After the server resources and signed-out states are handled, remove the authentication checks from `clerkMiddleware()`:
 
@@ -184,7 +196,7 @@ To help with the migration, Clerk has launched [`@clerk/eslint-plugin`](/docs/re
       })
       ```
 
-      Move the auth check into each protected resource. The following examples use [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) to redirect unauthenticated users to the sign-in page. If you want more control over the response, or if you want to perform [authorization checks](!authorization-check) instead, see the relevant guides in the [Before you start](#before-you-start) section.
+      Move the auth check into each protected resource. The following examples use [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect), which redirects unauthenticated users to the sign-in page for document requests (such as pages), returns a `401` for Server Actions, and returns a `404` for other non-document requests (such as Route Handlers). If you want more control over the response, or if you want to perform [authorization checks](!authorization-check) instead, see the relevant guides in the [Before you start](#before-you-start) section.
 
       <CodeBlockTabs options={["Server Component", "Route Handler", "Server Function"]}>
         ```tsx {{ filename: 'app/dashboard/page.tsx' }}
@@ -224,7 +236,7 @@ To help with the migration, Clerk has launched [`@clerk/eslint-plugin`](/docs/re
 
       <Include src="./_partials/preserve-signed-out-ux" />
 
-      ## Remove the Middleware gate
+      ## Remove the Middleware authentication checks
 
       After the server resources and signed-out states are handled, remove the authentication checks from `clerkMiddleware()`:
 
@@ -287,7 +299,7 @@ Another example is the mapping of regular expressions first to URLs and then to 
 
 Differences between how `createRouteMatcher()` parses a path and how the framework resolves it can also lead to dangerous gaps. If Clerk normalizes a path one way and treats it as public, but the framework normalizes it differently and renders a protected path, that creates a bypass. This is what happened in the [GHSA-vqx2-fgx2-5wq9](https://github.com/clerk/javascript/security/advisories/GHSA-vqx2-fgx2-5wq9) vulnerability. Future framework changes to path interpretation can introduce new vulnerabilities, and patching them inside `createRouteMatcher()` isn't sustainable without first-class framework support.
 
-On top of these concerns, in late 2025, several framework-level Middleware bypasses were publicly disclosed. In these cases, the request never goes through `createRouteMatcher()` at all, and all authentication checks at the Middleware level are bypassed.
+On top of these concerns, in 2025, several framework-level Middleware bypasses were publicly disclosed. In these cases, the request never goes through `createRouteMatcher()` at all, and all authentication checks at the Middleware level are bypassed.
 
 Together, these concerns led Clerk to deprecate `createRouteMatcher()` and recommend moving away from Middleware-level auth gating.
 

@@ -27,7 +27,7 @@ export type PartialsMap = Map<string, PartialsFile>
 export type TypedocsMap = Map<string, TypedocsFile>
 export type TooltipsMap = Map<string, TooltipsFile>
 
-export const createBlankStore = () => ({
+export const createBlankStore = (cloneCachedValues: boolean = false) => ({
   markdown: new Map() as DocsMap,
   coreDocs: new Map() as CoreDocsMap,
   scopedDocs: new Map() as ScopedDocsMap,
@@ -39,7 +39,10 @@ export const createBlankStore = () => ({
   // Track in-flight promises to deduplicate concurrent requests
   // Using any to avoid circular type reference with PartialsFile
   inFlightPartials: new Map() as Map<string, Promise<any>>,
+  cloneCachedValues,
 })
+
+const maybeClone = <T>(store: Store, value: T): T => (store.cloneCachedValues ? structuredClone(value) : value)
 
 export type Store = ReturnType<typeof createBlankStore>
 
@@ -146,10 +149,10 @@ export const markDocumentDirty =
 export const getMarkdownCache = (store: Store) => {
   return async (key: string, cacheMiss: (key: string) => Promise<MarkdownFile>) => {
     const cached = store.markdown.get(key)
-    if (cached) return structuredClone(cached)
+    if (cached) return maybeClone(store, cached)
 
     const result = await cacheMiss(key)
-    store.markdown.set(key, structuredClone(result))
+    store.markdown.set(key, maybeClone(store, result))
     return result
   }
 }
@@ -157,10 +160,10 @@ export const getMarkdownCache = (store: Store) => {
 export const getCoreDocCache = (store: Store) => {
   return async (key: string, cacheMiss: (key: string) => Promise<CoreDocsFile>) => {
     const cached = store.coreDocs.get(key)
-    if (cached) return structuredClone(cached)
+    if (cached) return maybeClone(store, cached)
 
     const result = await cacheMiss(key)
-    store.coreDocs.set(key, structuredClone(result))
+    store.coreDocs.set(key, maybeClone(store, result))
     return result
   }
 }
@@ -179,7 +182,7 @@ export const getScopedDocCache = (store: Store) => {
     // If it exists, return the cached file
     const cached = sdkCache.get(cache)
     if (cached) {
-      return structuredClone(cached)
+      return maybeClone(store, cached)
     }
 
     // If it doesn't exist, call the cache miss function for this sdk
@@ -189,7 +192,7 @@ export const getScopedDocCache = (store: Store) => {
     if (!sdkCache2) {
       throw new Error(`No SDK cache found for ${key}`)
     }
-    sdkCache2.set(cache, structuredClone(result))
+    sdkCache2.set(cache, maybeClone(store, result))
     store.scopedDocs.set(key, sdkCache2)
 
     return result
@@ -200,7 +203,7 @@ export const getPartialsCache = (store: Store) => {
   return async (key: string, cacheMiss: (key: string) => Promise<PartialsFile>) => {
     // Check if already cached
     const cached = store.partials.get(key)
-    if (cached) return structuredClone(cached)
+    if (cached) return maybeClone(store, cached)
 
     // Check if there's already an in-flight request for this partial
     const inFlight = store.inFlightPartials.get(key)
@@ -208,14 +211,14 @@ export const getPartialsCache = (store: Store) => {
       // Wait for the in-flight request to complete and return its result
       // This deduplicates concurrent requests to the same partial
       const result = await inFlight
-      return structuredClone(result)
+      return maybeClone(store, result)
     }
 
     // Create a new promise for this request
     const promise = cacheMiss(key)
       .then((result) => {
         // Store in cache and remove from in-flight
-        store.partials.set(key, structuredClone(result))
+        store.partials.set(key, maybeClone(store, result))
         store.inFlightPartials.delete(key)
         return result
       })
@@ -235,10 +238,10 @@ export const getPartialsCache = (store: Store) => {
 export const getTooltipsCache = (store: Store) => {
   return async (key: string, cacheMiss: (key: string) => Promise<TooltipsFile>) => {
     const cached = store.tooltips.get(key)
-    if (cached) return structuredClone(cached)
+    if (cached) return maybeClone(store, cached)
 
     const result = await cacheMiss(key)
-    store.tooltips.set(key, structuredClone(result))
+    store.tooltips.set(key, maybeClone(store, result))
     return result
   }
 }
@@ -246,10 +249,10 @@ export const getTooltipsCache = (store: Store) => {
 export const getTypedocsCache = (store: Store) => {
   return async (key: string, cacheMiss: (key: string) => Promise<TypedocsFile>) => {
     const cached = store.typedocs.get(key)
-    if (cached) return structuredClone(cached)
+    if (cached) return maybeClone(store, cached)
 
     const result = await cacheMiss(key)
-    store.typedocs.set(key, structuredClone(result))
+    store.typedocs.set(key, maybeClone(store, result))
     return result
   }
 }

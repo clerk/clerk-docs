@@ -27,7 +27,7 @@ export type PartialsMap = Map<string, PartialsFile>
 export type TypedocsMap = Map<string, TypedocsFile>
 export type TooltipsMap = Map<string, TooltipsFile>
 
-export const createBlankStore = (cloneCachedValues: boolean = true) => ({
+export const createBlankStore = (cloneCachedValues: boolean = false) => ({
   markdown: new Map() as DocsMap,
   coreDocs: new Map() as CoreDocsMap,
   scopedDocs: new Map() as ScopedDocsMap,

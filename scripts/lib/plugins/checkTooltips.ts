@@ -68,7 +68,10 @@ export const checkTooltips =
         return node
       }
 
-      foundTooltip?.(`${removeMdxSuffix(tooltipSrc)}.mdx`)
+      // Emit the path in the same `_tooltips/`-prefixed form used by `tooltip.path` and the
+      // dirty-doc adjacency key in `invalidateFile`, so editing a tooltip in dev mode correctly
+      // invalidates and rebuilds the docs that embed it.
+      foundTooltip?.(`_tooltips/${removeMdxSuffix(tooltipSrc)}.mdx`)
 
       if (options.embed === true) {
         return Object.assign(

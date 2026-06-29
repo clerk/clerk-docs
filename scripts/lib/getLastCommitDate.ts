@@ -8,11 +8,12 @@ export const getLastCommitDate = (config: BuildConfig) => {
   }
 
   const git = simpleGit(config.docsPath)
-  const repoRoot = path.dirname(config.docsPath)
   let mapPromise: Promise<Map<string, Date>> | undefined
 
   const getDateMap = () => {
     mapPromise ??= (async () => {
+      const repoRoot = (await git.raw(['rev-parse', '--show-toplevel'])).trim()
+
       // `--name-status` makes simple-git populate `commit.diff.files`, so we get the
       // changed paths per commit as typed objects instead of parsing raw git output.
       const log = (

@@ -61,6 +61,7 @@ export const parseInMarkdownFile =
     const headingsHashes = new Set<string>()
     let node: Node | undefined = undefined
     let nodeSnapshot: Node | undefined = undefined
+    let finalNode: Node | undefined = undefined
 
     const vfile = await remark()
       .use(remarkFrontmatter)
@@ -101,6 +102,15 @@ export const parseInMarkdownFile =
         }),
       )
       .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false, embed: false }))
+      // Capture the tree the pipeline ends with. A transformer can change the
+      // tree two ways: mutate the original in place (caught via `node` below) or
+      // return a new root that unified swaps in for later plugins (caught via
+      // `finalNode` here). `node` still points at the original in the latter
+      // case, so without this we'd miss a plugin that diverges the validated
+      // tree from what `doc.node` reuses.
+      .use(() => (tree) => {
+        finalNode = tree
+      })
       .process({
         path: file.relativeFilePath,
         value: fileContent,
@@ -119,18 +129,34 @@ export const parseInMarkdownFile =
     // the invariant so a future tree-mutating plugin fails loudly here rather
     // than silently diverging the generated output.
     //
-    // Compare structuredClone(node) against the snapshot (also a structuredClone)
-    // rather than node directly: structuredClone drops class prototypes (e.g. the
-    // acorn `Node` instances MDX attaches as data.estree on expression attributes),
-    // so normalizing both sides the same way makes the check sensitive to value
-    // mutations instead of flagging those benign prototype differences.
-    if (!isDeepStrictEqual(structuredClone(node), nodeSnapshot)) {
-      throw new Error(
+    // A plugin can diverge the tree two ways, so check both:
+    //   1. `node` — the original reference we expose as doc.node. Catches a
+    //      plugin that mutates the parsed tree in place.
+    //   2. `finalNode` — the tree the pipeline actually ended with. Catches a
+    //      plugin that returns a new root (e.g. mdastMap); unified hands that to
+    //      later plugins, but `node` still points at the untouched original, so
+    //      it would otherwise pass while doc.node is stale vs what was validated.
+    //
+    // Compare structuredClone(...) against the snapshot (also a structuredClone)
+    // rather than the nodes directly: structuredClone drops class prototypes (e.g.
+    // the acorn `Node` instances MDX attaches as data.estree on expression
+    // attributes), so normalizing both sides the same way makes the check
+    // sensitive to value mutations instead of flagging those benign prototype
+    // differences.
+    const treeMutationError = () =>
+      new Error(
         `A validation plugin mutated the parsed tree for ${file.href}. ` +
           `doc.node is reused (via structuredClone) instead of being re-parsed, so the build now ` +
           `assumes the embed:false validation pass is non-mutating. Either make the offending plugin ` +
           `non-mutating, or re-parse fileContent at the reuse sites instead of cloning doc.node.`,
       )
+
+    if (!isDeepStrictEqual(structuredClone(node), nodeSnapshot)) {
+      throw treeMutationError()
+    }
+
+    if (!isDeepStrictEqual(structuredClone(finalNode), nodeSnapshot)) {
+      throw treeMutationError()
     }
 
     // This needs to be done separately as some further validation expects the partials to not be embedded

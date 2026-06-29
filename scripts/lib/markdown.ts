@@ -9,6 +9,7 @@
 // - validates (but does not embed) the partials and typedocs
 // - extracts the headings and validates that they are unique
 
+import { isDeepStrictEqual } from 'node:util'
 import { slugifyWithCounter } from './utils/slugify'
 import { toString } from 'mdast-util-to-string'
 import { remark } from 'remark'
@@ -59,6 +60,7 @@ export const parseInMarkdownFile =
     const slugify = slugifyWithCounter()
     const headingsHashes = new Set<string>()
     let node: Node | undefined = undefined
+    let nodeSnapshot: Node | undefined = undefined
 
     const vfile = await remark()
       .use(remarkFrontmatter)
@@ -66,6 +68,9 @@ export const parseInMarkdownFile =
       .use(remarkGfm)
       .use(() => (tree, vfile) => {
         node = tree
+        // Snapshot the freshly-parsed tree before any validation plugin runs so
+        // we can assert below that the embed:false plugins leave it untouched.
+        nodeSnapshot = structuredClone(tree)
 
         if (inManifest === false) {
           safeMessage(config, vfile, file.filePath, section, 'doc-not-in-manifest', [])
@@ -95,7 +100,7 @@ export const parseInMarkdownFile =
           markDirty(file.filePath, typedoc)
         }),
       )
-      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false }))
+      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false, embed: false }))
       .process({
         path: file.relativeFilePath,
         value: fileContent,
@@ -103,6 +108,29 @@ export const parseInMarkdownFile =
 
     if (node === undefined) {
       throw new Error(errorMessages['doc-parse-failed'](file.href))
+    }
+
+    // `node` (exposed as doc.node) is reused downstream via structuredClone(...)
+    // instead of re-parsing fileContent — in build-docs.ts at the pass-1 SDK
+    // output run and the pass-2 heading run, and in the embedProcessor below.
+    // That substitution is only equivalent while the embed:false validation
+    // plugins above leave the parsed tree structurally identical to a fresh
+    // parse. They do today (read-only visits / non-mutating mdastMap), but guard
+    // the invariant so a future tree-mutating plugin fails loudly here rather
+    // than silently diverging the generated output.
+    //
+    // Compare structuredClone(node) against the snapshot (also a structuredClone)
+    // rather than node directly: structuredClone drops class prototypes (e.g. the
+    // acorn `Node` instances MDX attaches as data.estree on expression attributes),
+    // so normalizing both sides the same way makes the check sensitive to value
+    // mutations instead of flagging those benign prototype differences.
+    if (!isDeepStrictEqual(structuredClone(node), nodeSnapshot)) {
+      throw new Error(
+        `A validation plugin mutated the parsed tree for ${file.href}. ` +
+          `doc.node is reused (via structuredClone) instead of being re-parsed, so the build now ` +
+          `assumes the embed:false validation pass is non-mutating. Either make the offending plugin ` +
+          `non-mutating, or re-parse fileContent at the reuse sites instead of cloning doc.node.`,
+      )
     }
 
     // This needs to be done separately as some further validation expects the partials to not be embedded

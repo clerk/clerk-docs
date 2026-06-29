@@ -896,7 +896,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               foundTooltips.add(tooltip)
             }),
           )
-          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
+          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true, embed: true }))
           .use(
             embedLinks(
               config,
@@ -1067,7 +1067,7 @@ ${yaml.stringify({
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true, embed: true }))
               .use(embedLinks(config, routableDocsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))

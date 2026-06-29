@@ -38,10 +38,13 @@ export function slugifyWithCounter() {
   const occurrences = new Map<string, number>()
 
   const countable = (heading: string) => {
-    if (!heading) return ''
-    if (heading.trim() === '') return ''
+    if (!heading || heading.trim() === '') return ''
 
     let slugifiedHeading = memoizedSlugify(heading)
+    // Bail before recording so empties don't consume counter slots: upstream
+    // returns '' here, leaving `occurrences` untouched, so a later empty slug
+    // is still the "first" rather than picking up `-2`, `-3`, ...
+    if (!slugifiedHeading) return ''
 
     // How many times the "base" slug (with any trailing -N stripped) has been
     // seen. Lets us treat a family like `foo`, `foo-2`, `foo-3` as one group,

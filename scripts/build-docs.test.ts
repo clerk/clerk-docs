@@ -2604,7 +2604,7 @@ description: Quickstart page
     )
   })
 
-  test.only('should error on duplicate heading contributed by an embedded partial in a core doc with <If /> components', async () => {
+  test('should error on duplicate heading contributed by an embedded partial in a core doc with <If /> components', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',

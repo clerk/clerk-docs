@@ -636,12 +636,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               links.add(linkInPartial)
             }),
           )
-          .use(() => (tree) => {
-            node = tree
-          })
         const tree = processor.parse(inputFile)
-        node = tree
-        await processor.run(tree, inputFile)
+        node = await processor.run(tree, inputFile)
 
         if (node === null) {
           throw new Error(errorMessages['partial-parse-error'](partial.path))
@@ -683,12 +679,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               links.add(linkInTooltip)
             }),
           )
-          .use(() => (tree, vfile) => {
-            node = tree
-          })
         const tree = processor.parse(tooltip.vfile)
-        node = tree
-        await processor.run(tree, tooltip.vfile)
+        node = await processor.run(tree, tooltip.vfile)
 
         if (node === null) {
           throw new Error(errorMessages['tooltip-parse-error'](tooltip.path))
@@ -727,12 +719,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 links.add(linkInTypedoc)
               }),
             )
-            .use(() => (tree, vfile) => {
-              node = tree
-            })
           const tree = processor.parse(typedoc.vfile)
-          node = tree
-          await processor.run(tree, typedoc.vfile)
+          node = await processor.run(tree, typedoc.vfile)
 
           if (node === null) {
             throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
@@ -755,12 +743,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                   links.add(linkInTypedoc)
                 }),
               )
-              .use(() => (tree, vfile) => {
-                node = tree
-              })
             const tree = processor.parse(typedoc.vfile)
-            node = tree
-            await processor.run(tree, typedoc.vfile)
+            node = await processor.run(tree, typedoc.vfile)
 
             if (node === null) {
               throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))

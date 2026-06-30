@@ -58,6 +58,37 @@ The following example demonstrates how to protect a page from unauthenticated us
   ```
 </CodeBlockTabs>
 
+### Reduce repetition
+
+To avoid repeating the same authentication check in every page, move it into a small helper. Because Astro only redirects when the frontmatter **returns** the redirect, the helper returns the `Response` and each page returns the helper's result.
+
+```ts {{ filename: 'src/lib/require-auth.ts' }}
+import type { AstroGlobal } from 'astro'
+
+// Returns a redirect Response when the user is signed out, or undefined when
+// they're signed in. The page must return this value for the redirect to run.
+export function requireAuth(context: AstroGlobal): Response | undefined {
+  const { isAuthenticated } = context.locals.auth()
+
+  if (!isAuthenticated) {
+    return context.redirect('/sign-in')
+  }
+}
+```
+
+Each protected page then becomes one import and one call:
+
+```astro {{ filename: 'src/pages/dashboard.astro' }}
+---
+import { requireAuth } from '../lib/require-auth'
+
+const redirect = requireAuth(Astro)
+if (redirect) return redirect
+---
+
+<h1>Dashboard</h1>
+```
+
 ### Retrieve data from external sources
 
 Clerk provides integrations with a number of popular databases.

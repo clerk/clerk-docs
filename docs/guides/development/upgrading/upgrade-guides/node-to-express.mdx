@@ -49,35 +49,28 @@ app.listen(port, () => {
 
 ## `requireAuth()` usage changes
 
-In the Node SDK, `requireAuth()` wrapped route handlers. With the Express SDK, use `clerkMiddleware()` to add authentication state to requests, then call `getAuth()` inside the route handler to protect the route.
+In the Node SDK, `requireAuth()` wrapped route handlers. With the Express SDK, you must instead pass `requireAuth()` as a middleware function before your handler instead of wrapping your handler. Additionally, `requireAuth()` will now redirect un-authenticated users to the sign in page, where previously it would emit an error.
 
-```ts {{ del: [1, 4], ins: [2, [5, 14]] }}
+> [!WARNING]
+> The `requireAuth()` helper redirects unauthenticated users to the sign-in page so it should only be used for full-stack Express apps. If your client and server run on different origins, see the [cross-origin requests](/docs/guides/development/making-requests#cross-origin-requests) guide.
+>
+> Do not use `requireAuth()` for API routes. For backend API calls, use [`clerkMiddleware()`](/docs/reference/express/overview#clerk-middleware) along with [`getAuth()`](/docs/reference/express/get-auth) to verify sessions and return standard HTTP status codes.
+
+```ts {{ del: [1, 4], ins: [2, 5] }}
 import { requireAuth } from '@clerk/clerk-sdk-node'
-import { clerkMiddleware, getAuth } from '@clerk/express'
+import { requireAuth } from '@clerk/express'
 
 app.get('/', requireAuth(handler))
-app.use(clerkMiddleware())
-app.get('/', (req, res) => {
-  const { userId } = getAuth(req)
-
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
-
-  return handler(req, res)
-})
+app.get('/', requireAuth(), handler)
 ```
 
-If you'd like to retain the previous behavior of `requireAuth()` from the Node SDK by emitting an error, you can accomplish this as such:
+If you'd like to retain the previous behavior of `requireAuth()` (emitting an error rather than redirecting), you can accomplish this as such:
 
 ```ts
 const legacyRequireAuth = (req, res, next) => {
-  const { userId } = getAuth(req)
-
-  if (!userId) {
+  if (!req.auth.userId) {
     return next(new Error('Unauthenticated'))
   }
-
   next()
 }
 app.get('/', legacyRequireAuth, handler)
@@ -122,32 +115,24 @@ app.listen(port, () => {
 
 ## Migrate from `ClerkExpressRequireAuth`
 
-To enforce strict authentication, replace your existing Node SDK strict middleware, `ClerkExpressRequireAuth`, with `clerkMiddleware()` and [`getAuth()`](/docs/reference/express/get-auth).
+To enforce strict authentication, replace your existing Node SDK strict middleware, `ClerkExpressRequireAuth`, with the new Express SDK middleware, [`requireAuth()`](/docs/reference/express/overview#require-auth).
 
-Use `clerkMiddleware()` to add authentication state to requests, then call `getAuth()` inside the route handler to decide how to handle unauthenticated users.
+`requireAuth()` is a middleware function that you can use to protect routes in your Express.js application. This function checks if the user is authenticated, and redirects to the configured sign in URl if they are not.
 
-```ts {{ del: [1, [11, 13]], ins: [2, 8, [14, 22]] }}
+```ts {{ del: [1, [9, 11]], ins: [2, 3, [12, 14]] }}
 import { ClerkExpressRequireAuth, RequireAuthProp, StrictAuthProp } from '@clerk/clerk-sdk-node'
-import { clerkMiddleware, getAuth } from '@clerk/express'
+import { clerkMiddleware, requireAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
 const port = 3000
 
-app.use(clerkMiddleware())
-
 // Define a protected route
 app.get('/protected', ClerkExpressRequireAuth(), (req, res) => {
   res.send('This is a protected route')
 })
-app.get('/protected', (req, res) => {
-  const { userId } = getAuth(req)
-
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
-
-  return res.send('This is a protected route')
+app.get('/protected', requireAuth(), (req, res) => {
+  res.send('This is a protected route')
 })
 
 app.listen(port, () => {
@@ -199,8 +184,9 @@ app.get('/path', (req, res) => res.json(req.auth))
 
 With the Node SDK, you could import any of the Backend SDK methods directly from the Node SDK. With the Express SDK, you need to import the Backend SDK methods from the `@clerk/backend` package.
 
-```ts {{ del: [1], ins: [2] }}
-import { User } from '@clerk/clerk-sdk-node'
+```ts {{ del: [1], ins: [2, 3] }}
+import { User, requireAuth } from '@clerk/clerk-sdk-node'
+import { requireAuth } from '@clerk/express'
 import { User } from '@clerk/backend'
 ```
 

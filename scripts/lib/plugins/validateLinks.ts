@@ -8,6 +8,10 @@ import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 
 // Match clerk.com/docs URLs but require a path after /docs (not just /docs or /docs/)
 const CLERK_DOCS_URL_PATTERN = /https?:\/\/clerk\.com(\/docs\/[^\s\)\]"'`}]+)/g
+// Trailing punctuation accidentally captured at the end of a URL (e.g. sentence punctuation).
+const trailingPunctuationRegex = /[,;:\.]+$/
+// Trailing closing parens accidentally captured at the end of a URL.
+const trailingParensRegex = /\)+$/
 
 /**
  * Remark plugin to validate Markdown links in documentation.
@@ -138,7 +142,7 @@ function validateCodeBlockUrls(
     const matches = line.matchAll(CLERK_DOCS_URL_PATTERN)
     for (const match of matches) {
       // match[1] is the captured group: /docs/...
-      const fullPath = match[1].replace(/[,;:\.]+$/, '').replace(/\)+$/, '')
+      const fullPath = match[1].replace(trailingPunctuationRegex, '').replace(trailingParensRegex, '')
       const [url, hash] = fullPath.split('#')
 
       const ignore = config.ignoredPaths(url) || config.ignoredLinks(url)

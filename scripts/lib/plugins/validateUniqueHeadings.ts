@@ -1,6 +1,6 @@
 // goes through the markdown tree and ensures that all the heading ids are unique
 
-import { slugifyWithCounter } from '@sindresorhus/slugify'
+import { slugifyWithCounter } from '../utils/slugify'
 import { toString } from 'mdast-util-to-string'
 import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'

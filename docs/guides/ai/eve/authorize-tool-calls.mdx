@@ -1,0 +1,350 @@
+---
+title: Authorize tool calls
+description: Authorize individual eve tool calls — permission checks from the auth context, plus brokered OAuth for tools that need an external provider token.
+sdk: nextjs
+---
+
+Gate individual eve tool calls against the caller's Clerk permissions and scopes — and broker OAuth for tools that need a provider token on the caller's behalf.
+
+> [!TIP]
+> Skip the OAuth boilerplate — install the `clerkConnect()` and `clerkOAuthToken()` helpers via shadcn.
+
+```bash {{ filename: 'terminal', prompt: '$' }}
+bunx --bun shadcn@latest add clerk/eve-agents/auth
+```
+
+---
+
+The manual path has two parts: permission checks inside a tool, then OAuth brokered through Clerk.
+
+## Permission checks inside a tool
+
+Read the authenticated principal off eve's session context and, if the caller is a user, check their permissions. See [Custom channel auth](/docs/guides/ai/eve/custom-channel-auth#add-attributes) for how permissions and scopes get populated.
+
+Factor the guards into helpers so the tool reads as a sequence of small checks. `requireUserPrincipal` returns an agent error if the caller isn't a signed-in user; `requirePermissions` returns one if any of the required permissions are missing.
+
+<Tabs items={["lib/agent-errors.ts", "agent/tools/archive_project.ts"]}>
+  <Tab>
+    ```ts {{ filename: 'lib/agent-errors.ts' }}
+    import type { SessionAuthContext } from 'eve/context'
+
+    export type AgentError = { error: true; message: string }
+
+    export function requireUserPrincipal(
+      auth: SessionAuthContext | null,
+      message: string,
+    ): AgentError | null {
+      if (auth?.principalType !== 'user') {
+        return { error: true, message }
+      }
+      return null
+    }
+
+    export function requirePermissions(
+      auth: SessionAuthContext | null,
+      required: readonly string[],
+    ): AgentError | null {
+      const granted = auth?.attributes.permissions
+      const missing = Array.isArray(granted) ? required.filter((p) => !granted.includes(p)) : required
+      if (missing.length === 0) return null
+      return {
+        error: true,
+        message: `Missing required permission: ${missing.join(', ')}.`,
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'agent/tools/archive_project.ts' }}
+    import { defineTool } from 'eve/tools'
+    import { z } from 'zod'
+    import { requirePermissions, requireUserPrincipal } from '@/lib/agent-errors'
+
+    export default defineTool({
+      description: 'Archive a project.',
+      inputSchema: z.object({ projectId: z.string() }),
+      execute: async ({ projectId }, ctx) => {
+        const auth = ctx.session.auth.current
+
+        const userError = requireUserPrincipal(auth, 'Only signed-in users can archive projects.')
+        if (userError) return userError
+
+        const permError = requirePermissions(auth, ['org:projects:archive'])
+        if (permError) return permError
+
+        // ... perform the archive in your data layer
+        return { ok: true, projectId }
+      },
+    })
+    ```
+  </Tab>
+</Tabs>
+
+Always return a structured error rather than throwing; the model relays the string to the user. A thrown error aborts the tool loop and reaches the user only as a generic failure.
+
+Same shape for API key scopes:
+
+```ts
+const auth = ctx.session.auth.current
+const scopes = auth?.attributes.scopes
+
+if (auth?.principalType === 'machine' && auth.attributes.tokenType === 'api_key') {
+  if (!Array.isArray(scopes) || !scopes.includes('projects:write')) {
+    return {
+      error: true,
+      message: 'API key is missing the projects:write scope.',
+    }
+  }
+}
+```
+
+## OAuth via Clerk brokered connections {{ id: 'oauth-via-clerk-brokered-connections' }}
+
+For tools that call a provider API, Clerk can [broker the OAuth handshake](/docs/guides/configure/auth-strategies/social-connections/overview) and store the access token. When the token's missing, eve drives the consent flow through an [`AuthorizationDefinition`](https://eve.dev/docs/connections#self-hosted-interactive-oauth) on the tool. The three callbacks on [`defineInteractiveAuthorization`](https://eve.dev/docs/connections#self-hosted-interactive-oauth):
+
+- `getToken({ principal })` — return the stored token, or throw to request authorization.
+- `startAuthorization({ callbackUrl })` — return a challenge URL to send the user through consent.
+- `completeAuthorization({ principal })` — re-read the token after the redirect.
+
+Wrap the three callbacks in a reusable `clerkConnect(provider, options)` factory. This guide uses GitHub as the example, but the same factory works for any [Clerk-brokered OAuth provider](/docs/guides/configure/auth-strategies/social-connections/overview). Swap the provider name and adjust the scopes.
+
+> [!NOTE]
+> GitHub's `repo` scope isn't one of its defaults, so the connection must use **custom credentials**. Clerk's shared development credentials only grant a provider's default scopes. See the [GitHub social connection](/docs/guides/configure/auth-strategies/social-connections/github) guide to register your own OAuth app, and [Configure additional OAuth scopes](/docs/guides/configure/auth-strategies/social-connections/overview#configure-additional-o-auth-scopes).
+
+Start with a helper that reads Clerk's stored token for a given user and provider. It returns `null` if the token is missing or doesn't cover the required scopes, which sends the caller back through the connect flow to grant them.
+
+```ts {{ filename: 'lib/clerk-connect.ts' }}
+import { createClerkClient } from '@clerk/backend'
+
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+
+export async function readProviderToken(
+  userId: string,
+  provider: string,
+  requiredScopes: readonly string[],
+): Promise<string | null> {
+  const res = await clerk.users.getUserOauthAccessToken(userId, provider)
+  const entry = res.data[0]
+  if (!entry?.token) return null
+
+  if (requiredScopes.length) {
+    const granted = new Set(entry.scopes ?? [])
+    if (!requiredScopes.every((s) => granted.has(s))) return null
+  }
+
+  return entry.token
+}
+```
+
+`getToken` runs first on every tool call. Return the token if Clerk already has one for the caller. Throw `ConnectionAuthorizationRequiredError` to trigger the consent flow.
+
+```ts {{ filename: 'lib/clerk-connect.ts' }}
+import {
+  type AuthorizationDefinition,
+  ConnectionAuthorizationFailedError,
+  ConnectionAuthorizationRequiredError,
+  defineInteractiveAuthorization,
+} from 'eve/connections'
+
+type ClerkConnectOptions = {
+  readonly scopes?: readonly string[]
+}
+
+export function clerkConnect(
+  provider: string,
+  options: ClerkConnectOptions = {},
+): AuthorizationDefinition {
+  const scopes = options.scopes ?? []
+
+  return defineInteractiveAuthorization({
+    displayName: provider,
+
+    getToken: async ({ principal }) => {
+      if (principal.type !== 'user') {
+        throw new ConnectionAuthorizationRequiredError(provider, {
+          message: `Connecting ${provider} requires a signed-in user.`,
+        })
+      }
+
+      const token = await readProviderToken(principal.id, provider, scopes)
+      if (!token) {
+        throw new ConnectionAuthorizationRequiredError(provider, {
+          message: `Connect your ${provider} account to continue.`,
+        })
+      }
+
+      return { token }
+    },
+
+    // startAuthorization and completeAuthorization continue below
+  })
+}
+```
+
+`startAuthorization` builds the URL eve sends the user to. Forward `callbackUrl` so the dashboard page can redirect back when consent finishes, and pass any required scopes.
+
+```ts {{ filename: 'lib/clerk-connect.ts', prettier: false }}
+// Inside defineInteractiveAuthorization({...})
+startAuthorization: async ({ callbackUrl }) => {
+  const params = new URLSearchParams({ return: callbackUrl })
+  if (scopes.length) params.set('scopes', scopes.join(' '))
+  params.set('prompt', 'select_account consent')
+
+  return {
+    challenge: {
+      url: `/connect/${provider}?${params.toString()}`,
+      displayName: provider,
+    },
+  }
+},
+```
+
+After the redirect, `completeAuthorization` re-reads the stored token. If consent succeeded, the token is now there; if not, throw to fail the flow.
+
+```ts {{ filename: 'lib/clerk-connect.ts', prettier: false }}
+// Inside defineInteractiveAuthorization({...})
+completeAuthorization: async ({ principal }) => {
+  if (principal.type !== 'user') {
+    throw new ConnectionAuthorizationFailedError(provider, {
+      message: `Connect flow finished without a signed-in user.`,
+      reason: 'no_user',
+      retryable: false,
+    })
+  }
+
+  const token = await readProviderToken(principal.id, provider, scopes)
+  if (!token) {
+    throw new ConnectionAuthorizationFailedError(provider, {
+      message: `${provider} did not return an access token after connecting.`,
+      reason: 'no_token',
+      retryable: false,
+    })
+  }
+
+  return { token }
+},
+```
+
+Now any tool can opt into Clerk-brokered OAuth with one line: `auth: clerkConnect('github', { scopes: ['repo'] })`. By the time tool execution reaches `ctx.getToken()`, eve has already driven the consent flow if it needed to.
+
+```ts {{ filename: 'agent/tools/list_repos.ts', mark: [9] }}
+import { defineTool } from 'eve/tools'
+import { z } from 'zod'
+import { clerkConnect } from '@/lib/clerk-connect'
+
+export default defineTool({
+  description: "List the caller's GitHub repositories.",
+  inputSchema: z.object({}),
+  // `repo` covers public + private repos; use `public_repo` for public only.
+  auth: clerkConnect('github', { scopes: ['repo'] }),
+  execute: async (_input, ctx) => {
+    const { token } = await ctx.getToken()
+    const res = await fetch('https://api.github.com/user/repos', {
+      headers: { authorization: `Bearer ${token}` },
+    })
+    return await res.json()
+  },
+})
+```
+
+### The dashboard `/connect/[provider]` route
+
+The challenge URL points at a dashboard page that runs Clerk's frontend connect flow — [`createExternalAccount`](/docs/reference/objects/user#create-external-account), or `reauthorize` when the provider's already connected but missing a scope — and redirects back to the `return` URL. A dynamic `[provider]` route lets one page handle every provider you pass to `clerkConnect`.
+
+```tsx {{ filename: 'app/connect/[provider]/page.tsx', mark: [[37, 39]] }}
+'use client'
+
+import { useReverification, useUser } from '@clerk/nextjs'
+import type { OAuthStrategy } from '@clerk/types'
+import { useParams, useSearchParams } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+
+export default function ConnectProviderPage() {
+  const { user, isLoaded } = useUser()
+  const { provider } = useParams<{ provider: string }>()
+  const params = useSearchParams()
+  const [error, setError] = useState<string>()
+  const started = useRef(false)
+
+  // createExternalAccount can require step-up reverification.
+  const createExternalAccount = useReverification(
+    (args: Parameters<NonNullable<typeof user>['createExternalAccount']>[0]) =>
+      user?.createExternalAccount(args),
+  )
+
+  useEffect(() => {
+    if (!isLoaded || !user || started.current) return
+    started.current = true
+
+    const returnUrl = params.get('return') ?? '/'
+    const additionalScopes = params.get('scopes')?.split(' ').filter(Boolean) ?? []
+    const oidcPrompt = params.get('prompt') ?? undefined
+    const strategy = `oauth_${provider}` as OAuthStrategy
+    const existing = user.externalAccounts.find((a) => a.provider === provider)
+
+    void (async () => {
+      try {
+        // If the provider's already connected but without the scope (e.g. the
+        // user signed in with GitHub), reauthorize to add it — a fresh
+        // createExternalAccount would fail or loop.
+        const account =
+          existing && additionalScopes.length
+            ? await existing.reauthorize({ additionalScopes, redirectUrl: returnUrl, oidcPrompt })
+            : await createExternalAccount({
+                strategy,
+                additionalScopes,
+                redirectUrl: returnUrl,
+                oidcPrompt,
+              })
+
+        const url = account?.verification?.externalVerificationRedirectURL
+        if (url) {
+          // Full-page navigation; router.push is unreliable for cross-origin URLs.
+          window.location.href = url.href
+          return
+        }
+        setError('Clerk did not return a verification URL.')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    })()
+  }, [isLoaded, user, provider, params, createExternalAccount])
+
+  return <p>{error ? `Connection failed: ${error}` : `Connecting ${provider}…`}</p>
+}
+```
+
+### Fallback for API key callers
+
+API keys can't drive a browser consent flow, but the user _behind_ the key may already have connected. Read their stored token directly inside `execute` using the exported `readProviderToken`.
+
+```ts {{ filename: 'agent/tools/list_repos.ts', prettier: false }}
+import { readProviderToken } from '@/lib/clerk-connect'
+
+execute: async (_input, ctx) => {
+  const auth = ctx.session.auth.current
+  let token: string | null = null
+
+  if (auth?.principalType === 'user') {
+    ;({ token } = await ctx.getToken())
+  } else if (
+    auth?.principalType === 'machine' &&
+    auth.attributes.tokenType === 'api_key' &&
+    typeof auth.attributes.userId === 'string'
+  ) {
+    token = await readProviderToken(auth.attributes.userId, 'github', ['repo'])
+  }
+
+  if (!token) {
+    return { error: true, message: 'Connect your GitHub account to list repositories.' }
+  }
+  // ... call the provider API with `token`
+},
+```
+
+## Related guides
+
+- [Custom channel auth](/docs/guides/ai/eve/custom-channel-auth) — populate the `permissions` and `scopes` attributes these checks read.
+- [API keys & M2M](/docs/guides/ai/eve/api-keys-and-m2m) — create the API keys whose scopes these tool checks enforce.
+- [Social connections](/docs/guides/configure/auth-strategies/social-connections/overview) — set up the providers Clerk can broker.

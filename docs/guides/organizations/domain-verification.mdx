@@ -1,0 +1,39 @@
+---
+title: Domain verification
+description: Learn how Clerk verifies Organization domains through affiliation (email) and ownership (DNS TXT), and what each method unlocks.
+---
+
+Clerk can verify that a domain belongs to an Organization in two ways. Each proves something different and unlocks different features.
+
+| Method | How it works | Proves | Used for |
+| - | - | - | - |
+| [Affiliation](#domain-affiliation) | A verification code sent to an email at the domain | The user controls an email address at the domain | [Verified Domains](/docs/guides/organizations/add-members/verified-domains) enrollment (automatic invitations and suggestions) |
+| [Ownership](#domain-ownership) | A DNS `TXT` record that Clerk checks | The user controls the domain itself (a higher bar) | Assigning a domain to an [enterprise SSO connection](/docs/guides/organizations/add-members/sso) through self-serve SSO |
+
+Affiliation and ownership are tracked separately on the [`OrganizationDomain`](/docs/reference/types/organization-domain-resource) object, so a single domain can have both.
+
+## Domain affiliation
+
+Affiliation verification confirms that a user controls an email address at the domain. The user adds a domain, Clerk sends a verification code to an email address at that domain, and the user enters the code. If the user already has a verified email at that domain on their account, Clerk verifies the affiliation automatically.
+
+This is the verification behind [Verified Domains](/docs/guides/organizations/add-members/verified-domains), which powers automatic invitations and suggestions. Its verification strategy is `email_code`.
+
+To verify affiliation programmatically, use [`prepareAffiliationVerification()`](/docs/reference/types/organization-domain-resource#prepare-affiliation-verification) and [`attemptAffiliationVerification()`](/docs/reference/types/organization-domain-resource#attempt-affiliation-verification) on the `OrganizationDomain` object.
+
+## Domain ownership
+
+Ownership verification confirms that the Organization controls the domain itself, which is a higher bar than affiliation. It's required before a domain can be assigned to an [enterprise SSO connection](/docs/guides/organizations/add-members/sso) through [self-serve SSO](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso).
+
+When ownership verification starts, Clerk issues a DNS `TXT` record for each domain (a `txtRecordName` and `txtRecordValue`). An admin publishes the record with their DNS provider, and Clerk scans for it to confirm ownership.
+
+Ownership can be established in a few ways, reflected in the verification `strategy`:
+
+- `txt`: The standard flow described above, proven by publishing the DNS `TXT` record.
+- `legacy`: Granted implicitly to domains that predate the `TXT` verification flow.
+- `manual_override`: Granted manually by a Clerk admin through the [Backend API](/docs/reference/backend-api){{ target: '_blank' }} or Clerk Dashboard, bypassing the DNS challenge.
+
+You can verify ownership through:
+
+- The **Security** tab of [`<OrganizationProfile />`](/docs/reference/components/organization/organization-profile), as part of the [self-serve SSO](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso) flow.
+- The [Backend API](/docs/reference/backend-api){{ target: '_blank' }}.
+- The frontend SDK, using the Organization's `prepareOwnershipVerification()` and `attemptOwnershipVerification()` methods. These verify domains in bulk: pass the domain IDs, and each domain's result reports success or an error independently, so one bad domain doesn't fail the batch.

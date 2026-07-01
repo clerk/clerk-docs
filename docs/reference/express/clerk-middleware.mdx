@@ -7,7 +7,7 @@ sdk: expressjs
 The `clerkMiddleware()` function checks the request's cookies and headers for a session JWT and if found, attaches the [`Auth`](/docs/reference/backend/types/auth-object) object to the `request` object under the `auth` key. **It must be set before any other middleware.**
 
 > [!TIP]
-> Even if you are using [`requireAuth()`](/docs/reference/express/require-auth) middleware, you should still use `clerkMiddleware()` as it will provide authentication state to routes that don't use `requireAuth()`. See the [example](#example-use-clerk-middleware-require-auth-and-get-auth-together).
+> Use `clerkMiddleware()` with [`getAuth()`](/docs/reference/express/get-auth) to protect routes while keeping control over unauthenticated responses. See the [example](#example-use-clerk-middleware-and-get-auth-together).
 
 ```js
 import { clerkMiddleware } from '@clerk/express'
@@ -21,12 +21,12 @@ app.use(clerkMiddleware())
 app.use(clerkMiddleware(options))
 ```
 
-## Example: Use `clerkMiddleware()`, `requireAuth()`, and `getAuth()` together
+## Example: Use `clerkMiddleware()` and `getAuth()` together
 
-The following example demonstrates how to use `clerkMiddleware()`, [`requireAuth()`](/docs/reference/express/require-auth), and [`getAuth()`](/docs/reference/express/get-auth) together. `clerkMiddleware()` will provide authentication state to routes that don't use `requireAuth()`, `requireAuth()` will provide authentication state to a route and also protect the route based on authentication status, and `getAuth()` can be used in a number of ways. In this example, `getAuth()` is used to protect the route based on authorization status.
+The following example demonstrates how to use `clerkMiddleware()` and [`getAuth()`](/docs/reference/express/get-auth) together. `clerkMiddleware()` provides authentication state to your routes, and `getAuth()` protects a route based on authentication and authorization status.
 
 ```js
-import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+import { clerkMiddleware, getAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
@@ -35,26 +35,30 @@ const PORT = 3000
 // Apply `clerkMiddleware()` to all routes
 app.use(clerkMiddleware())
 
-// Use `getAuth()` to protect a route based on authorization status
-const hasPermission = (req, res, next) => {
+app.get('/path', (req, res) => {
+  // Use `getAuth()` to protect a route based on authorization status
   const auth = getAuth(req)
 
-  // Handle if the user is not authorized
-  if (!auth.has({ permission: 'org:admin:example' })) {
-    return res.status(403).send('Forbidden')
+  // Handle if the user is not authenticated
+  if (!auth.isAuthenticated) {
+    res.status(401).send('Unauthorized')
+    return
   }
 
-  return next()
-}
+  // Handle if the user is authenticated but not authorized
+  if (!auth.has({ permission: 'org:admin:example' })) {
+    res.status(403).send('Forbidden')
+    return
+  }
 
-// Use `requireAuth()` to protect a route based on authentication status
-// If user is not authenticated, requireAuth() will redirect back to the homepage
-// Then, use the `hasPermission` function created above to protect the route based on authorization status
-app.get('/path', requireAuth(), hasPermission, (req, res) => res.json(req.auth))
+  res.json(auth)
+})
 
 // This route is not protected but it will have authentication state
 // attached to the request object because `clerkMiddleware()` was applied to all routes
-app.get('/path2', (req, res) => res.json(req.auth))
+app.get('/path2', (req, res) => {
+  res.json(getAuth(req))
+})
 
 // Start the server and listen on the specified port
 app.listen(PORT, () => {

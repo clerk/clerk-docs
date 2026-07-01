@@ -136,10 +136,14 @@ Let's take the [first example](#authentication-based-protection) from this guide
 ```ts {{ filename: 'server/middleware/clerk.ts' }}
 import { clerkMiddleware } from '@clerk/nuxt/server'
 
+// Match a path segment exactly, or as a segment prefix (`/api/admin` matches
+// `/api/admin` and `/api/admin/users`, but not `/api/administer`).
+const matchesRoute = (path: string, route: string) => path === route || path.startsWith(`${route}/`)
+
 export default clerkMiddleware((event) => {
   const { isAuthenticated } = event.context.auth()
   const protectedRoutes = ['/api/invoices', '/api/admin']
-  const isProtectedRoute = protectedRoutes.some((route) => event.path.startsWith(route))
+  const isProtectedRoute = protectedRoutes.some((route) => matchesRoute(event.path, route))
 
   // Check if the user is not signed in
   // and is trying to access a protected route. If so, throw a 401 error.
@@ -157,10 +161,13 @@ Now, let's add authorization-based protection to the example so that you can see
 ```ts {{ filename: 'server/middleware/clerk.ts' }}
 import { clerkMiddleware } from '@clerk/nuxt/server'
 
+const matchesRoute = (path: string, route: string) => path === route || path.startsWith(`${route}/`)
+
 export default clerkMiddleware((event) => {
   const { isAuthenticated, has } = event.context.auth()
-  const protectedRoutes = ['/api/invoices', '/api/admin']
-  const isProtectedRoute = protectedRoutes.some((route) => event.path.startsWith(route))
+  const isInvoicesRoute = matchesRoute(event.path, '/api/invoices')
+  const isAdminRoute = matchesRoute(event.path, '/api/admin')
+  const isProtectedRoute = isInvoicesRoute || isAdminRoute
   const canCreateInvoices = has({
     permission: 'org:invoices:create',
   })
@@ -175,8 +182,8 @@ export default clerkMiddleware((event) => {
   }
 
   // Check if the user doesn't have the required Permission
-  // and is accessing a protected route. If so, throw a 403 error.
-  if (!canCreateInvoices && isProtectedRoute) {
+  // to access `/api/invoices`. If so, throw a 403 error.
+  if (isInvoicesRoute && !canCreateInvoices) {
     throw createError({
       statusCode: 403,
       statusMessage: 'Unauthorized: Missing Permission to create invoices',

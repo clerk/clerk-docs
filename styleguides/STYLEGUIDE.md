@@ -203,6 +203,16 @@ Use "ensure" instead of "make sure."
 > ✅
 > Ensure you have the correct permissions.
 
+### Prebuilt vs. pre-built
+
+Use "prebuilt" instead of "pre-built."
+
+> ❌
+> Clerk's pre-built components handle authentication and user management for you.
+
+> ✅
+> Clerk's prebuilt components handle authentication and user management for you.
+
 ### Sidenav vs. sidebar
 
 Use "sidenav" instead of "sidebar."

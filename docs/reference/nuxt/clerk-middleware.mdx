@@ -7,7 +7,7 @@ sdk: nuxt
 The `clerkMiddleware()` helper allows you to protect your Nuxt application **on the server-side**. It can be used to validate a user's authentication status or authorization status.
 
 > [!WARNING]
-> `clerkMiddleware()` should be used to protect API routes only. It's not recommended to use `clerkMiddleware()` to protect pages as it will **only work on initial page reload**. On subsequent navigations, it won't be triggered because client-side navigation will bypass the middleware. To protect pages, see the [dedicated guide](/docs/guides/secure/protect-pages).
+> `clerkMiddleware()` should be used to protect API routes only. It's not recommended to use `clerkMiddleware()` to protect pages as it will **only work on initial page reload**. On subsequent navigations, it won't run, because client-side navigation doesn't reach the server middleware. To protect pages, see the [guide on protecting content from unauthenticated users](/docs/guides/secure/protect-content).
 
 ## Configure `clerkMiddleware()`
 
@@ -39,7 +39,7 @@ You can protect API routes using either or both of the following:
 - [Authentication-based protection](#authentication-based-protection): Verify if the user is signed in.
 - [Authorization-based protection](#authorization-based-protection): Verify if the user has the required privileges, such as a Role, Permission, Feature, or Plan. Learn more about [authorization checks](/docs/guides/secure/authorization-checks).
 
-You can also [protect multiple routes](#protect-multiple-routes) using the `createRouteMatcher()` helper.
+You can also [protect multiple routes](#protect-multiple-routes) at once.
 
 ### Authentication-based protection
 
@@ -126,59 +126,70 @@ export default clerkMiddleware((event) => {
 
 ### Protect multiple routes
 
-You can protect multiple routes at once by using Clerk's `createRouteMatcher()` helper function. The `createRouteMatcher()` helper accepts an array of route patterns and checks if the route the user is trying to visit matches one of the patterns passed to it.
+You can protect multiple routes at once by matching against a list of path prefixes. This applies to server (API) routes, which have no file-system page tree to inherit protection from, so matching `event.path` here is the right tool. To protect _pages_, use Nuxt's built-in route middleware instead, which keeps your page structure as the source of truth; see the [guide on protecting content](/docs/guides/secure/protect-content).
 
-Let's take the [first example](#authentication-based-protection) from this guide and add the `createRouteMatcher()` helper. Instead of only checking `/api/admin/**` routes, the following example checks both `/api/invoices/**` _and_ `/api/admin/**` routes.
+> [!NOTE]
+> Clerk's `createRouteMatcher()` helper is no longer recommended. Match routes with `event.path` instead, as shown below.
+
+Let's take the [first example](#authentication-based-protection) from this guide and check more than one prefix. Instead of only checking `/api/admin/**` routes, the following example checks both `/api/invoices/**` _and_ `/api/admin/**` routes.
 
 ```ts {{ filename: 'server/middleware/clerk.ts' }}
-+ import { clerkMiddleware, createRouteMatcher } from '@clerk/nuxt/server'
+import { clerkMiddleware } from '@clerk/nuxt/server'
 
-  export default clerkMiddleware((event) => {
-    const { isAuthenticated } = event.context.auth()
--   const isAdminRoute = event.path.startsWith('/api/admin')
-+   const isProtectedRoute = createRouteMatcher(['/api/invoices(.*)', '/api/admin(.*)'])
+// Match a path segment exactly, or as a segment prefix (`/api/admin` matches
+// `/api/admin` and `/api/admin/users`, but not `/api/administer`).
+const matchesRoute = (path: string, route: string) => path === route || path.startsWith(`${route}/`)
 
-    // Check if the user is not signed in
-    // and is trying to access a protected route. If so, throw a 401 error.
-    if (!isAuthenticated && isProtectedRoute(event)) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized: User not signed in',
-      })
-    }
-  })
+export default clerkMiddleware((event) => {
+  const { isAuthenticated } = event.context.auth()
+  const protectedRoutes = ['/api/invoices', '/api/admin']
+  const isProtectedRoute = protectedRoutes.some((route) => matchesRoute(event.path, route))
+
+  // Check if the user is not signed in
+  // and is trying to access a protected route. If so, throw a 401 error.
+  if (!isAuthenticated && isProtectedRoute) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized: User not signed in',
+    })
+  }
+})
 ```
 
 Now, let's add authorization-based protection to the example so that you can see how to combine everything you've learned so far.
 
 ```ts {{ filename: 'server/middleware/clerk.ts' }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nuxt/server'
+import { clerkMiddleware } from '@clerk/nuxt/server'
 
-  export default clerkMiddleware((event) => {
-    const { isAuthenticated } = event.context.auth()
-    const isProtectedRoute = createRouteMatcher(['/api/invoices(.*)', '/api/admin(.*)'])
-+   const canCreateInvoices = has({
-+     permission: 'org:invoices:create',
-+   })
+const matchesRoute = (path: string, route: string) => path === route || path.startsWith(`${route}/`)
 
-    // Check if the user is not signed in
-    // and is trying to access a protected route. If so, throw a 401 error.
-    if (!isAuthenticated && isProtectedRoute(event)) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized: User not signed in',
-      })
-    }
-
-+   // Check if the user doesn't have the required Permission
-+   // and is accessing a protected route. If so, throw a 403 error.
-+   if (!canCreateInvoices && isProtectedRoute(event)) {
-+     throw createError({
-+       statusCode: 403,
-+       statusMessage: 'Unauthorized: Missing Permission to create invoices',
-+     })
-+   }
+export default clerkMiddleware((event) => {
+  const { isAuthenticated, has } = event.context.auth()
+  const isInvoicesRoute = matchesRoute(event.path, '/api/invoices')
+  const isAdminRoute = matchesRoute(event.path, '/api/admin')
+  const isProtectedRoute = isInvoicesRoute || isAdminRoute
+  const canCreateInvoices = has({
+    permission: 'org:invoices:create',
   })
+
+  // Check if the user is not signed in
+  // and is trying to access a protected route. If so, throw a 401 error.
+  if (!isAuthenticated && isProtectedRoute) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized: User not signed in',
+    })
+  }
+
+  // Check if the user doesn't have the required Permission
+  // to access `/api/invoices`. If so, throw a 403 error.
+  if (isInvoicesRoute && !canCreateInvoices) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Unauthorized: Missing Permission to create invoices',
+    })
+  }
+})
 ```
 
 ## `clerkMiddleware()` options

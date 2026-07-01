@@ -74,31 +74,34 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
   })
   ```
 
-  ## Protect your routes using `requireAuth()`
+  ## Protect your routes using `getAuth()`
 
-  To protect your routes, use the [`requireAuth()`](/docs/reference/express/require-auth) middleware. This middleware functions similarly to `clerkMiddleware()`, but also protects your routes by redirecting unauthenticated users to the sign-in page.
+  To protect your routes, use the [`getAuth()`](/docs/reference/express/get-auth) helper in the route body. `getAuth()` returns the request's auth state, so you can choose how your application responds when the user isn't authenticated.
 
-  In the following example, `requireAuth()` is used to protect the `/protected` route. If the user isn't authenticated, they're redirected to the homepage. If the user is authenticated, the [`getAuth()`](/docs/reference/express/get-auth) function is used to get the `userId`, which is passed to [`clerkClient.users.getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} to fetch the current user's `User` object.
+  In the following example, `getAuth()` is used to protect the `/protected` route. If the user isn't authenticated, the route returns a `401` status code. If the user is authenticated, the `userId` is passed to [`clerkClient.users.getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} to fetch the current user's `User` object.
 
   ```ts {{ filename: 'index.ts' }}
   import express from 'express'
-  import { clerkMiddleware, clerkClient, requireAuth, getAuth } from '@clerk/express'
+  import { clerkMiddleware, clerkClient, getAuth } from '@clerk/express'
 
   const app = express()
   const PORT = 3000
 
   app.use(clerkMiddleware())
 
-  // Use requireAuth() to protect this route
-  // If user isn't authenticated, requireAuth() will redirect back to the homepage
-  app.get('/protected', requireAuth(), async (req, res) => {
+  app.get('/protected', async (req, res) => {
     // Use `getAuth()` to get the user's `userId`
-    const { userId } = getAuth(req)
+    const { isAuthenticated, userId } = getAuth(req)
+
+    if (!isAuthenticated) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
 
     // Use the `getUser()` method to get the user's User object
     const user = await clerkClient.users.getUser(userId)
 
-    return res.json({ user })
+    res.json({ user })
   })
 
   // Start the server and listen on the specified port

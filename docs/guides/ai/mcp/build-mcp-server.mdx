@@ -130,20 +130,20 @@ sdk: nextjs, expressjs
   For this guide, you'll implement a single, example tool called `get_clerk_user_data` that retrieves information about the authenticated Clerk user. For more documentation on how to build MCP tools, see the [MCP documentation](https://modelcontextprotocol.io/docs/concepts/tools).
 
   <If sdk="nextjs">
-    Vercel's `createMcpHandler()` function is used to handle the connection and transports required by the MCP protocol. Within its callback function, you can define tools that external LLM-based apps can invoke using `server.tool()`. Each tool includes:
+    Vercel's `createMcpHandler()` function is used to handle the connection and transports required by the MCP protocol. Within its callback function, you can define tools that external LLM-based apps can invoke using `server.registerTool()`. Each tool includes:
   </If>
 
   <If sdk="expressjs">
-    The `McpServer()` function is used to create a new MCP server with a name and version. The `server.tool()` function is used to define tools that external LLM-based apps can invoke. Each tool includes:
+    The `McpServer()` function is used to create a new MCP server with a name and version. The `server.registerTool()` function is used to define tools that external LLM-based apps can invoke. Each tool includes:
   </If>
 
-  - A name (`get-clerk-user-data`).
+  - A name (`get_clerk_user_data`).
   - A description of what the tool does.
   - Input parameters (none in this case).
   - A function that represents the implementation of the tool. In this case, it extracts the user ID, which is provided by Clerk's OAuth authentication, and then fetches the user's data using Clerk's [`getUser()`](/docs/reference/backend/user/get-user) method. The response is then returned in MCP's expected response format.
 
   <If sdk="nextjs">
-    ```ts {{ filename: 'app/[transport]/route.ts', mark: [[7, 25]] }}
+    ```ts {{ filename: 'app/[transport]/route.ts', mark: [[7, 22]] }}
     import { verifyClerkToken } from '@clerk/mcp-tools/next'
     import { createMcpHandler, withMcpAuth } from 'mcp-handler'
     import { auth, clerkClient } from '@clerk/nextjs/server'
@@ -151,11 +151,12 @@ sdk: nextjs, expressjs
     const clerk = await clerkClient()
 
     const handler = createMcpHandler((server) => {
-      server.tool(
-        'get-clerk-user-data',
-        'Gets data about the Clerk user that authorized this request',
-        {},
-        async (_, { authInfo }) => {
+      server.registerTool(
+        'get_clerk_user_data',
+        {
+          description: 'Gets data about the Clerk user that authorized this request',
+        },
+        async ({ authInfo }) => {
           const userId = authInfo!.extra!.userId! as string
           const userData = await clerk.users.getUser(userId)
 
@@ -169,7 +170,7 @@ sdk: nextjs, expressjs
   </If>
 
   <If sdk="expressjs">
-    ```ts {{ filename: 'index.ts', mark: [[15, 37]], collapsible: true }}
+    ```ts {{ filename: 'index.ts', mark: [[14, 33]], collapsible: true }}
     import { type MachineAuthObject, clerkClient, clerkMiddleware } from '@clerk/express'
     import {
       mcpAuthClerk,
@@ -188,11 +189,12 @@ sdk: nextjs, expressjs
       version: '0.0.1',
     })
 
-    server.tool(
+    server.registerTool(
       'get_clerk_user_data',
-      'Gets data about the Clerk user that authorized this request',
-      {},
-      async (_, { authInfo }) => {
+      {
+        description: 'Gets data about the Clerk user that authorized this request',
+      },
+      async ({ authInfo }) => {
         // non-null assertion is safe here, mcpAuthClerk ensures presence
         const userId = authInfo!.extra!.userId! as string
         const userData = await clerkClient.users.getUser(userId)
@@ -342,7 +344,7 @@ sdk: nextjs, expressjs
 
   ## Finished 🎉
 
-  Once this is complete, clients that support the latest MCP spec can now invoke the `get-clerk-user-data` tool to securely fetch user data from your app, assuming the request is authorized with a Clerk OAuth token. To test this out, [learn how to connect your client LLM to the MCP server](/docs/guides/ai/mcp/connect-mcp-client).
+  Once this is complete, clients that support the latest MCP spec can now invoke the `get_clerk_user_data` tool to securely fetch user data from your app, assuming the request is authorized with a Clerk OAuth token. To test this out, [learn how to connect your client LLM to the MCP server](/docs/guides/ai/mcp/connect-mcp-client).
 
   The next step is to replace the demo tool with your own tools, resources, and/or prompts that are relevant to your app. You can learn more about how to do this in the [MCP SDK documentation](https://modelcontextprotocol.io/docs/concepts/tools).
 </Steps>

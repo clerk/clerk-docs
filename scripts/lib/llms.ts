@@ -3,6 +3,9 @@ import type { SDK } from './schemas'
 
 type Docs = Map<string, string>
 
+// Collapses any run of whitespace into a single space.
+const whitespaceRunRegex = /\s+/g
+
 export const LLMS_FULL_HEADER = `# Clerk Documentation (full content)
 
 > Complete Clerk documentation: every doc page concatenated into one file
@@ -103,7 +106,7 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdk
 
 export const normalizeFrontmatterDescription = (raw: unknown): string | undefined => {
   if (typeof raw !== 'string') return undefined
-  const trimmed = raw.trim().replace(/\s+/g, ' ')
+  const trimmed = raw.trim().replace(whitespaceRunRegex, ' ')
   return trimmed.length > 0 ? trimmed : undefined
 }
 

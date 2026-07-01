@@ -108,16 +108,18 @@ You can run an auth check in a layout the same way as in a page, and you should 
 
 ### Protect a Server Action
 
-Server Actions run as API endpoints, so verify the user inside the action itself, before running any logic that depends on them being signed in.
+Server Actions can be called from any Client Component, so verify the user inside the action itself, before running any logic that depends on them being signed in.
 
 <Tabs items={["auth.protect()", "auth()"]}>
   <Tab>
+    Inside a Server Action, [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) doesn't redirect. Because a Server Action isn't a document request, it rejects unauthenticated requests with a `401` error instead. To handle the unauthenticated case yourself, use `auth()`.
+
     ```tsx {{ filename: 'app/actions.ts' }}
     'use server'
     import { auth } from '@clerk/nextjs/server'
 
     export async function createPost(formData: FormData) {
-      // Redirects to the sign-in route if the user is not signed in
+      // Returns a 401 error if the user is not signed in
       const { userId } = await auth.protect()
 
       // Add your Server Action logic using the `userId`
@@ -149,7 +151,9 @@ Server Actions run as API endpoints, so verify the user inside the action itself
 On the client, you can read the `isSignedIn` property from the [`useAuth()`](/docs/reference/hooks/use-auth) or [`useUser()`](/docs/reference/hooks/use-user) hook to conditionally render UI based on whether the user is signed in.
 
 > [!WARNING]
-> A client-side check is a UX affordance, not a security boundary. By the time this code runs, the component has already been sent to the browser, so anything it contains is available to the user regardless of the check. Protect the data instead: guard the resources you pass to Client Components as props, and the Route Handlers or external API endpoints the client calls (see [Server-side](#server-side)).
+> A client-side check is a UX affordance, not a security boundary. By the time this code runs, the component has already been sent to the browser, so anything it contains is available to the user regardless of the check.
+>
+> Protect the data instead: guard the Route Handlers, Server Actions, and external API endpoints the client calls. Protecting the Server Components that render these Client Components also guards any data you pass down as props (see [Server-side](#server-side)).
 
 <CodeBlockTabs options={["useAuth()", "useUser()"]}>
   ```tsx {{ filename: 'app/example/page.tsx' }}

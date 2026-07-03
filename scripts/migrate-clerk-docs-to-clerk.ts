@@ -2226,8 +2226,8 @@ async function updateExistingMigration(
         ? 're-uses the existing PR'
         : 'branch has no PR yet — would create one (and sync the source PR) if an open clerk-docs PR exists',
       sourcePrComment: existing.pr
-        ? 'skipped (migration marker already on source PR)'
-        : 'would post if missing (marker check makes it idempotent)',
+        ? 'would ensure the migration notice comment on the source PR lists this branch + PR (appends if missing)'
+        : 'would post if missing (idempotent when the clerk PR is already listed)',
       sourcePrClose: existing.pr
         ? 'skipped (source PR was already closed during the initial migration)'
         : 'would close after a successful comment (unless --no-close-source-pr)',
@@ -2356,6 +2356,21 @@ async function updateExistingMigration(
     let clerkPrUrl = existing.pr?.url ?? '(branch updated; no clerk PR yet)'
     if (existing.pr) {
       infoLog('Pushed update to existing migration branch', { branch: migrationBranch, clerkPrUrl })
+      // Self-heal the source PR's migration notice: if this branch/PR isn't listed there yet
+      // (e.g. the branch was created before the list format existed, or the source PR was
+      // previously migrated to a different branch), append it. Idempotent when already listed.
+      if (sourcePr) {
+        try {
+          await upsertMigrationNoticeComment(config, sourcePr.number, formatRepoSlug(config.clerkDocsRepo), {
+            branch: migrationBranch,
+            prUrl: existing.pr.url,
+          })
+        } catch (err) {
+          warnLog('Could not update migration notice comment on source PR (migration itself succeeded)', {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
     } else {
       // Recover from a previous run where the push succeeded but PR creation failed: without this,
       // every re-run lands in update mode and the branch stays PR-less forever.

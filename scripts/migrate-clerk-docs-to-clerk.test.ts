@@ -11,6 +11,7 @@ import {
   buildBaseMergeIntoMigrationArgs,
   buildClosePrCommandArgs,
   buildFetchBranchRefspecArgs,
+  buildUpstreamConfigArgs,
   buildMigrationBranchName,
   buildPrRefsRewriteCallback,
   canCommentOnPrInRepo,
@@ -720,7 +721,8 @@ describe('formatUpdateMergeConflictHints', () => {
       remoteName: 'clerk-docs-migrate-123',
     })
     const joined = hints.join('\n')
-    expect(joined).toContain('git push origin feat/foo-docs-migration')
+    expect(joined).toContain('git push')
+    expect(joined).toContain('tracks origin/feat/foo-docs-migration')
     expect(joined).toContain('git remote remove clerk-docs-migrate-123')
   })
 
@@ -733,7 +735,8 @@ describe('formatUpdateMergeConflictHints', () => {
     })
     const joined = hints.join('\n')
     expect(joined).toContain('/Users/me/dev/clerk')
-    expect(joined).toContain('git push origin feat/foo-docs-migration')
+    expect(joined).toContain('git push')
+    expect(joined).toContain('tracks origin/feat/foo-docs-migration')
     expect(joined).toContain('git remote remove clerk-docs-migrate-789')
     expect(joined).toContain('git merge --abort')
   })
@@ -843,5 +846,14 @@ describe('buildBaseMergeIntoMigrationArgs', () => {
     expect(buildBaseMergeIntoMigrationArgs('main', 'feat/foo-docs-migration')).not.toContain(
       '--allow-unrelated-histories',
     )
+  })
+})
+
+describe('buildUpstreamConfigArgs', () => {
+  test('writes remote + merge config so the branch tracks its own name on origin', () => {
+    expect(buildUpstreamConfigArgs('nick/test-migrate-clerk-docs-2')).toEqual([
+      ['config', 'branch.nick/test-migrate-clerk-docs-2.remote', 'origin'],
+      ['config', 'branch.nick/test-migrate-clerk-docs-2.merge', 'refs/heads/nick/test-migrate-clerk-docs-2'],
+    ])
   })
 })

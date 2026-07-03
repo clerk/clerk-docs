@@ -704,12 +704,12 @@ function formatUpdateMergeConflictHints(params: {
     return [
       `The clerk workspace is a temporary clone at ${params.workspacePath}. It is not cleaned up automatically — delete it yourself once you're done with it.`,
       'To resolve conflicts in your IDE, re-run the migration with --clerk-path pointing at your own clerk checkout.',
-      `If you want to finish manually in the temp clone: cd "${params.workspacePath}", resolve the conflicts listed by \`git status\`, \`git commit\`, then \`git push origin ${params.branch}\` (cleanup: \`git remote remove ${params.remoteName}\`).`,
+      `If you want to finish manually in the temp clone: cd "${params.workspacePath}", resolve the conflicts listed by \`git status\`, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there (cleanup: \`git remote remove ${params.remoteName}\`).`,
     ]
   }
   return [
     `Conflicts are in ${params.workspacePath} on branch "${params.branch}". \`git status\` in that folder lists the files.`,
-    `Resolve the conflicts in your IDE, \`git commit\`, then \`git push origin ${params.branch}\`. The clerk PR will update automatically. Push before re-running this script — a re-run refuses to proceed while the local branch has unpushed commits.`,
+    `Resolve the conflicts in your IDE, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there. The clerk PR will update automatically. Push before re-running this script — a re-run refuses to proceed while the local branch has unpushed commits.`,
     `When you're done, clean up the filter-repo remote with: \`git remote remove ${params.remoteName}\` in ${params.workspacePath}.`,
     'Alternatively, to abandon this merge and retry: `git merge --abort` in that folder, then re-run this script.',
   ]
@@ -1876,6 +1876,20 @@ function buildBaseMergeIntoMigrationArgs(baseRef: string, migrationBranch: strin
 }
 
 /**
+ * `git config` args (one command per entry) that make a not-yet-pushed branch track
+ * `origin/<branch>`. `git branch --set-upstream-to` refuses while the remote branch doesn't exist,
+ * so the two config keys are written directly. With this in place a plain `git push` (or an IDE
+ * push/sync button) targets — and creates — the same-named branch on origin, which matters when a
+ * merge conflict interrupts create mode before the script's own `git push -u` ran.
+ */
+function buildUpstreamConfigArgs(branch: string): string[][] {
+  return [
+    ['config', `branch.${branch}.remote`, 'origin'],
+    ['config', `branch.${branch}.merge`, `refs/heads/${branch}`],
+  ]
+}
+
+/**
  * Close the source clerk-docs PR after the backlink comment has been posted.
  * Idempotent in spirit: if the PR is already closed, `gh pr close` exits non-zero and the caller logs a warning.
  * Skips the close in dry-run mode.
@@ -2136,7 +2150,19 @@ async function createNewMigration(
     // single-branch clones): the local base branch may be stale, diverged, or absent, and its
     // local-only commits must not leak into the pushed migration branch.
     await runCommand('git', buildFetchBranchRefspecArgs(baseRef), clerkWorkPath)
-    await runCommand('git', ['checkout', '-b', newBranch, `origin/${baseRef}`], clerkWorkPath)
+    // --no-track: without it the new branch would track origin/<baseRef>, and if the merge below
+    // conflicts, an upstream-based push during manual resolution (plain `git push` with
+    // push.default=upstream, or an IDE sync button) would land the merge commit on the clerk base
+    // branch instead of the migration branch.
+    await runCommand('git', ['checkout', '--no-track', '-b', newBranch, `origin/${baseRef}`], clerkWorkPath)
+    // Point the upstream at origin/<newBranch> instead. That remote branch doesn't exist yet, so
+    // `git branch --set-upstream-to` would refuse — write the config directly. This makes a plain
+    // `git push` (or an IDE push/sync button) during manual conflict resolution create and push to
+    // the migration branch, matching the `git push -u origin <newBranch>` the script itself runs
+    // on the successful path.
+    for (const configArgs of buildUpstreamConfigArgs(newBranch)) {
+      await runCommand('git', configArgs, clerkWorkPath)
+    }
     const merge = await runCommand(
       'git',
       [
@@ -2772,6 +2798,7 @@ export {
   buildClosePrCommandArgs,
   buildFetchBranchRefspecArgs,
   buildBaseMergeIntoMigrationArgs,
+  buildUpstreamConfigArgs,
   parseGitRemoteUrlToSlug,
   repoSlugsEqual,
   isDirectCliInvocation,

@@ -268,24 +268,14 @@ const migrationErrorDefinitions = {
     ],
   },
   'update-merge-conflict': {
-    message: (params: { branch: string; workspacePath: string; isTemporary: boolean; remoteName: string }): string =>
+    message: (params: MergeConflictHintParams): string =>
       `Merge conflict while updating existing migration branch "${params.branch}". The latest clerk base or new clerk-docs changes conflict with the existing branch state in clerk.`,
-    hints: (params: {
-      branch: string
-      workspacePath: string
-      isTemporary: boolean
-      remoteName: string
-    }): readonly string[] => formatUpdateMergeConflictHints(params),
+    hints: (params: MergeConflictHintParams): readonly string[] => formatUpdateMergeConflictHints(params),
   },
   'create-merge-conflict': {
-    message: (params: { branch: string; workspacePath: string; isTemporary: boolean; remoteName: string }): string =>
+    message: (params: MergeConflictHintParams): string =>
       `Merge conflict while migrating clerk-docs history onto new branch "${params.branch}". The rewritten clerk-docs tree conflicts with the existing clerk-docs/ contents in clerk.`,
-    hints: (params: {
-      branch: string
-      workspacePath: string
-      isTemporary: boolean
-      remoteName: string
-    }): readonly string[] => formatUpdateMergeConflictHints(params),
+    hints: (params: MergeConflictHintParams): readonly string[] => formatUpdateMergeConflictHints(params),
   },
   'local-only-requires-clerk-path': {
     message: (): string =>
@@ -690,27 +680,36 @@ function formatClosedPrAbortMessage(params: { branch: string; prUrl: string; sta
   return `Refusing to update migration branch "${params.branch}": its clerk PR is ${params.state.toLowerCase()} (${params.prUrl}).`
 }
 
-/**
- * Remediation hints when a merge conflict happens during update mode.
- * Split by workspace kind: temp clones can't be used for IDE-driven resolution, local clones can.
- */
-function formatUpdateMergeConflictHints(params: {
+interface MergeConflictHintParams {
   branch: string
   workspacePath: string
   isTemporary: boolean
   remoteName: string
-}): readonly string[] {
+  /** The filter-repo'd clerk-docs duplicate the `remoteName` remote points at (also in the temp dir). */
+  filterRepoClonePath: string
+}
+
+/**
+ * Remediation hints when a merge conflict happens during create or update mode.
+ * Split by workspace kind: for temp clones the primary fix is opening the clone in an IDE,
+ * resolving, pushing, and re-running; a local clone (--clerk-path) is already IDE-friendly.
+ * Cleanup differs too: deleting a temp clone deletes its remotes with it (no `git remote remove`
+ * needed), while a --clerk-path checkout persists and needs the filter-repo remote removed.
+ * Either way the filter-repo'd clerk-docs duplicate is a separate temp directory to delete.
+ */
+function formatUpdateMergeConflictHints(params: MergeConflictHintParams): readonly string[] {
   if (params.isTemporary) {
     return [
-      `The clerk workspace is a temporary clone at ${params.workspacePath}. It is not cleaned up automatically — delete it yourself once you're done with it.`,
-      'To resolve conflicts in your IDE, re-run the migration with --clerk-path pointing at your own clerk checkout.',
-      `If you want to finish manually in the temp clone: cd "${params.workspacePath}", resolve the conflicts listed by \`git status\`, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there (cleanup: \`git remote remove ${params.remoteName}\`).`,
+      `Open the temporary clone in your IDE (e.g. \`cursor "${params.workspacePath}"\`), resolve the conflicts listed by \`git status\`, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there.`,
+      'Then re-run this script: it picks up the pushed branch in update mode and creates/syncs the clerk PR.',
+      'Prefer working in your own clerk checkout instead? Re-run the migration with --clerk-path pointing at it and resolve the conflicts there.',
+      `Nothing is cleaned up automatically — when you're done, delete the temporary clone at ${params.workspacePath} and the filter-repo copy of clerk-docs at ${params.filterRepoClonePath} (deleting the clone removes the "${params.remoteName}" remote with it).`,
     ]
   }
   return [
     `Conflicts are in ${params.workspacePath} on branch "${params.branch}". \`git status\` in that folder lists the files.`,
     `Resolve the conflicts in your IDE, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there. The clerk PR will update automatically. Push before re-running this script — a re-run refuses to proceed while the local branch has unpushed commits.`,
-    `When you're done, clean up the filter-repo remote with: \`git remote remove ${params.remoteName}\` in ${params.workspacePath}.`,
+    `When you're done, clean up: \`git remote remove ${params.remoteName}\` in ${params.workspacePath}, and delete the filter-repo copy of clerk-docs at ${params.filterRepoClonePath}.`,
     'Alternatively, to abandon this merge and retry: `git merge --abort` in that folder, then re-run this script.',
   ]
 }
@@ -2183,6 +2182,7 @@ async function createNewMigration(
           workspacePath: clerkWorkPath,
           isTemporary: clerkWorkspace.isTemporary,
           remoteName,
+          filterRepoClonePath: tempClonePath,
         })
       }
       throw new Error(
@@ -2288,6 +2288,7 @@ async function updateExistingMigration(
     workspacePath: clerkWorkPath,
     isTemporary: clerkWorkspace.isTemporary,
     remoteName,
+    filterRepoClonePath: tempClonePath,
   }
 
   try {

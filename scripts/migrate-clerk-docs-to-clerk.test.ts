@@ -701,38 +701,48 @@ describe('formatClosedPrAbortMessage', () => {
 })
 
 describe('formatUpdateMergeConflictHints', () => {
-  test('temp workspaces direct the user to re-run with --clerk-path', () => {
-    const hints = formatUpdateMergeConflictHints({
-      branch: 'feat/foo-docs-migration',
-      workspacePath: '/tmp/clerk-migrate-abc',
-      isTemporary: true,
-      remoteName: 'clerk-docs-migrate-123',
-    })
+  const tempParams = {
+    branch: 'feat/foo-docs-migration',
+    workspacePath: '/tmp/clerk-migrate-abc',
+    isTemporary: true,
+    remoteName: 'clerk-docs-migrate-123',
+    filterRepoClonePath: '/tmp/clerk-docs-migrate-feat-foo-456',
+  }
+  const localParams = {
+    branch: 'feat/foo-docs-migration',
+    workspacePath: '/Users/me/dev/clerk',
+    isTemporary: false,
+    remoteName: 'clerk-docs-migrate-789',
+    filterRepoClonePath: '/tmp/clerk-docs-migrate-feat-foo-456',
+  }
+
+  test('temp workspaces lead with the IDE resolve-in-temp-clone fix, --clerk-path as fallback', () => {
+    const hints = formatUpdateMergeConflictHints(tempParams)
+    expect(hints[0]).toContain('cursor "/tmp/clerk-migrate-abc"')
+    expect(hints[1]).toContain('re-run this script')
     expect(hints.join('\n')).toContain('temporary clone')
     expect(hints.join('\n')).toContain('--clerk-path')
-    expect(hints.join('\n')).toContain('/tmp/clerk-migrate-abc')
+    const joined = hints.join('\n')
+    expect(joined.indexOf('cursor "/tmp/clerk-migrate-abc"')).toBeLessThan(joined.indexOf('--clerk-path'))
   })
 
   test('temp workspaces still document the manual resolve/push path', () => {
-    const hints = formatUpdateMergeConflictHints({
-      branch: 'feat/foo-docs-migration',
-      workspacePath: '/tmp/clerk-migrate-abc',
-      isTemporary: true,
-      remoteName: 'clerk-docs-migrate-123',
-    })
+    const hints = formatUpdateMergeConflictHints(tempParams)
     const joined = hints.join('\n')
     expect(joined).toContain('git push')
     expect(joined).toContain('tracks origin/feat/foo-docs-migration')
-    expect(joined).toContain('git remote remove clerk-docs-migrate-123')
+  })
+
+  test('temp workspaces say deleting both temp dirs is the whole cleanup (no git remote remove)', () => {
+    const hints = formatUpdateMergeConflictHints(tempParams)
+    const joined = hints.join('\n')
+    expect(joined).not.toContain('git remote remove')
+    expect(joined).toContain('/tmp/clerk-migrate-abc')
+    expect(joined).toContain('/tmp/clerk-docs-migrate-feat-foo-456')
   })
 
   test('local (--clerk-path) workspaces describe the IDE resolve-then-push flow', () => {
-    const hints = formatUpdateMergeConflictHints({
-      branch: 'feat/foo-docs-migration',
-      workspacePath: '/Users/me/dev/clerk',
-      isTemporary: false,
-      remoteName: 'clerk-docs-migrate-789',
-    })
+    const hints = formatUpdateMergeConflictHints(localParams)
     const joined = hints.join('\n')
     expect(joined).toContain('/Users/me/dev/clerk')
     expect(joined).toContain('git push')
@@ -741,13 +751,13 @@ describe('formatUpdateMergeConflictHints', () => {
     expect(joined).toContain('git merge --abort')
   })
 
+  test('local workspaces still list the filter-repo temp clone for deletion', () => {
+    const hints = formatUpdateMergeConflictHints(localParams)
+    expect(hints.join('\n')).toContain('/tmp/clerk-docs-migrate-feat-foo-456')
+  })
+
   test('local workspaces do NOT suggest --clerk-path (already using it)', () => {
-    const hints = formatUpdateMergeConflictHints({
-      branch: 'feat/foo-docs-migration',
-      workspacePath: '/Users/me/dev/clerk',
-      isTemporary: false,
-      remoteName: 'clerk-docs-migrate-789',
-    })
+    const hints = formatUpdateMergeConflictHints(localParams)
     expect(hints.join('\n')).not.toContain('--clerk-path')
   })
 })

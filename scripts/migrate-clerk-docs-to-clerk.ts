@@ -1760,32 +1760,87 @@ async function maybeAlignClerkDocsBranch(config: CliConfig, currentBranch: strin
   return after
 }
 
-async function maybeCommentWithMarker(
+/** One "migrated to" destination listed in the migration-notice comment. `branch` is absent for entries recovered from the legacy single-URL comment format. */
+type MigrationNoticeEntry = { branch?: string; prUrl: string }
+
+/**
+ * Extract the branch/PR entries from an existing migration-notice comment body.
+ * Understands the canonical list format produced by {@link formatMigrationNoticeCommentBody} and
+ * the legacy single-line format ("This branch and pr were migrated to: <url>"), so old comments
+ * upgrade to the list format the first time they're updated.
+ */
+function parseMigrationNoticeEntries(body: string): MigrationNoticeEntry[] {
+  const entries: MigrationNoticeEntry[] = []
+  for (const match of body.matchAll(/^- (?:`([^`]+)` → )?(https?:\/\/\S+)\s*$/gm)) {
+    entries.push(match[1] ? { branch: match[1], prUrl: match[2] } : { prUrl: match[2] })
+  }
+  if (entries.length === 0) {
+    const legacy = body.match(/migrated to:\s*(https?:\/\/\S+)/i)
+    if (legacy) entries.push({ prUrl: legacy[1] })
+  }
+  return entries
+}
+
+/** Body for the backlink comment maintained by {@link upsertMigrationNoticeComment} on the source clerk-docs PR. */
+function formatMigrationNoticeCommentBody(clerkRepoSlug: string, entries: readonly MigrationNoticeEntry[]): string {
+  const lines = entries.map((entry) => (entry.branch ? `- \`${entry.branch}\` → ${entry.prUrl}` : `- ${entry.prUrl}`))
+  return [
+    MIGRATION_NOTICE_MARKER,
+    `This branch and PR were migrated to ${clerkRepoSlug}. Migration branches/PRs created from this PR (most recent last):`,
+    '',
+    ...lines,
+  ].join('\n')
+}
+
+/**
+ * Post or update the single marker comment on the source clerk-docs PR so it lists *every* clerk
+ * branch + PR this source PR was migrated to. Re-migrations to a different clerk branch/PR append
+ * an entry instead of leaving the old backlink stale; a clerk PR that is already listed is not
+ * added twice (idempotent re-runs).
+ */
+async function upsertMigrationNoticeComment(
   config: CliConfig,
   prNumber: number,
   repo: string,
-  body: string,
-): Promise<boolean> {
-  const view = await commandJson<{ comments: Array<{ body: string }> }>(
+  entry: { branch: string; prUrl: string },
+): Promise<void> {
+  // REST (not `gh pr view --json comments`) because updating a comment needs its numeric id.
+  const comments = await commandJson<Array<{ id: number; body: string }>>(
     'gh',
-    ['pr', 'view', String(prNumber), '--repo', repo, '--json', 'comments'],
+    ['api', `repos/${repo}/issues/${prNumber}/comments?per_page=100`],
     process.cwd(),
   )
-  if (view.comments.some((comment) => comment.body.includes(MIGRATION_NOTICE_MARKER))) {
-    infoLog('Skipping comment; marker already exists', { repo, prNumber })
-    return false
-  }
-  if (!config.dryRun) {
+  const existing = comments.find((comment) => comment.body.includes(MIGRATION_NOTICE_MARKER))
+  const clerkRepoSlug = formatRepoSlug(config.clerkRepo)
+  if (!existing) {
+    const body = formatMigrationNoticeCommentBody(clerkRepoSlug, [entry])
+    if (config.dryRun) {
+      infoLog('Dry-run: would post migration notice comment', { repo, prNumber, clerkPrUrl: entry.prUrl })
+      return
+    }
     await runCommand('gh', ['pr', 'comment', String(prNumber), '--repo', repo, '--body', body], process.cwd())
-  } else {
-    infoLog('Dry-run: would post comment', { repo, prNumber })
+    return
   }
-  return true
-}
-
-/** Body for the backlink comment that {@link maybeCommentWithMarker} posts on the source clerk-docs PR. */
-function formatMigrationNoticeCommentBody(clerkPrUrl: string): string {
-  return `${MIGRATION_NOTICE_MARKER}\nThis branch and pr were migrated to: ${clerkPrUrl}`
+  const entries = parseMigrationNoticeEntries(existing.body)
+  if (entries.some((listed) => listed.prUrl === entry.prUrl)) {
+    infoLog('Migration notice comment already lists this clerk PR', { repo, prNumber, clerkPrUrl: entry.prUrl })
+    return
+  }
+  const body = formatMigrationNoticeCommentBody(clerkRepoSlug, [...entries, entry])
+  if (config.dryRun) {
+    infoLog('Dry-run: would append new clerk PR to migration notice comment', {
+      repo,
+      prNumber,
+      clerkPrUrl: entry.prUrl,
+    })
+    return
+  }
+  await runCommand(
+    'gh',
+    ['api', '--method', 'PATCH', `repos/${repo}/issues/comments/${existing.id}`, '-f', `body=${body}`],
+    process.cwd(),
+  )
+  infoLog('Appended new clerk PR to existing migration notice comment', { repo, prNumber, clerkPrUrl: entry.prUrl })
 }
 
 /** `gh pr close` args used by {@link closeSourcePrAfterMigration} (extracted for unit testing). */
@@ -1960,12 +2015,7 @@ async function ensureClerkPrAndSyncSourcePr(
     const sourceRepoSlug = formatRepoSlug(config.clerkDocsRepo)
     let commentSucceeded = false
     try {
-      await maybeCommentWithMarker(
-        config,
-        sourcePr.number,
-        sourceRepoSlug,
-        formatMigrationNoticeCommentBody(clerkPrUrl),
-      )
+      await upsertMigrationNoticeComment(config, sourcePr.number, sourceRepoSlug, { branch, prUrl: clerkPrUrl })
       commentSucceeded = true
     } catch (err) {
       warnLog('Could not comment on source PR (migration itself succeeded)', {
@@ -2694,6 +2744,7 @@ export {
   formatUpdateMergeConflictHints,
   formatClosedPrAbortMessage,
   formatMigrationNoticeCommentBody,
+  parseMigrationNoticeEntries,
   buildClosePrCommandArgs,
   buildFetchBranchRefspecArgs,
   buildBaseMergeIntoMigrationArgs,

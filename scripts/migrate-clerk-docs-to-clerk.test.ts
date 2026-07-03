@@ -30,6 +30,7 @@ import {
   parseConfig,
   parseGhPrViewForMigration,
   parseGitRemoteUrlToSlug,
+  parseMigrationNoticeEntries,
   parseSemverLoose,
   repoSlugsEqual,
   resolveEffectiveClerkBase,
@@ -742,15 +743,47 @@ describe('formatUpdateMergeConflictHints', () => {
 })
 
 describe('formatMigrationNoticeCommentBody', () => {
-  test('embeds the marker and the migrated clerk PR URL', () => {
-    const body = formatMigrationNoticeCommentBody('https://github.com/clerk/clerk/pull/1234')
+  test('embeds the marker and every migrated branch + clerk PR URL', () => {
+    const body = formatMigrationNoticeCommentBody('clerk/clerk', [
+      { branch: 'feat/foo-docs-migration', prUrl: 'https://github.com/clerk/clerk/pull/1234' },
+      { branch: 'nick/retry-branch', prUrl: 'https://github.com/clerk/clerk/pull/5678' },
+    ])
     expect(body).toContain('<!-- clerk-docs-migration-notice -->')
-    expect(body).toContain('https://github.com/clerk/clerk/pull/1234')
+    expect(body).toContain('- `feat/foo-docs-migration` → https://github.com/clerk/clerk/pull/1234')
+    expect(body).toContain('- `nick/retry-branch` → https://github.com/clerk/clerk/pull/5678')
   })
 
-  test('starts with the marker so maybeCommentWithMarker can detect re-runs', () => {
-    const body = formatMigrationNoticeCommentBody('https://example.invalid/pr/1')
+  test('starts with the marker so upsertMigrationNoticeComment can detect re-runs', () => {
+    const body = formatMigrationNoticeCommentBody('clerk/clerk', [
+      { branch: 'b', prUrl: 'https://example.invalid/pr/1' },
+    ])
     expect(body.startsWith('<!-- clerk-docs-migration-notice -->')).toBe(true)
+  })
+
+  test('renders entries without a branch (recovered from the legacy comment format)', () => {
+    const body = formatMigrationNoticeCommentBody('clerk/clerk', [{ prUrl: 'https://github.com/clerk/clerk/pull/9' }])
+    expect(body).toContain('- https://github.com/clerk/clerk/pull/9')
+    expect(body).not.toContain('`')
+  })
+})
+
+describe('parseMigrationNoticeEntries', () => {
+  test('round-trips entries through formatMigrationNoticeCommentBody', () => {
+    const entries = [
+      { branch: 'feat/foo-docs-migration', prUrl: 'https://github.com/clerk/clerk/pull/1234' },
+      { prUrl: 'https://github.com/clerk/clerk/pull/42' },
+    ]
+    const body = formatMigrationNoticeCommentBody('clerk/clerk', entries)
+    expect(parseMigrationNoticeEntries(body)).toEqual(entries)
+  })
+
+  test('recovers the URL from the legacy single-line comment format', () => {
+    const legacy = '<!-- clerk-docs-migration-notice -->\nThis branch and pr were migrated to: https://github.com/clerk/clerk/pull/2418'
+    expect(parseMigrationNoticeEntries(legacy)).toEqual([{ prUrl: 'https://github.com/clerk/clerk/pull/2418' }])
+  })
+
+  test('returns no entries for unrelated comment bodies', () => {
+    expect(parseMigrationNoticeEntries('just a regular PR comment')).toEqual([])
   })
 })
 

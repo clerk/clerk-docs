@@ -1,0 +1,193 @@
+<If sdk={["nextjs", "tanstack-react-start"]}>
+  In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+  - If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated`.
+  - If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
+  - If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+
+  <If sdk="nextjs">
+    ```tsx {{ filename: 'app/api/example/route.ts' }}
+    import { NextResponse } from 'next/server'
+    import { auth } from '@clerk/nextjs/server'
+
+    export async function POST() {
+      // Accept session_token, oauth_token, and api_key types
+      const authObject = await auth({
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      if (!authObject.isAuthenticated) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      // Check if the token is an API key and if it doesn't have the required scope
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+        return NextResponse.json({ error: 'API key missing the "write:users" scope' }, { status: 401 })
+      }
+
+      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+      return NextResponse.json({ subject, tokenType: authObject.tokenType })
+    }
+    ```
+
+    You can also protect entire route groups using [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware). See how to implement this in [the middleware docs](/docs/reference/nextjs/clerk-middleware#protect-routes-based-on-token-types).
+  </If>
+
+  <If sdk="tanstack-react-start">
+    ```tsx {{ filename: 'app/routes/api/example.tsx' }}
+    import { json } from '@tanstack/react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth } from '@clerk/tanstack-react-start/server'
+
+    export const ServerRoute = createFileRoute('/api/example')({
+      server: {
+        handlers: {
+          POST: async () => {
+            const authObject = await auth({
+              acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+            })
+
+            if (!authObject.isAuthenticated) {
+              return json({ error: 'Unauthorized' }, { status: 401 })
+            }
+
+            if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+              return json({ error: 'API key missing the "write:users" scope' }, { status: 401 })
+            }
+
+            const subject =
+              authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+            return json({ subject, tokenType: authObject.tokenType })
+          },
+        },
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk={["fastify", "expressjs", "react-router"]}>
+  In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+  - If the token is invalid or missing, `getAuth()` will return `false` for `isAuthenticated`.
+  - If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
+  - If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+
+  <If sdk="expressjs">
+    ```ts {{ filename: 'index.ts' }}
+    import express from 'express'
+    import { clerkMiddleware, getAuth } from '@clerk/express'
+
+    const app = express()
+
+    app.use(clerkMiddleware())
+
+    app.post('/api/example', (req, res) => {
+      const authObject = getAuth(req, {
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      if (!authObject.isAuthenticated) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+        res.status(401).json({ error: 'API key missing the "write:users" scope' })
+        return
+      }
+
+      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+      res.json({ subject, tokenType: authObject.tokenType })
+    })
+    ```
+  </If>
+
+  <If sdk="fastify">
+    ```ts {{ filename: 'src/routes/example.ts' }}
+    import Fastify from 'fastify'
+    import { clerkPlugin, getAuth } from '@clerk/fastify'
+
+    const fastify = Fastify()
+
+    fastify.register(clerkPlugin)
+
+    fastify.post('/api/example', (request, reply) => {
+      const authObject = getAuth(request, {
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      if (!authObject.isAuthenticated) {
+        return reply.code(401).send({ error: 'Unauthorized' })
+      }
+
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+        return reply.code(401).send({ error: 'API key missing the "write:users" scope' })
+      }
+
+      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+      return reply.send({ subject, tokenType: authObject.tokenType })
+    })
+    ```
+  </If>
+
+  <If sdk="react-router">
+    ```ts {{ filename: 'app/routes/api.example.ts' }}
+    import { getAuth } from '@clerk/react-router/server'
+    import type { Route } from './+types/api.example'
+
+    export async function action(args: Route.ActionArgs) {
+      const authObject = await getAuth(args, {
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      if (!authObject.isAuthenticated) {
+        throw new Response('Unauthorized', { status: 401 })
+      }
+
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+        throw new Response('API key missing the "write:users" scope', { status: 401 })
+      }
+
+      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+      return Response.json({ subject, tokenType: authObject.tokenType })
+    }
+    ```
+  </If>
+</If>
+
+<If sdk="nuxt">
+  In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+  - If the token is invalid or missing, `event.context.auth()` will return `false` for `isAuthenticated`.
+  - If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
+  - If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+
+  ```ts {{ filename: 'server/api/example.ts' }}
+  export default defineEventHandler((event) => {
+    const authObject = event.context.auth({
+      acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+    })
+
+    if (!authObject.isAuthenticated) {
+      throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+    }
+
+    if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'API key missing the "write:users" scope',
+      })
+    }
+
+    const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+    return { subject, tokenType: authObject.tokenType }
+  })
+  ```
+</If>

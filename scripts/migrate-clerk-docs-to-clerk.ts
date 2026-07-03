@@ -368,11 +368,17 @@ const migrationErrorDefinitions = {
     ],
   },
   'clerk-base-mismatch': {
-    message: (params: { prUrl: string; prBase: string; configuredBase: string }): string =>
+    message: (params: { prUrl: string; prBase: string; configuredBase: string; migrationBranch: string }): string =>
       `--clerk-base is "${params.configuredBase}" but the existing clerk PR (${params.prUrl}) is based on "${params.prBase}". ` +
       `Merging a different base into the migration branch would pull unrelated commits into the open PR.`,
-    hints: (params: { prUrl: string; prBase: string; configuredBase: string }): readonly string[] => [
+    hints: (params: {
+      prUrl: string
+      prBase: string
+      configuredBase: string
+      migrationBranch: string
+    }): readonly string[] => [
       `Re-run with --clerk-base ${params.prBase} (or drop --clerk-base to follow the PR's base automatically).`,
+      `If you only want the commits from "${params.configuredBase}" included in the PR, keep the base as-is and merge them into the migration branch yourself: in a clerk checkout, git checkout ${params.migrationBranch}, git merge origin/${params.configuredBase}, git push — then re-run without --clerk-base.`,
       'If you really want a different base, retarget the clerk PR on GitHub first.',
     ],
   },
@@ -1945,14 +1951,16 @@ function resolveEffectiveClerkBase(params: {
   existingPr: { baseRefName: string; url: string } | null
   configuredBase: string
   configuredExplicitly: boolean
+  migrationBranch: string
 }): string {
-  const { existingPr, configuredBase, configuredExplicitly } = params
+  const { existingPr, configuredBase, configuredExplicitly, migrationBranch } = params
   if (!existingPr || existingPr.baseRefName === configuredBase) return configuredBase
   if (configuredExplicitly) {
     throwMigrationError('clerk-base-mismatch', {
       prUrl: existingPr.url,
       prBase: existingPr.baseRefName,
       configuredBase,
+      migrationBranch,
     })
   }
   return existingPr.baseRefName
@@ -2574,6 +2582,7 @@ async function main(): Promise<void> {
       existingPr: migrationMode === 'update' ? existingMigration?.pr ?? null : null,
       configuredBase: config.clerkBaseBranch,
       configuredExplicitly: config.clerkBaseBranchExplicit,
+      migrationBranch: migrationBranchName,
     })
     if (baseRef !== config.clerkBaseBranch) {
       warnLog('Following the existing clerk PR base instead of the default --clerk-base', {

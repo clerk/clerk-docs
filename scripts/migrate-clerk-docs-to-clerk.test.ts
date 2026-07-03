@@ -494,9 +494,14 @@ describe('isDirectCliInvocation', () => {
 
 describe('resolveEffectiveClerkBase', () => {
   test('uses the configured base when there is no existing PR', () => {
-    expect(resolveEffectiveClerkBase({ existingPr: null, configuredBase: 'main', configuredExplicitly: false })).toBe(
-      'main',
-    )
+    expect(
+      resolveEffectiveClerkBase({
+        existingPr: null,
+        configuredBase: 'main',
+        configuredExplicitly: false,
+        migrationBranch: 'feat/foo-docs-migration',
+      }),
+    ).toBe('main')
   })
 
   test('uses the configured base when it matches the existing PR base', () => {
@@ -505,6 +510,7 @@ describe('resolveEffectiveClerkBase', () => {
         existingPr: { baseRefName: 'main', url: 'https://github.com/clerk/clerk/pull/1' },
         configuredBase: 'main',
         configuredExplicitly: true,
+        migrationBranch: 'feat/foo-docs-migration',
       }),
     ).toBe('main')
   })
@@ -515,28 +521,29 @@ describe('resolveEffectiveClerkBase', () => {
         existingPr: { baseRefName: 'release', url: 'https://github.com/clerk/clerk/pull/1' },
         configuredBase: 'main',
         configuredExplicitly: false,
+        migrationBranch: 'feat/foo-docs-migration',
       }),
     ).toBe('release')
   })
 
   test('aborts when an explicit --clerk-base conflicts with the existing PR base', () => {
-    expect(() =>
-      resolveEffectiveClerkBase({
-        existingPr: { baseRefName: 'release', url: 'https://github.com/clerk/clerk/pull/1' },
-        configuredBase: 'main',
-        configuredExplicitly: true,
-      }),
-    ).toThrow(MigrationError)
+    const conflicting = {
+      existingPr: { baseRefName: 'release', url: 'https://github.com/clerk/clerk/pull/1' },
+      configuredBase: 'main',
+      configuredExplicitly: true,
+      migrationBranch: 'feat/foo-docs-migration',
+    }
+    expect(() => resolveEffectiveClerkBase(conflicting)).toThrow(MigrationError)
     try {
-      resolveEffectiveClerkBase({
-        existingPr: { baseRefName: 'release', url: 'https://github.com/clerk/clerk/pull/1' },
-        configuredBase: 'main',
-        configuredExplicitly: true,
-      })
+      resolveEffectiveClerkBase(conflicting)
       expect.unreachable('should have thrown')
     } catch (err) {
       expect(err).toBeInstanceOf(MigrationError)
-      expect((err as InstanceType<typeof MigrationError>).code).toBe('clerk-base-mismatch')
+      const migrationErr = err as InstanceType<typeof MigrationError>
+      expect(migrationErr.code).toBe('clerk-base-mismatch')
+      const hints = migrationErr.hints.join('\n')
+      expect(hints).toContain('git merge origin/main')
+      expect(hints).toContain('git checkout feat/foo-docs-migration')
     }
   })
 })

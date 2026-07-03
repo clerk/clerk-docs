@@ -1,0 +1,83 @@
+---
+title: Verify API keys in your TanStack React Start application with Clerk
+description: Learn how to use Clerk's helpers to verify API keys in your TanStack React Start application.
+sdk: tanstack-react-start
+---
+
+When building a resource server that needs to accept and verify API keys issued by Clerk, it's crucial to verify these keys on your backend to ensure the request is coming from an authenticated client.
+
+Clerk's TanStack React Start SDK provides a built-in [`auth()`](/docs/reference/tanstack-react-start/auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your server function or API route should accept in your TanStack React Start application.
+
+By default, `acceptsToken` is set to `session_token`, which means API keys will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To learn more about the supported token types, see the [`auth()` parameters documentation](/docs/reference/tanstack-react-start/auth#parameters).
+
+Below are two examples of verifying API keys in a TanStack React Start API route using Clerk's SDK:
+
+## Example 1: Accepting a single token type
+
+In the following example, the `acceptsToken` parameter is set to only accept `api_key`s.
+
+- If the API key is invalid or missing, `auth()` will return `false` for `isAuthenticated` and `null` for machine-specific properties, and the request will be rejected with a `401` response.
+- If the API key is valid, `subject`, `scopes`, and `claims` are returned. API keys are scoped to either a user or an Organization, so `subject` is the user ID or Organization ID associated with the key.
+
+```tsx {{ filename: 'app/routes/api/example.tsx' }}
+import { json } from '@tanstack/react-start'
+import { createFileRoute } from '@tanstack/react-router'
+import { auth } from '@clerk/tanstack-react-start/server'
+
+export const ServerRoute = createFileRoute('/api/example')({
+  server: {
+    handlers: {
+      GET: async () => {
+        const { isAuthenticated, claims, scopes, subject } = await auth({
+          acceptsToken: 'api_key',
+        })
+
+        if (!isAuthenticated) {
+          return json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        return json({ subject, scopes, claims })
+      },
+    },
+  },
+})
+```
+
+## Example 2: Accepting multiple token types
+
+In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+- If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated`.
+- If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
+- If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+
+```tsx {{ filename: 'app/routes/api/example.tsx' }}
+import { json } from '@tanstack/react-start'
+import { createFileRoute } from '@tanstack/react-router'
+import { auth } from '@clerk/tanstack-react-start/server'
+
+export const ServerRoute = createFileRoute('/api/example')({
+  server: {
+    handlers: {
+      POST: async () => {
+        const authObject = await auth({
+          acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+        })
+
+        if (!authObject.isAuthenticated) {
+          return json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+          return json({ error: 'API key missing the "write:users" scope' }, { status: 401 })
+        }
+
+        const subject =
+          authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+        return json({ subject, tokenType: authObject.tokenType })
+      },
+    },
+  },
+})
+```

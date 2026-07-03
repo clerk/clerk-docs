@@ -1,0 +1,79 @@
+---
+title: Verify API keys in your Express application with Clerk
+description: Learn how to use Clerk's helpers to verify API keys in your Express application.
+sdk: expressjs
+---
+
+When building a resource server that needs to accept and verify API keys issued by Clerk, it's crucial to verify these keys on your backend to ensure the request is coming from an authenticated client.
+
+Clerk's Express SDK provides a built-in [`getAuth()`](/docs/reference/express/get-auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your route should accept in your Express application.
+
+By default, `acceptsToken` is set to `session_token`, which means API keys will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To learn more about the supported token types, see the [`getAuth()` options documentation](/docs/reference/express/get-auth#get-auth-options).
+
+The following examples assume that [`clerkMiddleware()`](/docs/reference/express/clerk-middleware) has been applied before the routes that call `getAuth()`.
+
+## Example 1: Accepting a single token type
+
+In the following example, the `acceptsToken` parameter is set to only accept `api_key`s.
+
+- If the API key is invalid or missing, `getAuth()` will return `false` for `isAuthenticated` and `null` for machine-specific properties, and the request will be rejected with a `401` response.
+- If the API key is valid, `subject`, `scopes`, and `claims` are returned. API keys are scoped to either a user or an Organization, so `subject` is the user ID or Organization ID associated with the key.
+
+```ts {{ filename: 'index.ts' }}
+import express from 'express'
+import { clerkMiddleware, getAuth } from '@clerk/express'
+
+const app = express()
+
+app.use(clerkMiddleware())
+
+app.get('/api/example', (req, res) => {
+  const { isAuthenticated, claims, scopes, subject } = getAuth(req, {
+    acceptsToken: 'api_key',
+  })
+
+  if (!isAuthenticated) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  res.json({ subject, scopes, claims })
+})
+```
+
+## Example 2: Accepting multiple token types
+
+In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+- If the token is invalid or missing, `getAuth()` will return `false` for `isAuthenticated`.
+- If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
+- If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+
+```ts {{ filename: 'index.ts' }}
+import express from 'express'
+import { clerkMiddleware, getAuth } from '@clerk/express'
+
+const app = express()
+
+app.use(clerkMiddleware())
+
+app.post('/api/example', (req, res) => {
+  const authObject = getAuth(req, {
+    acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+  })
+
+  if (!authObject.isAuthenticated) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+    res.status(401).json({ error: 'API key missing the "write:users" scope' })
+    return
+  }
+
+  const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+
+  res.json({ subject, tokenType: authObject.tokenType })
+})
+```

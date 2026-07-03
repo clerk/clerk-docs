@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
@@ -22,11 +23,16 @@ import {
   formatSourcePrMigrationAppendix,
   formatUpdateMergeConflictHints,
   gitRootIsAboveDocsProject,
+  isDirectCliInvocation,
   isSemverAtLeast,
   lineIgnoresSymlinkedClerkDocsRoot,
+  MigrationError,
   parseConfig,
   parseGhPrViewForMigration,
+  parseGitRemoteUrlToSlug,
   parseSemverLoose,
+  repoSlugsEqual,
+  resolveEffectiveClerkBase,
   resolveMigrationBranchName,
   reviewRequestToHandle,
   rewritePrRefsInCommitMessage,
@@ -357,6 +363,181 @@ describe('parseConfig', () => {
     expect(config.clerkDocsRepo).toEqual(['legacy', 'docs'])
     expect(config.allowDirtyClerkDocs).toBe(true)
   })
+
+  test('parseConfig rejects unknown flags (a typo cannot silently change run behavior)', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--dry-runn']
+    expect(() => parseConfig()).toThrow(/Unknown option/)
+  })
+
+  test('parseConfig rejects a value flag with a missing value at the end of argv', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-path']
+    expect(() => parseConfig()).toThrow(/argument missing/)
+  })
+
+  test('parseConfig rejects a value flag whose value is the next flag (no silent mode flip)', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-path', '--local-only']
+    expect(() => parseConfig()).toThrow(/ambiguous/)
+  })
+
+  test('parseConfig supports the --flag=value form', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-base=release']
+    const config = parseConfig()
+    expect(config.clerkBaseBranch).toBe('release')
+    expect(config.clerkBaseBranchExplicit).toBe(true)
+  })
+
+  test('parseConfig rejects duplicate value flags', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-base', 'one', '--clerk-base', 'two']
+    expect(() => parseConfig()).toThrow(
+      'Duplicate CLI argument: --clerk-base and --clerk-base both set clerk-base. Pass it only once.',
+    )
+  })
+
+  test('parseConfig rejects duplicate settings passed through aliases', () => {
+    process.argv = [
+      'node',
+      'scripts/migrate-clerk-docs-to-clerk.ts',
+      '--docs-path',
+      './docs-a',
+      '--clerk-docs-path',
+      './docs-b',
+    ]
+    expect(() => parseConfig()).toThrow(
+      'Duplicate CLI argument: --docs-path and --clerk-docs-path both set docs-path. Pass it only once.',
+    )
+  })
+
+  test('parseConfig rejects empty string values (e.g. from an unset shell variable)', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-base', '']
+    expect(() => parseConfig()).toThrow('--clerk-base requires a non-empty value')
+  })
+
+  test('parseConfig rejects --local-only without --clerk-path (branch would die with the temp clone)', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--local-only']
+    expect(() => parseConfig()).toThrow(/--local-only requires --clerk-path/)
+  })
+
+  test('parseConfig accepts --local-only together with --clerk-path', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--local-only', '--clerk-path', './']
+    const config = parseConfig()
+    expect(config.localOnly).toBe(true)
+    expect(config.clerkPath).toBeTruthy()
+  })
+
+  test('parseConfig marks clerkBaseBranchExplicit false when --clerk-base is defaulted', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts']
+    const config = parseConfig()
+    expect(config.clerkBaseBranch).toBe('main')
+    expect(config.clerkBaseBranchExplicit).toBe(false)
+  })
+
+  test('parseConfig rejects repo slugs with characters outside the GitHub charset', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-repo', "clerk/cl'erk"]
+    expect(() => parseConfig()).toThrow(/Invalid repo slug/)
+  })
+
+  test('parseConfig rejects repo slugs with too many path segments', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--docs-repo', 'a/b/c']
+    expect(() => parseConfig()).toThrow(/Invalid repo slug/)
+  })
+})
+
+describe('parseGitRemoteUrlToSlug', () => {
+  test('parses https URLs with and without .git suffix', () => {
+    expect(parseGitRemoteUrlToSlug('https://github.com/clerk/clerk.git')).toEqual(['clerk', 'clerk'])
+    expect(parseGitRemoteUrlToSlug('https://github.com/clerk/clerk-docs')).toEqual(['clerk', 'clerk-docs'])
+  })
+
+  test('parses scp-like ssh remotes (git@github.com:owner/repo.git)', () => {
+    expect(parseGitRemoteUrlToSlug('git@github.com:clerk/clerk-docs.git')).toEqual(['clerk', 'clerk-docs'])
+  })
+
+  test('parses ssh:// URLs', () => {
+    expect(parseGitRemoteUrlToSlug('ssh://git@github.com/clerk/clerk.git')).toEqual(['clerk', 'clerk'])
+  })
+
+  test('returns null for local paths and non-owner/repo shapes', () => {
+    expect(parseGitRemoteUrlToSlug('/Users/me/dev/clerk')).toBeNull()
+    expect(parseGitRemoteUrlToSlug('https://github.com/clerk')).toBeNull()
+    expect(parseGitRemoteUrlToSlug('https://github.com/a/b/c')).toBeNull()
+  })
+})
+
+describe('repoSlugsEqual', () => {
+  test('compares case-insensitively (GitHub slugs are case-insensitive)', () => {
+    expect(repoSlugsEqual(['Clerk', 'Clerk-Docs'], ['clerk', 'clerk-docs'])).toBe(true)
+    expect(repoSlugsEqual(['clerk', 'clerk'], ['clerk', 'clerk-docs'])).toBe(false)
+  })
+})
+
+describe('isDirectCliInvocation', () => {
+  test('true when argv[1] resolves to the module path, including paths with spaces', () => {
+    const scriptPath = '/tmp/My Projects/clerk-docs/scripts/migrate.ts'
+    const url = pathToFileURL(scriptPath).href
+    // The old string comparison (`file://${argv1}`) failed here because pathToFileURL percent-encodes.
+    expect(url).not.toBe(`file://${scriptPath}`)
+    expect(isDirectCliInvocation(url, scriptPath)).toBe(true)
+  })
+
+  test('resolves relative argv[1] against the cwd', () => {
+    const abs = path.join(process.cwd(), 'scripts/migrate-clerk-docs-to-clerk.ts')
+    expect(isDirectCliInvocation(pathToFileURL(abs).href, 'scripts/migrate-clerk-docs-to-clerk.ts')).toBe(true)
+  })
+
+  test('false when argv[1] is missing or points elsewhere (module imported, not executed)', () => {
+    const url = pathToFileURL('/repo/scripts/migrate.ts').href
+    expect(isDirectCliInvocation(url, undefined)).toBe(false)
+    expect(isDirectCliInvocation(url, '/usr/bin/vitest')).toBe(false)
+  })
+})
+
+describe('resolveEffectiveClerkBase', () => {
+  test('uses the configured base when there is no existing PR', () => {
+    expect(resolveEffectiveClerkBase({ existingPr: null, configuredBase: 'main', configuredExplicitly: false })).toBe(
+      'main',
+    )
+  })
+
+  test('uses the configured base when it matches the existing PR base', () => {
+    expect(
+      resolveEffectiveClerkBase({
+        existingPr: { baseRefName: 'main', url: 'https://github.com/clerk/clerk/pull/1' },
+        configuredBase: 'main',
+        configuredExplicitly: true,
+      }),
+    ).toBe('main')
+  })
+
+  test('follows the existing PR base when --clerk-base was defaulted', () => {
+    expect(
+      resolveEffectiveClerkBase({
+        existingPr: { baseRefName: 'release', url: 'https://github.com/clerk/clerk/pull/1' },
+        configuredBase: 'main',
+        configuredExplicitly: false,
+      }),
+    ).toBe('release')
+  })
+
+  test('aborts when an explicit --clerk-base conflicts with the existing PR base', () => {
+    expect(() =>
+      resolveEffectiveClerkBase({
+        existingPr: { baseRefName: 'release', url: 'https://github.com/clerk/clerk/pull/1' },
+        configuredBase: 'main',
+        configuredExplicitly: true,
+      }),
+    ).toThrow(MigrationError)
+    try {
+      resolveEffectiveClerkBase({
+        existingPr: { baseRefName: 'release', url: 'https://github.com/clerk/clerk/pull/1' },
+        configuredBase: 'main',
+        configuredExplicitly: true,
+      })
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(MigrationError)
+      expect((err as InstanceType<typeof MigrationError>).code).toBe('clerk-base-mismatch')
+    }
+  })
 })
 
 describe('rewritePrRefsInCommitMessage', () => {
@@ -586,11 +767,11 @@ describe('buildClosePrCommandArgs', () => {
 })
 
 describe('buildFetchBranchRefspecArgs', () => {
-  test('uses an explicit refspec so origin/<branch> is created in a single-branch clone', () => {
+  test('uses a forced explicit refspec so origin/<branch> is created in a single-branch clone', () => {
     expect(buildFetchBranchRefspecArgs('migrate-clerk-docs')).toEqual([
       'fetch',
       'origin',
-      'migrate-clerk-docs:refs/remotes/origin/migrate-clerk-docs',
+      '+migrate-clerk-docs:refs/remotes/origin/migrate-clerk-docs',
     ])
   })
 
@@ -598,8 +779,13 @@ describe('buildFetchBranchRefspecArgs', () => {
     expect(buildFetchBranchRefspecArgs('nick/my-new-branch')).toEqual([
       'fetch',
       'origin',
-      'nick/my-new-branch:refs/remotes/origin/nick/my-new-branch',
+      '+nick/my-new-branch:refs/remotes/origin/nick/my-new-branch',
     ])
+  })
+
+  test('forces the tracking-ref update (leading +) so force-pushed remote branches still fetch', () => {
+    const refspec = buildFetchBranchRefspecArgs('any-branch')[2]
+    expect(refspec.startsWith('+')).toBe(true)
   })
 })
 

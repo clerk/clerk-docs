@@ -798,7 +798,8 @@ describe('parseMigrationNoticeEntries', () => {
   })
 
   test('recovers the URL from the legacy single-line comment format', () => {
-    const legacy = '<!-- clerk-docs-migration-notice -->\nThis branch and pr were migrated to: https://github.com/clerk/clerk/pull/2418'
+    const legacy =
+      '<!-- clerk-docs-migration-notice -->\nThis branch and pr were migrated to: https://github.com/clerk/clerk/pull/2418'
     expect(parseMigrationNoticeEntries(legacy)).toEqual([{ prUrl: 'https://github.com/clerk/clerk/pull/2418' }])
   })
 

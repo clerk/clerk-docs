@@ -65,6 +65,7 @@ interface CliConfig {
    * Override the clerk-side branch name to migrate into (e.g. `nick/my-new-branch`).
    * When unset, defaults to `${headRef}-docs-migration`. Used for both create and update mode:
    * if the named branch already exists on clerk the run updates it instead of creating a new one.
+   * `main` is rejected: update mode would push migration commits directly to clerk's default branch.
    */
   targetBranch?: string
   /**
@@ -194,6 +195,15 @@ const migrationErrorDefinitions = {
     hints: (): readonly string[] => [
       'Checkout your feature branch in clerk-docs and rerun from there.',
       'If you really want to migrate main (e.g. a one-shot full-history import), rerun with --allow-docs-main.',
+    ],
+  },
+  'refuse-target-branch-main': {
+    message: (): string =>
+      '--target-branch cannot be "main": the target branch is the clerk-side branch this run pushes migration commits to. ' +
+      'Since "main" already exists on clerk, the run would switch to update mode and push the migration directly to clerk\'s default branch instead of going through a PR.',
+    hints: (): readonly string[] => [
+      'Pass a feature branch name instead, e.g. --target-branch nick/my-docs-migration.',
+      'Or drop --target-branch to use the default name: <docs-branch>-docs-migration.',
     ],
   },
   'insufficient-repo-access': {
@@ -482,7 +492,7 @@ Optional:
   --clerk-path <path>         Path to the local clerk (default: clones into a temp directory)
   --clerk-repo <owner/repo>   Target PR repo (default: clerk/clerk); must match the clerk clone's origin remote
   --clerk-base <branch>       Branch in clerk to base the new PR on (default: main). In update mode the existing clerk PR's base wins; passing a conflicting --clerk-base aborts.
-  --target-branch <branch>    Clerk-side branch name to migrate into, e.g. nick/my-new-branch (default: <docs-branch>-docs-migration). If that branch already exists on clerk, the run updates it instead of creating a new branch.
+  --target-branch <branch>    Clerk-side branch name to migrate into, e.g. nick/my-new-branch (default: <docs-branch>-docs-migration). If that branch already exists on clerk, the run updates it instead of creating a new branch. "main" is rejected — updating it would push the migration directly to clerk's default branch.
   --allow-dirty-clerk         Skip clean-tree preflight for local clerk (only applies with --clerk-path); uncommitted changes stay in your working tree and are not included in the PR
 
   --docs-path <path>          Path to the clerk-docs repo (default: cwd)
@@ -812,6 +822,9 @@ function parseConfig(): CliConfig {
   }
   if (parsed.data.localOnly && !parsed.data.clerkPath) {
     throwMigrationError('local-only-requires-clerk-path')
+  }
+  if (parsed.data.targetBranch === 'main') {
+    throwMigrationError('refuse-target-branch-main')
   }
   return parsed.data
 }

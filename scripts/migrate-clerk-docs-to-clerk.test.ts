@@ -337,6 +337,16 @@ describe('parseConfig', () => {
     expect(config.targetBranch).toBe('nick/my-new-branch')
   })
 
+  test('parseConfig rejects --target-branch main (update mode would push straight to clerk main)', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--target-branch', 'main']
+    expect(() => parseConfig()).toThrow(/--target-branch cannot be "main"/)
+  })
+
+  test('parseConfig rejects main through the --clerk-target-branch alias too', () => {
+    process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--clerk-target-branch', 'main']
+    expect(() => parseConfig()).toThrow(/--target-branch cannot be "main"/)
+  })
+
   test('parseConfig rejects invalid --pr values', () => {
     process.argv = ['node', 'scripts/migrate-clerk-docs-to-clerk.ts', '--pr', 'zero']
     expect(() => parseConfig()).toThrow('--pr must be a positive integer')

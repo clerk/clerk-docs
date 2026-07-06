@@ -1875,7 +1875,7 @@ function buildClosePrCommandArgs(prNumber: number, repo: string): string[] {
  * resolution) doesn't fail the fetch with a non-fast-forward rejection.
  */
 function buildFetchBranchRefspecArgs(branch: string): string[] {
-  return ['fetch', 'origin', `+${branch}:refs/remotes/origin/${branch}`]
+  return ['fetch', '--no-prune', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]
 }
 
 /**

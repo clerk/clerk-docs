@@ -8,14 +8,7 @@ The `getAuth()` helper retrieves authentication state from the `request` object.
 
 ## Usage
 
-The `getAuth()` helper can be used to protect routes based on authentication status, authorization status, and token type. It also offers more granular control over how to handle unauthenticated users - you can redirect them to the sign-in page, return a `401` status code, or perform whatever action you need. Unlike [`requireAuth()`](/docs/reference/express/require-auth), it **can** be used to protect API routes.
-
-> [!QUIZ]
-> When should you use `getAuth()` instead of [`requireAuth()`](/docs/reference/express/require-auth)?
->
-> ---
->
-> The [`requireAuth()`](/docs/reference/express/require-auth) helper protects a route based on _authentication_ status, and redirects unauthenticated users to the sign-in page. It can only be used in full-stack applications, and cannot be used to protect API routes. The `getAuth()` helper offers more options for protecting routes, more granular control over how to protect them, and can be used to protect API routes.
+The `getAuth()` helper can be used to protect routes based on authentication status, authorization status, and token type. It also offers more granular control over how to handle unauthenticated users - you can redirect them to the sign-in page, return a `401` status code, or perform whatever action you need.
 
 ### Example: Protect a route based on authentication status
 
@@ -31,15 +24,16 @@ const PORT = 3000
 // Apply `clerkMiddleware()` to all routes
 app.use(clerkMiddleware())
 
-// Use `getAuth()` to protect a route based on authentication status
 app.get('/path', (req, res) => {
+  // Use `getAuth()` to protect a route based on authentication status
   const auth = getAuth(req)
 
   if (!auth.isAuthenticated) {
-    return res.status(401).send('User not authenticated')
+    res.status(401).send('User not authenticated')
+    return
   }
 
-  return res.json(auth)
+  res.json(auth)
 })
 
 app.listen(PORT, () => {
@@ -49,10 +43,10 @@ app.listen(PORT, () => {
 
 ### Example: Protect a route based on authorization status
 
-The following example demonstrates how to use [`requireAuth()`](/docs/reference/express/require-auth) and `getAuth()` together. `requireAuth()` protects the route based on _authentication_ status while `getAuth()` protects the route based on _authorization_ status. It also demonstrates how to use both `clerkMiddleware()` and `requireAuth()` together, as `clerkMiddleware()` will provide authentication state to routes that don't use `requireAuth()`.
+The following example uses `getAuth()` to protect the route based on _authentication_ and _authorization_ status.
 
 ```js
-import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+import { clerkMiddleware, getAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
@@ -61,22 +55,24 @@ const PORT = 3000
 // Apply `clerkMiddleware()` to all routes
 app.use(clerkMiddleware())
 
-// Use `getAuth()` to protect a route based on authorization status
-const hasPermission = (req, res, next) => {
+app.get('/path', (req, res) => {
+  // Use `getAuth()` to protect a route based on authorization status
   const auth = getAuth(req)
 
-  // Handle if the user is not authorized
-  if (!auth.has({ permission: 'org:admin:example' })) {
-    return res.status(403).send('Forbidden')
+  // Handle if the user is not authenticated
+  if (!auth.isAuthenticated) {
+    res.status(401).send('Unauthorized')
+    return
   }
 
-  return next()
-}
+  // Handle if the user is authenticated but not authorized
+  if (!auth.has({ permission: 'org:admin:example' })) {
+    res.status(403).send('Forbidden')
+    return
+  }
 
-// Use `requireAuth()` to protect a route based on authentication status
-// If user is not authenticated, requireAuth() will redirect back to the homepage
-// Then, use the `hasPermission` function created above to protect the route based on authorization status
-app.get('/path', requireAuth(), hasPermission, (req, res) => res.json(req.auth))
+  res.json(auth)
+})
 
 // Start the server and listen on the specified port
 app.listen(PORT, () => {

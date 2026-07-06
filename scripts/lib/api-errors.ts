@@ -3,6 +3,13 @@ import path from 'path'
 import type { BuildConfig } from './config'
 import { DocsFile } from './io'
 
+// Matches bare http(s) URLs so they can be wrapped as MDX links.
+const urlRegex = /(https?:\/\/[^\s]+)/g
+// Matches each uppercase letter, used to insert word-break opportunities.
+const uppercaseLetterRegex = /([A-Z])/g
+// Matches a single trailing newline at the end of the string.
+const trailingNewlineRegex = /\n$/
+
 interface ApiError {
   name: string
   description?: string
@@ -49,7 +56,7 @@ ${opts.description}
     const parsedDescription = description
       .replaceAll(name, `\`${name}\``) // Format the error name in the description
       .replaceAll('_', '\\_') // Escape underscores
-      .replaceAll(/(https?:\/\/[^\s]+)/g, (url) => `[${url}](${url})`) // Replace URLs with MDX links
+      .replaceAll(urlRegex, (url) => `[${url}](${url})`) // Replace URLs with MDX links
 
     return `\n${parsedDescription}\n`
   }
@@ -63,7 +70,7 @@ ${opts.description}
 
   // Handles line break opportunities in the error name
   const parseName = (name: string) => {
-    return name.replace(/([A-Z])/g, '<wbr />$1')
+    return name.replace(uppercaseLetterRegex, '<wbr />$1')
   }
 
   const parseCode = (code: {}, status: number) => {
@@ -115,7 +122,7 @@ ${fileErrors}
     })
     .join('')
 
-  return frontmatter + errorDocs.replace(/\n$/, '')
+  return frontmatter + errorDocs.replace(trailingNewlineRegex, '')
 }
 
 export async function generateApiErrorDocs(config: BuildConfig) {

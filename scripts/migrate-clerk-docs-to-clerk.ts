@@ -1868,14 +1868,21 @@ function buildClosePrCommandArgs(prNumber: number, repo: string): string[] {
 
 /**
  * `git fetch` args that materialize `origin/<branch>` even in a `--single-branch` clone.
- * The explicit `branch:refs/remotes/origin/branch` refspec is required because a bare
+ * The explicit `refs/heads/<branch>:refs/remotes/origin/<branch>` refspec is required because a bare
  * `git fetch origin <branch>` would only update FETCH_HEAD, leaving `origin/<branch>` undefined
  * and breaking a subsequent `git checkout`/`git merge origin/<branch>`. The leading `+` forces
  * the tracking-ref update so a force-pushed remote branch (e.g. after a manual conflict
  * resolution) doesn't fail the fetch with a non-fast-forward rejection.
+ *
+ * The source is fully qualified (`refs/heads/<branch>`) and `--no-prune` is passed so the fetch is
+ * safe when the user has `fetch.prune` / `remote.origin.prune` enabled (a common global setting).
+ * With an unqualified source, git's prune pass fails to match the remote head against the existing
+ * `refs/remotes/origin/<branch>` and deletes it (`- [deleted] (none)`) right after updating it —
+ * which then makes the following `git rev-list <branch>..origin/<branch>` sync check abort with
+ * "unknown revision". Either guard alone prevents this; both are kept for defense in depth.
  */
 function buildFetchBranchRefspecArgs(branch: string): string[] {
-  return ['fetch', 'origin', `+${branch}:refs/remotes/origin/${branch}`]
+  return ['fetch', '--no-prune', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]
 }
 
 /**

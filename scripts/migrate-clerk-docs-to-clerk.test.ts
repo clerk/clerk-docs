@@ -834,22 +834,30 @@ describe('buildFetchBranchRefspecArgs', () => {
   test('uses a forced explicit refspec so origin/<branch> is created in a single-branch clone', () => {
     expect(buildFetchBranchRefspecArgs('migrate-clerk-docs')).toEqual([
       'fetch',
+      '--no-prune',
       'origin',
-      '+migrate-clerk-docs:refs/remotes/origin/migrate-clerk-docs',
+      '+refs/heads/migrate-clerk-docs:refs/remotes/origin/migrate-clerk-docs',
     ])
   })
 
   test('preserves slashes in branch names like nick/my-new-branch', () => {
     expect(buildFetchBranchRefspecArgs('nick/my-new-branch')).toEqual([
       'fetch',
+      '--no-prune',
       'origin',
-      '+nick/my-new-branch:refs/remotes/origin/nick/my-new-branch',
+      '+refs/heads/nick/my-new-branch:refs/remotes/origin/nick/my-new-branch',
     ])
   })
 
   test('forces the tracking-ref update (leading +) so force-pushed remote branches still fetch', () => {
-    const refspec = buildFetchBranchRefspecArgs('any-branch')[2]
-    expect(refspec.startsWith('+')).toBe(true)
+    const refspec = buildFetchBranchRefspecArgs('any-branch').at(-1)
+    expect(refspec?.startsWith('+')).toBe(true)
+  })
+
+  test('is prune-safe: passes --no-prune and a fully-qualified source so a user prune config cannot delete the tracking ref', () => {
+    const args = buildFetchBranchRefspecArgs('any-branch')
+    expect(args).toContain('--no-prune')
+    expect(args.at(-1)).toBe('+refs/heads/any-branch:refs/remotes/origin/any-branch')
   })
 })
 

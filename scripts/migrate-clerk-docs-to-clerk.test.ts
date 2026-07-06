@@ -6,19 +6,19 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import {
-  assertGitFilterRepoVersionOutput,
   assertSemverAtLeast,
   buildBaseMergeIntoMigrationArgs,
   buildClosePrCommandArgs,
   buildFetchBranchRefspecArgs,
   buildUpstreamConfigArgs,
   buildMigrationBranchName,
-  buildPrRefsRewriteCallback,
+  buildSquashCommitMessage,
   canCommentOnPrInRepo,
   canPushToRepo,
   canReadRepo,
   classifyExistingMigration,
   commandJson,
+  createNewMigration,
   formatClosedPrAbortMessage,
   formatMigrationNoticeCommentBody,
   formatSourcePrMigrationAppendix,
@@ -33,6 +33,7 @@ import {
   parseGitRemoteUrlToSlug,
   parseMigrationNoticeEntries,
   parseSemverLoose,
+  readLastMigratedDocsHead,
   repoSlugsEqual,
   resolveEffectiveClerkBase,
   resolveMigrationBranchName,
@@ -41,7 +42,9 @@ import {
   runCommand,
   sanitizeBranchForPath,
   stripClerkDocsRootGitignoreEntries,
+  updateExistingMigration,
 } from './migrate-clerk-docs-to-clerk'
+import type { CliConfig } from './migrate-clerk-docs-to-clerk'
 
 describe('migrate-clerk-docs-to-clerk core helpers', () => {
   test('sanitizeBranchForPath replaces separators', () => {
@@ -112,11 +115,6 @@ describe('semver utilities', () => {
 
   test('assertSemverAtLeast throws for old versions', () => {
     expect(() => assertSemverAtLeast('git', 'git version 2.38.0', '2.39.0')).toThrow('Minimum supported is 2.39.0')
-  })
-
-  test('assertGitFilterRepoVersionOutput accepts semver and hash outputs', () => {
-    expect(() => assertGitFilterRepoVersionOutput('git-filter-repo', '2.38.0', '2.38.0')).not.toThrow()
-    expect(() => assertGitFilterRepoVersionOutput('git-filter-repo', '1a2b3c4d5e', '2.38.0')).not.toThrow()
   })
 })
 
@@ -626,17 +624,50 @@ describe('rewritePrRefsInCommitMessage', () => {
   })
 })
 
-describe('buildPrRefsRewriteCallback', () => {
-  test('returns a Python snippet with the repo slug embedded', () => {
-    const result = buildPrRefsRewriteCallback('clerk/clerk-docs')
-    expect(result).toContain('import re')
-    expect(result).toContain("clerk/clerk-docs#'")
-    expect(result).toContain('message')
+describe('buildSquashCommitMessage', () => {
+  const baseParams = {
+    title: 'Migrate clerk-docs branch feat/foo',
+    docsRepoSlug: 'clerk/clerk-docs',
+    headRef: 'feat/foo',
+    headSha: 'a'.repeat(40),
+    commitLines: ['abc1234 Fix typo (#123)', 'def5678 Add page'],
+    coAuthors: ['Alice <alice@example.com>', 'Bob <bob@example.com>'],
+  }
+
+  test('starts with the title and lists every squashed commit', () => {
+    const msg = buildSquashCommitMessage(baseParams)
+    expect(msg.startsWith('Migrate clerk-docs branch feat/foo\n\n')).toBe(true)
+    expect(msg).toContain('Squashed migration of 2 commit(s) from clerk/clerk-docs branch feat/foo')
+    expect(msg).toContain('- def5678 Add page')
   })
 
-  test('uses the same lookbehind pattern as the TypeScript regex', () => {
-    const result = buildPrRefsRewriteCallback('clerk/clerk-docs')
-    expect(result).toContain('(?<![/\\w])#(\\d+)')
+  test('qualifies bare #N refs in commit subjects to the docs repo', () => {
+    const msg = buildSquashCommitMessage(baseParams)
+    expect(msg).toContain('- abc1234 Fix typo (clerk/clerk-docs#123)')
+    expect(msg).not.toContain('Fix typo (#123)')
+  })
+
+  test('ends with Co-authored-by attribution and the migrated-head trailer', () => {
+    const msg = buildSquashCommitMessage(baseParams)
+    const lines = msg.split('\n')
+    expect(lines.at(-3)).toBe('Co-authored-by: Alice <alice@example.com>')
+    expect(lines.at(-2)).toBe('Co-authored-by: Bob <bob@example.com>')
+    expect(lines.at(-1)).toBe(`Clerk-Docs-Migrated-Head: ${'a'.repeat(40)}`)
+  })
+
+  test('caps the commit list and reports how many were omitted', () => {
+    const commitLines = Array.from({ length: 60 }, (_, i) => `sha${i} commit ${i}`)
+    const msg = buildSquashCommitMessage({ ...baseParams, commitLines })
+    expect(msg).toContain('Squashed migration of 60 commit(s)')
+    expect(msg).toContain('- sha49 commit 49')
+    expect(msg).not.toContain('- sha50 commit 50')
+    expect(msg).toContain('- … and 10 more')
+  })
+
+  test('works without co-authors (trailer block is just the migrated head)', () => {
+    const msg = buildSquashCommitMessage({ ...baseParams, coAuthors: [] })
+    expect(msg).not.toContain('Co-authored-by')
+    expect(msg.split('\n').at(-1)).toBe(`Clerk-Docs-Migrated-Head: ${'a'.repeat(40)}`)
   })
 })
 
@@ -715,15 +746,11 @@ describe('formatUpdateMergeConflictHints', () => {
     branch: 'feat/foo-docs-migration',
     workspacePath: '/tmp/clerk-migrate-abc',
     isTemporary: true,
-    remoteName: 'clerk-docs-migrate-123',
-    filterRepoClonePath: '/tmp/clerk-docs-migrate-feat-foo-456',
   }
   const localParams = {
     branch: 'feat/foo-docs-migration',
     workspacePath: '/Users/me/dev/clerk',
     isTemporary: false,
-    remoteName: 'clerk-docs-migrate-789',
-    filterRepoClonePath: '/tmp/clerk-docs-migrate-feat-foo-456',
   }
 
   test('temp workspaces lead with the IDE resolve-in-temp-clone fix, --clerk-path as fallback', () => {
@@ -736,34 +763,35 @@ describe('formatUpdateMergeConflictHints', () => {
     expect(joined.indexOf('cursor "/tmp/clerk-migrate-abc"')).toBeLessThan(joined.indexOf('--clerk-path'))
   })
 
-  test('temp workspaces still document the manual resolve/push path', () => {
+  test('temp workspaces still document the manual resolve/commit/push path', () => {
     const hints = formatUpdateMergeConflictHints(tempParams)
     const joined = hints.join('\n')
+    expect(joined).toContain('git commit')
     expect(joined).toContain('git push')
     expect(joined).toContain('tracks origin/feat/foo-docs-migration')
   })
 
-  test('temp workspaces say deleting both temp dirs is the whole cleanup (no git remote remove)', () => {
+  test('temp workspaces say deleting the temp clone is the whole cleanup (no git remote remove)', () => {
     const hints = formatUpdateMergeConflictHints(tempParams)
     const joined = hints.join('\n')
     expect(joined).not.toContain('git remote remove')
     expect(joined).toContain('/tmp/clerk-migrate-abc')
-    expect(joined).toContain('/tmp/clerk-docs-migrate-feat-foo-456')
   })
 
   test('local (--clerk-path) workspaces describe the IDE resolve-then-push flow', () => {
     const hints = formatUpdateMergeConflictHints(localParams)
     const joined = hints.join('\n')
     expect(joined).toContain('/Users/me/dev/clerk')
+    expect(joined).toContain('git commit')
     expect(joined).toContain('git push')
     expect(joined).toContain('tracks origin/feat/foo-docs-migration')
-    expect(joined).toContain('git remote remove clerk-docs-migrate-789')
     expect(joined).toContain('git merge --abort')
   })
 
-  test('local workspaces still list the filter-repo temp clone for deletion', () => {
-    const hints = formatUpdateMergeConflictHints(localParams)
-    expect(hints.join('\n')).toContain('/tmp/clerk-docs-migrate-feat-foo-456')
+  test('mentions that the commit message is prefilled after conflict resolution', () => {
+    for (const params of [tempParams, localParams]) {
+      expect(formatUpdateMergeConflictHints(params).join('\n')).toContain('prefilled')
+    }
   })
 
   test('local workspaces do NOT suggest --clerk-path (already using it)', () => {
@@ -876,5 +904,213 @@ describe('buildUpstreamConfigArgs', () => {
       ['config', 'branch.nick/test-migrate-clerk-docs-2.remote', 'origin'],
       ['config', 'branch.nick/test-migrate-clerk-docs-2.merge', 'refs/heads/nick/test-migrate-clerk-docs-2'],
     ])
+  })
+})
+
+/**
+ * Offline integration tests for the squash migration flow, against scratch git repos with local
+ * bare "origins". `localOnly: true` and a null source PR keep every path free of `gh` calls.
+ */
+describe('squash migration integration (scratch git repos)', () => {
+  let rootDir = ''
+  let docsDir = ''
+  let clerkDir = ''
+  let config: CliConfig
+  const workspace = () => ({ path: clerkDir, isTemporary: false })
+  const migrationBranch = 'feature-docs-migration'
+
+  const git = async (repo: string, ...args: string[]) => {
+    const result = await runCommand('git', args, repo)
+    return result.stdout.trim()
+  }
+
+  const writeAndCommit = async (repo: string, file: string, contents: string, message: string) => {
+    await fs.mkdir(path.dirname(path.join(repo, file)), { recursive: true })
+    await fs.writeFile(path.join(repo, file), contents, 'utf8')
+    await git(repo, 'add', '-A')
+    await git(repo, 'commit', '-m', message)
+  }
+
+  const initRepo = async (repo: string) => {
+    await fs.mkdir(repo, { recursive: true })
+    await git(repo, 'init', '-q', '-b', 'main')
+    await git(repo, 'config', 'user.email', 'tester@example.com')
+    await git(repo, 'config', 'user.name', 'Tester')
+    await git(repo, 'config', 'commit.gpgsign', 'false')
+  }
+
+  beforeEach(async () => {
+    rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-squash-int-'))
+    docsDir = path.join(rootDir, 'docs')
+    clerkDir = path.join(rootDir, 'clerk')
+
+    await runCommand('git', ['init', '-q', '--bare', path.join(rootDir, 'docs-bare')], rootDir)
+    await runCommand('git', ['init', '-q', '--bare', path.join(rootDir, 'clerk-bare')], rootDir)
+
+    // Docs repo: main plus a feature branch with an edit (with a #12 ref), an add, and a rename.
+    await initRepo(docsDir)
+    await writeAndCommit(docsDir, 'docs/a.mdx', 'line1\nline2\nline3\n', 'initial a')
+    await writeAndCommit(docsDir, 'docs/b.mdx', 'hello\n', 'initial b')
+    await git(docsDir, 'remote', 'add', 'origin', path.join(rootDir, 'docs-bare'))
+    await git(docsDir, 'push', '-q', '-u', 'origin', 'main')
+    await git(docsDir, 'checkout', '-q', '-b', 'feature')
+    await writeAndCommit(docsDir, 'docs/a.mdx', 'line1\nline2-EDITED\nline3\n', 'edit a (#12)')
+    await writeAndCommit(docsDir, 'docs/new-page.mdx', 'brand new\n', 'add new page')
+    await git(docsDir, 'mv', 'docs/b.mdx', 'docs/b-renamed.mdx')
+    await git(docsDir, '-c', 'user.name=Alice', '-c', 'user.email=alice@example.com', 'commit', '-m', 'rename b')
+
+    // Clerk repo: docs content lives squashed under clerk-docs/ (no shared history) + own files.
+    await initRepo(clerkDir)
+    await writeAndCommit(clerkDir, 'clerk-docs/docs/a.mdx', 'line1\nline2\nline3\n', 'wip')
+    await fs.writeFile(path.join(clerkDir, 'clerk-docs/docs/b.mdx'), 'hello\n', 'utf8')
+    await fs.writeFile(path.join(clerkDir, 'src-app.ts'), 'app code\n', 'utf8')
+    await fs.writeFile(path.join(clerkDir, '.gitignore'), 'node_modules\n/clerk-docs\n', 'utf8')
+    await git(clerkDir, 'add', '-A', '-f')
+    await git(clerkDir, 'commit', '--amend', '-q', '-m', 'clerk main (docs snapshot squashed)')
+    await git(clerkDir, 'remote', 'add', 'origin', path.join(rootDir, 'clerk-bare'))
+    await git(clerkDir, 'push', '-q', '-u', 'origin', 'main')
+
+    config = {
+      clerkPath: clerkDir,
+      clerkDocsPath: docsDir,
+      clerkBaseBranch: 'main',
+      clerkBaseBranchExplicit: false,
+      localOnly: true,
+      dryRun: false,
+      allowDirtyClerk: false,
+      allowDirtyClerkDocs: false,
+      allowClerkDocsMain: false,
+      debug: false,
+      clerkRepo: ['clerk', 'clerk'],
+      clerkDocsRepo: ['clerk', 'clerk-docs'],
+      closeSourcePr: true,
+      mergeMain: true,
+    }
+  })
+
+  afterEach(async () => {
+    if (rootDir) {
+      await fs.rm(rootDir, { recursive: true, force: true })
+    }
+  })
+
+  const runCreate = async () => await createNewMigration(config, workspace(), 'feature', 'main', null)
+
+  test('create mode applies the branch diff as one squash commit with attribution and trailer', async () => {
+    const outcome = await runCreate()
+    expect(outcome.newBranch).toBe(migrationBranch)
+
+    // One squash commit + the gitignore cleanup commit.
+    const commits = await git(clerkDir, 'log', '--format=%s', `main..${migrationBranch}`)
+    expect(commits.split('\n')).toEqual([
+      'chore: stop ignoring clerk-docs after in-repo migration',
+      'Migrate clerk-docs branch feature',
+    ])
+
+    const message = await git(clerkDir, 'log', '--format=%B', '-n', '1', `${migrationBranch}~1`)
+    const docsHead = await git(docsDir, 'rev-parse', 'feature')
+    expect(message).toContain('Squashed migration of 3 commit(s) from clerk/clerk-docs branch feature')
+    expect(message).toContain('edit a (clerk/clerk-docs#12)')
+    expect(message).toContain('Co-authored-by: Alice <alice@example.com>')
+    expect(message).toContain(`Clerk-Docs-Migrated-Head: ${docsHead}`)
+    await expect(readLastMigratedDocsHead(clerkDir, migrationBranch)).resolves.toBe(docsHead)
+
+    // Tree: edit applied, rename applied, addition present, clerk's own files untouched.
+    const aContents = await git(clerkDir, 'show', `${migrationBranch}:clerk-docs/docs/a.mdx`)
+    expect(aContents).toBe('line1\nline2-EDITED\nline3')
+    await expect(git(clerkDir, 'show', `${migrationBranch}:clerk-docs/docs/b-renamed.mdx`)).resolves.toBe('hello')
+    await expect(git(clerkDir, 'show', `${migrationBranch}:clerk-docs/docs/new-page.mdx`)).resolves.toBe('brand new')
+    await expect(git(clerkDir, 'show', `${migrationBranch}:src-app.ts`)).resolves.toBe('app code')
+    const gitignore = await git(clerkDir, 'show', `${migrationBranch}:.gitignore`)
+    expect(gitignore).not.toContain('/clerk-docs')
+
+    // No temporary fetch refs left behind in either repo.
+    for (const repo of [clerkDir, docsDir]) {
+      await expect(git(repo, 'for-each-ref', 'refs/clerk-docs-migrate-tmp/')).resolves.toBe('')
+    }
+  })
+
+  test('create mode aborts when the branch has no changes against main', async () => {
+    await git(docsDir, 'checkout', '-q', 'main')
+    await git(docsDir, 'checkout', '-q', '-b', 'empty-branch')
+    await expect(createNewMigration(config, workspace(), 'empty-branch', 'main', null)).rejects.toMatchObject({
+      code: 'nothing-to-migrate',
+    })
+  })
+
+  test('update mode applies only the docs changes since the last migrated head', async () => {
+    await runCreate()
+    await git(clerkDir, 'push', '-q', '-u', 'origin', migrationBranch)
+
+    await writeAndCommit(docsDir, 'docs/second.mdx', 'second round\n', 'second change')
+    const newDocsHead = await git(docsDir, 'rev-parse', 'feature')
+
+    const outcome = await updateExistingMigration(config, workspace(), 'feature', 'main', null, {
+      branch: migrationBranch,
+      pr: null,
+    })
+    expect(outcome.clerkPrUrl).toContain('local-only')
+
+    const newCommitSubject = await git(clerkDir, 'log', '--format=%s', '-n', '1', migrationBranch)
+    expect(newCommitSubject).toBe('Update clerk-docs migration for branch feature')
+    const message = await git(clerkDir, 'log', '--format=%B', '-n', '1', migrationBranch)
+    expect(message).toContain('Squashed migration of 1 commit(s)')
+    expect(message).toContain(`Clerk-Docs-Migrated-Head: ${newDocsHead}`)
+    await expect(readLastMigratedDocsHead(clerkDir, migrationBranch)).resolves.toBe(newDocsHead)
+
+    // Only the new file changed in the update commit.
+    const changed = await git(clerkDir, 'diff', '--name-only', `${migrationBranch}~1`, migrationBranch)
+    expect(changed).toBe('clerk-docs/docs/second.mdx')
+  })
+
+  test('update mode is a no-op when there are no new docs commits', async () => {
+    await runCreate()
+    await git(clerkDir, 'push', '-q', '-u', 'origin', migrationBranch)
+    const before = await git(clerkDir, 'rev-parse', migrationBranch)
+
+    await updateExistingMigration(config, workspace(), 'feature', 'main', null, {
+      branch: migrationBranch,
+      pr: null,
+    })
+
+    await expect(git(clerkDir, 'rev-parse', migrationBranch)).resolves.toBe(before)
+  })
+
+  test('update mode aborts with guidance on legacy branches without the baseline trailer', async () => {
+    // A migration branch created by the old full-history flow: exists on origin, no trailer anywhere.
+    await git(clerkDir, 'checkout', '-q', '-b', migrationBranch, 'main')
+    await writeAndCommit(clerkDir, 'legacy-note.md', 'legacy\n', 'legacy migration commit')
+    await git(clerkDir, 'push', '-q', '-u', 'origin', migrationBranch)
+    await git(clerkDir, 'checkout', '-q', 'main')
+
+    await expect(
+      updateExistingMigration(config, workspace(), 'feature', 'main', null, { branch: migrationBranch, pr: null }),
+    ).rejects.toMatchObject({ code: 'migration-branch-missing-baseline' })
+  })
+
+  test('conflicting changes leave a conflicted worktree with the commit message prefilled', async () => {
+    await runCreate()
+    await git(clerkDir, 'push', '-q', '-u', 'origin', migrationBranch)
+
+    // Same line edited on both sides: clerk-side directly on the migration branch, docs-side on the branch.
+    await git(clerkDir, 'checkout', '-q', migrationBranch)
+    await writeAndCommit(clerkDir, 'clerk-docs/docs/a.mdx', 'line1\nline2-CLERK\nline3\n', 'clerk-side edit')
+    await git(clerkDir, 'push', '-q', 'origin', migrationBranch)
+    await writeAndCommit(docsDir, 'docs/a.mdx', 'line1\nline2-DOCS\nline3\n', 'docs-side edit')
+
+    await expect(
+      updateExistingMigration(config, workspace(), 'feature', 'main', null, { branch: migrationBranch, pr: null }),
+    ).rejects.toMatchObject({ code: 'update-merge-conflict' })
+
+    const unmerged = await git(clerkDir, 'ls-files', '-u')
+    expect(unmerged).toContain('clerk-docs/docs/a.mdx')
+    const conflicted = await fs.readFile(path.join(clerkDir, 'clerk-docs/docs/a.mdx'), 'utf8')
+    expect(conflicted).toContain('<<<<<<<')
+    expect(conflicted).toContain('line2-DOCS')
+
+    // The prefilled commit message keeps the trailer so a manual commit preserves the baseline.
+    const docsHead = await git(docsDir, 'rev-parse', 'feature')
+    const mergeMsg = await fs.readFile(path.join(clerkDir, '.git', 'MERGE_MSG'), 'utf8')
+    expect(mergeMsg).toContain(`Clerk-Docs-Migrated-Head: ${docsHead}`)
   })
 })

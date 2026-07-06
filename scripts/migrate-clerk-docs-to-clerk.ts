@@ -1,22 +1,30 @@
 /**
  * PR / branch migration only: run from your clerk-docs feature branch (not main).
  *
+ * The branch's changes are migrated as a single squashed commit: the script diffs the branch
+ * against its merge-base with clerk-docs/main and applies that diff under clerk/clerk-docs/ with a
+ * 3-way apply. Individual clerk-docs commits are not carried over (clerk squash-merges PRs anyway,
+ * and the initial full-history import into clerk was itself squash-merged, so per-commit ancestry
+ * cannot be preserved). Original commit subjects and Co-authored-by attribution are recorded in the
+ * squash commit message, along with a `Clerk-Docs-Migrated-Head:` trailer that re-runs use to stay
+ * incremental.
+ *
  * First run (create mode):
- *   Merges origin/main into the current clerk-docs branch, rewrites that branch's history under
- *   clerk/clerk-docs/ (preserving authors per imported commit), merges the rewritten history into a
- *   new branch in the clerk repo (branched from origin/<--clerk-base>, not the local base branch),
- *   pushes it, and opens a PR in clerk if an open clerk-docs PR exists. A backlink comment is added
- *   to the source clerk-docs PR and that PR is then closed (the close is skipped if the backlink
- *   comment could not be posted).
+ *   Merges origin/main into the current clerk-docs branch, computes the branch diff, applies it as
+ *   one commit on a new branch in the clerk repo (branched from origin/<--clerk-base>, not the
+ *   local base branch), pushes it, and opens a PR in clerk if an open clerk-docs PR exists. A
+ *   backlink comment is added to the source clerk-docs PR and that PR is then closed (the close is
+ *   skipped if the backlink comment could not be posted).
  *
  * Re-run on the same clerk-docs branch (update mode):
  *   Safe and idempotent. The script detects the existing `${headRef}-docs-migration` branch on clerk,
  *   merges the latest clerk base (taken from the existing clerk PR's base branch, falling back to
- *   --clerk-base) plus the latest clerk-docs commits onto it, and pushes. A clerk PR is only opened
- *   if the branch has no PR yet (recovers from a run where the push succeeded but PR creation failed).
- *   If the existing clerk PR is CLOSED or MERGED the script aborts with instructions. If a re-merge
- *   conflicts, the working tree is left in a conflicted state (with the filter-repo remote preserved)
- *   so you can resolve in your IDE and push manually, or `git merge --abort` and re-run.
+ *   --clerk-base), then applies only the docs changes made since the last migrated head (read from
+ *   the `Clerk-Docs-Migrated-Head:` trailer) as another squashed commit, and pushes. A clerk PR is
+ *   only opened if the branch has no PR yet (recovers from a run where the push succeeded but PR
+ *   creation failed). If the existing clerk PR is CLOSED or MERGED the script aborts with
+ *   instructions. If applying conflicts, the working tree is left in a conflicted state so you can
+ *   resolve in your IDE, commit (the commit message is prefilled), and push manually.
  */
 import { existsSync, lstatSync } from 'node:fs'
 import fs from 'node:fs/promises'
@@ -80,8 +88,7 @@ interface CliConfig {
   allowDirtyClerkDocs: boolean
   /**
    * Skip preflight refusal when the current clerk-docs branch is `main`. Off by default because
-   * migrating `main` rewrites the entire clerk-docs history into clerk and is almost always the
-   * wrong thing to do for an ad-hoc PR migration.
+   * `main` has no branch diff against itself, so a squash migration of it finds nothing to do.
    */
   allowClerkDocsMain: boolean
   debug: boolean
@@ -148,19 +155,18 @@ const CLERK_TEMP_CLONE_DEPTH = 1
  */
 const CLERK_TEMP_CLONE_FILTER_BLOB_NONE = true
 const MIGRATION_NOTICE_MARKER = '<!-- clerk-docs-migration-notice -->'
+/**
+ * Trailer written into every squash migration commit, recording the clerk-docs commit whose tree
+ * that squash represents. Update mode reads the most recent trailer on the migration branch and
+ * diffs from there, so re-runs only bring over changes made since the last migration.
+ */
+const MIGRATED_HEAD_TRAILER = 'Clerk-Docs-Migrated-Head'
+/** Cap the per-commit list embedded in the squash commit message (huge branches stay readable). */
+const SQUASH_MESSAGE_COMMIT_LIST_LIMIT = 50
 const MIN_TOOL_VERSIONS = {
   git: '2.39.0',
   gh: '2.40.0',
-  gitFilterRepo: '2.38.0',
 } as const
-
-const MIGRATION_GIT_FILTER_REPO_INSTALL_HINT = [
-  'git-filter-repo is not installed or not on your PATH.',
-  'Install it, then re-run:',
-  '  macOS:   brew install git-filter-repo',
-  '  pip:    pip install git-filter-repo   (or pipx install git-filter-repo)',
-  'Docs:    https://github.com/newren/git-filter-repo/blob/main/INSTALL.md',
-].join('\n')
 
 /**
  * Central migration failures: message + hints per key (same idea as `scripts/lib/error-messages.ts`, plus hints).
@@ -178,23 +184,12 @@ const migrationErrorDefinitions = {
       'If you want to postpone migration, abort and rebase/merge your branch first.',
     ],
   },
-  'stale-migrate-remote': {
-    message: (): string =>
-      [
-        'Detected leftover state from a previous run: temporary migrate remote is still configured in clerk',
-        'Stop and fix manually (remove stale remote, revert repos), then retry.',
-      ].join('\n'),
-    hints: (): readonly string[] => [
-      'In your clerk repo, remove stale remotes matching `clerk-docs-migrate-*`.',
-      'Ensure no partial migration branch/merge is in progress before rerunning.',
-    ],
-  },
   'refuse-clerk-docs-main': {
     message: (): string =>
-      'Refusing to run on clerk-docs/main. Use a feature branch for your PR, or migrate main separately by hand.',
+      'Refusing to run on clerk-docs/main. Use a feature branch for your PR — main has no branch diff to migrate.',
     hints: (): readonly string[] => [
       'Checkout your feature branch in clerk-docs and rerun from there.',
-      'If you really want to migrate main (e.g. a one-shot full-history import), rerun with --allow-docs-main.',
+      'If you know what you are doing (e.g. --target-branch onto an existing migration), rerun with --allow-docs-main.',
     ],
   },
   'refuse-target-branch-main': {
@@ -212,10 +207,6 @@ const migrationErrorDefinitions = {
       'Verify your GitHub account has the required repo permissions.',
       'If your org uses SSO, authorize GitHub CLI for the org and rerun.',
     ],
-  },
-  'git-filter-repo-missing': {
-    message: (): string => MIGRATION_GIT_FILTER_REPO_INSTALL_HINT,
-    hints: (): readonly string[] => ['Install git-filter-repo (`brew install git-filter-repo`), then rerun.'],
   },
   'json-parse-failed': {
     message: (command: string, argsLine: string): string => `Failed parsing JSON from ${command} ${argsLine}`,
@@ -279,13 +270,39 @@ const migrationErrorDefinitions = {
   },
   'update-merge-conflict': {
     message: (params: MergeConflictHintParams): string =>
-      `Merge conflict while updating existing migration branch "${params.branch}". The latest clerk base or new clerk-docs changes conflict with the existing branch state in clerk.`,
+      `Conflict while updating existing migration branch "${params.branch}". The latest clerk base or new clerk-docs changes conflict with the existing branch state in clerk.`,
     hints: (params: MergeConflictHintParams): readonly string[] => formatUpdateMergeConflictHints(params),
   },
   'create-merge-conflict': {
     message: (params: MergeConflictHintParams): string =>
-      `Merge conflict while migrating clerk-docs history onto new branch "${params.branch}". The rewritten clerk-docs tree conflicts with the existing clerk-docs/ contents in clerk.`,
+      `Conflict while applying the clerk-docs branch diff onto new branch "${params.branch}". The branch's changes conflict with the existing clerk-docs/ contents in clerk.`,
     hints: (params: MergeConflictHintParams): readonly string[] => formatUpdateMergeConflictHints(params),
+  },
+  'nothing-to-migrate': {
+    message: (params: { headRef: string; baseSha: string }): string =>
+      `Branch "${params.headRef}" has no changes against its merge-base with clerk-docs/main (${params.baseSha.slice(0, 10)}). There is nothing to migrate.`,
+    hints: (_params: { headRef: string; baseSha: string }): readonly string[] => [
+      'Commit your docs changes on this branch (and push them) before migrating.',
+      `If the branch's changes already landed on clerk-docs/main, they arrive in clerk via the main sync instead.`,
+    ],
+  },
+  'migration-branch-missing-baseline': {
+    message: (params: { branch: string }): string =>
+      `Migration branch "${params.branch}" has no "${MIGRATED_HEAD_TRAILER}:" trailer in its history, so this run cannot tell which clerk-docs commit was last migrated. ` +
+      `It was probably created by the old full-history version of this script.`,
+    hints: (params: { branch: string }): readonly string[] => [
+      `Recreate it with the squash workflow: close the clerk PR, delete the branch (gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/${params.branch}), then re-run.`,
+      'Or pass --target-branch <name> to migrate into a fresh clerk branch and abandon the old one.',
+    ],
+  },
+  'baseline-commit-missing': {
+    message: (params: { branch: string; baselineSha: string }): string =>
+      `The last migrated clerk-docs commit ${params.baselineSha.slice(0, 10)} (from the "${MIGRATED_HEAD_TRAILER}:" trailer on "${params.branch}") does not exist in your clerk-docs checkout, so the incremental diff cannot be computed. ` +
+      `The docs branch was probably rebased or force-pushed and the old commit was garbage-collected.`,
+    hints: (params: { branch: string; baselineSha: string }): readonly string[] => [
+      `Try fetching it: git fetch origin ${params.baselineSha} (or git fetch origin), then re-run.`,
+      `If it is gone for good, recreate the migration: close the clerk PR, delete the branch, and re-run for a fresh squash migration.`,
+    ],
   },
   'local-only-requires-clerk-path': {
     message: (): string =>
@@ -312,7 +329,7 @@ const migrationErrorDefinitions = {
   },
   'docs-repo-shallow': {
     message: (docsPath: string): string =>
-      `clerk-docs at ${docsPath} is a shallow clone. Migrating it would rewrite truncated history into clerk (losing commits/authors beyond the shallow boundary).`,
+      `clerk-docs at ${docsPath} is a shallow clone. The migration needs enough history to compute the branch's merge-base with main (and the commit list/attribution for the squash commit message).`,
     hints: (_docsPath: string): readonly string[] => [
       'Fetch the full history first: git fetch --unshallow origin, then re-run.',
     ],
@@ -480,9 +497,9 @@ function printHelp(): void {
 Usage:
   tsx ./scripts/migrate-clerk-docs-to-clerk.ts [options]
 
-Run from your clerk-docs feature branch (not main). Migrates that branch into clerk under ${TARGET_DIR_IN_CLERK}/.
+Run from your clerk-docs feature branch (not main). Migrates that branch's changes into clerk under ${TARGET_DIR_IN_CLERK}/ as a single squashed commit (the diff against the branch's merge-base with clerk-docs/main). Original commit subjects and Co-authored-by attribution are kept in the squash commit message.
 
-Re-running on the same clerk-docs branch is safe: the script detects the existing ${'`${headRef}-docs-migration`'} branch in clerk and updates it with new commits instead of creating a duplicate branch or PR (a clerk PR is opened on re-run only if the branch has none yet). Update mode follows the existing clerk PR's base branch. If the existing clerk PR is CLOSED or MERGED the script aborts with instructions; if the re-merge conflicts, resolve in your IDE and push manually (or abort and re-run).
+Re-running on the same clerk-docs branch is safe: the script detects the existing ${'`${headRef}-docs-migration`'} branch in clerk and adds a squashed commit with only the docs changes made since the last run (tracked via the ${MIGRATED_HEAD_TRAILER}: commit trailer) instead of creating a duplicate branch or PR (a clerk PR is opened on re-run only if the branch has none yet). Update mode follows the existing clerk PR's base branch. If the existing clerk PR is CLOSED or MERGED the script aborts with instructions; if applying the changes conflicts, resolve in your IDE, commit (the message is prefilled), and push manually.
 
 By default clones the clerk repo (see --clerk-repo) into a temp directory (needs gh auth with push access). Use --clerk-path for an existing local clone instead. Use --clerk-path when a conflict is likely, since conflict resolution happens in the clerk workspace.
 
@@ -498,8 +515,8 @@ Optional:
   --docs-path <path>          Path to the clerk-docs repo (default: cwd)
   --docs-repo <owner/repo>    Source PR lookup (default: clerk/clerk-docs); must match the clerk-docs checkout's origin remote
   --docs-base <branch>        Desired checked-out branch in clerk-docs before migration starts
-  --allow-dirty-docs          Skip clean-tree preflight for clerk-docs; only committed history is migrated (filter-repo reads commits, not the working tree), though the merge of origin/main can still abort if local edits conflict
-  --allow-docs-main           Skip the preflight refusal when the current clerk-docs branch is "main". Off by default because migrating main rewrites the entire clerk-docs history into clerk; only use it when you know that is what you want (e.g. a one-shot full-history import).
+  --allow-dirty-docs          Skip clean-tree preflight for clerk-docs; only committed changes are migrated (the diff is computed between commits, not the working tree), though the merge of origin/main can still abort if local edits conflict
+  --allow-docs-main           Skip the preflight refusal when the current clerk-docs branch is "main". Off by default because main has no branch diff to migrate (the run would find nothing to do).
 
   --local-only                Create or update the migrated branch in the clerk workspace only (skip push, PR creation, and source-PR comment). Requires --clerk-path; without it the branch would only exist in a temp clone that is deleted at the end of the run.
   --dry-run                   Print planned actions without git/GitHub writes (still performs read-only gh calls for auth, permissions, and PR lookups)
@@ -694,33 +711,28 @@ interface MergeConflictHintParams {
   branch: string
   workspacePath: string
   isTemporary: boolean
-  remoteName: string
-  /** The filter-repo'd clerk-docs duplicate the `remoteName` remote points at (also in the temp dir). */
-  filterRepoClonePath: string
 }
 
 /**
- * Remediation hints when a merge conflict happens during create or update mode.
- * Split by workspace kind: for temp clones the primary fix is opening the clone in an IDE,
- * resolving, pushing, and re-running; a local clone (--clerk-path) is already IDE-friendly.
- * Cleanup differs too: deleting a temp clone deletes its remotes with it (no `git remote remove`
- * needed), while a --clerk-path checkout persists and needs the filter-repo remote removed.
- * Either way the filter-repo'd clerk-docs duplicate is a separate temp directory to delete.
+ * Remediation hints when a conflict happens during create or update mode (either the clerk base
+ * merge in update mode, or the 3-way apply of the docs branch diff). The non-conflicting changes
+ * are already staged and the intended squash commit message is prefilled (MERGE_MSG), so the fix
+ * is: resolve, `git add`, `git commit`, push. Split by workspace kind: for temp clones the primary
+ * fix is opening the clone in an IDE; a local clone (--clerk-path) is already IDE-friendly.
  */
 function formatUpdateMergeConflictHints(params: MergeConflictHintParams): readonly string[] {
   if (params.isTemporary) {
     return [
-      `Open the temporary clone in your IDE (e.g. \`cursor "${params.workspacePath}"\`), resolve the conflicts listed by \`git status\`, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there.`,
+      `Open the temporary clone in your IDE (e.g. \`cursor "${params.workspacePath}"\`), resolve the conflicts listed by \`git status\`, \`git add\` them, \`git commit\` (the commit message is prefilled), then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there.`,
       'Then re-run this script: it picks up the pushed branch in update mode and creates/syncs the clerk PR.',
       'Prefer working in your own clerk checkout instead? Re-run the migration with --clerk-path pointing at it and resolve the conflicts there.',
-      `Nothing is cleaned up automatically — when you're done, delete the temporary clone at ${params.workspacePath} and the filter-repo copy of clerk-docs at ${params.filterRepoClonePath} (deleting the clone removes the "${params.remoteName}" remote with it).`,
+      `Nothing is cleaned up automatically — when you're done, delete the temporary clone at ${params.workspacePath}.`,
     ]
   }
   return [
     `Conflicts are in ${params.workspacePath} on branch "${params.branch}". \`git status\` in that folder lists the files.`,
-    `Resolve the conflicts in your IDE, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there. The clerk PR will update automatically. Push before re-running this script — a re-run refuses to proceed while the local branch has unpushed commits.`,
-    `When you're done, clean up: \`git remote remove ${params.remoteName}\` in ${params.workspacePath}, and delete the filter-repo copy of clerk-docs at ${params.filterRepoClonePath}.`,
-    'Alternatively, to abandon this merge and retry: `git merge --abort` in that folder, then re-run this script.',
+    `Resolve the conflicts in your IDE, \`git add\` them, \`git commit\` (the commit message is prefilled), then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there. The clerk PR will update automatically. Push before re-running this script — a re-run refuses to proceed while the local branch has unpushed commits.`,
+    'Alternatively, to abandon and retry: `git merge --abort` (if a merge is in progress) or `git reset --hard` in that folder, then re-run this script.',
   ]
 }
 
@@ -1146,72 +1158,6 @@ function assertSemverAtLeast(label: string, rawOutput: string, minimumVersion: s
   })
 }
 
-/** How to invoke filter-repo: either `git filter-repo ...` or standalone `git-filter-repo ...`. */
-interface GitFilterRepoInvoker {
-  command: string
-  argsPrefix: string[]
-}
-
-function assertGitFilterRepoVersionOutput(label: string, rawOutput: string, minimumVersion: string): void {
-  const raw = rawOutput.trim()
-  const semverMatch = raw.match(/(\d+)\.(\d+)\.(\d+)/)
-  if (semverMatch) {
-    const actualParsed: [number, number, number] = [
-      Number(semverMatch[1]),
-      Number(semverMatch[2]),
-      Number(semverMatch[3]),
-    ]
-    const minimumParsed = parseSemverLoose(minimumVersion)
-    if (!minimumParsed) {
-      throw new Error(`Invalid minimum version constant: ${minimumVersion}`)
-    }
-    if (!isSemverAtLeast(actualParsed, minimumParsed)) {
-      throw new Error(`${label} ${actualParsed.join('.')} is too old. Minimum supported is ${minimumVersion}.`)
-    }
-    infoLog(`${label} version check passed`, {
-      detectedVersion: actualParsed.join('.'),
-      minimumVersion,
-    })
-    return
-  }
-
-  // Some installs (e.g. brew) print only a git short hash for `git filter-repo --version`.
-  if (/^[0-9a-f]{7,40}$/i.test(raw)) {
-    warnLog(
-      `${label} printed a build/commit id instead of semver; treating as installed (cannot verify >= ${minimumVersion})`,
-      { raw },
-    )
-    return
-  }
-
-  throw new Error(
-    `${label} version could not be parsed. Raw output: "${raw}". Expected semver like ${minimumVersion} or a git hash.`,
-  )
-}
-
-async function resolveGitFilterRepoInvoker(): Promise<GitFilterRepoInvoker> {
-  infoLog('Checking git-filter-repo (git filter-repo or git-filter-repo on PATH)')
-  const asSub = await runCommand('git', ['filter-repo', '--version'], process.cwd(), { allowFailure: true })
-  if (asSub.code === 0) {
-    assertGitFilterRepoVersionOutput(
-      'git-filter-repo (git subcommand)',
-      `${asSub.stdout}\n${asSub.stderr}`,
-      MIN_TOOL_VERSIONS.gitFilterRepo,
-    )
-    return { command: 'git', argsPrefix: ['filter-repo'] }
-  }
-  const standalone = await runCommand('git-filter-repo', ['--version'], process.cwd(), { allowFailure: true })
-  if (standalone.code === 0) {
-    assertGitFilterRepoVersionOutput(
-      'git-filter-repo (standalone)',
-      `${standalone.stdout}\n${standalone.stderr}`,
-      MIN_TOOL_VERSIONS.gitFilterRepo,
-    )
-    return { command: 'git-filter-repo', argsPrefix: [] }
-  }
-  throwMigrationError('git-filter-repo-missing')
-}
-
 async function assertGitRepo(repoPath: string, label: string): Promise<void> {
   infoLog(`Validating git repository for ${label}`, { repoPath })
   if (!existsSync(repoPath)) throw new Error(`${label} path does not exist: ${repoPath}`)
@@ -1255,7 +1201,7 @@ async function assertDocsPathIsGitRoot(docsPath: string): Promise<void> {
   }
 }
 
-/** A shallow docs clone would silently migrate truncated history (filter-repo rewrites what's local). */
+/** A shallow docs clone can't reliably resolve the merge-base with main (the diff baseline). */
 async function assertDocsRepoNotShallow(docsPath: string): Promise<void> {
   const result = await runCommand('git', ['rev-parse', '--is-shallow-repository'], docsPath)
   if (result.stdout.trim() === 'true') {
@@ -1450,20 +1396,10 @@ const PR_REF_PATTERN = /(?<![/\w])#(\d+)/g
 /**
  * Rewrites bare `#123` refs in a commit message to fully-qualified cross-repo refs
  * (e.g. `clerk/clerk-docs#123`) so GitHub links resolve correctly after migration.
+ * Applied to the original commit subjects listed in the squash commit message.
  */
 function rewritePrRefsInCommitMessage(message: string, docsRepoSlug: string): string {
   return message.replace(PR_REF_PATTERN, `${docsRepoSlug}#$1`)
-}
-
-/**
- * Builds a Python snippet for `git filter-repo --message-callback` that applies
- * the same rewrite as {@link rewritePrRefsInCommitMessage} on the bytes-level message.
- */
-function buildPrRefsRewriteCallback(docsRepoSlug: string): string {
-  return [
-    'import re',
-    `return re.sub(rb'(?<![/\\w])#(\\d+)', lambda m: b'${docsRepoSlug}#' + m.group(1), message)`,
-  ].join('\n')
 }
 
 /** Fail before spawning `git` in `clerkPath` (bad cwd yields opaque `spawn git ENOENT`). */
@@ -1476,10 +1412,22 @@ function assertClerkPathResolvable(clerkPath: string): void {
   }
 }
 
-async function assertNoStaleImportRemote(clerkPath: string): Promise<void> {
+/**
+ * Older versions of this script attached a temporary `clerk-docs-migrate-*` remote to the clerk
+ * workspace (and left it in place on a preserved conflict). The squash workflow no longer uses
+ * remotes, so leftovers are harmless — just point them out for cleanup.
+ */
+async function warnOnStaleImportRemote(clerkPath: string): Promise<void> {
   const remotes = await runCommand('git', ['remote'], clerkPath)
-  if (remotes.stdout.split('\n').some((name) => name.trim().startsWith('clerk-docs-migrate-'))) {
-    throwMigrationError('stale-migrate-remote')
+  const stale = remotes.stdout
+    .split('\n')
+    .map((name) => name.trim())
+    .filter((name) => name.startsWith('clerk-docs-migrate-'))
+  if (stale.length > 0) {
+    warnLog('Leftover clerk-docs-migrate-* remote(s) from an older run; harmless, but you can remove them.', {
+      remotes: stale,
+      cleanup: stale.map((name) => `git -C "${clerkPath}" remote remove ${name}`),
+    })
   }
 }
 
@@ -1493,7 +1441,7 @@ interface ClerkWorkspace {
  */
 async function prepareClerkWorkspace(config: CliConfig, baseRef: string): Promise<ClerkWorkspace> {
   if (config.clerkPath) {
-    await assertNoStaleImportRemote(config.clerkPath)
+    await warnOnStaleImportRemote(config.clerkPath)
     await assertGitRepo(config.clerkPath, 'clerk')
     if (config.allowDirtyClerk) {
       warnLog('Bypassing clean-working-tree check for clerk due to --allow-dirty-clerk.')
@@ -1921,50 +1869,236 @@ interface MigrationOutcome {
   mode: 'create' | 'update'
 }
 
+/** Resolve a docs-side ref to a full commit sha. */
+async function resolveDocsCommitSha(docsPath: string, ref: string): Promise<string> {
+  const result = await runCommand('git', ['rev-parse', '--verify', `${ref}^{commit}`], docsPath)
+  return result.stdout.trim()
+}
+
+/** Whether a commit object exists in the docs checkout (baseline may be gone after a force-push + gc). */
+async function docsCommitExists(docsPath: string, sha: string): Promise<boolean> {
+  const result = await runCommand('git', ['cat-file', '-e', `${sha}^{commit}`], docsPath, { allowFailure: true })
+  return result.code === 0
+}
+
 /**
- * Duplicate local clerk-docs at `headRef`, rewrite its history under `${TARGET_DIR_IN_CLERK}/`,
- * and attach it to `clerkWorkPath` as a temporary remote so the caller can `git merge` from it.
- * Shared by both `createNewMigration` and `updateExistingMigration`.
+ * Create mode's diff baseline: the branch's merge-base with `origin/main`. After the usual
+ * merge-main step this is main's tip, so the diff is exactly "what this branch changes vs main" —
+ * the same thing the source PR shows. Fetched explicitly so it works in single-branch clones and
+ * ignores a stale local `main` branch.
  */
-async function setupFilterRepoRemote(
+async function resolveCreateBaselineSha(config: CliConfig, headRef: string): Promise<string> {
+  await runCommand('git', buildFetchBranchRefspecArgs('main'), config.clerkDocsPath)
+  const result = await runCommand('git', ['merge-base', 'origin/main', headRef], config.clerkDocsPath)
+  return result.stdout.trim()
+}
+
+/**
+ * Most recent `Clerk-Docs-Migrated-Head:` trailer value reachable from `ref` in the clerk
+ * workspace, or null when no migration commit carries one (legacy full-history branches).
+ */
+async function readLastMigratedDocsHead(clerkWorkPath: string, ref: string): Promise<string | null> {
+  const found = await runCommand(
+    'git',
+    ['rev-list', '-n', '1', '--fixed-strings', '--grep', `${MIGRATED_HEAD_TRAILER}:`, ref],
+    clerkWorkPath,
+    { allowFailure: true },
+  )
+  const commit = found.stdout.trim()
+  if (found.code !== 0 || !commit) return null
+  const trailer = await runCommand(
+    'git',
+    ['show', '-s', `--format=%(trailers:key=${MIGRATED_HEAD_TRAILER},valueonly=true)`, commit],
+    clerkWorkPath,
+  )
+  const match = trailer.stdout.match(/\b[0-9a-f]{40}\b/)
+  return match ? match[0] : null
+}
+
+/**
+ * Binary patch of the docs-side changes between two commits, written to a temp file.
+ * Returns null when the diff is empty. The `-c` overrides pin the patch format against user
+ * config (`diff.noprefix` etc. would produce a patch `git apply` can't consume).
+ */
+async function buildDocsDiffPatchFile(
   config: CliConfig,
-  filterRepo: GitFilterRepoInvoker,
-  clerkWorkPath: string,
+  baselineSha: string,
+  headSha: string,
   headRef: string,
-): Promise<{ tempClonePath: string; remoteName: string }> {
-  const tempClonePath = path.join(os.tmpdir(), `clerk-docs-migrate-${sanitizeBranchForPath(headRef)}-${Date.now()}`)
-  const remoteName = `clerk-docs-migrate-${Date.now()}`
-  stepLog('Duplicating local clerk-docs for filter-repo', {
-    from: config.clerkDocsPath,
-    to: tempClonePath,
-    branch: headRef,
-    note: 'This is a local git clone of your checkout (not gh clone of clerk/clerk-docs). Large repos can take many minutes.',
-  })
-  // --no-local: a plain local-path clone hardlinks objects with the source repo. git-filter-repo's
-  // docs call that combination out explicitly ("it is better to pass --no-local to git clone than
-  // passing --force to git-filter-repo") — without it the rewrite operates on objects shared with
-  // the user's real clerk-docs checkout.
+): Promise<string | null> {
+  const diff = await runCommand(
+    'git',
+    [
+      '-c',
+      'diff.noprefix=false',
+      '-c',
+      'diff.mnemonicPrefix=false',
+      '-c',
+      'diff.external=',
+      'diff',
+      '--binary',
+      '--full-index',
+      '--find-renames',
+      '--no-ext-diff',
+      '--no-textconv',
+      baselineSha,
+      headSha,
+    ],
+    config.clerkDocsPath,
+  )
+  if (diff.stdout.trim() === '') return null
+  const patchPath = path.join(os.tmpdir(), `clerk-docs-migrate-${sanitizeBranchForPath(headRef)}-${Date.now()}.patch`)
+  await fs.writeFile(patchPath, diff.stdout, 'utf8')
+  return patchPath
+}
+
+/** Original commit subjects + authors in the migrated range, for the squash commit message. */
+async function collectSquashRangeDetails(
+  config: CliConfig,
+  baselineSha: string,
+  headSha: string,
+): Promise<{ commitLines: string[]; coAuthors: string[] }> {
+  const log = await runCommand(
+    'git',
+    ['log', '--no-merges', '--reverse', '--format=%h%x1f%s%x1f%aN%x1f%aE', `${baselineSha}..${headSha}`],
+    config.clerkDocsPath,
+  )
+  const commitLines: string[] = []
+  const coAuthors: string[] = []
+  const seenAuthors = new Set<string>()
+  for (const line of log.stdout.split('\n')) {
+    if (!line.trim()) continue
+    const [shortSha, subject, authorName, authorEmail] = line.split('\u001f')
+    if (!shortSha || subject === undefined) continue
+    commitLines.push(`${shortSha} ${subject}`)
+    if (authorName && authorEmail) {
+      const coAuthor = `${authorName} <${authorEmail}>`
+      if (!seenAuthors.has(coAuthor)) {
+        seenAuthors.add(coAuthor)
+        coAuthors.push(coAuthor)
+      }
+    }
+  }
+  return { commitLines, coAuthors }
+}
+
+/**
+ * Message for the squash migration commit: title, the list of original commits it squashes
+ * (bare `#N` refs qualified to the docs repo so GitHub links keep resolving), Co-authored-by
+ * attribution for every author in the range, and the `Clerk-Docs-Migrated-Head:` trailer that
+ * update mode reads to stay incremental.
+ */
+function buildSquashCommitMessage(params: {
+  title: string
+  docsRepoSlug: string
+  headRef: string
+  headSha: string
+  commitLines: readonly string[]
+  coAuthors: readonly string[]
+}): string {
+  const { title, docsRepoSlug, headRef, headSha, commitLines, coAuthors } = params
+  const shown = commitLines.slice(0, SQUASH_MESSAGE_COMMIT_LIST_LIMIT)
+  const hidden = commitLines.length - shown.length
+  const body = [
+    `Squashed migration of ${commitLines.length} commit(s) from ${docsRepoSlug} branch ${headRef}:`,
+    '',
+    ...shown.map((line) => `- ${rewritePrRefsInCommitMessage(line, docsRepoSlug)}`),
+    ...(hidden > 0 ? [`- … and ${hidden} more`] : []),
+  ]
+  const trailers = [...coAuthors.map((author) => `Co-authored-by: ${author}`), `${MIGRATED_HEAD_TRAILER}: ${headSha}`]
+  return [title, '', ...body, '', ...trailers].join('\n')
+}
+
+/**
+ * Make the docs-side objects needed by `git apply --3way` available in the clerk workspace:
+ * conflicts fall back to a content-level merge that reads the pre-image blobs from the object db.
+ * Arbitrary shas can't be fetched directly, so each is exposed via a temporary ref on the docs
+ * side, fetched, and the refs deleted again on both sides ({@link cleanupDocsObjectRefs}); the
+ * fetched objects stay in the workspace's object db (index entries protect them from gc while a
+ * conflict is being resolved).
+ */
+const DOCS_OBJECT_REFSPEC_NAMESPACE = 'refs/clerk-docs-migrate-tmp'
+
+async function fetchDocsObjectsIntoClerkWorkspace(
+  config: CliConfig,
+  clerkWorkPath: string,
+  shas: readonly string[],
+): Promise<void> {
+  for (const [index, sha] of shas.entries()) {
+    await runCommand('git', ['update-ref', `${DOCS_OBJECT_REFSPEC_NAMESPACE}/${index}`, sha], config.clerkDocsPath)
+  }
   await runCommand(
     'git',
-    ['clone', '--no-local', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
-    process.cwd(),
-  )
-  const messageCallback = buildPrRefsRewriteCallback(formatRepoSlug(config.clerkDocsRepo))
-  await runCommand(
-    filterRepo.command,
     [
-      ...filterRepo.argsPrefix,
-      '--to-subdirectory-filter',
-      TARGET_DIR_IN_CLERK,
-      '--message-callback',
-      messageCallback,
-      '--force',
+      'fetch',
+      '--no-tags',
+      config.clerkDocsPath,
+      `+${DOCS_OBJECT_REFSPEC_NAMESPACE}/*:${DOCS_OBJECT_REFSPEC_NAMESPACE}/*`,
     ],
-    tempClonePath,
+    clerkWorkPath,
   )
-  await runCommand('git', ['remote', 'add', remoteName, tempClonePath], clerkWorkPath)
-  await runCommand('git', ['fetch', remoteName], clerkWorkPath)
-  return { tempClonePath, remoteName }
+}
+
+async function cleanupDocsObjectRefs(config: CliConfig, clerkWorkPath: string): Promise<void> {
+  for (const repoPath of [config.clerkDocsPath, clerkWorkPath]) {
+    const refs = await runCommand(
+      'git',
+      ['for-each-ref', '--format=%(refname)', `${DOCS_OBJECT_REFSPEC_NAMESPACE}/`],
+      repoPath,
+      { allowFailure: true },
+    )
+    for (const ref of refs.stdout.split('\n')) {
+      if (!ref.trim()) continue
+      await runCommand('git', ['update-ref', '-d', ref.trim()], repoPath, { allowFailure: true })
+    }
+  }
+}
+
+/**
+ * Apply the docs branch diff onto the checked-out migration branch (under
+ * `${TARGET_DIR_IN_CLERK}/`) and commit it as a single squash commit.
+ *
+ * `git apply --3way` stages what applies cleanly and leaves real conflicts as unmerged index
+ * entries with conflict markers — the same resolution UX as a merge. On conflict the intended
+ * commit message (including the `Clerk-Docs-Migrated-Head:` trailer) is prefilled into MERGE_MSG
+ * so a manual `git commit` after resolving preserves the baseline for future incremental runs.
+ */
+async function applyAndCommitSquash(params: {
+  clerkWorkPath: string
+  patchPath: string
+  commitMessage: string
+  conflictErrorCode: 'create-merge-conflict' | 'update-merge-conflict'
+  conflictParams: MergeConflictHintParams
+  onConflictPreserve: () => void
+}): Promise<void> {
+  const { clerkWorkPath, patchPath, commitMessage, conflictErrorCode, conflictParams, onConflictPreserve } = params
+  const apply = await runCommand(
+    'git',
+    ['apply', '--3way', '--binary', '--whitespace=nowarn', `--directory=${TARGET_DIR_IN_CLERK}`, patchPath],
+    clerkWorkPath,
+    { allowFailure: true },
+  )
+  if (apply.code !== 0) {
+    if (await isMergeConflictState(clerkWorkPath)) {
+      // Prefill the squash commit message for the manual `git commit` after conflict resolution.
+      const mergeMsgPath = (
+        await runCommand('git', ['rev-parse', '--git-path', 'MERGE_MSG'], clerkWorkPath)
+      ).stdout.trim()
+      await fs.writeFile(path.resolve(clerkWorkPath, mergeMsgPath), commitMessage, 'utf8')
+      onConflictPreserve()
+      throwMigrationError(conflictErrorCode, conflictParams)
+    }
+    throw new Error(
+      `git apply of the clerk-docs branch diff failed without starting a 3-way merge: ${(apply.stderr + apply.stdout).trim()}`,
+    )
+  }
+  const messagePath = `${patchPath}.commit-msg`
+  await fs.writeFile(messagePath, commitMessage, 'utf8')
+  try {
+    await runCommand('git', ['commit', '-F', messagePath], clerkWorkPath)
+  } finally {
+    await fs.rm(messagePath, { force: true })
+  }
 }
 
 /**
@@ -2084,7 +2218,6 @@ async function ensureClerkPrAndSyncSourcePr(
 
 async function migrateCurrentBranch(
   config: CliConfig,
-  filterRepo: GitFilterRepoInvoker,
   clerkWorkspace: ClerkWorkspace,
   headRef: string,
   baseRef: string,
@@ -2100,24 +2233,15 @@ async function migrateCurrentBranch(
     })
   }
   if (classification === 'update' && existing) {
-    const outcome = await updateExistingMigration(
-      config,
-      filterRepo,
-      clerkWorkspace,
-      headRef,
-      baseRef,
-      sourcePr,
-      existing,
-    )
+    const outcome = await updateExistingMigration(config, clerkWorkspace, headRef, baseRef, sourcePr, existing)
     return { ...outcome, mode: 'update' }
   }
-  const outcome = await createNewMigration(config, filterRepo, clerkWorkspace, headRef, baseRef, sourcePr)
+  const outcome = await createNewMigration(config, clerkWorkspace, headRef, baseRef, sourcePr)
   return { ...outcome, mode: 'create' }
 }
 
 async function createNewMigration(
   config: CliConfig,
-  filterRepo: GitFilterRepoInvoker,
   clerkWorkspace: ClerkWorkspace,
   headRef: string,
   baseRef: string,
@@ -2126,45 +2250,69 @@ async function createNewMigration(
   const clerkWorkPath = clerkWorkspace.path
 
   if (config.dryRun) {
-    infoLog('Dry-run (create mode): would filter-repo, merge, push, open new PR', {
-      clerkWorkPath: clerkWorkPath || '(would clone clerk to temp)',
-      suggestedBranch: resolveMigrationBranchName(config, headRef),
-      branchedFrom: `origin/${baseRef} (fetched explicitly; the local base branch state is not used)`,
-      clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
-      gitignore:
-        'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
-      commitMessages: `would rewrite #NNN refs in commit messages to ${formatRepoSlug(config.clerkDocsRepo)}#NNN`,
-      clerkPrPeople:
-        sourcePr !== null
-          ? 'would match draft + assignees + requested reviewers from source PR where possible; review approvals cannot transfer (summarized in PR body)'
+    infoLog(
+      'Dry-run (create mode): would diff the branch against clerk-docs/main, apply as one squash commit, push, open new PR',
+      {
+        clerkWorkPath: clerkWorkPath || '(would clone clerk to temp)',
+        suggestedBranch: resolveMigrationBranchName(config, headRef),
+        branchedFrom: `origin/${baseRef} (fetched explicitly; the local base branch state is not used)`,
+        squashCommit: `would apply the diff of merge-base(origin/main, ${headRef})..${headRef} under ${TARGET_DIR_IN_CLERK}/ as a single commit (original subjects + Co-authored-by in the message, plus the ${MIGRATED_HEAD_TRAILER}: trailer)`,
+        clerkPr: sourcePr ? 'would create (open clerk-docs PR exists)' : 'would skip (no open clerk-docs PR)',
+        gitignore:
+          'would remove /clerk-docs (and bare clerk-docs/) entries from clerk root .gitignore if present, then commit if changed',
+        commitMessages: `would rewrite #NNN refs in the listed commit subjects to ${formatRepoSlug(config.clerkDocsRepo)}#NNN`,
+        clerkPrPeople:
+          sourcePr !== null
+            ? 'would match draft + assignees + requested reviewers from source PR where possible; review approvals cannot transfer (summarized in PR body)'
+            : 'n/a',
+        sourcePrComment: sourcePr ? 'would post backlink comment to source clerk-docs PR' : 'n/a',
+        sourcePrClose: sourcePr
+          ? config.closeSourcePr
+            ? 'would close source clerk-docs PR after the comment (skipped automatically if the comment fails)'
+            : 'would leave source clerk-docs PR open (--no-close-source-pr)'
           : 'n/a',
-      sourcePrComment: sourcePr ? 'would post backlink comment to source clerk-docs PR' : 'n/a',
-      sourcePrClose: sourcePr
-        ? config.closeSourcePr
-          ? 'would close source clerk-docs PR after the comment (skipped automatically if the comment fails)'
-          : 'would leave source clerk-docs PR open (--no-close-source-pr)'
-        : 'n/a',
-    })
+      },
+    )
     return { newBranch: resolveMigrationBranchName(config, headRef), clerkPrUrl: '(dry-run)' }
   }
 
   const newBranch = resolveMigrationBranchName(config, headRef)
   await assertBranchNameAvailable(clerkWorkPath, newBranch)
-  stepLog('Migrating current branch into clerk', { headRef, baseRef, newBranch, clerkWorkPath })
+  stepLog('Migrating current branch into clerk as a squash commit', { headRef, baseRef, newBranch, clerkWorkPath })
 
-  const { tempClonePath, remoteName } = await setupFilterRepoRemote(config, filterRepo, clerkWorkPath, headRef)
+  const headSha = await resolveDocsCommitSha(config.clerkDocsPath, headRef)
+  const baselineSha = await resolveCreateBaselineSha(config, headRef)
+  const patchPath = await buildDocsDiffPatchFile(config, baselineSha, headSha, headRef)
+  if (!patchPath) {
+    throwMigrationError('nothing-to-migrate', { headRef, baseSha: baselineSha })
+  }
+  const rangeDetails = await collectSquashRangeDetails(config, baselineSha, headSha)
+  const commitMessage = buildSquashCommitMessage({
+    title: `Migrate clerk-docs branch ${headRef}`,
+    docsRepoSlug: formatRepoSlug(config.clerkDocsRepo),
+    headRef,
+    headSha,
+    ...rangeDetails,
+  })
+  infoLog('Prepared squash migration', {
+    baseline: baselineSha,
+    head: headSha,
+    commitsSquashed: rangeDetails.commitLines.length,
+  })
 
-  // On a real merge conflict, leave the workspace + filter-repo remote in place for manual resolution.
+  // On a real conflict, leave the workspace in place (staged changes + conflict markers) for manual resolution.
   let preserveOnExit = false
 
   try {
+    // Blobs for `git apply --3way` conflict fallback.
+    await fetchDocsObjectsIntoClerkWorkspace(config, clerkWorkPath, [baselineSha, headSha])
     // Branch from origin/<baseRef> directly (explicit refspec fetch so it exists even in
     // single-branch clones): the local base branch may be stale, diverged, or absent, and its
     // local-only commits must not leak into the pushed migration branch.
     await runCommand('git', buildFetchBranchRefspecArgs(baseRef), clerkWorkPath)
-    // --no-track: without it the new branch would track origin/<baseRef>, and if the merge below
+    // --no-track: without it the new branch would track origin/<baseRef>, and if the apply below
     // conflicts, an upstream-based push during manual resolution (plain `git push` with
-    // push.default=upstream, or an IDE sync button) would land the merge commit on the clerk base
+    // push.default=upstream, or an IDE sync button) would land the squash commit on the clerk base
     // branch instead of the migration branch.
     await runCommand('git', ['checkout', '--no-track', '-b', newBranch, `origin/${baseRef}`], clerkWorkPath)
     // Point the upstream at origin/<newBranch> instead. That remote branch doesn't exist yet, so
@@ -2175,33 +2323,16 @@ async function createNewMigration(
     for (const configArgs of buildUpstreamConfigArgs(newBranch)) {
       await runCommand('git', configArgs, clerkWorkPath)
     }
-    const merge = await runCommand(
-      'git',
-      [
-        'merge',
-        `${remoteName}/${headRef}`,
-        '--allow-unrelated-histories',
-        '-m',
-        `Migrate clerk-docs branch ${headRef}`,
-      ],
+    await applyAndCommitSquash({
       clerkWorkPath,
-      { allowFailure: true },
-    )
-    if (merge.code !== 0) {
-      if (await isMergeConflictState(clerkWorkPath)) {
+      patchPath,
+      commitMessage,
+      conflictErrorCode: 'create-merge-conflict',
+      conflictParams: { branch: newBranch, workspacePath: clerkWorkPath, isTemporary: clerkWorkspace.isTemporary },
+      onConflictPreserve: () => {
         preserveOnExit = true
-        throwMigrationError('create-merge-conflict', {
-          branch: newBranch,
-          workspacePath: clerkWorkPath,
-          isTemporary: clerkWorkspace.isTemporary,
-          remoteName,
-          filterRepoClonePath: tempClonePath,
-        })
-      }
-      throw new Error(
-        `git merge of the rewritten clerk-docs history failed before any merge started (this is not a content conflict): ${(merge.stderr + merge.stdout).trim()}`,
-      )
-    }
+      },
+    })
     const gitignoreStripped = await stripClerkDocsRootGitignoreEntries(clerkWorkPath)
     if (gitignoreStripped) {
       await runCommand('git', ['add', '.gitignore'], clerkWorkPath)
@@ -2228,32 +2359,33 @@ async function createNewMigration(
     })
     return { newBranch, clerkPrUrl }
   } finally {
+    // Temp refs and the patch file are safe to remove even on a preserved conflict: the staged
+    // changes and conflict markers live in the workspace's index/working tree.
+    await cleanupDocsObjectRefs(config, clerkWorkPath)
     if (!preserveOnExit) {
-      await runCommand('git', ['remote', 'remove', remoteName], clerkWorkPath, { allowFailure: true })
-      await fs.rm(tempClonePath, { recursive: true, force: true })
+      await fs.rm(patchPath, { force: true })
     }
   }
 }
 
 /**
- * Update an already-migrated branch with new commits from clerk-docs.
+ * Update an already-migrated branch with the docs changes made since the last migration.
  * - Checks out the existing migration branch in the clerk workspace, refusing first if the local
  *   branch has commits that were never pushed (a `checkout -B` would silently discard them —
  *   including a manual conflict resolution from a previous run).
  * - Merges the latest clerk base into the migration branch so re-runs carry base updates through,
  *   not just new docs commits (no-op when the base hasn't moved). `baseRef` is resolved by the
  *   caller from the existing clerk PR's base (see {@link resolveEffectiveClerkBase}).
- * - Merges the freshly-rewritten clerk-docs history on top (filter-repo is deterministic, so only
- *   the new commits are actually merged).
- * - On a real conflict (base or docs): leaves the working tree conflicted and preserves the
- *   filter-repo remote + temp clone so the user can finish manually or abort and re-run. On any
- *   other error or success: cleans up.
+ * - Reads the `Clerk-Docs-Migrated-Head:` trailer from the branch's most recent migration commit
+ *   and applies only the diff from that docs commit to the current head, as one squash commit.
+ * - On a real conflict (base merge or apply): leaves the working tree conflicted (staged changes +
+ *   conflict markers, commit message prefilled) so the user can finish manually. On any other
+ *   error or success: cleans up.
  * - Re-uses the existing clerk PR; if the branch has no PR yet (e.g. a previous run pushed but PR
  *   creation failed), creates one and syncs the source PR like create mode.
  */
 async function updateExistingMigration(
   config: CliConfig,
-  filterRepo: GitFilterRepoInvoker,
   clerkWorkspace: ClerkWorkspace,
   headRef: string,
   baseRef: string,
@@ -2263,10 +2395,11 @@ async function updateExistingMigration(
   const migrationBranch = existing.branch
 
   if (config.dryRun) {
-    infoLog('Dry-run (update mode): would filter-repo, merge new commits onto existing branch, push', {
+    infoLog('Dry-run (update mode): would apply docs changes since the last migrated head as one squash commit, push', {
       migrationBranch,
       existingPr: existing.pr?.url ?? '(none)',
       baseMerge: `would merge latest clerk base "${baseRef}" into ${migrationBranch} (no-op if base unchanged)`,
+      squashCommit: `would read the ${MIGRATED_HEAD_TRAILER}: trailer from ${migrationBranch} and apply the diff from that clerk-docs commit to ${headRef} under ${TARGET_DIR_IN_CLERK}/ (no-op when nothing changed)`,
       gitignore:
         'would re-run gitignore cleanup; idempotent after first migration (commits only if anything actually changed)',
       clerkPrCreate: existing.pr
@@ -2291,17 +2424,14 @@ async function updateExistingMigration(
     isTemporaryWorkspace: clerkWorkspace.isTemporary,
   })
 
-  const { tempClonePath, remoteName } = await setupFilterRepoRemote(config, filterRepo, clerkWorkPath, headRef)
-
-  // If a merge conflict is surfaced, we want to leave state on disk so the user can finish manually.
+  // If a conflict is surfaced, we want to leave state on disk so the user can finish manually.
   let preserveOnExit = false
+  let patchPath: string | null = null
 
   const conflictParams = {
     branch: migrationBranch,
     workspacePath: clerkWorkPath,
     isTemporary: clerkWorkspace.isTemporary,
-    remoteName,
-    filterRepoClonePath: tempClonePath,
   }
 
   try {
@@ -2341,6 +2471,17 @@ async function updateExistingMigration(
     }
     await runCommand('git', ['checkout', '-B', migrationBranch, `origin/${migrationBranch}`], clerkWorkPath)
 
+    // Where did the last migration leave off? Without the trailer there is no reliable baseline to
+    // diff from (legacy full-history branches predate the squash workflow) — recreate instead.
+    const baselineSha = await readLastMigratedDocsHead(clerkWorkPath, migrationBranch)
+    if (!baselineSha) {
+      throwMigrationError('migration-branch-missing-baseline', { branch: migrationBranch })
+    }
+    if (!(await docsCommitExists(config.clerkDocsPath, baselineSha))) {
+      throwMigrationError('baseline-commit-missing', { branch: migrationBranch, baselineSha })
+    }
+    const headSha = await resolveDocsCommitSha(config.clerkDocsPath, headRef)
+
     // Pull the latest clerk base into the migration branch so re-runs carry base updates through,
     // not just new docs commits. The migration branch descends from baseRef, so this is an ordinary
     // merge (no --allow-unrelated-histories) and a no-op when the base hasn't moved. Fetch with an
@@ -2362,26 +2503,44 @@ async function updateExistingMigration(
       )
     }
 
-    const merge = await runCommand(
-      'git',
-      [
-        'merge',
-        `${remoteName}/${headRef}`,
-        '--allow-unrelated-histories',
-        '-m',
-        `Update clerk-docs migration for branch ${headRef}`,
-      ],
-      clerkWorkPath,
-      { allowFailure: true },
-    )
-    if (merge.code !== 0) {
-      if (await isMergeConflictState(clerkWorkPath)) {
-        preserveOnExit = true
-        throwMigrationError('update-merge-conflict', conflictParams)
+    if (baselineSha === headSha) {
+      infoLog('No new clerk-docs commits since the last migration', { migratedHead: headSha })
+    } else {
+      patchPath = await buildDocsDiffPatchFile(config, baselineSha, headSha, headRef)
+      if (!patchPath) {
+        // New commits but a net-empty diff (e.g. a change plus its revert). Nothing to commit; the
+        // baseline trailer stays at the older commit, which is still a correct diff base for
+        // future runs (diffs are tree-to-tree).
+        infoLog('New clerk-docs commits produce no content changes; nothing to apply', {
+          baseline: baselineSha,
+          head: headSha,
+        })
+      } else {
+        const rangeDetails = await collectSquashRangeDetails(config, baselineSha, headSha)
+        const commitMessage = buildSquashCommitMessage({
+          title: `Update clerk-docs migration for branch ${headRef}`,
+          docsRepoSlug: formatRepoSlug(config.clerkDocsRepo),
+          headRef,
+          headSha,
+          ...rangeDetails,
+        })
+        infoLog('Prepared incremental squash update', {
+          baseline: baselineSha,
+          head: headSha,
+          commitsSquashed: rangeDetails.commitLines.length,
+        })
+        await fetchDocsObjectsIntoClerkWorkspace(config, clerkWorkPath, [baselineSha, headSha])
+        await applyAndCommitSquash({
+          clerkWorkPath,
+          patchPath,
+          commitMessage,
+          conflictErrorCode: 'update-merge-conflict',
+          conflictParams,
+          onConflictPreserve: () => {
+            preserveOnExit = true
+          },
+        })
       }
-      throw new Error(
-        `git merge of the rewritten clerk-docs history failed before any merge started (this is not a content conflict): ${(merge.stderr + merge.stdout).trim()}`,
-      )
     }
 
     const gitignoreStripped = await stripClerkDocsRootGitignoreEntries(clerkWorkPath)
@@ -2432,9 +2591,11 @@ async function updateExistingMigration(
     }
     return { newBranch: migrationBranch, clerkPrUrl }
   } finally {
-    if (!preserveOnExit) {
-      await runCommand('git', ['remote', 'remove', remoteName], clerkWorkPath, { allowFailure: true })
-      await fs.rm(tempClonePath, { recursive: true, force: true })
+    // Temp refs and the patch file are safe to remove even on a preserved conflict: the staged
+    // changes and conflict markers live in the workspace's index/working tree.
+    await cleanupDocsObjectRefs(config, clerkWorkPath)
+    if (patchPath && !preserveOnExit) {
+      await fs.rm(patchPath, { force: true })
     }
   }
 }
@@ -2451,8 +2612,8 @@ function printRunIntro(config: CliConfig): void {
     config.mergeMain
       ? '- Merges origin/main into your current clerk-docs feature branch'
       : '- Skips the origin/main merge into your clerk-docs branch (--no-merge-main)',
-    '- Rewrites that branch history under clerk/clerk-docs/',
-    '- Merges rewritten history into the clerk repo (create mode = new branch + PR; update mode = existing migration branch)',
+    "- Applies the branch's diff (vs its merge-base with clerk-docs/main) under clerk/clerk-docs/ as a single squash commit",
+    '- Create mode = new branch + PR; update mode = adds a squash commit with only the changes since the last run to the existing migration branch',
     '- Pushes the branch and opens/links PRs when source PR context is available',
     '- In create mode, posts a backlink comment on the source clerk-docs PR and closes it (close skipped if the comment fails)',
     '- Re-runs on the same clerk-docs branch update the existing migration branch instead of creating duplicates',
@@ -2559,13 +2720,12 @@ async function main(): Promise<void> {
     await assertCommandAvailable('gh')
     await assertMinimumVersion('git', 'git', ['--version'], MIN_TOOL_VERSIONS.git)
     await assertMinimumVersion('gh', 'gh', ['--version'], MIN_TOOL_VERSIONS.gh)
-    const filterRepoInvoker = await resolveGitFilterRepoInvoker()
     await assertGhAuthenticated()
     await assertGithubRepoMigrationAccess(config)
     if (config.clerkPath) {
       assertClerkPathResolvable(config.clerkPath)
       await assertGitRepo(config.clerkPath, 'clerk')
-      await assertNoStaleImportRemote(config.clerkPath)
+      await warnOnStaleImportRemote(config.clerkPath)
       await assertOriginMatchesRepoSlug(config.clerkPath, config.clerkRepo, 'clerk')
     }
     await assertGitRepo(config.clerkDocsPath, 'clerk-docs')
@@ -2575,7 +2735,7 @@ async function main(): Promise<void> {
     await assertOriginMatchesRepoSlug(config.clerkDocsPath, config.clerkDocsRepo, 'clerk-docs')
     if (config.allowDirtyClerkDocs) {
       warnLog(
-        'Bypassing clean-working-tree check for clerk-docs due to --allow-dirty-docs. Only committed history is migrated (filter-repo reads commits, not the working tree), but the upcoming `git merge origin/main` can still abort if your local edits conflict with incoming changes.',
+        'Bypassing clean-working-tree check for clerk-docs due to --allow-dirty-docs. Only committed changes are migrated (the diff is computed between commits, not the working tree), but the upcoming `git merge origin/main` can still abort if your local edits conflict with incoming changes.',
       )
     } else {
       await assertCleanWorkingTree(config.clerkDocsPath, 'clerk-docs')
@@ -2593,7 +2753,7 @@ async function main(): Promise<void> {
         throwMigrationError('refuse-clerk-docs-main')
       }
       warnLog(
-        'Bypassing clerk-docs/main refusal due to --allow-docs-main. This will rewrite the entire clerk-docs main history into clerk; make sure that is what you want.',
+        'Bypassing clerk-docs/main refusal due to --allow-docs-main. Note that main has no diff against itself, so a create-mode run will find nothing to migrate.',
       )
     }
 
@@ -2683,14 +2843,13 @@ async function main(): Promise<void> {
       completed: phases.flatMap((p) => p.completed),
       next:
         migrationMode === 'update'
-          ? 'Update the existing migration branch in clerk with new commits'
-          : 'Rewrite history and push in clerk (opens a clerk PR only if an open clerk-docs PR exists)',
+          ? 'Update the existing migration branch in clerk with the docs changes since the last run'
+          : 'Apply the branch diff as one squash commit and push in clerk (opens a clerk PR only if an open clerk-docs PR exists)',
     })
 
     currentPhase = 'migrate-branch'
     const { newBranch, clerkPrUrl, mode } = await migrateCurrentBranch(
       config,
-      filterRepoInvoker,
       workspace,
       clerkDocsBranch,
       baseRef,
@@ -2759,7 +2918,7 @@ async function main(): Promise<void> {
       )
       infoLog('- If you used a temp clerk clone, delete that folder when done inspecting it.')
       infoLog(
-        '- If a clerk-docs-migrate-* remote or /tmp/clerk-docs-migrate-* clone remains, remove it (a preserved conflict keeps both on purpose).',
+        '- A preserved conflict leaves the workspace branch with staged changes + conflict markers on purpose; a leftover /tmp/clerk-docs-migrate-*.patch file can be deleted after resolving.',
       )
     }
     process.exitCode = 1
@@ -2799,9 +2958,8 @@ export {
   canPushToRepo,
   canReadRepo,
   canCommentOnPrInRepo,
-  assertGitFilterRepoVersionOutput,
   rewritePrRefsInCommitMessage,
-  buildPrRefsRewriteCallback,
+  buildSquashCommitMessage,
   buildMigrationBranchName,
   resolveMigrationBranchName,
   classifyExistingMigration,
@@ -2818,7 +2976,12 @@ export {
   isDirectCliInvocation,
   resolveEffectiveClerkBase,
   MigrationError,
+  // Exported for integration tests (exercised offline against scratch repos with --local-only semantics).
+  createNewMigration,
+  updateExistingMigration,
+  readLastMigratedDocsHead,
 }
+export type { CliConfig }
 
 if (isDirectCliInvocation(import.meta.url, process.argv[1])) {
   main().catch((error) => {

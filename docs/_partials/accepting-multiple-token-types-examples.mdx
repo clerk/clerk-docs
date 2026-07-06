@@ -1,37 +1,40 @@
 <If sdk={["nextjs", "tanstack-react-start"]}>
   In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
 
-  - If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated`.
-  - If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
-  - If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+  - If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated` and `null` for other properties, like `userId`.
+  - If the token is an `api_key`, the code can access the associated user's data using the `userId`.
+  - If the token is valid, `isAuthenticated` is `true` and `userId` is returned and available for use in the application logic. This example includes pseudo-code that uses the `userId` to get data from a database.
 
   <If sdk="nextjs">
     ```tsx {{ filename: 'app/api/example/route.ts' }}
-    import { NextResponse } from 'next/server'
+    import { NextRequest, NextResponse } from 'next/server'
     import { auth } from '@clerk/nextjs/server'
 
-    export async function POST() {
+    export async function POST(req: NextRequest) {
       // Accept session_token, oauth_token, and api_key types
-      const authObject = await auth({
+      const { isAuthenticated, tokenType, userId, scopes } = await auth({
         acceptsToken: ['session_token', 'oauth_token', 'api_key'],
       })
 
-      if (!authObject.isAuthenticated) {
+      // If the token is invalid or missing
+      if (!isAuthenticated) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      // Check if the token is an API key and if it doesn't have the required scope
-      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
-        return NextResponse.json({ error: 'API key missing the "write:users" scope' }, { status: 401 })
+      // Check if the token is an api key and if it doesn't have the required scope
+      if (tokenType === 'api_key' && !scopes?.includes('write:users')) {
+        return NextResponse.json({ error: 'API Key missing the "write:users" scope' }, { status: 401 })
       }
 
-      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the userId
+      const data = db.select().from(user).where(eq(user.id, userId))
 
-      return NextResponse.json({ subject, tokenType: authObject.tokenType })
+      return NextResponse.json({ data })
     }
     ```
 
-    You can also protect entire route groups using [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware). See how to implement this in [the middleware docs](/docs/reference/nextjs/clerk-middleware#protect-routes-based-on-token-types).
+    To enforce token types across your API routes, check the token type in each Route Handler with [`auth({ acceptsToken })`](/docs/reference/nextjs/app-router/auth#verify-machine-requests).
   </If>
 
   <If sdk="tanstack-react-start">

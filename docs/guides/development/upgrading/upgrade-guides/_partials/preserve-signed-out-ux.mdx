@@ -1,0 +1,41 @@
+> [!IMPORTANT]
+> The lint rule can't help you with this step. You need to verify this manually.
+
+If a route only uses Client Components, the protected resource is often an API endpoint that the client calls. If the Middleware-based authentication check previously redirected signed-out users before that call happened, removing it _without adding a signed-out state_ can make the UX worse. For example, a page that previously redirected might now show a generic error page instead.
+
+Use client-side controls such as [`<Show when="signed-out">`](/docs/reference/components/control/show) to handle a signed-out user's experience.
+
+One way to preserve the previous UX is to render signed-out handling from the shared layout for the affected routes. Keep this logic in a Client Component so it can respond to client-side auth state changes.
+
+<Tabs items={["Client Component", "Layout"]}>
+  <Tab>
+    ```tsx {{ filename: 'app/dashboard/SignedOutRedirect.tsx' }}
+    'use client'
+
+    import { RedirectToSignIn, Show } from '@clerk/nextjs'
+
+    export default function SignedOutRedirect({ children }: { children: React.ReactNode }) {
+      return (
+        <>
+          <Show when="signed-in">{children}</Show>
+          <Show when="signed-out">
+            <RedirectToSignIn />
+          </Show>
+        </>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    Use this pattern in the layout for the affected route or route group, rather than in a root layout that also renders public pages. This preserves the signed-out experience, but it doesn't replace auth checks in the API endpoints the client calls.
+
+    ```tsx {{ filename: 'app/dashboard/layout.tsx' }}
+    import SignedOutRedirect from './SignedOutRedirect'
+
+    export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+      return <SignedOutRedirect>{children}</SignedOutRedirect>
+    }
+    ```
+  </Tab>
+</Tabs>

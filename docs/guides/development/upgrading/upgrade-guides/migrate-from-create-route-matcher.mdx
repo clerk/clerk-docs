@@ -1,0 +1,357 @@
+---
+title: Migrate away from Middleware-based auth checks
+description: Learn how to migrate away from Middleware-based auth checks with createRouteMatcher to resource-based auth checks.
+sdk: nextjs
+---
+
+Previously, authentication checks were often performed in `clerkMiddleware()` using `createRouteMatcher()`. Clerk is deprecating this approach and now recommends protecting each server-side resource (pages, Route Handlers, and Server Functions, including Server Actions) individually, rather than relying on Middleware-based auth checks. This guide explains how to migrate to the new resource-based protection model. To learn more about why `createRouteMatcher()` is being deprecated, see [Motivations for deprecating `createRouteMatcher()`](#motivations-for-deprecating-create-route-matcher).
+
+`createRouteMatcher()` continues to work and its behavior hasn't changed. Calling it logs a one-time deprecation warning to the console in development, and the function will be removed in the next major version of `@clerk/nextjs`. You can plan the migration on your own schedule, but complete it before upgrading to the next major version.
+
+## Before you start
+
+Before you migrate, it's important to understand how resource protection works and how removing Middleware-based authentication checks can affect your signed-out user experience.
+
+This migration is about both protecting server-side resources and preserving the signed-out user experience. Server-rendered pages, Route Handlers, Server Functions, external API endpoints, and any other code that can access privileged data must include their own authentication checks.
+
+Client Components can't reach privileged data directly, but this migration still applies to routes that render Client Components. Client-only routes might need a signed-out state even if there is no server-side resource to protect.
+
+Use the following guides to learn how to protect different types of resources:
+
+- To require a signed-in user, see the [guide on protecting content from unauthenticated users](/docs/guides/secure/protect-content).
+- To require a specific Role, Permission, Feature, or Plan, see the [guide on authorization checks](/docs/guides/secure/authorization-checks).
+- For machine requests (API keys, OAuth tokens, machine tokens), check the token type in the Route Handler with [`auth({ acceptsToken })`](/docs/reference/nextjs/app-router/auth#verify-machine-requests).
+- To understand how to protect external API endpoints, see the [guide on making authenticated requests](/docs/guides/development/making-requests) as well as the SDK reference for the programming language or framework your backend API uses.
+
+> [!TIP]
+> Before you start the migration, verify that all relevant Server Functions are protected. Server Functions can't be reliably protected by Middleware patterns — they're called by ID, not by path (see [Motivations for deprecating `createRouteMatcher()`](#motivations-for-deprecating-create-route-matcher)). Verifying their protection first gives you a safer baseline before removing Middleware checks elsewhere.
+>
+> The lint rule can help with this step, or you can search your codebase for `'use server'` to find your Server Functions.
+
+## Migration guide
+
+**Don't remove `clerkMiddleware()` entirely during this migration.** It's still required for Clerk to work correctly and can still be used for any non-auth logic, like redirects, headers, and other request handling. If you use `createRouteMatcher()` for non-auth path logic, replace it with the framework's native matching (`config.matcher` and `req.nextUrl.pathname`). For an example, see [Geo blocking](/docs/guides/development/geo-blocking).
+
+The line to hold: if deleting a piece of `clerkMiddleware()` logic would leave a resource unprotected, it was a gate and belongs at the resource. A cross-cutting redirect for incomplete [session tasks](/docs/guides/configure/session-tasks) or [onboarding](/docs/guides/development/add-onboarding-flow) can stay in `clerkMiddleware()` on that basis: the redirect only sends the user somewhere useful first, while the resource still runs the auth check.
+
+To help with the migration, Clerk has launched [`@clerk/eslint-plugin`](/docs/reference/nextjs/eslint-plugin), which includes `@clerk/next/require-auth-protection`, a lint rule that warns you when a resource is missing required protection. The package also includes the Bulk Fixer CLI, which can automatically add protection to your resources. You can also migrate manually if you prefer. Use the following tabs to choose your migration method.
+
+> [!WARNING]
+> The lint rule and the Bulk Fixer CLI only work with App Router resources, so Pages Router routes must be audited manually. Protect pages with [`getAuth()`](/docs/reference/nextjs/pages-router/get-auth) in `getServerSideProps`, and protect `pages/api` routes by calling `getAuth(req)` in each handler and returning a `401` for signed-out requests. See the [Pages Router examples](/docs/guides/users/reading#pages-router) for both patterns.
+
+<Tabs items={["Use the lint rule", "Migrate manually"]}>
+  <Tab>
+    <Steps>
+      ## Install and configure the lint rule
+
+      Install `@clerk/eslint-plugin`. The plugin requires ESLint `>=9` with the flat config format ([Oxlint is also supported](/docs/reference/nextjs/eslint-plugin#setup)); if you can't use flat config, follow the **Migrate manually** tab instead. The `require-auth-protection` rule is experimental, so [pin](/docs/pinning) the package version. See the [`@clerk/eslint-plugin` reference](/docs/reference/nextjs/eslint-plugin) for all options and advanced configuration, including how to set it up for monorepos. The reference also describes the exact patterns the lint rule recognizes, like how protection must always be at the top of the function.
+
+      ```npm
+      npm install --save-dev @clerk/eslint-plugin
+      ```
+
+      In your `eslint.config.mjs` file, register the Next.js plugin and the `@clerk/next/require-auth-protection` rule. The rule accepts a `protected` option which is an array of folder globs whose resources must perform an authentication check. You can base the patterns on your current `createRouteMatcher()` patterns, but you need to convert them from URL-based patterns to folder-based patterns.
+
+      Derive the folder globs from your actual directory tree, not from the URL patterns, because folder paths and URLs don't always match:
+
+      | Your route | URL pattern | Folder glob |
+      | - | - | - |
+      | `src/app/dashboard/` | `/dashboard(.*)` | `src/app/dashboard/**` |
+      | `src/app/(app)/dashboard/` (route group) | `/dashboard(.*)` | `src/app/(app)/dashboard/**` |
+      | `src/app/[locale]/dashboard/` (i18n) | `/:locale/dashboard(.*)` | `src/app/[locale]/dashboard/**` |
+
+      Route groups and dynamic segments like `[locale]` appear in folder globs but not in URLs. A glob that matches no folders reports no lint errors, which can look like a fully protected slice, so double-check each glob against your directory structure. These examples assume a `src` directory; see [Path matching](/docs/reference/nextjs/eslint-plugin#path-matching) for glob semantics and other project layouts.
+
+      <Tabs items={["Incremental migration", "Migrate the whole application at once"]}>
+        <Tab>
+          It's recommended to **incrementally migrate your application**, starting with a small slice of your application and gradually adding more resources to the protected set. You can also temporarily disable resource groups that you aren't ready to migrate yet.
+
+          Scope `protected` to the slice you're migrating. The following example scopes the rule to a `/dashboard` folder and temporarily skips Server Component entrypoints so you can focus on Route Handlers and Server Functions first:
+
+          ```js {{ filename: 'eslint.config.mjs' }}
+          import clerkNext from '@clerk/eslint-plugin/next'
+
+          export default [
+            {
+              plugins: { '@clerk/next': clerkNext },
+              rules: {
+                '@clerk/next/require-auth-protection': [
+                  'error',
+                  {
+                    protected: ['src/app/dashboard/**', 'src/actions/dashboard/**'],
+                    public: ['src/app/sign-in/**', 'src/app/sign-up/**'],
+                    resources: {
+                      routeHandlers: true,
+                      serverFunctions: true,
+                      serverComponentEntrypoints: false, // Skip for now.
+                    },
+                  },
+                ],
+              },
+            },
+          ]
+          ```
+
+          When you're ready to include pages, layouts, templates, and `default` files in the migration, set `serverComponentEntrypoints` to `true` or remove the `resources` option altogether.
+        </Tab>
+
+        <Tab>
+          If you're migrating the whole application at once, you can set `protected` to include all route groups:
+
+          ```js {{ filename: 'eslint.config.mjs' }}
+          import clerkNext from '@clerk/eslint-plugin/next'
+
+          export default [
+            {
+              plugins: { '@clerk/next': clerkNext },
+              rules: {
+                '@clerk/next/require-auth-protection': [
+                  'error',
+                  {
+                    protected: ['**'],
+                    public: ['src/app/sign-in/**', 'src/app/sign-up/**'],
+                  },
+                ],
+              },
+            },
+          ]
+          ```
+        </Tab>
+      </Tabs>
+
+      ## Run the Bulk Fixer CLI
+
+      The lint rule doesn't use ESLint autofixes, because adding protection changes runtime behavior. Instead, you can run the [Bulk Fixer CLI](/docs/reference/nextjs/eslint-plugin#bulk-fixer-cli) to automatically add protection to your resources.
+
+      <Include src="_partials/nextjs/bulk-fixer-cli" />
+
+      ## Preserve signed-out UX for client-only routes
+
+      <Include src="./_partials/preserve-signed-out-ux" />
+
+      ## Remove the Middleware authentication checks
+
+      After the server resources and signed-out states are handled, remove the Middleware authentication checks for the routes you've migrated. If you're migrating incrementally, keep the checks for the routes you haven't migrated yet. It's safe for a route to be protected by both the Middleware check and the resource check while the migration is in progress.
+
+      <Include src="_partials/nextjs/nextjs-15-callout" />
+
+      ```tsx {{ filename: 'proxy.ts' }}
+      import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+      // The `/dashboard` patterns were removed after that slice was migrated.
+      // Keep the remaining patterns until their routes are migrated.
+      const isProtected = createRouteMatcher(['/settings(.*)', '/admin(.*)'])
+
+      export default clerkMiddleware(async (auth, req) => {
+        if (isProtected(req)) await auth.protect()
+      })
+      ```
+
+      Once every slice has been migrated, remove the authentication checks entirely:
+
+      ```tsx {{ filename: 'proxy.ts' }}
+      import { clerkMiddleware } from '@clerk/nextjs/server'
+
+      // Keep clerkMiddleware() and your existing `config.matcher` export;
+      // they're still required. Only remove the authentication checks.
+      export default clerkMiddleware()
+      ```
+
+      ## Test and repeat
+
+      Test the migrated slice while signed out. Verify that protected resources reject unauthenticated requests and that pages still show the expected signed-out experience.
+
+      If you have more slices to migrate, start from the top of the guide and add more patterns to the lint rule. Repeat until you are no longer using `createRouteMatcher()`.
+
+      ## Keep the lint rule enabled for ongoing protection
+
+      Once the migration is complete, broaden `protected` to cover your whole application, opting out only the public routes.
+
+      ```js {{ filename: 'eslint.config.mjs' }}
+      import clerkNext from '@clerk/eslint-plugin/next'
+
+      export default [
+        {
+          plugins: { '@clerk/next': clerkNext },
+          rules: {
+            '@clerk/next/require-auth-protection': [
+              'error',
+              {
+                protected: ['**'],
+                public: ['src/app/sign-in/**', 'src/app/sign-up/**'],
+              },
+            ],
+          },
+        },
+      ]
+      ```
+    </Steps>
+  </Tab>
+
+  <Tab>
+    If you prefer to migrate manually, it's still recommended to install the lint rule to help ensure your resources stay protected over time.
+
+    <Steps>
+      ## Identify a slice of your application to migrate
+
+      Choose a route, route group, or feature area to migrate first. Within that slice, identify every resource that needs protection. You can use your current `createRouteMatcher()` patterns as a starting point.
+
+      > [!IMPORTANT]
+      > If your Middleware uses the inverted pattern (an `isPublicRoute` matcher that protects everything _except_ the listed routes), don't derive the protected set from the matcher array. Every route that's **not** in the public list is currently protected, so each one needs a resource-level check before you remove the Middleware check. Forgetting one silently makes it public. For this pattern, consider using the lint rule instead: setting `protected: ['**']` and listing your public routes in `public` mirrors your existing model.
+
+      For routes that require signed-in users, check the following files:
+
+      - Protect all `layout`, `template`, `default`, and `page` files.
+        - Protecting only layout files isn't enough, because they don't always re-render when pages do.
+      - Protect `loading` and `error` files only if they access sensitive resources.
+        - These files are usually mostly static and often don't need protection, but there are exceptions.
+      - Protect exports from `route` files.
+        - All functions named as HTTP verbs turn into Route Handlers, so protect them.
+
+      Server Functions need protection regardless of where they are located, so audit them separately.
+
+      ## Add auth checks to server resources
+
+      The following example shows how to migrate a Middleware-based auth check to a resource-based auth check. This example performs [an authentication check on the resource](/docs/guides/secure/protect-content#protect-a-page), but the same principle applies to any authentication or [authorization check](!authorization-check) that you want to move to the resource.
+
+      <Include src="_partials/nextjs/nextjs-15-callout" />
+
+      If `clerkMiddleware()` protects a route:
+
+      ```tsx {{ filename: 'proxy.ts' }}
+      import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+      const isProtected = createRouteMatcher(['/dashboard/:path*'])
+
+      export default clerkMiddleware(async (auth, req) => {
+        if (isProtected(req)) await auth.protect()
+      })
+      ```
+
+      Move the auth check into each protected resource. The following examples use `auth.protect()`.
+
+      <Include src="_partials/nextjs/auth-protect-behavior" />
+
+      If you want more control over the response, or if you want to perform [authorization checks](!authorization-check) instead, see the relevant guides in the [Before you start](#before-you-start) section.
+
+      <CodeBlockTabs options={["Server Component", "Route Handler", "Server Function"]}>
+        ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+        + import { auth } from '@clerk/nextjs/server'
+
+          export default async function Page() {
+        +   await auth.protect()
+
+            return <h1>Dashboard</h1>
+          }
+        ```
+
+        ```tsx {{ filename: 'app/api/dashboard/route.ts' }}
+        + import { auth } from '@clerk/nextjs/server'
+
+          export async function GET() {
+        +   const { userId } = await auth.protect()
+
+            return Response.json({ userId })
+          }
+        ```
+
+        ```tsx {{ filename: 'app/dashboard/actions.ts' }}
+          'use server'
+
+        + import { auth } from '@clerk/nextjs/server'
+
+          export async function updateDashboard() {
+        +   const { userId } = await auth.protect()
+
+            // Add your Server Function logic using the `userId`
+          }
+        ```
+      </CodeBlockTabs>
+
+      ## Preserve signed-out UX for client-only routes
+
+      <Include src="./_partials/preserve-signed-out-ux" />
+
+      ## Remove the Middleware authentication checks
+
+      After the server resources and signed-out states are handled, remove the Middleware authentication checks for the routes you've migrated. If you're migrating incrementally, keep the checks for the routes you haven't migrated yet. It's safe for a route to be protected by both the Middleware check and the resource check while the migration is in progress.
+
+      ```tsx {{ filename: 'proxy.ts' }}
+      import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+      // The `/dashboard` patterns were removed after that slice was migrated.
+      // Keep the remaining patterns until their routes are migrated.
+      const isProtected = createRouteMatcher(['/settings(.*)', '/admin(.*)'])
+
+      export default clerkMiddleware(async (auth, req) => {
+        if (isProtected(req)) await auth.protect()
+      })
+      ```
+
+      Once every slice has been migrated, remove the authentication checks entirely:
+
+      ```tsx {{ filename: 'proxy.ts' }}
+      import { clerkMiddleware } from '@clerk/nextjs/server'
+
+      // Keep clerkMiddleware() and your existing `config.matcher` export;
+      // they're still required. Only remove the authentication checks.
+      export default clerkMiddleware()
+      ```
+
+      ## Test and repeat
+
+      Test the migrated slice while signed out. Verify that protected resources reject unauthenticated requests and that pages still show the expected signed-out experience.
+
+      If you have more slices to migrate, start from the top of the guide and repeat the process until you are no longer using `createRouteMatcher()`.
+    </Steps>
+  </Tab>
+</Tabs>
+
+## What about early redirects for signed-out users?
+
+Moving signed-out UX handling out of Middleware can raise a natural performance question: "Will signed-out users now have to wait longer for the redirect to happen, especially if it happens in a Client Component?"
+
+This is a fair concern. If this is something you want to optimize for, first follow this migration guide to ensure your application behaves correctly, even without the Middleware gate. After that, you can add back an early redirect to the Middleware gate as a pure performance optimization.
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware(async (auth, req) => {
+  // Important: This is not an auth guarantee, only
+  // a performance optimization for signed-out users.
+  const pathname = req.nextUrl.pathname
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+    const { isAuthenticated, redirectToSignIn } = await auth()
+
+    if (!isAuthenticated) return redirectToSignIn()
+  }
+})
+```
+
+**Keep the resource-level auth checks in place.** Because the early redirect is a pure performance optimization, you can remove it at any time without exposing protected data or changing access control. The only impact of removing it is on signed-out users' perceived load time.
+
+> [!WARNING]
+> Adding the redirect back to the Middleware can make it harder to determine if the base resources are correctly protected.
+>
+> If you add the redirect behavior back to the Middleware, you should have a strategy for verifying the base resources are also protected. For example, by using the `require-auth-protection` lint rule or by setting up auth tests that skip the Middleware redirect.
+
+## Motivations for deprecating `createRouteMatcher()`
+
+> [!NOTE]
+> This section provides the technical rationale for the updated recommendations. Reading this section is optional.
+
+The reasons for deprecating `createRouteMatcher()` are a mix of existing concerns and new ones.
+
+One main concern has always been that Middleware-level auth gating can lead to a false sense of security. It can be tempting to think, "I'm already guarding my entire application in Middleware, so I'm safe by default." In reality, Middleware checks can be bypassed in several ways, leaving resources unprotected.
+
+Server Functions are one example. It can be tempting to think these are protected by Middleware checks, but they're called _by ID_, not by path. If a Server Function that lives in `/protected/server-functions.ts` is called while visiting `/public/`, Middleware sees `/public/` and lets the request through, even if `/protected/:path*` is protected.
+
+Another example is the mapping of regular expressions first to URLs and then to folders. Regular expressions have subtle caveats, and a mistake can leave a resource unprotected.
+
+Differences between how `createRouteMatcher()` parses a path and how the framework resolves it can also lead to dangerous gaps. If Clerk normalizes a path one way and treats it as public, but the framework normalizes it differently and renders a protected path, that creates a bypass. This is what happened in the [GHSA-vqx2-fgx2-5wq9](https://github.com/clerk/javascript/security/advisories/GHSA-vqx2-fgx2-5wq9) vulnerability. Future framework changes to path interpretation can introduce new vulnerabilities, and patching them inside `createRouteMatcher()` isn't sustainable without first-class framework support.
+
+On top of these concerns, in 2025, several framework-level Middleware bypasses were publicly disclosed. In these cases, the request never goes through `createRouteMatcher()` at all, and all authentication checks at the Middleware level are bypassed.
+
+Together, these concerns led Clerk to deprecate `createRouteMatcher()` and recommend moving away from Middleware-level auth gating.
+
+Clerk strongly believes in being _secure by default_, and this change helps provide those guarantees without creating a false sense of security.

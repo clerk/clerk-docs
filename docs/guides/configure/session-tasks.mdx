@@ -47,9 +47,15 @@ Your sign-up/sign-in flow should handle session tasks, but if a user's authentic
 
 The following methods are available to redirect users to the appropriate task page when they have pending session tasks:
 
-- [The `taskUrls` option](#using-the-task-urls-option): Protect your entire application
-- [Middleware](#using-middleware-based-redirects): Protect your entire application, route groups, or individual routes
-- [The `<RedirectToTasks />` component](#using-the-redirect-to-tasks-control-component): Protect routes
+- [The `taskUrls` option](#using-the-task-urls-option): Redirect across your entire application
+
+<If sdk="nextjs">
+  * [Middleware-based redirects](#using-middleware-based-redirects): Redirect for specific routes or route groups
+</If>
+
+<If sdk={["chrome-extension", "nextjs", "nuxt", "react", "react-router", "tanstack-react-start", "vue"]}>
+  - [The `<RedirectToTasks />` component](#using-the-redirect-to-tasks-control-component): Redirect from routes, route groups (in a layout), or individual pages
+</If>
 
 ### Using the `taskUrls` option
 
@@ -63,79 +69,49 @@ export default function Page() {
 }
 ```
 
-### Using middleware-based redirects
-
 <If sdk="nextjs">
-  If you'd like to simply redirect users to the sign-in page if they are signed-out, you can [use `auth.protect()`](#using-auth-protect). If you'd like to have more control over what your app does based on user authentication status, you can [use the `isAuthenticated` property](#using-is-authenticated).
-</If>
+  ### Using middleware-based redirects
 
-<If sdk="nextjs">
-  #### Using `auth.protect()`
+  In your `clerkMiddleware()`, read the session status and redirect users with pending tasks to the task page. This example matches the request path to decide which routes require completed tasks.
 
-  When using `auth.protect()` in middleware to protect routes, it will redirect users to the sign-in page if they are signed-out. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to an `active` (signed-in) state.
+  {/* TODO: Add example for Astro, Nuxt, React Router, and Tanstack React Start. */}
 
-  <Include src="_partials/nextjs/nextjs-15-callout" />
+  ```tsx {{ filename: 'proxy.ts' }}
+  import { clerkMiddleware } from '@clerk/nextjs/server'
+  import { NextRequest, NextResponse } from 'next/server'
 
-  ```tsx {{ filename: 'proxy.ts', mark: [[6, 8]] }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  // Set the routes that require completed session tasks
+  const sessionTaskRoutes = ['/dashboard', '/forum']
 
-  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+  export default clerkMiddleware(async (auth, req: NextRequest) => {
+    // Use the `auth()` helper to get the session status
+    const { sessionStatus } = await auth()
 
-  export default clerkMiddleware(async (auth, req) => {
-    // pending users won't be able to access protected routes
-    // and will be redirected to the sign-in page
-    if (isProtectedRoute(req)) await auth.protect()
+    const { pathname } = req.nextUrl
+    const routeRequiresSessionTasks = sessionTaskRoutes.some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`),
+    )
+
+    // Handle pending users
+    // This example redirects pending users to the /session-tasks page
+    // so they can fulfill the session tasks
+    if (sessionStatus === 'pending' && routeRequiresSessionTasks) {
+      const url = req.nextUrl.clone()
+      url.pathname = '/session-tasks'
+      return NextResponse.redirect(url)
+    }
   })
-
-  export const config = {
-    matcher: [
-      // Skip Next.js internals and all static files, unless found in search params
-      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-      // Always run for API routes
-      '/(api|trpc)(.*)',
-      // Always run for Clerk-specific frontend API routes
-      '/__clerk/(.*)',
-    ],
-  }
   ```
+
+  > [!WARNING]
+  > Like any middleware path match, this redirect is a navigation convenience, not a security boundary: it controls where pending users land, not access to data. A `pending` session is already treated as signed-out, so enforce protection in the page, Route Handler, or Server Action that reads protected data.
 </If>
 
-#### Using `isAuthenticated`
+<If sdk={["chrome-extension", "nextjs", "nuxt", "react", "react-router", "tanstack-react-start", "vue"]}>
+  ### Using the `<RedirectToTasks />` control component
 
-When using the `isAuthenticated` property in middleware to protect routes, it will return `false` if the user has a `pending` session. Then, you can handle how to respond to pending users, such as redirecting them to a custom page to fulfill the session tasks. **This example is written for Next.js, but you can use the comments in the example to help you adapt it to your SDK.**
-
-```tsx {{ filename: 'proxy.ts' }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { NextRequest, NextResponse } from 'next/server'
-
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default clerkMiddleware(async (auth, req: NextRequest) => {
-  // The `Auth` object gives you access to properties like `isAuthenticated`
-  // Accessing the `Auth` object differs depending on the SDK you're using
-  // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-  const { isAuthenticated, redirectToSignIn, sessionStatus } = await auth()
-
-  // Handle pending users
-  // This example redirects pending users to the /session-tasks page
-  // so they can fulfill the session tasks
-  if (!isAuthenticated && sessionStatus === 'pending' && isProtectedRoute(req)) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/session-tasks'
-    return NextResponse.redirect(url)
-  }
-
-  // Send users who are not authenticated
-  // and don't have pending tasks to the sign-in page
-  if (!isAuthenticated && isProtectedRoute(req)) {
-    return redirectToSignIn()
-  }
-})
-```
-
-### Using the `<RedirectToTasks />` control component
-
-The [`<RedirectToTasks />`](/docs/reference/components/control/redirect-to-tasks) control component redirects users to the appropriate task page when they have pending session tasks. It can be used in layout files to protect multiple pages or in individual pages to protect a single page.
+  The [`<RedirectToTasks />`](/docs/reference/components/control/redirect-to-tasks) control component redirects users to the appropriate task page when they have pending session tasks. It can be used in layout files to protect multiple pages or in individual pages to protect a single page.
+</If>
 
 ## Session handling
 

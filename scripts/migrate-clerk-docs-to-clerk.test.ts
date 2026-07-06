@@ -10,7 +10,9 @@ import {
   assertSemverAtLeast,
   buildBaseMergeIntoMigrationArgs,
   buildClosePrCommandArgs,
+  buildDeltaRevListArgs,
   buildFetchBranchRefspecArgs,
+  buildGitCherryArgs,
   buildUpstreamConfigArgs,
   buildMigrationBranchName,
   buildPrRefsRewriteCallback,
@@ -27,9 +29,11 @@ import {
   isDirectCliInvocation,
   isSemverAtLeast,
   lineIgnoresSymlinkedClerkDocsRoot,
+  MIGRATION_DELTA_BASE_REF,
   MigrationError,
   parseConfig,
   parseGhPrViewForMigration,
+  parseGitCherryUnappliedShas,
   parseGitRemoteUrlToSlug,
   parseMigrationNoticeEntries,
   parseSemverLoose,
@@ -770,6 +774,29 @@ describe('formatUpdateMergeConflictHints', () => {
     const hints = formatUpdateMergeConflictHints(localParams)
     expect(hints.join('\n')).not.toContain('--clerk-path')
   })
+
+  test('merge conflicts (default operation) resume with git commit and abort with git merge --abort', () => {
+    for (const params of [localParams, { ...localParams, operation: 'merge' as const }]) {
+      const joined = formatUpdateMergeConflictHints(params).join('\n')
+      expect(joined).toContain('`git commit`')
+      expect(joined).toContain('`git merge --abort`')
+      expect(joined).not.toContain('cherry-pick')
+    }
+  })
+
+  test('cherry-pick conflicts resume with git cherry-pick --continue and abort with git cherry-pick --abort', () => {
+    const joined = formatUpdateMergeConflictHints({ ...localParams, operation: 'cherry-pick' }).join('\n')
+    expect(joined).toContain('`git cherry-pick --continue`')
+    expect(joined).toContain('`git cherry-pick --abort`')
+    expect(joined).not.toContain('`git commit`')
+    expect(joined).not.toContain('`git merge --abort`')
+  })
+
+  test('cherry-pick conflicts in temp workspaces name the resume command and promise the re-run picks up pending commits', () => {
+    const hints = formatUpdateMergeConflictHints({ ...tempParams, operation: 'cherry-pick' })
+    expect(hints[0]).toContain('`git cherry-pick --continue`')
+    expect(hints[1]).toContain('still pending')
+  })
 })
 
 describe('formatMigrationNoticeCommentBody', () => {
@@ -875,6 +902,58 @@ describe('buildBaseMergeIntoMigrationArgs', () => {
     expect(buildBaseMergeIntoMigrationArgs('main', 'feat/foo-docs-migration')).not.toContain(
       '--allow-unrelated-histories',
     )
+  })
+})
+
+describe('buildDeltaRevListArgs', () => {
+  test('enumerates the rewritten delta range oldest-first with merges dropped', () => {
+    expect(buildDeltaRevListArgs('clerk-docs-migrate-123', 'nick/my-new-branch')).toEqual([
+      'rev-list',
+      '--reverse',
+      '--no-merges',
+      `clerk-docs-migrate-123/${MIGRATION_DELTA_BASE_REF}..clerk-docs-migrate-123/nick/my-new-branch`,
+    ])
+  })
+
+  test('bounds the range at the stamped delta base so clerk-docs main history is excluded', () => {
+    const range = buildDeltaRevListArgs('mig', 'feat').at(-1)
+    expect(range).toBe(`mig/${MIGRATION_DELTA_BASE_REF}..mig/feat`)
+  })
+})
+
+describe('buildGitCherryArgs', () => {
+  test('compares the rewritten delta against the migration branch by patch-id', () => {
+    expect(buildGitCherryArgs('feat/foo-docs-migration', 'clerk-docs-migrate-123', 'feat/foo')).toEqual([
+      'cherry',
+      'feat/foo-docs-migration',
+      'clerk-docs-migrate-123/feat/foo',
+      `clerk-docs-migrate-123/${MIGRATION_DELTA_BASE_REF}`,
+    ])
+  })
+})
+
+describe('parseGitCherryUnappliedShas', () => {
+  test('returns only + (unapplied) SHAs, preserving commit order', () => {
+    const stdout = [
+      '- c99139fb700f7f2714919731b4d762c01c1a0a37',
+      '+ 92441b5e019015da358e1309ba9593d55f765e19',
+      '- b4a2cb03ef241b397cbda74faaec70356449a8a8',
+      '+ 8f87892e4d86943ce0ae0e45abd90090c102c8c0',
+    ].join('\n')
+    expect(parseGitCherryUnappliedShas(stdout)).toEqual([
+      '92441b5e019015da358e1309ba9593d55f765e19',
+      '8f87892e4d86943ce0ae0e45abd90090c102c8c0',
+    ])
+  })
+
+  test('returns [] when everything is already applied (all - lines) or output is empty', () => {
+    expect(parseGitCherryUnappliedShas('- abc123\n- def456\n')).toEqual([])
+    expect(parseGitCherryUnappliedShas('')).toEqual([])
+    expect(parseGitCherryUnappliedShas('\n\n')).toEqual([])
+  })
+
+  test('tolerates surrounding whitespace without misreading a SHA', () => {
+    expect(parseGitCherryUnappliedShas('  + abc123  \n')).toEqual(['abc123'])
   })
 })
 

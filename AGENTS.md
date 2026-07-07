@@ -59,6 +59,12 @@ The docs search runs on Algolia, populated by `scripts/update-algolia-records.ts
 - SDK code examples must match the canonical partials `docs/_partials/create-user.mdx` and `docs/_partials/delete-user.mdx` per SDK (import path, auth accessor, `clerkClient` usage). The build never executes code blocks, so copy the pattern from there, not from memory.
 - Reference content is mixed: `<Typedoc />` pages pull auto-generated content from `clerk-typedoc/`, while other type pages (e.g. `docs/reference/types/agent-task.mdx`) are hand-authored. Know which kind a page is before editing.
 
+## Skills
+
+Skill files live in `.agents/skills/<skill-name>/SKILL.md`. Read the relevant one before working in its area.
+
+- `.agents/skills/migrate-branch-to-clerk/SKILL.md` — running `scripts/migrate-clerk-docs-to-clerk.ts` to migrate a branch/PR into the `clerk/clerk` monorepo, re-run semantics, and what to do at each conflict tier.
+
 ## References
 
 - Authoring, validation, and new-feature/reference checklists: `contributing/CONTRIBUTING.md`

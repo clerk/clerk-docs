@@ -1,16 +1,16 @@
 <If sdk={["nextjs", "tanstack-react-start"]}>
   In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
 
-  - If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated` and `null` for other properties, like `userId`.
-  - If the token is an `api_key`, the code can access the associated user's data using the `userId`.
-  - If the token is valid, `isAuthenticated` is `true` and `userId` is returned and available for use in the application logic. This example includes pseudo-code that uses the `userId` to get data from a database.
+  - If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated` and the request will be rejected with a `401` response.
+  - If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
+  - If the token is valid and identifies a user, `userId` is available for use in the application logic. This example includes pseudo-code that uses the `userId` to get data from a database.
 
   <If sdk="nextjs">
     ```tsx {{ filename: 'app/api/example/route.ts' }}
-    import { NextRequest, NextResponse } from 'next/server'
+    import { NextResponse } from 'next/server'
     import { auth } from '@clerk/nextjs/server'
 
-    export async function POST(req: NextRequest) {
+    export async function POST() {
       // Accept session_token, oauth_token, and api_key types
       const { isAuthenticated, tokenType, userId, scopes } = await auth({
         acceptsToken: ['session_token', 'oauth_token', 'api_key'],
@@ -21,9 +21,14 @@
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      // Check if the token is an api key and if it doesn't have the required scope
+      // Check if the token is an API key and if it doesn't have the required scope
       if (tokenType === 'api_key' && !scopes?.includes('write:users')) {
-        return NextResponse.json({ error: 'API Key missing the "write:users" scope' }, { status: 401 })
+        return NextResponse.json({ error: 'API key missing the "write:users" scope' }, { status: 401 })
+      }
+
+      // Check if the token identifies a user
+      if (!userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
       // If the token is valid, move forward with the application logic
@@ -47,22 +52,31 @@
       server: {
         handlers: {
           POST: async () => {
-            const authObject = await auth({
+            // Accept session_token, oauth_token, and api_key types
+            const { isAuthenticated, tokenType, userId, scopes } = await auth({
               acceptsToken: ['session_token', 'oauth_token', 'api_key'],
             })
 
-            if (!authObject.isAuthenticated) {
+            // If the token is invalid or missing
+            if (!isAuthenticated) {
               return json({ error: 'Unauthorized' }, { status: 401 })
             }
 
-            if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+            // Check if the token is an API key and if it doesn't have the required scope
+            if (tokenType === 'api_key' && !scopes?.includes('write:users')) {
               return json({ error: 'API key missing the "write:users" scope' }, { status: 401 })
             }
 
-            const subject =
-              authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+            // Check if the token identifies a user
+            if (!userId) {
+              return json({ error: 'Unauthorized' }, { status: 401 })
+            }
 
-            return json({ subject, tokenType: authObject.tokenType })
+            // If the token is valid, move forward with the application logic
+            // This example includes pseudo-code for getting data from a database using the userId
+            const data = db.select().from(user).where(eq(user.id, userId))
+
+            return json({ data })
           },
         },
       },
@@ -74,9 +88,9 @@
 <If sdk={["fastify", "expressjs", "react-router"]}>
   In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
 
-  - If the token is invalid or missing, `getAuth()` will return `false` for `isAuthenticated`.
+  - If the token is invalid or missing, `getAuth()` will return `false` for `isAuthenticated` and the request will be rejected with a `401` response.
   - If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
-  - If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+  - If the token is valid and identifies a user, `userId` is available for use in the application logic. This example includes pseudo-code that uses the `userId` to get data from a database.
 
   <If sdk="expressjs">
     ```ts {{ filename: 'index.ts' }}
@@ -88,23 +102,34 @@
     app.use(clerkMiddleware())
 
     app.post('/api/example', (req, res) => {
-      const authObject = getAuth(req, {
+      // Accept session_token, oauth_token, and api_key types
+      const { isAuthenticated, tokenType, userId, scopes } = getAuth(req, {
         acceptsToken: ['session_token', 'oauth_token', 'api_key'],
       })
 
-      if (!authObject.isAuthenticated) {
+      // If the token is invalid or missing
+      if (!isAuthenticated) {
         res.status(401).json({ error: 'Unauthorized' })
         return
       }
 
-      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+      // Check if the token is an API key and if it doesn't have the required scope
+      if (tokenType === 'api_key' && !scopes?.includes('write:users')) {
         res.status(401).json({ error: 'API key missing the "write:users" scope' })
         return
       }
 
-      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+      // Check if the token identifies a user
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
 
-      res.json({ subject, tokenType: authObject.tokenType })
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the userId
+      const data = db.select().from(user).where(eq(user.id, userId))
+
+      res.json({ data })
     })
     ```
   </If>
@@ -119,21 +144,31 @@
     fastify.register(clerkPlugin)
 
     fastify.post('/api/example', (request, reply) => {
-      const authObject = getAuth(request, {
+      // Accept session_token, oauth_token, and api_key types
+      const { isAuthenticated, tokenType, userId, scopes } = getAuth(request, {
         acceptsToken: ['session_token', 'oauth_token', 'api_key'],
       })
 
-      if (!authObject.isAuthenticated) {
+      // If the token is invalid or missing
+      if (!isAuthenticated) {
         return reply.code(401).send({ error: 'Unauthorized' })
       }
 
-      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+      // Check if the token is an API key and if it doesn't have the required scope
+      if (tokenType === 'api_key' && !scopes?.includes('write:users')) {
         return reply.code(401).send({ error: 'API key missing the "write:users" scope' })
       }
 
-      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+      // Check if the token identifies a user
+      if (!userId) {
+        return reply.code(401).send({ error: 'Unauthorized' })
+      }
 
-      return reply.send({ subject, tokenType: authObject.tokenType })
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the userId
+      const data = db.select().from(user).where(eq(user.id, userId))
+
+      return reply.send({ data })
     })
     ```
   </If>
@@ -144,21 +179,31 @@
     import type { Route } from './+types/api.example'
 
     export async function action(args: Route.ActionArgs) {
-      const authObject = await getAuth(args, {
+      // Accept session_token, oauth_token, and api_key types
+      const { isAuthenticated, tokenType, userId, scopes } = await getAuth(args, {
         acceptsToken: ['session_token', 'oauth_token', 'api_key'],
       })
 
-      if (!authObject.isAuthenticated) {
+      // If the token is invalid or missing
+      if (!isAuthenticated) {
         throw new Response('Unauthorized', { status: 401 })
       }
 
-      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+      // Check if the token is an API key and if it doesn't have the required scope
+      if (tokenType === 'api_key' && !scopes?.includes('write:users')) {
         throw new Response('API key missing the "write:users" scope', { status: 401 })
       }
 
-      const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+      // Check if the token identifies a user
+      if (!userId) {
+        throw new Response('Unauthorized', { status: 401 })
+      }
 
-      return Response.json({ subject, tokenType: authObject.tokenType })
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the userId
+      const data = db.select().from(user).where(eq(user.id, userId))
+
+      return Response.json({ data })
     }
     ```
   </If>
@@ -167,30 +212,40 @@
 <If sdk="nuxt">
   In the following example, the `acceptsToken` option allows `session_token`s, `oauth_token`s, and `api_key`s.
 
-  - If the token is invalid or missing, `event.context.auth()` will return `false` for `isAuthenticated`.
+  - If the token is invalid or missing, `event.context.auth()` will return `false` for `isAuthenticated` and the request will be rejected with a `401` response.
   - If the token is an `api_key`, the code checks that it includes the required `'write:users'` scope. If not, the request will be rejected with a `401` response.
-  - If the token is valid, `isAuthenticated` is `true` and the request can move forward with the application logic.
+  - If the token is valid and identifies a user, `userId` is available for use in the application logic. This example includes pseudo-code that uses the `userId` to get data from a database.
 
   ```ts {{ filename: 'server/api/example.ts' }}
   export default defineEventHandler((event) => {
-    const authObject = event.context.auth({
+    // Accept session_token, oauth_token, and api_key types
+    const { isAuthenticated, tokenType, userId, scopes } = event.context.auth({
       acceptsToken: ['session_token', 'oauth_token', 'api_key'],
     })
 
-    if (!authObject.isAuthenticated) {
+    // If the token is invalid or missing
+    if (!isAuthenticated) {
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
     }
 
-    if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('write:users')) {
+    // Check if the token is an API key and if it doesn't have the required scope
+    if (tokenType === 'api_key' && !scopes?.includes('write:users')) {
       throw createError({
         statusCode: 401,
         statusMessage: 'API key missing the "write:users" scope',
       })
     }
 
-    const subject = authObject.tokenType === 'session_token' ? authObject.userId : authObject.subject
+    // Check if the token identifies a user
+    if (!userId) {
+      throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+    }
 
-    return { subject, tokenType: authObject.tokenType }
+    // If the token is valid, move forward with the application logic
+    // This example includes pseudo-code for getting data from a database using the userId
+    const data = db.select().from(user).where(eq(user.id, userId))
+
+    return { data }
   })
   ```
 </If>

@@ -1435,6 +1435,61 @@ describe('syncing conflicts back to the clerk-docs repo (real git repos)', () =>
     expect((await run(docsRepo, 'status', '--porcelain')).stdout.trim()).not.toBe('')
   })
 
+  test('syncConflictsBackToDocsRepo skips a modify/delete conflict on a file both endpoints deleted', async () => {
+    // Regression: an old commit modifies package-lock.json, but both the clerk base and the docs
+    // branch tip later deleted it (pnpm migration). Clerk's conflict side is a deletion and the
+    // docs checkout has no such file, so `git add -A -- package-lock.json` used to fail with
+    // "pathspec did not match any files". The path carries no information and must be skipped.
+    const docsContent = 'line one\nline two (docs edit)\nline three\n'
+    const clerkContent = 'line one\nline two (clerk edit)\nline three\n'
+    const baseContent = 'line one\nline two\nline three\n'
+    const lockBase = '{"lockfileVersion": 1}\n'
+    const lockEdited = '{"lockfileVersion": 1, "edited": true}\n'
+
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', baseContent)
+    await write(clerkRepo, 'clerk-docs/package-lock.json', lockBase)
+    await commitAll(clerkRepo, 'root', '2026-01-01T00:00:01Z')
+    await run(clerkRepo, 'checkout', '-b', 'docs')
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', docsContent)
+    await write(clerkRepo, 'clerk-docs/package-lock.json', lockEdited)
+    const d1 = await commitAll(clerkRepo, 'docs: edit doc and lockfile', '2026-01-01T00:00:02Z')
+    await fs.rm(path.join(clerkRepo, 'clerk-docs/package-lock.json'))
+    await commitAll(clerkRepo, 'docs: migrate to pnpm', '2026-01-01T00:00:03Z')
+    await run(clerkRepo, 'checkout', 'main')
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', clerkContent)
+    await fs.rm(path.join(clerkRepo, 'clerk-docs/package-lock.json'))
+    await commitAll(clerkRepo, 'clerk: own edit, lockfile already gone', '2026-01-01T00:00:04Z')
+
+    await write(docsRepo, 'docs/doc.md', baseContent)
+    await write(docsRepo, 'package-lock.json', lockBase)
+    await commitAll(docsRepo, 'root', '2026-01-01T00:00:01Z')
+    await run(docsRepo, 'checkout', '-b', 'feature')
+    await write(docsRepo, 'docs/doc.md', docsContent)
+    await write(docsRepo, 'package-lock.json', lockEdited)
+    await commitAll(docsRepo, 'docs: edit doc and lockfile', '2026-01-01T00:00:02Z')
+    await fs.rm(path.join(docsRepo, 'package-lock.json'))
+    await commitAll(docsRepo, 'docs: migrate to pnpm', '2026-01-01T00:00:03Z')
+
+    const pick = await runAllowFail(clerkRepo, 'cherry-pick', d1)
+    expect(pick.code).not.toBe(0)
+    // Sanity: the conflict really spans both paths (doc.md content, package-lock.json modify/delete).
+    const unmerged = (await run(clerkRepo, 'ls-files', '-u')).stdout
+    expect(unmerged).toContain('clerk-docs/docs/doc.md')
+    expect(unmerged).toContain('clerk-docs/package-lock.json')
+
+    const synced = await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'feature', 'ours')
+
+    expect(synced).not.toBeNull()
+    expect(synced?.docsPaths).toEqual(['docs/doc.md'])
+    // The sync commit records only clerk's doc.md state; the lockfile stays deleted and untouched.
+    const syncCommitFiles = (await run(docsRepo, 'show', '--name-only', '--format=', synced!.syncCommitSha)).stdout
+    expect(syncCommitFiles.trim()).toBe('docs/doc.md')
+    await expect(fs.access(path.join(docsRepo, 'package-lock.json'))).rejects.toThrow()
+    const worktree = await fs.readFile(path.join(docsRepo, 'docs/doc.md'), 'utf8')
+    expect(worktree).toContain('<<<<<<<')
+    expect(worktree).toContain('line two (clerk edit)')
+  })
+
   test('syncConflictsBackToDocsRepo refuses when the docs repo is dirty or on the wrong branch', async () => {
     await setupConflict()
 
@@ -1443,6 +1498,37 @@ describe('syncing conflicts back to the clerk-docs repo (real git repos)', () =>
     await fs.rm(path.join(docsRepo, 'unrelated.md'))
 
     expect(await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'some-other-branch', 'ours')).toBeNull()
+  })
+
+  test('refuses to sync a binary conflicted file and leaves the docs checkout untouched', async () => {
+    // Blob content round-trips through UTF-8 strings in sync-back; a binary file (e.g. an image
+    // edited on both sides) would be committed corrupted, so it must fall back to tier 3.
+    const writeBytes = async (repo: string, file: string, bytes: number[]): Promise<void> => {
+      await fs.mkdir(path.dirname(path.join(repo, file)), { recursive: true })
+      await fs.writeFile(path.join(repo, file), Buffer.from(bytes))
+    }
+    const pngIsh = (variant: number) => [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x00, variant]
+
+    await writeBytes(clerkRepo, 'clerk-docs/docs/images/pic.png', pngIsh(1))
+    await commitAll(clerkRepo, 'root', '2026-01-01T00:00:01Z')
+    await run(clerkRepo, 'checkout', '-b', 'docs')
+    await writeBytes(clerkRepo, 'clerk-docs/docs/images/pic.png', pngIsh(2))
+    const d1 = await commitAll(clerkRepo, 'docs: update image', '2026-01-01T00:00:02Z')
+    await run(clerkRepo, 'checkout', 'main')
+    await writeBytes(clerkRepo, 'clerk-docs/docs/images/pic.png', pngIsh(3))
+    await commitAll(clerkRepo, 'clerk: own image edit', '2026-01-01T00:00:03Z')
+
+    await writeBytes(docsRepo, 'docs/images/pic.png', pngIsh(2))
+    await commitAll(docsRepo, 'root', '2026-01-01T00:00:01Z')
+    await run(docsRepo, 'checkout', '-b', 'feature')
+    const tipBefore = (await run(docsRepo, 'rev-parse', 'HEAD')).stdout.trim()
+
+    const pick = await runAllowFail(clerkRepo, 'cherry-pick', d1)
+    expect(pick.code).not.toBe(0)
+
+    expect(await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'feature', 'ours')).toBeNull()
+    expect((await run(docsRepo, 'rev-parse', 'HEAD')).stdout.trim()).toBe(tipBefore)
+    expect((await run(docsRepo, 'status', '--porcelain')).stdout.trim()).toBe('')
   })
 
   test('ROUND TRIP: resolve in clerk-docs, re-run, and the migration finishes without touching the clerk clone', async () => {
@@ -1479,7 +1565,7 @@ describe('syncing conflicts back to the clerk-docs repo (real git repos)', () =>
     expect(picked.conflictSha).toBeNull()
     expect((await run(clerkRepo, 'show', 'main:clerk-docs/docs/doc.md')).stdout).toBe(resolvedContent)
     expect((await run(clerkRepo, 'show', 'main:clerk-docs/docs/doc.md')).stdout).toContain('clerk edit')
-  })
+  }, 30000)
 
   test('sync-back leaves the clerk workspace clean enough that nothing conflicted remains', async () => {
     await setupConflict()
@@ -1502,6 +1588,8 @@ describe('syncing conflicts back to the clerk-docs repo (real git repos)', () =>
     expect(hints).toContain('feature/foo')
     expect(hints).toContain('abcdef0123')
     expect(hints).toContain('re-run')
+    // The re-run's preflight refuses a branch that is ahead of origin, so the hint must say push.
+    expect(hints).toContain('git push origin feature/foo')
     expect(hints).toContain('do not need to open the clerk workspace')
   })
 })

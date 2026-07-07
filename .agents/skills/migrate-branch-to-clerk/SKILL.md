@@ -65,12 +65,12 @@ Conflicts escalate through three tiers automatically. Match the script's output 
 
 Do this:
 
-1. Resolve the markers in the listed files in this clerk-docs checkout. A listed file _without_ markers either merged cleanly (review it) or one side deleted it (keep or delete to decide).
+1. Resolve the markers in the listed files in this clerk-docs checkout. A listed file _without_ markers either merged cleanly (review it) or one side deleted it (keep or delete to decide). Conflicted paths that both clerk and the docs branch tip already deleted (e.g. an old commit touching a long-gone `package-lock.json`) are skipped and never listed — there is nothing to resolve, and the re-run auto-resolves them on its own.
 2. **Keep the `record clerk's state` commit** — never drop, squash away, or amend it. It anchors clerk's version in docs history; the re-run's auto-resolution depends on it.
 3. Commit the resolution on the same branch, push, and re-run the script. It converges unattended.
 4. Do **not** open the clerk clone or temp workspace; its side was aborted and is rebuilt from scratch on the re-run.
 
-**Tier 3 — `create-merge-conflict` / `update-merge-conflict` error (resolve in the clerk workspace).** Last resort, only when the conflict can't be represented docs-side (path outside `clerk-docs/`, or the docs repo was dirty/on the wrong branch). The clerk workspace is left conflicted with the filter-repo remote preserved; follow the printed hints — resolve there, push manually (upstream is pre-configured so plain `git push` targets the migration branch), or `git cherry-pick --abort` / `git merge --abort` and re-run.
+**Tier 3 — `create-merge-conflict` / `update-merge-conflict` error (resolve in the clerk workspace).** Last resort, only when the conflict can't be represented docs-side (path outside `clerk-docs/`, a binary conflicted file, or the docs repo was dirty/on the wrong branch). The clerk workspace is left conflicted with the filter-repo remote preserved; follow the printed hints — resolve there, push manually (upstream is pre-configured so plain `git push` targets the migration branch), or `git cherry-pick --abort` / `git merge --abort` and re-run.
 
 ## Gotchas
 

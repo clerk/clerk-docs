@@ -3,20 +3,35 @@
  *
  * First run (create mode):
  *   Merges origin/main into the current clerk-docs branch, rewrites that branch's history under
- *   clerk/clerk-docs/ (preserving authors per imported commit), merges the rewritten history into a
- *   new branch in the clerk repo (branched from origin/<--clerk-base>, not the local base branch),
- *   pushes it, and opens a PR in clerk if an open clerk-docs PR exists. A backlink comment is added
- *   to the source clerk-docs PR and that PR is then closed (the close is skipped if the backlink
- *   comment could not be posted).
+ *   clerk/clerk-docs/ (preserving authors per imported commit), then cherry-picks only the branch's
+ *   own commits (its delta beyond clerk-docs main) onto a new branch in the clerk repo (branched
+ *   from origin/<--clerk-base>, not the local base branch), pushes it, and opens a PR in clerk if an
+ *   open clerk-docs PR exists. The clerk PR therefore contains exactly the source PR's commits — not
+ *   the full rewritten clerk-docs history, which the squashed initial import already represents.
+ *   (Migrating main itself with --allow-docs-main still merges the full rewritten history — that
+ *   mode exists precisely for a wholesale history import.) A backlink comment is added to the source
+ *   clerk-docs PR and that PR is then closed (the close is skipped if the backlink comment could not
+ *   be posted).
  *
  * Re-run on the same clerk-docs branch (update mode):
  *   Safe and idempotent. The script detects the existing `${headRef}-docs-migration` branch on clerk,
  *   merges the latest clerk base (taken from the existing clerk PR's base branch, falling back to
- *   --clerk-base) plus the latest clerk-docs commits onto it, and pushes. A clerk PR is only opened
+ *   --clerk-base), then cherry-picks only the clerk-docs commits not already on the branch (matched
+ *   by patch-id via `git cherry`, plus a commit fingerprint — author email/timestamp/subject — that
+ *   recognizes prior applications whose conflicts were resolved by hand, since a manual resolution
+ *   changes the patch and so its patch-id), and pushes. A clerk PR is only opened
  *   if the branch has no PR yet (recovers from a run where the push succeeded but PR creation failed).
- *   If the existing clerk PR is CLOSED or MERGED the script aborts with instructions. If a re-merge
- *   conflicts, the working tree is left in a conflicted state (with the filter-repo remote preserved)
- *   so you can resolve in your IDE and push manually, or `git merge --abort` and re-run.
+ *   If the existing clerk PR is CLOSED or MERGED the script aborts with instructions. Conflicts
+ *   (cherry-pick and base merge) escalate in three tiers: (1) auto-resolved to the docs branch's
+ *   final tree when the clerk side of every conflicted file is itself a docs-history state (then
+ *   the resolution cannot change the PR's net diff — see autoResolveConflictsToBranchFinalState);
+ *   (2) when clerk has its own edits, the conflict is synced *back into the clerk-docs repo* —
+ *   clerk's side is committed onto the docs branch and conflict markers are written into the
+ *   working tree, so you resolve in the checkout you already have open, commit, and re-run (the
+ *   recorded clerk state is what lets the re-run finish automatically — see
+ *   syncConflictsBackToDocsRepo); (3) only if the conflict can't be represented docs-side is the
+ *   clerk working tree left conflicted (with the filter-repo remote preserved) for manual
+ *   resolution there.
  */
 import { existsSync, lstatSync } from 'node:fs'
 import fs from 'node:fs/promises'
@@ -65,6 +80,7 @@ interface CliConfig {
    * Override the clerk-side branch name to migrate into (e.g. `nick/my-new-branch`).
    * When unset, defaults to `${headRef}-docs-migration`. Used for both create and update mode:
    * if the named branch already exists on clerk the run updates it instead of creating a new one.
+   * `main` is rejected: update mode would push migration commits directly to clerk's default branch.
    */
   targetBranch?: string
   /**
@@ -139,6 +155,17 @@ interface SourcePrMigrationMetadata {
 }
 
 const TARGET_DIR_IN_CLERK = 'clerk-docs'
+/** The clerk-docs default branch; the boundary that a feature branch's migration delta is measured against. */
+const CLERK_DOCS_MAIN_BRANCH = 'main'
+/**
+ * Branch stamped into the filter-repo duplicate at `merge-base(origin/main, <headRef>)` *before*
+ * the rewrite, so the rewritten history carries a ref marking where clerk-docs main ends and the
+ * feature branch's own commits (the delta that gets cherry-picked into clerk) begin. A branch ref
+ * is used because the duplicate is a `--single-branch` clone: the merge-base commit object exists
+ * there (it is an ancestor of headRef), but no ref would otherwise survive the filter-repo rewrite
+ * to point at its rewritten equivalent.
+ */
+const MIGRATION_DELTA_BASE_REF = 'clerk-docs-migration-delta-base'
 /** Temp `gh repo clone` of clerk: only baseRef snapshot + merge/push; full history not needed. */
 const CLERK_TEMP_CLONE_DEPTH = 1
 /**
@@ -194,6 +221,15 @@ const migrationErrorDefinitions = {
     hints: (): readonly string[] => [
       'Checkout your feature branch in clerk-docs and rerun from there.',
       'If you really want to migrate main (e.g. a one-shot full-history import), rerun with --allow-docs-main.',
+    ],
+  },
+  'refuse-target-branch-main': {
+    message: (): string =>
+      '--target-branch cannot be "main": the target branch is the clerk-side branch this run pushes migration commits to. ' +
+      'Since "main" already exists on clerk, the run would switch to update mode and push the migration directly to clerk\'s default branch instead of going through a PR.',
+    hints: (): readonly string[] => [
+      'Pass a feature branch name instead, e.g. --target-branch nick/my-docs-migration.',
+      'Or drop --target-branch to use the default name: <docs-branch>-docs-migration.',
     ],
   },
   'insufficient-repo-access': {
@@ -269,13 +305,47 @@ const migrationErrorDefinitions = {
   },
   'update-merge-conflict': {
     message: (params: MergeConflictHintParams): string =>
-      `Merge conflict while updating existing migration branch "${params.branch}". The latest clerk base or new clerk-docs changes conflict with the existing branch state in clerk.`,
+      params.operation === 'cherry-pick'
+        ? `Conflict while cherry-picking new clerk-docs commits onto existing migration branch "${params.branch}". A commit's changes conflict with the branch state in clerk.`
+        : `Merge conflict while updating existing migration branch "${params.branch}". The latest clerk base conflicts with the existing branch state in clerk.`,
     hints: (params: MergeConflictHintParams): readonly string[] => formatUpdateMergeConflictHints(params),
   },
   'create-merge-conflict': {
     message: (params: MergeConflictHintParams): string =>
-      `Merge conflict while migrating clerk-docs history onto new branch "${params.branch}". The rewritten clerk-docs tree conflicts with the existing clerk-docs/ contents in clerk.`,
+      params.operation === 'cherry-pick'
+        ? `Conflict while cherry-picking the branch's commits onto new branch "${params.branch}". A commit's changes conflict with the existing clerk-docs/ contents in clerk.`
+        : `Merge conflict while migrating clerk-docs history onto new branch "${params.branch}". The rewritten clerk-docs tree conflicts with the existing clerk-docs/ contents in clerk.`,
     hints: (params: MergeConflictHintParams): readonly string[] => formatUpdateMergeConflictHints(params),
+  },
+  'conflict-synced-to-docs': {
+    message: (params: ConflictSyncedToDocsParams): string =>
+      `Clerk has its own edits to ${params.files.length} docs file(s) that conflict with branch "${params.branch}". ` +
+      'The conflict was brought back into this clerk-docs repo so you can resolve it here — no need to open the clerk clone.',
+    hints: (params: ConflictSyncedToDocsParams): readonly string[] => formatConflictSyncedToDocsHints(params),
+  },
+  'empty-migration-delta': {
+    message: (params: { headRef: string; totalDeltaCommits: number; skippedEmpty: number }): string =>
+      params.totalDeltaCommits === 0
+        ? `Branch "${params.headRef}" has no commits beyond clerk-docs main — there is nothing to migrate.`
+        : `All ${params.totalDeltaCommits} commit(s) on branch "${params.headRef}" are already present in clerk (each cherry-pick came up empty) — there is nothing new to migrate.`,
+    hints: (): readonly string[] => [
+      'Commit the changes you want to migrate on this branch, then re-run.',
+      'If the work already landed in clerk another way, no migration is needed — close the clerk-docs PR manually.',
+      'If you used --clerk-path, delete the leftover local migration branch (git branch -D <branch>) before re-running.',
+    ],
+  },
+  'delta-base-not-found': {
+    message: (params: { headRef: string }): string =>
+      `Could not determine the merge-base between clerk-docs main and "${params.headRef}" (neither origin/main nor a local main ref shares history with the branch).`,
+    hints: (): readonly string[] => [
+      'Make sure the clerk-docs checkout has a main ref (git fetch origin main), then re-run.',
+      'If the branch genuinely shares no history with clerk-docs main, there is no delta to compute — migrate its changes manually.',
+    ],
+  },
+  'reserved-delta-base-branch': {
+    message: (params: { headRef: string }): string =>
+      `Branch name "${params.headRef}" collides with the internal delta-base marker this script stamps into the filter-repo duplicate.`,
+    hints: (): readonly string[] => ['Rename the clerk-docs branch (git branch -m <new-name>), then re-run.'],
   },
   'local-only-requires-clerk-path': {
     message: (): string =>
@@ -472,7 +542,9 @@ Usage:
 
 Run from your clerk-docs feature branch (not main). Migrates that branch into clerk under ${TARGET_DIR_IN_CLERK}/.
 
-Re-running on the same clerk-docs branch is safe: the script detects the existing ${'`${headRef}-docs-migration`'} branch in clerk and updates it with new commits instead of creating a duplicate branch or PR (a clerk PR is opened on re-run only if the branch has none yet). Update mode follows the existing clerk PR's base branch. If the existing clerk PR is CLOSED or MERGED the script aborts with instructions; if the re-merge conflicts, resolve in your IDE and push manually (or abort and re-run).
+Re-running on the same clerk-docs branch is safe: the script detects the existing ${'`${headRef}-docs-migration`'} branch in clerk and updates it with new commits instead of creating a duplicate branch or PR (a clerk PR is opened on re-run only if the branch has none yet). Update mode follows the existing clerk PR's base branch. If the existing clerk PR is CLOSED or MERGED the script aborts with instructions; if the re-apply conflicts, resolve in your IDE and push manually (or abort and re-run).
+
+Feature branches migrate as their delta: only the branch's own commits (its history beyond clerk-docs main) are cherry-picked onto the clerk base, so the clerk PR shows exactly the source PR's commits — not the full rewritten clerk-docs history. Migrating clerk-docs main itself (--allow-docs-main) still merges the full rewritten history.
 
 By default clones the clerk repo (see --clerk-repo) into a temp directory (needs gh auth with push access). Use --clerk-path for an existing local clone instead. Use --clerk-path when a conflict is likely, since conflict resolution happens in the clerk workspace.
 
@@ -482,7 +554,7 @@ Optional:
   --clerk-path <path>         Path to the local clerk (default: clones into a temp directory)
   --clerk-repo <owner/repo>   Target PR repo (default: clerk/clerk); must match the clerk clone's origin remote
   --clerk-base <branch>       Branch in clerk to base the new PR on (default: main). In update mode the existing clerk PR's base wins; passing a conflicting --clerk-base aborts.
-  --target-branch <branch>    Clerk-side branch name to migrate into, e.g. nick/my-new-branch (default: <docs-branch>-docs-migration). If that branch already exists on clerk, the run updates it instead of creating a new branch.
+  --target-branch <branch>    Clerk-side branch name to migrate into, e.g. nick/my-new-branch (default: <docs-branch>-docs-migration). If that branch already exists on clerk, the run updates it instead of creating a new branch. "main" is rejected — updating it would push the migration directly to clerk's default branch.
   --allow-dirty-clerk         Skip clean-tree preflight for local clerk (only applies with --clerk-path); uncommitted changes stay in your working tree and are not included in the PR
 
   --docs-path <path>          Path to the clerk-docs repo (default: cwd)
@@ -680,6 +752,29 @@ function formatClosedPrAbortMessage(params: { branch: string; prUrl: string; sta
   return `Refusing to update migration branch "${params.branch}": its clerk PR is ${params.state.toLowerCase()} (${params.prUrl}).`
 }
 
+interface ConflictSyncedToDocsParams {
+  /** Docs-repo-relative paths with conflict markers (or a one-sided deletion) in the working tree. */
+  files: readonly string[]
+  /** The clerk-docs branch (headRef) the conflict was synced onto. */
+  branch: string
+  /** The commit recording clerk's side of the conflicted files. */
+  syncCommitSha: string
+}
+
+/**
+ * Remediation hints when a clerk-workspace conflict was brought back into the clerk-docs repo
+ * (see syncConflictsBackToDocsRepo): the user resolves ordinary conflict markers in their own
+ * checkout, commits, and re-runs — the clerk clone is out of the picture.
+ */
+function formatConflictSyncedToDocsHints(params: ConflictSyncedToDocsParams): readonly string[] {
+  return [
+    `Review these files in your clerk-docs checkout: ${params.files.join(', ')} — resolve any conflict markers; a file without markers either merged cleanly or one side deleted it (keep, edit, or delete it to decide).`,
+    `Commit the resolution on "${params.branch}", then re-run this script — the migration will finish on its own.`,
+    `Keep the "record clerk's state" commit (${params.syncCommitSha.slice(0, 10)}) the script just added to your branch: it is what lets the re-run resolve this conflict automatically.`,
+    'You do not need to open the clerk workspace: its conflict was aborted and the next run redoes that side from scratch. (A temporary clerk clone left on disk can simply be deleted.)',
+  ]
+}
+
 interface MergeConflictHintParams {
   branch: string
   workspacePath: string
@@ -687,6 +782,13 @@ interface MergeConflictHintParams {
   remoteName: string
   /** The filter-repo'd clerk-docs duplicate the `remoteName` remote points at (also in the temp dir). */
   filterRepoClonePath: string
+  /**
+   * Which git operation stopped on the conflict, so the hints name the right resume/abort commands:
+   * the base merge and the --allow-docs-main full-history import conflict as a `merge`
+   * (`git commit` / `git merge --abort`), while the delta apply conflicts as a `cherry-pick`
+   * (`git cherry-pick --continue` / `git cherry-pick --abort`). Defaults to `merge`.
+   */
+  operation?: 'merge' | 'cherry-pick'
 }
 
 /**
@@ -698,19 +800,27 @@ interface MergeConflictHintParams {
  * Either way the filter-repo'd clerk-docs duplicate is a separate temp directory to delete.
  */
 function formatUpdateMergeConflictHints(params: MergeConflictHintParams): readonly string[] {
+  const isCherryPick = params.operation === 'cherry-pick'
+  // Cherry-pick conflicts stop the delta apply mid-sequence; after the user resumes and pushes,
+  // the re-run's patch-id comparison applies whatever commits were still pending.
+  const resume = isCherryPick ? '`git cherry-pick --continue`' : '`git commit`'
+  const abort = isCherryPick ? '`git cherry-pick --abort`' : '`git merge --abort`'
+  const rerun = isCherryPick
+    ? 'Then re-run this script: it picks up the pushed branch in update mode, applies any commits that were still pending when the conflict stopped the run, and creates/syncs the clerk PR.'
+    : 'Then re-run this script: it picks up the pushed branch in update mode and creates/syncs the clerk PR.'
   if (params.isTemporary) {
     return [
-      `Open the temporary clone in your IDE (e.g. \`cursor "${params.workspacePath}"\`), resolve the conflicts listed by \`git status\`, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there.`,
-      'Then re-run this script: it picks up the pushed branch in update mode and creates/syncs the clerk PR.',
+      `Open the temporary clone in your IDE (e.g. \`cursor "${params.workspacePath}"\`), resolve the conflicts listed by \`git status\`, ${resume}, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there.`,
+      rerun,
       'Prefer working in your own clerk checkout instead? Re-run the migration with --clerk-path pointing at it and resolve the conflicts there.',
       `Nothing is cleaned up automatically — when you're done, delete the temporary clone at ${params.workspacePath} and the filter-repo copy of clerk-docs at ${params.filterRepoClonePath} (deleting the clone removes the "${params.remoteName}" remote with it).`,
     ]
   }
   return [
     `Conflicts are in ${params.workspacePath} on branch "${params.branch}". \`git status\` in that folder lists the files.`,
-    `Resolve the conflicts in your IDE, \`git commit\`, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there. The clerk PR will update automatically. Push before re-running this script — a re-run refuses to proceed while the local branch has unpushed commits.`,
+    `Resolve the conflicts in your IDE, ${resume}, then \`git push\` — the branch already tracks origin/${params.branch}, so a plain push (or your IDE's push button) lands there. The clerk PR will update automatically. Push before re-running this script — a re-run refuses to proceed while the local branch has unpushed commits.`,
     `When you're done, clean up: \`git remote remove ${params.remoteName}\` in ${params.workspacePath}, and delete the filter-repo copy of clerk-docs at ${params.filterRepoClonePath}.`,
-    'Alternatively, to abandon this merge and retry: `git merge --abort` in that folder, then re-run this script.',
+    `Alternatively, to abandon this ${isCherryPick ? 'cherry-pick' : 'merge'} and retry: ${abort} in that folder, then re-run this script.`,
   ]
 }
 
@@ -812,6 +922,9 @@ function parseConfig(): CliConfig {
   }
   if (parsed.data.localOnly && !parsed.data.clerkPath) {
     throwMigrationError('local-only-requires-clerk-path')
+  }
+  if (parsed.data.targetBranch === 'main') {
+    throwMigrationError('refuse-target-branch-main')
   }
   return parsed.data
 }
@@ -1855,14 +1968,21 @@ function buildClosePrCommandArgs(prNumber: number, repo: string): string[] {
 
 /**
  * `git fetch` args that materialize `origin/<branch>` even in a `--single-branch` clone.
- * The explicit `branch:refs/remotes/origin/branch` refspec is required because a bare
+ * The explicit `refs/heads/<branch>:refs/remotes/origin/<branch>` refspec is required because a bare
  * `git fetch origin <branch>` would only update FETCH_HEAD, leaving `origin/<branch>` undefined
  * and breaking a subsequent `git checkout`/`git merge origin/<branch>`. The leading `+` forces
  * the tracking-ref update so a force-pushed remote branch (e.g. after a manual conflict
  * resolution) doesn't fail the fetch with a non-fast-forward rejection.
+ *
+ * The source is fully qualified (`refs/heads/<branch>`) and `--no-prune` is passed so the fetch is
+ * safe when the user has `fetch.prune` / `remote.origin.prune` enabled (a common global setting).
+ * With an unqualified source, git's prune pass fails to match the remote head against the existing
+ * `refs/remotes/origin/<branch>` and deletes it (`- [deleted] (none)`) right after updating it —
+ * which then makes the following `git rev-list <branch>..origin/<branch>` sync check abort with
+ * "unknown revision". Either guard alone prevents this; both are kept for defense in depth.
  */
 function buildFetchBranchRefspecArgs(branch: string): string[] {
-  return ['fetch', 'origin', `+${branch}:refs/remotes/origin/${branch}`]
+  return ['fetch', '--no-prune', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]
 }
 
 /**
@@ -1872,6 +1992,501 @@ function buildFetchBranchRefspecArgs(branch: string): string[] {
  */
 function buildBaseMergeIntoMigrationArgs(baseRef: string, migrationBranch: string): string[] {
   return ['merge', `origin/${baseRef}`, '-m', `Merge clerk base ${baseRef} into ${migrationBranch}`]
+}
+
+/**
+ * `git rev-list` args enumerating the rewritten branch's own commits — its delta beyond clerk-docs
+ * main — oldest first, ready to cherry-pick in order. `--no-merges` drops merge commits (e.g. the
+ * script's own "merge origin/main into the branch" step): a merge commit's mainline content is
+ * already represented by the squashed clerk-docs import in clerk, and its conflict resolutions (if
+ * any) resurface as ordinary cherry-pick conflicts on the branch commits they resolved, so nothing
+ * is silently lost.
+ */
+function buildDeltaRevListArgs(remoteName: string, headRef: string): string[] {
+  return ['rev-list', '--reverse', '--no-merges', `${remoteName}/${MIGRATION_DELTA_BASE_REF}..${remoteName}/${headRef}`]
+}
+
+/**
+ * `git cherry` args comparing the rewritten delta against the existing migration branch by
+ * patch-id. Output lines are `+ <sha>` (not yet on the branch — cherry-pick it) or `- <sha>`
+ * (an equivalent change is already there — skip it). Patch-id matching makes update mode
+ * backward-compatible with migration branches created by the older full-history-merge flow:
+ * those branches contain the rewritten commits themselves, so their patch-ids match exactly and
+ * only genuinely new commits are applied.
+ */
+function buildGitCherryArgs(migrationBranch: string, remoteName: string, headRef: string): string[] {
+  return ['cherry', migrationBranch, `${remoteName}/${headRef}`, `${remoteName}/${MIGRATION_DELTA_BASE_REF}`]
+}
+
+/** SHAs marked `+` (not yet applied) in `git cherry` output, preserving commit order. */
+function parseGitCherryUnappliedShas(stdout: string): string[] {
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('+ '))
+    .map((line) => line.slice(2).trim())
+    .filter(Boolean)
+}
+
+/**
+ * Fingerprint identifying a commit across cherry-picks and manual conflict resolutions: author
+ * email + author timestamp + subject, all of which `git cherry-pick` (and `git commit` during a
+ * conflicted pick, including `--allow-empty`) preserves. Patch-ids don't survive content-changing
+ * resolutions — once a pick is resolved by hand, `git cherry` reports the source commit as
+ * unapplied on every subsequent run and re-picks it into the same conflict forever. The
+ * fingerprint recognizes those prior applications regardless of what the resolution did.
+ */
+async function commitFingerprint(repoPath: string, ref: string): Promise<string> {
+  return (await runCommand('git', ['log', '-1', '--format=%ae|%at|%s', ref], repoPath)).stdout.trim()
+}
+
+/**
+ * Fingerprints (see {@link commitFingerprint}) of the non-merge commits already on the migration
+ * branch beyond the clerk base — i.e. every previously cherry-picked docs commit plus any manual
+ * conflict-resolution commits made from them.
+ */
+async function collectAppliedCommitFingerprints(
+  repoPath: string,
+  migrationBranch: string,
+  baseRef: string,
+): Promise<Set<string>> {
+  const log = await runCommand(
+    'git',
+    ['log', '--no-merges', '--format=%ae|%at|%s', migrationBranch, '--not', `origin/${baseRef}`],
+    repoPath,
+  )
+  return new Set(
+    log.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean),
+  )
+}
+
+/** Blob shas of one conflicted path's index stages. An absent stage means that side deleted (or never had) the path. */
+interface ConflictedPathStages {
+  path: string
+  /** Stage 1: the merge base's version. */
+  base?: string
+  /** Stage 2: ours — `HEAD`, i.e. the migration branch / clerk workspace side. */
+  ours?: string
+  /** Stage 3: theirs — the commit being cherry-picked, or the branch being merged in. */
+  theirs?: string
+}
+
+/** Parse `git ls-files -u -z` into per-path stage blobs, or null when there is no readable conflict state. */
+async function collectConflictedPathStages(repoPath: string): Promise<ConflictedPathStages[] | null> {
+  const unmerged = await runCommand('git', ['ls-files', '-u', '-z'], repoPath, { allowFailure: true })
+  if (unmerged.code !== 0) return null
+  const byPath = new Map<string, ConflictedPathStages>()
+  for (const entry of unmerged.stdout.split('\0')) {
+    if (!entry) continue
+    const tab = entry.indexOf('\t')
+    if (tab === -1) return null
+    const [, blob, stage] = entry.slice(0, tab).split(/\s+/)
+    const filePath = entry.slice(tab + 1)
+    if (!blob || !stage) return null
+    const stages = byPath.get(filePath) ?? { path: filePath }
+    if (stage === '1') stages.base = blob
+    else if (stage === '2') stages.ours = blob
+    else if (stage === '3') stages.theirs = blob
+    else return null
+    byPath.set(filePath, stages)
+  }
+  return byPath.size > 0 ? [...byPath.values()] : null
+}
+
+/**
+ * Whether the clerk-side state (`blob`, or a deletion when undefined) of a conflicted path is one
+ * the docs branch's own history has already seen: its blob at the delta base or at any commit
+ * reachable from the branch tip but not the delta base (which includes docs-main states brought
+ * in by the branch's own merges of main, and clerk-side states recorded by
+ * {@link syncConflictsBackToDocsRepo}). When true, clerk carries no independent edit to the file —
+ * the conflict is an old commit replayed against the branch's own later state — so resolving to
+ * the branch's final tree can only move the file forward along docs history. When false, clerk
+ * has content of its own on the path (a clerk-side fix, or another migration PR that already
+ * merged) and auto-resolving would silently revert it, so the caller must fall back to manual
+ * resolution.
+ *
+ * A clerk side that *deleted* the path is only within docs history if some docs commit also
+ * deletes it (raw diff new-blob of all zeros); otherwise a deliberate clerk-side deletion would
+ * be silently resurrected by checking out the final tree's content.
+ */
+async function blobIsWithinDocsHistory(
+  repoPath: string,
+  filePath: string,
+  blob: string | undefined,
+  finalTreeRef: string,
+  deltaBaseRef: string,
+): Promise<boolean> {
+  // -m diffs merge commits against each parent: without it a blob introduced by a merge
+  // *resolution* (e.g. the user merging docs main into their branch and resolving there) would
+  // be invisible to --raw and a legitimately docs-owned state would fail the guard.
+  const rawLog = await runCommand(
+    'git',
+    [
+      'log',
+      '--format=',
+      '-m',
+      '--raw',
+      '--no-renames',
+      '--no-abbrev',
+      `${deltaBaseRef}..${finalTreeRef}`,
+      '--',
+      filePath,
+    ],
+    repoPath,
+  )
+  const rawLines = rawLog.stdout.split('\n').filter((line) => line.startsWith(':'))
+  const atFinalTree = await runCommand(
+    'git',
+    ['rev-parse', '-q', '--verify', `${finalTreeRef}:${filePath}`],
+    repoPath,
+    {
+      allowFailure: true,
+    },
+  )
+  if (blob === undefined) {
+    // A clerk-side deletion is a docs state if the docs branch deletes the file too — at its tip
+    // or anywhere in its history.
+    if (atFinalTree.code !== 0) return true
+    return rawLines.some((line) => /^0+$/.test(line.split(/\s+/)[3] ?? ''))
+  }
+  const docsBlobs = new Set<string>()
+  if (atFinalTree.code === 0) docsBlobs.add(atFinalTree.stdout.trim())
+  const atDeltaBase = await runCommand(
+    'git',
+    ['rev-parse', '-q', '--verify', `${deltaBaseRef}:${filePath}`],
+    repoPath,
+    {
+      allowFailure: true,
+    },
+  )
+  if (atDeltaBase.code === 0) docsBlobs.add(atDeltaBase.stdout.trim())
+  for (const line of rawLines) {
+    const fields = line.split(/\s+/)
+    for (const historyBlob of [fields[2], fields[3]]) {
+      if (historyBlob && !/^0+$/.test(historyBlob)) docsBlobs.add(historyBlob)
+    }
+  }
+  return docsBlobs.has(blob)
+}
+
+/**
+ * Auto-resolve a cherry-pick or merge that stopped on content conflicts by resolving every
+ * conflicted path to the rewritten branch's *final* tree: the file's final content when it exists
+ * there, deletion when it doesn't. Guarded per path by {@link blobIsWithinDocsHistory} against
+ * the *clerk-side* stage of the conflict — `ours`/HEAD for a cherry-pick (docs commits are being
+ * replayed onto clerk), `theirs` for update mode's base merge (the clerk base is being merged
+ * into the docs-derived migration branch). Resolution only proceeds when the clerk-side state of
+ * *every* conflicted path is itself a docs-history state, which makes the final tree the exact
+ * net result the clerk PR must end up with — the resolution cannot change the PR's diff, it only
+ * coarsens which mid-sequence commit carries a disputed hunk (later picks that become empty as a
+ * result are skipped by the caller's empty-pick handling). Conflicts of this shape are typically
+ * old commits authored against long-gone file states — e.g. edits to a package-lock.json or
+ * npm-based vercel.json that the branch's merge of docs main later replaced with pnpm
+ * equivalents — where replaying the stale hunk is never what the PR wants. Resolving them by
+ * hand instead also breaks update mode's patch-id bookkeeping: the resolved commit's patch-id no
+ * longer matches the source commit, so `git cherry` would re-pick it into the same conflict on
+ * every subsequent run.
+ *
+ * If any conflicted path fails the guard (clerk has its own edit there), nothing is touched and
+ * the conflict is left in place — the caller then tries {@link syncConflictsBackToDocsRepo} and
+ * falls back to manual resolution.
+ *
+ * Returns 'applied' (resolved and committed), 'skipped' (a cherry-pick resolved to an empty pick
+ * and skipped; merges always commit), or null (guard refused, or something unexpected went
+ * wrong; the conflict state is left intact).
+ */
+async function autoResolveConflictsToBranchFinalState(
+  repoPath: string,
+  finalTreeRef: string,
+  deltaBaseRef: string,
+  operation: 'cherry-pick' | 'merge',
+): Promise<'applied' | 'skipped' | null> {
+  const conflicts = await collectConflictedPathStages(repoPath)
+  if (!conflicts) return null
+  // Guard every path before touching anything, so a refusal leaves the conflict state pristine.
+  for (const conflict of conflicts) {
+    const clerkSideBlob = operation === 'cherry-pick' ? conflict.ours : conflict.theirs
+    if (!(await blobIsWithinDocsHistory(repoPath, conflict.path, clerkSideBlob, finalTreeRef, deltaBaseRef))) {
+      warnLog('Not auto-resolving: the clerk side of a conflicted path has its own edits (not a docs-history state)', {
+        path: conflict.path,
+        operation,
+      })
+      return null
+    }
+  }
+  for (const conflict of conflicts) {
+    const filePath = conflict.path
+    const inFinalTree = await runCommand('git', ['cat-file', '-e', `${finalTreeRef}:${filePath}`], repoPath, {
+      allowFailure: true,
+    })
+    const resolve =
+      inFinalTree.code === 0
+        ? await runCommand('git', ['checkout', finalTreeRef, '--', filePath], repoPath, { allowFailure: true })
+        : await runCommand('git', ['rm', '-f', '--', filePath], repoPath, { allowFailure: true })
+    if (resolve.code !== 0) return null
+    warnLog(`Auto-resolved a ${operation} conflict to the docs branch final state`, {
+      path: filePath,
+      resolution: inFinalTree.code === 0 ? 'took final file content' : 'kept deletion (absent from final tree)',
+    })
+  }
+  if (operation === 'merge') {
+    // A merge conclusion is always a commit — even a content-empty one still records the
+    // ancestry. --no-edit keeps the prepared merge message without opening an editor.
+    await runCommand('git', ['commit', '--no-edit'], repoPath)
+    return 'applied'
+  }
+  const staged = await runCommand('git', ['diff', '--cached', '--quiet'], repoPath, { allowFailure: true })
+  if (staged.code === 0) {
+    await runCommand('git', ['cherry-pick', '--skip'], repoPath)
+    return 'skipped'
+  }
+  // core.editor=true so --continue commits the prepared message without opening an editor.
+  await runCommand('git', ['-c', 'core.editor=true', 'cherry-pick', '--continue'], repoPath)
+  return 'applied'
+}
+
+interface DocsConflictSyncResult {
+  /** Docs-repo-relative paths whose conflicts were written into the docs working tree. */
+  docsPaths: string[]
+  /** The commit recording clerk's side on the docs branch (what lets the next run auto-resolve). */
+  syncCommitSha: string
+}
+
+/**
+ * Bring a guard-refused clerk-workspace conflict back into the clerk-docs repo so the user can
+ * resolve it in the checkout they already have open instead of the temporary clerk clone.
+ * Two things happen on the docs branch:
+ *
+ * 1. A commit recording clerk's side of every conflicted file (content copied blob-for-blob,
+ *    deletions preserved). This is not busywork: it anchors the clerk-side blobs *in the docs
+ *    branch's history*, which is exactly what {@link blobIsWithinDocsHistory} checks — so on the
+ *    next run the same conflict auto-resolves to the branch's final tree, which by then includes
+ *    the user's resolution. Without this commit the re-run would refuse again, forever.
+ * 2. Ordinary conflict markers written into the working tree (via `git merge-file`: docs branch
+ *    tip vs clerk's content over the conflict's own merge base), left uncommitted. The user
+ *    resolves them like any merge conflict, commits, and re-runs the script. Files whose edits
+ *    don't overlap merge cleanly and just need review.
+ *
+ * Returns null — leaving the old resolve-in-clerk-clone flow as the fallback — when the conflict
+ * can't be represented docs-side: a conflicted path outside `clerk-docs/` (e.g. .gitignore), the
+ * docs repo no longer on `headRef` or not clean, or clerk's side identical to the docs tip for
+ * every path (nothing to record).
+ */
+async function syncConflictsBackToDocsRepo(
+  clerkWorkPath: string,
+  docsRepoPath: string,
+  headRef: string,
+  clerkSide: 'ours' | 'theirs',
+): Promise<DocsConflictSyncResult | null> {
+  const conflicts = await collectConflictedPathStages(clerkWorkPath)
+  if (!conflicts) return null
+  const prefix = `${TARGET_DIR_IN_CLERK}/`
+  if (conflicts.some((conflict) => !conflict.path.startsWith(prefix))) return null
+
+  const currentBranch = await runCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'], docsRepoPath, {
+    allowFailure: true,
+  })
+  if (currentBranch.code !== 0 || currentBranch.stdout.trim() !== headRef) return null
+  const status = await runCommand('git', ['status', '--porcelain'], docsRepoPath, { allowFailure: true })
+  if (status.code !== 0 || status.stdout.trim() !== '') return null
+
+  const catBlob = async (blob: string): Promise<string> =>
+    (await runCommand('git', ['cat-file', 'blob', blob], clerkWorkPath)).stdout
+
+  const entries = conflicts.map((conflict) => ({
+    conflict,
+    docsPath: conflict.path.slice(prefix.length),
+    clerkBlob: clerkSide === 'ours' ? conflict.ours : conflict.theirs,
+  }))
+
+  // 1. Record clerk's side of the conflicted files as a commit on the docs branch.
+  for (const entry of entries) {
+    const absPath = path.join(docsRepoPath, entry.docsPath)
+    if (entry.clerkBlob) {
+      await fs.mkdir(path.dirname(absPath), { recursive: true })
+      await fs.writeFile(absPath, await catBlob(entry.clerkBlob), 'utf8')
+    } else {
+      await fs.rm(absPath, { force: true })
+    }
+  }
+  await runCommand('git', ['add', '-A', '--', ...entries.map((entry) => entry.docsPath)], docsRepoPath)
+  const staged = await runCommand('git', ['diff', '--cached', '--quiet'], docsRepoPath, { allowFailure: true })
+  if (staged.code === 0) return null
+  await runCommand(
+    'git',
+    [
+      'commit',
+      '-m',
+      [
+        "chore(migration): record clerk's state of docs files that conflict with this branch",
+        '',
+        'Written by migrate-clerk-docs-to-clerk so the conflict can be resolved in this repo',
+        'instead of the temporary clerk clone. The follow-up resolution commit decides the final',
+        "content; this commit only anchors clerk's version in the branch history so the migration",
+        'script can finish automatically on the next run. Keep both commits.',
+      ].join('\n'),
+    ],
+    docsRepoPath,
+  )
+  const syncCommitSha = (await runCommand('git', ['rev-parse', 'HEAD'], docsRepoPath)).stdout.trim()
+
+  // 2. Write conflict markers (or the surviving side) into the working tree, uncommitted.
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-conflict-'))
+  try {
+    for (const entry of entries) {
+      const absPath = path.join(docsRepoPath, entry.docsPath)
+      const docsTip = await runCommand(
+        'git',
+        ['rev-parse', '-q', '--verify', `${syncCommitSha}^:${entry.docsPath}`],
+        docsRepoPath,
+        { allowFailure: true },
+      )
+      if (docsTip.code !== 0 || !entry.clerkBlob) {
+        // One side deleted the file: markers can't represent it. Leave the surviving content in
+        // the working tree (docs tip content when clerk deleted; clerk's content is already at
+        // HEAD when the docs branch deleted) and let the user keep or delete it, then commit.
+        if (!entry.clerkBlob && docsTip.code === 0) {
+          const tipContent = await runCommand('git', ['cat-file', 'blob', docsTip.stdout.trim()], docsRepoPath)
+          await fs.mkdir(path.dirname(absPath), { recursive: true })
+          await fs.writeFile(absPath, tipContent.stdout, 'utf8')
+        }
+        continue
+      }
+      const oursFile = path.join(tmpDir, 'ours')
+      const baseFile = path.join(tmpDir, 'base')
+      const theirsFile = path.join(tmpDir, 'theirs')
+      const tipContent = await runCommand('git', ['cat-file', 'blob', docsTip.stdout.trim()], docsRepoPath)
+      await fs.writeFile(oursFile, tipContent.stdout, 'utf8')
+      await fs.writeFile(baseFile, entry.conflict.base ? await catBlob(entry.conflict.base) : '', 'utf8')
+      await fs.writeFile(theirsFile, await catBlob(entry.clerkBlob), 'utf8')
+      const merged = await runCommand(
+        'git',
+        [
+          'merge-file',
+          '-p',
+          '-L',
+          `${headRef} (this branch)`,
+          '-L',
+          'merge base',
+          '-L',
+          'clerk/clerk (clerk-side edits)',
+          oursFile,
+          baseFile,
+          theirsFile,
+        ],
+        docsRepoPath,
+        { allowFailure: true },
+      )
+      // merge-file exits with the number of conflicts (0 = clean merge); errors surface as >= 128.
+      if (merged.code >= 128) return null
+      await fs.writeFile(absPath, merged.stdout, 'utf8')
+    }
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true })
+  }
+  return { docsPaths: entries.map((entry) => entry.docsPath), syncCommitSha }
+}
+
+/**
+ * True when a failed `git cherry-pick` stopped because the commit's changes are already present
+ * (no conflict, clean index, sequencer still holding the commit) — the state git itself resolves
+ * with `git cherry-pick --skip`. Detected manually because `--empty=drop` needs git >= 2.45 while
+ * this script supports the older MIN_TOOL_VERSIONS.git.
+ */
+async function isCherryPickEmptyStop(repoPath: string): Promise<boolean> {
+  if (await isMergeConflictState(repoPath)) return false
+  const staged = await runCommand('git', ['diff', '--cached', '--quiet'], repoPath, { allowFailure: true })
+  if (staged.code !== 0) return false
+  const pickHead = await runCommand('git', ['rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD'], repoPath, {
+    allowFailure: true,
+  })
+  return pickHead.code === 0
+}
+
+interface CherryPickDeltaResult {
+  applied: number
+  skippedEmpty: number
+  /** SHA the sequence stopped on with a content conflict (working tree left conflicted), or null. */
+  conflictSha: string | null
+}
+
+/**
+ * Cherry-pick delta commits one at a time so a failure is attributable to a specific commit.
+ * Empty picks (changes already present) are skipped. Content conflicts are auto-resolved to the
+ * rewritten branch's final tree (`finalTreeRef`, e.g. `<remote>/<headRef>`) when the clerk side
+ * of every conflicted path is itself a docs-history state relative to `deltaBaseRef` (e.g.
+ * `<remote>/<MIGRATION_DELTA_BASE_REF>`; see {@link autoResolveConflictsToBranchFinalState});
+ * a refused guard or an unexpected failure inside that resolution stops the run with the working
+ * tree left conflicted for manual resolution.
+ */
+async function cherryPickDeltaCommits(
+  repoPath: string,
+  shas: readonly string[],
+  finalTreeRef: string,
+  deltaBaseRef: string,
+): Promise<CherryPickDeltaResult> {
+  let applied = 0
+  let skippedEmpty = 0
+  for (const sha of shas) {
+    const pick = await runCommand('git', ['cherry-pick', sha], repoPath, { allowFailure: true })
+    if (pick.code === 0) {
+      applied += 1
+      continue
+    }
+    if (await isMergeConflictState(repoPath)) {
+      const autoResolved = await autoResolveConflictsToBranchFinalState(
+        repoPath,
+        finalTreeRef,
+        deltaBaseRef,
+        'cherry-pick',
+      )
+      if (autoResolved === 'applied') {
+        applied += 1
+        infoLog('Auto-resolved a conflicted delta commit to the docs branch final state', { sha })
+        continue
+      }
+      if (autoResolved === 'skipped') {
+        skippedEmpty += 1
+        infoLog('Skipped a conflicted delta commit that resolved to no changes against the docs branch final state', {
+          sha,
+        })
+        continue
+      }
+      return { applied, skippedEmpty, conflictSha: sha }
+    }
+    if (await isCherryPickEmptyStop(repoPath)) {
+      await runCommand('git', ['cherry-pick', '--skip'], repoPath)
+      skippedEmpty += 1
+      infoLog('Skipped a delta commit whose changes are already present in clerk', { sha })
+      continue
+    }
+    throw new Error(
+      `git cherry-pick ${sha} failed for a reason other than a content conflict: ${(pick.stderr + pick.stdout).trim()}`,
+    )
+  }
+  return { applied, skippedEmpty, conflictSha: null }
+}
+
+/**
+ * SHA in clerk-docs marking where the current branch's own work begins: its merge-base with
+ * clerk-docs main. Prefers a freshly-fetched `origin/main` (best-effort — clerk-docs is frozen, so
+ * this rarely moves) and falls back to a local `main` ref for offline runs.
+ */
+async function resolveDocsDeltaBaseSha(config: CliConfig, headRef: string): Promise<string> {
+  await runCommand('git', buildFetchBranchRefspecArgs(CLERK_DOCS_MAIN_BRANCH), config.clerkDocsPath, {
+    allowFailure: true,
+  })
+  for (const mainRef of [`origin/${CLERK_DOCS_MAIN_BRANCH}`, CLERK_DOCS_MAIN_BRANCH]) {
+    const mergeBase = await runCommand('git', ['merge-base', mainRef, headRef], config.clerkDocsPath, {
+      allowFailure: true,
+    })
+    const sha = mergeBase.stdout.trim()
+    if (mergeBase.code === 0 && sha) return sha
+  }
+  throwMigrationError('delta-base-not-found', { headRef })
 }
 
 /**
@@ -1910,15 +2525,22 @@ interface MigrationOutcome {
 
 /**
  * Duplicate local clerk-docs at `headRef`, rewrite its history under `${TARGET_DIR_IN_CLERK}/`,
- * and attach it to `clerkWorkPath` as a temporary remote so the caller can `git merge` from it.
- * Shared by both `createNewMigration` and `updateExistingMigration`.
+ * and attach it to `clerkWorkPath` as a temporary remote so the caller can cherry-pick (or, for a
+ * full-history import, `git merge`) from it. Shared by both `createNewMigration` and
+ * `updateExistingMigration`.
+ *
+ * For feature branches the duplicate also gets {@link MIGRATION_DELTA_BASE_REF} stamped at the
+ * branch's merge-base with clerk-docs main *before* the rewrite, so the caller can address the
+ * rewritten delta as `<remoteName>/<MIGRATION_DELTA_BASE_REF>..<remoteName>/<headRef>`. When
+ * migrating clerk-docs main itself (--allow-docs-main), `deltaBaseRef` is null — that mode is a
+ * deliberate wholesale history import with no delta boundary.
  */
 async function setupFilterRepoRemote(
   config: CliConfig,
   filterRepo: GitFilterRepoInvoker,
   clerkWorkPath: string,
   headRef: string,
-): Promise<{ tempClonePath: string; remoteName: string }> {
+): Promise<{ tempClonePath: string; remoteName: string; deltaBaseRef: string | null }> {
   const tempClonePath = path.join(os.tmpdir(), `clerk-docs-migrate-${sanitizeBranchForPath(headRef)}-${Date.now()}`)
   const remoteName = `clerk-docs-migrate-${Date.now()}`
   stepLog('Duplicating local clerk-docs for filter-repo', {
@@ -1936,6 +2558,21 @@ async function setupFilterRepoRemote(
     ['clone', '--no-local', '--single-branch', '--branch', headRef, config.clerkDocsPath, tempClonePath],
     process.cwd(),
   )
+  // Stamp the delta boundary before filter-repo so the rewrite maps it to the rewritten history.
+  // Skipped when migrating clerk-docs main itself: merge-base(main, main) is main, the delta would
+  // be empty by construction, and --allow-docs-main exists precisely for a full-history import.
+  let deltaBaseRef: string | null = null
+  if (headRef !== CLERK_DOCS_MAIN_BRANCH) {
+    if (headRef === MIGRATION_DELTA_BASE_REF) {
+      throwMigrationError('reserved-delta-base-branch', { headRef })
+    }
+    const deltaBaseSha = await resolveDocsDeltaBaseSha(config, headRef)
+    await runCommand('git', ['branch', MIGRATION_DELTA_BASE_REF, deltaBaseSha], tempClonePath)
+    deltaBaseRef = MIGRATION_DELTA_BASE_REF
+    infoLog('Stamped delta base (merge-base with clerk-docs main) into the filter-repo duplicate', {
+      deltaBaseSha,
+    })
+  }
   const messageCallback = buildPrRefsRewriteCallback(formatRepoSlug(config.clerkDocsRepo))
   await runCommand(
     filterRepo.command,
@@ -1951,7 +2588,7 @@ async function setupFilterRepoRemote(
   )
   await runCommand('git', ['remote', 'add', remoteName, tempClonePath], clerkWorkPath)
   await runCommand('git', ['fetch', remoteName], clerkWorkPath)
-  return { tempClonePath, remoteName }
+  return { tempClonePath, remoteName, deltaBaseRef }
 }
 
 /**
@@ -2113,7 +2750,7 @@ async function createNewMigration(
   const clerkWorkPath = clerkWorkspace.path
 
   if (config.dryRun) {
-    infoLog('Dry-run (create mode): would filter-repo, merge, push, open new PR', {
+    infoLog("Dry-run (create mode): would filter-repo, cherry-pick the branch's commits, push, open new PR", {
       clerkWorkPath: clerkWorkPath || '(would clone clerk to temp)',
       suggestedBranch: resolveMigrationBranchName(config, headRef),
       branchedFrom: `origin/${baseRef} (fetched explicitly; the local base branch state is not used)`,
@@ -2139,7 +2776,12 @@ async function createNewMigration(
   await assertBranchNameAvailable(clerkWorkPath, newBranch)
   stepLog('Migrating current branch into clerk', { headRef, baseRef, newBranch, clerkWorkPath })
 
-  const { tempClonePath, remoteName } = await setupFilterRepoRemote(config, filterRepo, clerkWorkPath, headRef)
+  const { tempClonePath, remoteName, deltaBaseRef } = await setupFilterRepoRemote(
+    config,
+    filterRepo,
+    clerkWorkPath,
+    headRef,
+  )
 
   // On a real merge conflict, leave the workspace + filter-repo remote in place for manual resolution.
   let preserveOnExit = false
@@ -2162,20 +2804,76 @@ async function createNewMigration(
     for (const configArgs of buildUpstreamConfigArgs(newBranch)) {
       await runCommand('git', configArgs, clerkWorkPath)
     }
-    const merge = await runCommand(
-      'git',
-      [
-        'merge',
+    if (deltaBaseRef === null) {
+      // Full-history import (--allow-docs-main): merge the entire rewritten history so every
+      // clerk-docs commit lands in clerk. This is the one mode where the resulting PR is *meant*
+      // to carry thousands of commits.
+      const merge = await runCommand(
+        'git',
+        [
+          'merge',
+          `${remoteName}/${headRef}`,
+          '--allow-unrelated-histories',
+          '-m',
+          `Migrate clerk-docs branch ${headRef}`,
+        ],
+        clerkWorkPath,
+        { allowFailure: true },
+      )
+      if (merge.code !== 0) {
+        if (await isMergeConflictState(clerkWorkPath)) {
+          preserveOnExit = true
+          throwMigrationError('create-merge-conflict', {
+            branch: newBranch,
+            workspacePath: clerkWorkPath,
+            isTemporary: clerkWorkspace.isTemporary,
+            remoteName,
+            filterRepoClonePath: tempClonePath,
+            operation: 'merge',
+          })
+        }
+        throw new Error(
+          `git merge of the rewritten clerk-docs history failed before any merge started (this is not a content conflict): ${(merge.stderr + merge.stdout).trim()}`,
+        )
+      }
+    } else {
+      // Delta migration: cherry-pick only the branch's own commits onto the clerk base. The full
+      // rewritten history was fetched into the workspace's object store (cherry-pick needs those
+      // objects for 3-way application) but never becomes reachable from the pushed branch, so the
+      // clerk PR shows exactly the source PR's commits instead of the entire clerk-docs history —
+      // which the squashed initial import already represents in clerk. This also sidesteps the
+      // add/add whole-file conflicts an unrelated-histories merge manufactures when both sides
+      // carry the same file.
+      const revList = await runCommand('git', buildDeltaRevListArgs(remoteName, headRef), clerkWorkPath)
+      const deltaShas = revList.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      if (deltaShas.length === 0) {
+        throwMigrationError('empty-migration-delta', { headRef, totalDeltaCommits: 0, skippedEmpty: 0 })
+      }
+      infoLog("Cherry-picking the branch's own commits onto the clerk base", { commits: deltaShas.length })
+      const picked = await cherryPickDeltaCommits(
+        clerkWorkPath,
+        deltaShas,
         `${remoteName}/${headRef}`,
-        '--allow-unrelated-histories',
-        '-m',
-        `Migrate clerk-docs branch ${headRef}`,
-      ],
-      clerkWorkPath,
-      { allowFailure: true },
-    )
-    if (merge.code !== 0) {
-      if (await isMergeConflictState(clerkWorkPath)) {
+        `${remoteName}/${deltaBaseRef}`,
+      )
+      if (picked.conflictSha) {
+        // Preferred path: bring the conflict back into the clerk-docs repo the user already has
+        // open, clean up here, and let the re-run finish automatically after they resolve there.
+        const synced = await syncConflictsBackToDocsRepo(clerkWorkPath, config.clerkDocsPath, headRef, 'ours')
+        if (synced) {
+          await runCommand('git', ['cherry-pick', '--abort'], clerkWorkPath, { allowFailure: true })
+          // Drop the half-built branch so the re-run's assertBranchNameAvailable doesn't refuse.
+          await runCommand('git', ['checkout', '--detach', `origin/${baseRef}`], clerkWorkPath, { allowFailure: true })
+          await runCommand('git', ['branch', '-D', newBranch], clerkWorkPath, { allowFailure: true })
+          throwMigrationError('conflict-synced-to-docs', {
+            files: synced.docsPaths,
+            branch: headRef,
+            syncCommitSha: synced.syncCommitSha,
+          })
+        }
         preserveOnExit = true
         throwMigrationError('create-merge-conflict', {
           branch: newBranch,
@@ -2183,11 +2881,17 @@ async function createNewMigration(
           isTemporary: clerkWorkspace.isTemporary,
           remoteName,
           filterRepoClonePath: tempClonePath,
+          operation: 'cherry-pick',
         })
       }
-      throw new Error(
-        `git merge of the rewritten clerk-docs history failed before any merge started (this is not a content conflict): ${(merge.stderr + merge.stdout).trim()}`,
-      )
+      if (picked.applied === 0) {
+        throwMigrationError('empty-migration-delta', {
+          headRef,
+          totalDeltaCommits: deltaShas.length,
+          skippedEmpty: picked.skippedEmpty,
+        })
+      }
+      infoLog('Applied delta commits', { applied: picked.applied, skippedEmpty: picked.skippedEmpty })
     }
     const gitignoreStripped = await stripClerkDocsRootGitignoreEntries(clerkWorkPath)
     if (gitignoreStripped) {
@@ -2230,8 +2934,10 @@ async function createNewMigration(
  * - Merges the latest clerk base into the migration branch so re-runs carry base updates through,
  *   not just new docs commits (no-op when the base hasn't moved). `baseRef` is resolved by the
  *   caller from the existing clerk PR's base (see {@link resolveEffectiveClerkBase}).
- * - Merges the freshly-rewritten clerk-docs history on top (filter-repo is deterministic, so only
- *   the new commits are actually merged).
+ * - Cherry-picks the freshly-rewritten clerk-docs commits not already on the branch (matched by
+ *   patch-id via `git cherry`, which also recognizes commits carried over by the older
+ *   full-history-merge flow). Migrating clerk-docs main itself still merges the full rewritten
+ *   history (--allow-docs-main is a wholesale import).
  * - On a real conflict (base or docs): leaves the working tree conflicted and preserves the
  *   filter-repo remote + temp clone so the user can finish manually or abort and re-run. On any
  *   other error or success: cleans up.
@@ -2250,7 +2956,7 @@ async function updateExistingMigration(
   const migrationBranch = existing.branch
 
   if (config.dryRun) {
-    infoLog('Dry-run (update mode): would filter-repo, merge new commits onto existing branch, push', {
+    infoLog('Dry-run (update mode): would filter-repo, cherry-pick new commits onto existing branch, push', {
       migrationBranch,
       existingPr: existing.pr?.url ?? '(none)',
       baseMerge: `would merge latest clerk base "${baseRef}" into ${migrationBranch} (no-op if base unchanged)`,
@@ -2278,7 +2984,12 @@ async function updateExistingMigration(
     isTemporaryWorkspace: clerkWorkspace.isTemporary,
   })
 
-  const { tempClonePath, remoteName } = await setupFilterRepoRemote(config, filterRepo, clerkWorkPath, headRef)
+  const { tempClonePath, remoteName, deltaBaseRef } = await setupFilterRepoRemote(
+    config,
+    filterRepo,
+    clerkWorkPath,
+    headRef,
+  )
 
   // If a merge conflict is surfaced, we want to leave state on disk so the user can finish manually.
   let preserveOnExit = false
@@ -2340,35 +3051,119 @@ async function updateExistingMigration(
       { allowFailure: true },
     )
     if (baseMerge.code !== 0) {
-      if (await isMergeConflictState(clerkWorkPath)) {
-        preserveOnExit = true
-        throwMigrationError('update-merge-conflict', conflictParams)
+      if (!(await isMergeConflictState(clerkWorkPath))) {
+        throw new Error(
+          `git merge origin/${baseRef} failed before any merge started (this is not a content conflict): ${(baseMerge.stderr + baseMerge.stdout).trim()}`,
+        )
       }
-      throw new Error(
-        `git merge origin/${baseRef} failed before any merge started (this is not a content conflict): ${(baseMerge.stderr + baseMerge.stdout).trim()}`,
-      )
+      // Same escalation as cherry-pick conflicts: auto-resolve when the clerk side (theirs — the
+      // base being merged in) is a docs-history state, otherwise sync the conflict back into the
+      // clerk-docs repo, and only preserve the conflicted clone as a last resort. Skipped for
+      // --allow-docs-main full-history imports, which have no delta base to guard against.
+      const mergeAutoResolved =
+        deltaBaseRef === null
+          ? null
+          : await autoResolveConflictsToBranchFinalState(
+              clerkWorkPath,
+              `${remoteName}/${headRef}`,
+              `${remoteName}/${deltaBaseRef}`,
+              'merge',
+            )
+      if (mergeAutoResolved === null) {
+        const synced =
+          deltaBaseRef === null
+            ? null
+            : await syncConflictsBackToDocsRepo(clerkWorkPath, config.clerkDocsPath, headRef, 'theirs')
+        if (synced) {
+          await runCommand('git', ['merge', '--abort'], clerkWorkPath, { allowFailure: true })
+          throwMigrationError('conflict-synced-to-docs', {
+            files: synced.docsPaths,
+            branch: headRef,
+            syncCommitSha: synced.syncCommitSha,
+          })
+        }
+        preserveOnExit = true
+        throwMigrationError('update-merge-conflict', { ...conflictParams, operation: 'merge' })
+      }
+      infoLog('Auto-resolved base merge conflicts to the docs branch final state', { baseRef })
     }
 
-    const merge = await runCommand(
-      'git',
-      [
-        'merge',
-        `${remoteName}/${headRef}`,
-        '--allow-unrelated-histories',
-        '-m',
-        `Update clerk-docs migration for branch ${headRef}`,
-      ],
-      clerkWorkPath,
-      { allowFailure: true },
-    )
-    if (merge.code !== 0) {
-      if (await isMergeConflictState(clerkWorkPath)) {
-        preserveOnExit = true
-        throwMigrationError('update-merge-conflict', conflictParams)
-      }
-      throw new Error(
-        `git merge of the rewritten clerk-docs history failed before any merge started (this is not a content conflict): ${(merge.stderr + merge.stdout).trim()}`,
+    if (deltaBaseRef === null) {
+      // Full-history update (--allow-docs-main): merge the rewritten history again; filter-repo is
+      // deterministic, so only commits new since the last run are actually merged.
+      const merge = await runCommand(
+        'git',
+        [
+          'merge',
+          `${remoteName}/${headRef}`,
+          '--allow-unrelated-histories',
+          '-m',
+          `Update clerk-docs migration for branch ${headRef}`,
+        ],
+        clerkWorkPath,
+        { allowFailure: true },
       )
+      if (merge.code !== 0) {
+        if (await isMergeConflictState(clerkWorkPath)) {
+          preserveOnExit = true
+          throwMigrationError('update-merge-conflict', { ...conflictParams, operation: 'merge' })
+        }
+        throw new Error(
+          `git merge of the rewritten clerk-docs history failed before any merge started (this is not a content conflict): ${(merge.stderr + merge.stdout).trim()}`,
+        )
+      }
+    } else {
+      // Delta update: apply only the clerk-docs commits not already on the migration branch,
+      // matched by patch-id (`git cherry`). Patch-ids also recognize commits carried over by the
+      // older full-history-merge flow and by manual conflict resolutions, so nothing is re-applied.
+      const cherry = await runCommand('git', buildGitCherryArgs(migrationBranch, remoteName, headRef), clerkWorkPath)
+      const unappliedByPatchId = parseGitCherryUnappliedShas(cherry.stdout)
+      // Patch-ids miss commits whose earlier pick was resolved by hand — the resolution's patch
+      // differs from the source commit's, so `git cherry` would re-pick them into the same
+      // conflict on every run. A second filter by commit fingerprint recognizes those prior
+      // applications. (Theoretical false positive: two distinct commits sharing author, subject,
+      // and the same author-second — not a realistic docs-branch shape.)
+      const appliedFingerprints = await collectAppliedCommitFingerprints(clerkWorkPath, migrationBranch, baseRef)
+      const newShas: string[] = []
+      for (const sha of unappliedByPatchId) {
+        if (appliedFingerprints.has(await commitFingerprint(clerkWorkPath, sha))) {
+          infoLog('Skipping a commit already applied to the migration branch (matched a manual conflict resolution)', {
+            sha,
+          })
+          continue
+        }
+        newShas.push(sha)
+      }
+      if (newShas.length === 0) {
+        infoLog('No new clerk-docs commits to apply (patch-id comparison found everything already on the branch)')
+      } else {
+        infoLog('Cherry-picking new clerk-docs commits onto the migration branch', { commits: newShas.length })
+        const picked = await cherryPickDeltaCommits(
+          clerkWorkPath,
+          newShas,
+          `${remoteName}/${headRef}`,
+          `${remoteName}/${deltaBaseRef}`,
+        )
+        if (picked.conflictSha) {
+          const synced = await syncConflictsBackToDocsRepo(clerkWorkPath, config.clerkDocsPath, headRef, 'ours')
+          if (synced) {
+            await runCommand('git', ['cherry-pick', '--abort'], clerkWorkPath, { allowFailure: true })
+            // Reset the local migration branch to origin so a --clerk-path re-run isn't refused
+            // for unpushed commits; everything discarded here is script-generated and recreated.
+            await runCommand('git', ['reset', '--hard', `origin/${migrationBranch}`], clerkWorkPath, {
+              allowFailure: true,
+            })
+            throwMigrationError('conflict-synced-to-docs', {
+              files: synced.docsPaths,
+              branch: headRef,
+              syncCommitSha: synced.syncCommitSha,
+            })
+          }
+          preserveOnExit = true
+          throwMigrationError('update-merge-conflict', { ...conflictParams, operation: 'cherry-pick' })
+        }
+        infoLog('Applied delta commits', { applied: picked.applied, skippedEmpty: picked.skippedEmpty })
+      }
     }
 
     const gitignoreStripped = await stripClerkDocsRootGitignoreEntries(clerkWorkPath)
@@ -2439,7 +3234,7 @@ function printRunIntro(config: CliConfig): void {
       ? '- Merges origin/main into your current clerk-docs feature branch'
       : '- Skips the origin/main merge into your clerk-docs branch (--no-merge-main)',
     '- Rewrites that branch history under clerk/clerk-docs/',
-    '- Merges rewritten history into the clerk repo (create mode = new branch + PR; update mode = existing migration branch)',
+    "- Cherry-picks the branch's own commits from the rewritten history onto the clerk base (create mode = new branch + PR; update mode = existing migration branch; --allow-docs-main imports merge the full history)",
     '- Pushes the branch and opens/links PRs when source PR context is available',
     '- In create mode, posts a backlink comment on the source clerk-docs PR and closes it (close skipped if the comment fails)',
     '- Re-runs on the same clerk-docs branch update the existing migration branch instead of creating duplicates',
@@ -2799,6 +3594,18 @@ export {
   buildClosePrCommandArgs,
   buildFetchBranchRefspecArgs,
   buildBaseMergeIntoMigrationArgs,
+  buildDeltaRevListArgs,
+  buildGitCherryArgs,
+  parseGitCherryUnappliedShas,
+  commitFingerprint,
+  collectAppliedCommitFingerprints,
+  autoResolveConflictsToBranchFinalState,
+  cherryPickDeltaCommits,
+  collectConflictedPathStages,
+  blobIsWithinDocsHistory,
+  syncConflictsBackToDocsRepo,
+  formatConflictSyncedToDocsHints,
+  MIGRATION_DELTA_BASE_REF,
   buildUpstreamConfigArgs,
   parseGitRemoteUrlToSlug,
   repoSlugsEqual,

@@ -8,7 +8,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import {
   assertGitFilterRepoVersionOutput,
   assertSemverAtLeast,
+  autoResolveConflictsToBranchFinalState,
+  blobIsWithinDocsHistory,
   buildBaseMergeIntoMigrationArgs,
+  cherryPickDeltaCommits,
+  collectAppliedCommitFingerprints,
+  commitFingerprint,
+  formatConflictSyncedToDocsHints,
+  syncConflictsBackToDocsRepo,
   buildClosePrCommandArgs,
   buildDeltaRevListArgs,
   buildFetchBranchRefspecArgs,
@@ -964,4 +971,775 @@ describe('buildUpstreamConfigArgs', () => {
       ['config', 'branch.nick/test-migrate-clerk-docs-2.merge', 'refs/heads/nick/test-migrate-clerk-docs-2'],
     ])
   })
+})
+
+describe('conflict auto-resolution and fingerprint dedup (real git repos)', () => {
+  let repo = ''
+
+  const git = (...args: string[]) => runCommand('git', args, repo)
+  const gitAllowFail = (...args: string[]) => runCommand('git', args, repo, { allowFailure: true })
+
+  async function write(file: string, content: string): Promise<void> {
+    await fs.mkdir(path.dirname(path.join(repo, file)), { recursive: true })
+    await fs.writeFile(path.join(repo, file), content, 'utf8')
+  }
+
+  /** Commit everything with a fixed author date so fingerprints are deterministic per commit. */
+  async function commitAll(message: string, date: string): Promise<string> {
+    await git('add', '-A')
+    await git('commit', '-m', message, '--date', date)
+    return (await git('rev-parse', 'HEAD')).stdout.trim()
+  }
+
+  async function contentAt(ref: string, file: string): Promise<string> {
+    return (await git('show', `${ref}:${file}`)).stdout
+  }
+
+  async function fileExistsAt(ref: string, file: string): Promise<boolean> {
+    return (await gitAllowFail('cat-file', '-e', `${ref}:${file}`)).code === 0
+  }
+
+  beforeEach(async () => {
+    repo = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-clerk-docs-git-test-'))
+    await git('init', '-b', 'main')
+    await git('config', 'user.email', 'docs-author@example.com')
+    await git('config', 'user.name', 'Docs Author')
+    await git('config', 'commit.gpgsign', 'false')
+  })
+
+  afterEach(async () => {
+    if (repo) {
+      await fs.rm(repo, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * The *safe* conflict shape the auto-resolver exists for: the clerk base's copy of the file is
+   * itself a docs-history state (here, mid-history v2 — like a squashed import that carried a
+   * docs-main state the branch had merged), and the delta commits are stale hunks authored
+   * against long-gone versions of the same line. Picking them conflicts, but clerk holds no
+   * independent edit.
+   */
+  async function setupStaleHunkDelta() {
+    await write('docs/doc.md', 'line one\nline two\nline three\n')
+    const rootSha = await commitAll('root: initial doc', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('docs/doc.md', 'line one\nline two (v1)\nline three\n')
+    await write('docs/extra.md', 'extra\n')
+    const d1 = await commitAll('docs: edit line two and add extra', '2026-01-01T00:00:02Z')
+    await write('docs/doc.md', 'line one\nline two (v2)\nline three\n')
+    const d2 = await commitAll('docs: line two v2', '2026-01-01T00:00:03Z')
+    await write('docs/doc.md', 'line one\nline two (v3)\nline three\n')
+    const d3 = await commitAll('docs: line two v3', '2026-01-01T00:00:04Z')
+
+    await git('checkout', 'main')
+    await write('docs/doc.md', 'line one\nline two (v2)\nline three\n')
+    await commitAll('clerk: import carries a docs-history state of doc.md', '2026-01-01T00:00:05Z')
+
+    return { rootSha, d1, d2, d3 }
+  }
+
+  /**
+   * The *unsafe* shape: the clerk base's copy of the file carries an edit that exists nowhere in
+   * the docs branch's history (a clerk-side fix, or another migration PR that already merged).
+   * Auto-resolving to the docs final tree would silently revert it.
+   */
+  async function setupClerkDivergedDelta() {
+    await write('docs/doc.md', 'line one\nline two\nline three\n')
+    const rootSha = await commitAll('root: initial doc', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('docs/doc.md', 'line one\nline two (docs edit)\nline three\n')
+    const d1 = await commitAll('docs: edit line two', '2026-01-01T00:00:02Z')
+    await write('docs/doc.md', 'line one\nline two (docs edit)\nline three (docs edit)\n')
+    const d2 = await commitAll('docs: edit line three', '2026-01-01T00:00:03Z')
+
+    await git('checkout', 'main')
+    await write('docs/doc.md', 'line one\nline two (clerk edit)\nline three\n')
+    await commitAll('clerk: conflicting edit to line two', '2026-01-01T00:00:04Z')
+
+    return { rootSha, d1, d2 }
+  }
+
+  test('cherryPickDeltaCommits auto-resolves a stale-hunk conflict to the docs branch final tree and continues', async () => {
+    const { rootSha, d1, d2, d3 } = await setupStaleHunkDelta()
+
+    const picked = await cherryPickDeltaCommits(repo, [d1, d2, d3], 'docs', rootSha)
+
+    expect(picked.conflictSha).toBeNull()
+    // Resolving d1's conflict takes the *whole final file* — including d2/d3's later edits — so
+    // their own picks become empty and are skipped. This is the documented "coarsens which
+    // mid-sequence commit carries a disputed hunk" behavior: net tree right, attribution coarser.
+    expect(picked.applied).toBe(1)
+    expect(picked.skippedEmpty).toBe(2)
+    // The conflicted file moved forward along docs history to the final content, not a mix.
+    expect(await contentAt('main', 'docs/doc.md')).toBe(await contentAt('docs', 'docs/doc.md'))
+    expect(await contentAt('main', 'docs/extra.md')).toBe('extra\n')
+    const subjects = (await git('log', '--format=%s', 'main')).stdout
+    // The auto-resolved commit keeps the source subject (and author), which fingerprint dedup relies on.
+    expect(subjects).toContain('docs: edit line two and add extra')
+    // d2/d3 subjects never land — their content rode along in the auto-resolved d1.
+    expect(subjects).not.toContain('docs: line two v2')
+    expect(subjects).not.toContain('docs: line two v3')
+  })
+
+  test('cherryPickDeltaCommits resolves to deletion when the docs branch itself deletes the conflicted file', async () => {
+    await write('docs/old.md', 'stale content\n')
+    const rootSha = await commitAll('root: add old doc', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('docs/old.md', 'docs rewrite\n')
+    const d1 = await commitAll('docs: rewrite old doc', '2026-01-01T00:00:02Z')
+    await write('docs/old.md', 'docs rewrite v2\n')
+    const d2 = await commitAll('docs: rewrite old doc again', '2026-01-01T00:00:03Z')
+    await fs.rm(path.join(repo, 'docs/old.md'))
+    const d3 = await commitAll('docs: delete old doc', '2026-01-01T00:00:04Z')
+
+    // clerk base holds a docs-history state of the file (no independent clerk edit).
+    await git('checkout', 'main')
+    await write('docs/old.md', 'docs rewrite v2\n')
+    await commitAll('clerk: import carries a docs-history state of old doc', '2026-01-01T00:00:05Z')
+
+    const picked = await cherryPickDeltaCommits(repo, [d1, d2, d3], 'docs', rootSha)
+
+    expect(picked.conflictSha).toBeNull()
+    expect(await fileExistsAt('main', 'docs/old.md')).toBe(false)
+  })
+
+  test('cherryPickDeltaCommits skips a conflicted pick whose resolution is a no-op against HEAD', async () => {
+    await write('docs/doc.md', 'line two\n')
+    const rootSha = await commitAll('root: initial doc', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('docs/doc.md', 'TWO\n')
+    const d1 = await commitAll('docs: first edit', '2026-01-01T00:00:02Z')
+    await write('docs/doc.md', 'TWO plus\n')
+    const d2 = await commitAll('docs: second edit', '2026-01-01T00:00:03Z')
+
+    // clerk base is already at the docs final content (e.g. a previous run landed it).
+    await git('checkout', 'main')
+    await write('docs/doc.md', 'TWO plus\n')
+    await commitAll('clerk: already at final content', '2026-01-01T00:00:04Z')
+
+    const picked = await cherryPickDeltaCommits(repo, [d1, d2], 'docs', rootSha)
+
+    expect(picked.conflictSha).toBeNull()
+    expect(picked.applied).toBe(0)
+    expect(picked.skippedEmpty).toBe(2)
+    expect(await contentAt('main', 'docs/doc.md')).toBe('TWO plus\n')
+  })
+
+  test('autoResolveConflictsToBranchFinalState returns null when no conflict is in progress', async () => {
+    await write('docs/doc.md', 'content\n')
+    const rootSha = await commitAll('root', '2026-01-01T00:00:01Z')
+    expect(await autoResolveConflictsToBranchFinalState(repo, 'main', rootSha, 'cherry-pick')).toBeNull()
+  })
+
+  test('merge conflicts auto-resolve to the docs final tree when the base side is a docs-history state', async () => {
+    await write('clerk-docs/docs/doc.md', 'line one\nline two\n')
+    const rootSha = await commitAll('root', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('clerk-docs/docs/doc.md', 'line one\nline two (v1)\n')
+    await commitAll('docs: v1', '2026-01-01T00:00:02Z')
+    await write('clerk-docs/docs/doc.md', 'line one\nline two (v2)\n')
+    await commitAll('docs: v2', '2026-01-01T00:00:03Z')
+
+    // The migration branch already carries the docs final tree.
+    await git('checkout', '-b', 'migration', rootSha)
+    await write('clerk-docs/docs/doc.md', 'line one\nline two (v2)\n')
+    await commitAll('migration: at docs final', '2026-01-01T00:00:04Z')
+
+    // The clerk base moved to a docs-history state (e.g. an earlier migration PR merged v1).
+    await git('checkout', '-b', 'base', rootSha)
+    await write('clerk-docs/docs/doc.md', 'line one\nline two (v1)\n')
+    await commitAll('base: carries docs v1', '2026-01-01T00:00:05Z')
+
+    await git('checkout', 'migration')
+    const merge = await gitAllowFail('merge', 'base', '-m', 'Merge clerk base into migration')
+    expect(merge.code).not.toBe(0)
+
+    const resolved = await autoResolveConflictsToBranchFinalState(repo, 'docs', rootSha, 'merge')
+
+    expect(resolved).toBe('applied')
+    expect(await contentAt('migration', 'clerk-docs/docs/doc.md')).toBe('line one\nline two (v2)\n')
+    // The merge concluded as a real merge commit (two parents), so base ancestry is recorded.
+    expect((await git('rev-list', '--parents', '-1', 'migration')).stdout.trim().split(/\s+/)).toHaveLength(3)
+  })
+
+  test('merge conflicts with clerk-own base edits refuse auto-resolution', async () => {
+    await write('clerk-docs/docs/doc.md', 'line one\nline two\n')
+    const rootSha = await commitAll('root', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('clerk-docs/docs/doc.md', 'line one\nline two (docs edit)\n')
+    await commitAll('docs: edit', '2026-01-01T00:00:02Z')
+
+    await git('checkout', '-b', 'migration', rootSha)
+    await write('clerk-docs/docs/doc.md', 'line one\nline two (docs edit)\n')
+    await commitAll('migration: at docs final', '2026-01-01T00:00:03Z')
+
+    await git('checkout', '-b', 'base', rootSha)
+    await write('clerk-docs/docs/doc.md', 'line one\nline two (clerk edit)\n')
+    await commitAll('base: clerk-side fix', '2026-01-01T00:00:04Z')
+
+    await git('checkout', 'migration')
+    const merge = await gitAllowFail('merge', 'base', '-m', 'Merge clerk base into migration')
+    expect(merge.code).not.toBe(0)
+
+    expect(await autoResolveConflictsToBranchFinalState(repo, 'docs', rootSha, 'merge')).toBeNull()
+    // Conflict state left intact for the sync-back / manual fallback.
+    expect((await git('ls-files', '-u')).stdout.trim()).not.toBe('')
+  })
+
+  test('GUARD: clerk-side edits on a conflicted path refuse auto-resolution and stop for manual handling', async () => {
+    // If the clerk base carries its own edit to the conflicted file (another merged migration PR,
+    // or a direct clerk-side fix), resolving to the docs final tree would silently revert it —
+    // the PR's diff against the base would include undoing that edit. The guard detects that the
+    // clerk-side file state is not a docs-history state and leaves the conflict for a human.
+    const { rootSha, d1, d2 } = await setupClerkDivergedDelta()
+
+    const before = await contentAt('main', 'docs/doc.md')
+    expect(before).toContain('clerk edit')
+
+    const picked = await cherryPickDeltaCommits(repo, [d1, d2], 'docs', rootSha)
+
+    // Stops on the conflicting commit instead of auto-resolving...
+    expect(picked.conflictSha).toBe(d1)
+    // ...with the conflict state intact for manual resolution...
+    expect((await git('ls-files', '-u')).stdout.trim()).not.toBe('')
+    // ...and the clerk-side edit still in place on the branch.
+    expect(await contentAt('main', 'docs/doc.md')).toContain('clerk edit')
+  })
+
+  test('GUARD accepts a blob that only exists as a docs merge-commit resolution (git log -m)', async () => {
+    // A conflict resolved *inside a merge commit* on the docs branch produces a blob that no
+    // ordinary (non-merge) commit introduces. `git log --raw` skips merge diffs by default, so
+    // without -m the guard would wrongly treat that docs-owned state as a clerk edit.
+    await write('docs/doc.md', 'line one\nline two\n')
+    const rootSha = await commitAll('root', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('docs/doc.md', 'line one\nline two (branch)\n')
+    await commitAll('docs: branch edit', '2026-01-01T00:00:02Z')
+
+    await git('checkout', '-b', 'docs-main', rootSha)
+    await write('docs/doc.md', 'line one\nline two (main)\n')
+    await commitAll('docs-main: main edit', '2026-01-01T00:00:03Z')
+
+    // Merge main into the branch and resolve the conflict to brand-new content: this blob exists
+    // only in the merge commit's tree.
+    await git('checkout', 'docs')
+    await gitAllowFail('merge', 'docs-main', '-m', 'merge docs main')
+    await write('docs/doc.md', 'line one\nline two (merged resolution)\n')
+    await git('add', '-A')
+    await git('commit', '--no-edit')
+    await write('docs/doc.md', 'line one\nline two (merged resolution)\nline three\n')
+    await commitAll('docs: after merge', '2026-01-01T00:00:04Z')
+
+    const mergeResolutionBlob = (await git('rev-parse', 'docs~1:docs/doc.md')).stdout.trim()
+    expect(await blobIsWithinDocsHistory(repo, 'docs/doc.md', mergeResolutionBlob, 'docs', rootSha)).toBe(true)
+
+    // A genuinely foreign blob still fails.
+    await git('checkout', '-b', 'clerk', rootSha)
+    await write('docs/doc.md', 'line one\nline two (clerk only)\n')
+    await commitAll('clerk: own edit', '2026-01-01T00:00:05Z')
+    const clerkBlob = (await git('rev-parse', 'clerk:docs/doc.md')).stdout.trim()
+    expect(await blobIsWithinDocsHistory(repo, 'docs/doc.md', clerkBlob, 'docs', rootSha)).toBe(false)
+  })
+
+  test('GUARD accepts a clerk-side deletion when the docs final tree also lacks the file', async () => {
+    await write('docs/doc.md', 'content\n')
+    await write('docs/gone.md', 'delete me\n')
+    const rootSha = await commitAll('root', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await git('rm', 'docs/gone.md')
+    await git('commit', '-m', 'docs: delete gone.md', '--date', '2026-01-01T00:00:02Z')
+
+    // Clerk deleted it too (blob undefined = that side has no stage): deletion matches the docs
+    // final tree, so resolving to the final tree cannot resurrect anything.
+    expect(await blobIsWithinDocsHistory(repo, 'docs/gone.md', undefined, 'docs', rootSha)).toBe(true)
+    // But a clerk-side deletion of a file the docs branch still has is a clerk edit.
+    expect(await blobIsWithinDocsHistory(repo, 'docs/doc.md', undefined, 'docs', rootSha)).toBe(false)
+  })
+
+  test('fingerprint dedup: an auto-resolved pick is invisible to git cherry but caught by fingerprints (fixes the re-pick loop)', async () => {
+    const { rootSha, d1 } = await setupStaleHunkDelta()
+
+    // Freeze origin/main at the clerk base tip; collectAppliedCommitFingerprints subtracts it.
+    const mainSha = (await git('rev-parse', 'main')).stdout.trim()
+    await git('update-ref', 'refs/remotes/origin/main', mainSha)
+
+    // Update-mode analog: the migration branch picks d1, which conflicts and is auto-resolved.
+    await git('checkout', '-b', 'migration')
+    const picked = await cherryPickDeltaCommits(repo, [d1], 'docs', rootSha)
+    expect(picked.applied).toBe(1)
+
+    // Patch-id bookkeeping alone re-picks it: the resolved commit's patch no longer matches d1,
+    // so `git cherry` still reports d1 as unapplied (+). This is the pre-change infinite loop.
+    const cherry = await git('cherry', 'migration', 'docs', rootSha)
+    expect(parseGitCherryUnappliedShas(cherry.stdout)).toContain(d1)
+
+    // The fingerprint filter recognizes the prior application and skips it.
+    const applied = await collectAppliedCommitFingerprints(repo, 'migration', 'main')
+    expect(applied.has(await commitFingerprint(repo, d1))).toBe(true)
+  })
+
+  test('commitFingerprint is author email|timestamp|subject and survives a cherry-pick', async () => {
+    await write('docs/doc.md', 'base\n')
+    await commitAll('root', '2026-01-01T00:00:01Z')
+
+    await git('checkout', '-b', 'docs')
+    await write('docs/other.md', 'new file\n')
+    const d1 = await commitAll('docs: add other doc', '2026-02-03T04:05:06Z')
+
+    const fingerprint = await commitFingerprint(repo, d1)
+    expect(fingerprint).toBe(`docs-author@example.com|${Date.parse('2026-02-03T04:05:06Z') / 1000}|docs: add other doc`)
+
+    await git('checkout', 'main')
+    await git('cherry-pick', d1)
+    expect(await commitFingerprint(repo, 'main')).toBe(fingerprint)
+  })
+
+  test('LIMITATION: a manual resolution that rewrote the subject is not recognized and would be re-picked', async () => {
+    const { rootSha, d1 } = await setupStaleHunkDelta()
+    const mainSha = (await git('rev-parse', 'main')).stdout.trim()
+    await git('update-ref', 'refs/remotes/origin/main', mainSha)
+
+    await git('checkout', '-b', 'migration')
+    const picked = await cherryPickDeltaCommits(repo, [d1], 'docs', rootSha)
+    expect(picked.applied).toBe(1)
+    // A human rewording the resolution commit breaks the subject-based fingerprint match.
+    await git('commit', '--amend', '-m', 'resolve conflict my own way')
+
+    const applied = await collectAppliedCommitFingerprints(repo, 'migration', 'main')
+    expect(applied.has(await commitFingerprint(repo, d1))).toBe(false)
+  })
+
+  test('collectAppliedCommitFingerprints excludes base commits and merge commits', async () => {
+    await write('docs/doc.md', 'base\n')
+    await commitAll('root', '2026-01-01T00:00:01Z')
+    const mainSha = (await git('rev-parse', 'main')).stdout.trim()
+    await git('update-ref', 'refs/remotes/origin/main', mainSha)
+
+    await git('checkout', '-b', 'migration')
+    await write('docs/new.md', 'delta\n')
+    await commitAll('migration: delta commit', '2026-01-01T00:00:02Z')
+
+    // Advance main and merge it in, like update mode's base merge.
+    await git('checkout', 'main')
+    await write('docs/base-move.md', 'base moved\n')
+    await commitAll('main: base moves on', '2026-01-01T00:00:03Z')
+    await git('update-ref', 'refs/remotes/origin/main', (await git('rev-parse', 'main')).stdout.trim())
+    await git('checkout', 'migration')
+    await git('merge', 'main', '-m', 'Merge clerk base main into migration')
+
+    const applied = await collectAppliedCommitFingerprints(repo, 'migration', 'main')
+    expect(applied).toEqual(
+      new Set([`docs-author@example.com|${Date.parse('2026-01-01T00:00:02Z') / 1000}|migration: delta commit`]),
+    )
+  })
+})
+
+describe('syncing conflicts back to the clerk-docs repo (real git repos)', () => {
+  let clerkRepo = ''
+  let docsRepo = ''
+
+  const run = (repo: string, ...args: string[]) => runCommand('git', args, repo)
+  const runAllowFail = (repo: string, ...args: string[]) => runCommand('git', args, repo, { allowFailure: true })
+
+  async function write(repo: string, file: string, content: string): Promise<void> {
+    await fs.mkdir(path.dirname(path.join(repo, file)), { recursive: true })
+    await fs.writeFile(path.join(repo, file), content, 'utf8')
+  }
+
+  async function commitAll(repo: string, message: string, date: string): Promise<string> {
+    await run(repo, 'add', '-A')
+    await run(repo, 'commit', '-m', message, '--date', date)
+    return (await run(repo, 'rev-parse', 'HEAD')).stdout.trim()
+  }
+
+  async function initRepo(repo: string): Promise<void> {
+    await run(repo, 'init', '-b', 'main')
+    await run(repo, 'config', 'user.email', 'docs-author@example.com')
+    await run(repo, 'config', 'user.name', 'Docs Author')
+    await run(repo, 'config', 'commit.gpgsign', 'false')
+  }
+
+  beforeEach(async () => {
+    clerkRepo = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-sync-clerk-'))
+    docsRepo = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-sync-docs-'))
+    await initRepo(clerkRepo)
+    await initRepo(docsRepo)
+  })
+
+  afterEach(async () => {
+    await fs.rm(clerkRepo, { recursive: true, force: true })
+    await fs.rm(docsRepo, { recursive: true, force: true })
+  })
+
+  /**
+   * Mirrors the real layout: the clerk workspace holds the *rewritten* docs history (paths under
+   * clerk-docs/) as branch `docs`, and its `main` (the clerk base) carries a clerk-side edit that
+   * conflicts with the docs delta. The separate docs repo is the user's clerk-docs checkout on
+   * branch `feature` with the same logical history at unprefixed paths.
+   */
+  async function setupConflict() {
+    const docsContent = 'line one\nline two (docs edit)\nline three\n'
+    const clerkContent = 'line one\nline two (clerk edit)\nline three\n'
+    const baseContent = 'line one\nline two\nline three\n'
+
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', baseContent)
+    const rootSha = await commitAll(clerkRepo, 'root', '2026-01-01T00:00:01Z')
+    await run(clerkRepo, 'checkout', '-b', 'docs')
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', docsContent)
+    const d1 = await commitAll(clerkRepo, 'docs: edit line two', '2026-01-01T00:00:02Z')
+    await run(clerkRepo, 'checkout', 'main')
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', clerkContent)
+    await commitAll(clerkRepo, 'clerk: own edit to line two', '2026-01-01T00:00:03Z')
+
+    await write(docsRepo, 'docs/doc.md', baseContent)
+    await commitAll(docsRepo, 'root', '2026-01-01T00:00:01Z')
+    await run(docsRepo, 'checkout', '-b', 'feature')
+    await write(docsRepo, 'docs/doc.md', docsContent)
+    await commitAll(docsRepo, 'docs: edit line two', '2026-01-01T00:00:02Z')
+
+    // Create the guard-refused conflict state in the clerk workspace.
+    const pick = await runAllowFail(clerkRepo, 'cherry-pick', d1)
+    expect(pick.code).not.toBe(0)
+
+    return { rootSha, d1, docsContent, clerkContent }
+  }
+
+  test('syncConflictsBackToDocsRepo records clerk state as a commit and writes markers into the docs worktree', async () => {
+    const { docsContent, clerkContent } = await setupConflict()
+
+    const synced = await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'feature', 'ours')
+
+    expect(synced).not.toBeNull()
+    expect(synced?.docsPaths).toEqual(['docs/doc.md'])
+    // The sync commit anchors clerk's exact content in the docs branch history.
+    const syncedContent = (await run(docsRepo, 'show', `${synced?.syncCommitSha}:docs/doc.md`)).stdout
+    expect(syncedContent).toBe(clerkContent)
+    const subject = (await run(docsRepo, 'log', '-1', '--format=%s')).stdout
+    expect(subject).toContain("record clerk's state")
+    // The working tree has ordinary conflict markers with both sides present, left uncommitted.
+    const worktree = await fs.readFile(path.join(docsRepo, 'docs/doc.md'), 'utf8')
+    expect(worktree).toContain('<<<<<<<')
+    expect(worktree).toContain('line two (docs edit)')
+    expect(worktree).toContain('line two (clerk edit)')
+    expect(worktree).toContain('>>>>>>>')
+    expect(docsContent).not.toBe(worktree)
+    expect((await run(docsRepo, 'status', '--porcelain')).stdout.trim()).not.toBe('')
+  })
+
+  test('syncConflictsBackToDocsRepo refuses when the docs repo is dirty or on the wrong branch', async () => {
+    await setupConflict()
+
+    await fs.writeFile(path.join(docsRepo, 'unrelated.md'), 'uncommitted\n', 'utf8')
+    expect(await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'feature', 'ours')).toBeNull()
+    await fs.rm(path.join(docsRepo, 'unrelated.md'))
+
+    expect(await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'some-other-branch', 'ours')).toBeNull()
+  })
+
+  test('ROUND TRIP: resolve in clerk-docs, re-run, and the migration finishes without touching the clerk clone', async () => {
+    const { rootSha, d1, clerkContent } = await setupConflict()
+
+    // Run 1: guard-refused conflict is synced back, clerk workspace cleaned up.
+    const synced = await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'feature', 'ours')
+    expect(synced).not.toBeNull()
+    await run(clerkRepo, 'cherry-pick', '--abort')
+
+    // The user resolves the markers in their clerk-docs checkout, keeping both edits, and commits.
+    const resolvedContent = 'line one\nline two (docs edit, keeping clerk edit)\nline three\n'
+    await write(docsRepo, 'docs/doc.md', resolvedContent)
+    const r = await commitAll(docsRepo, 'resolve migration conflict with clerk', '2026-01-01T00:00:05Z')
+    const s = `${r}^`
+
+    // Run 2: filter-repo deterministically re-rewrites the docs branch, so the sync commit and
+    // the resolution commit appear (path-prefixed) on the rewritten branch. Simulate that here.
+    await run(clerkRepo, 'checkout', 'docs')
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', clerkContent)
+    const sPrime = await commitAll(
+      clerkRepo,
+      (await run(docsRepo, 'log', '-1', '--format=%s', s)).stdout.trim(),
+      '2026-01-01T00:00:04Z',
+    )
+    await write(clerkRepo, 'clerk-docs/docs/doc.md', resolvedContent)
+    const rPrime = await commitAll(clerkRepo, 'resolve migration conflict with clerk', '2026-01-01T00:00:05Z')
+    await run(clerkRepo, 'checkout', 'main')
+
+    const picked = await cherryPickDeltaCommits(clerkRepo, [d1, sPrime, rPrime], 'docs', rootSha)
+
+    // Everything lands unattended: the guard now passes because the docs branch history contains
+    // clerk's state (the sync commit), and the final tree is the user's resolution.
+    expect(picked.conflictSha).toBeNull()
+    expect((await run(clerkRepo, 'show', 'main:clerk-docs/docs/doc.md')).stdout).toBe(resolvedContent)
+    expect((await run(clerkRepo, 'show', 'main:clerk-docs/docs/doc.md')).stdout).toContain('clerk edit')
+  })
+
+  test('sync-back leaves the clerk workspace clean enough that nothing conflicted remains', async () => {
+    await setupConflict()
+
+    const synced = await syncConflictsBackToDocsRepo(clerkRepo, docsRepo, 'feature', 'ours')
+    expect(synced).not.toBeNull()
+    await run(clerkRepo, 'cherry-pick', '--abort')
+
+    expect((await run(clerkRepo, 'ls-files', '-u')).stdout.trim()).toBe('')
+    expect((await run(clerkRepo, 'status', '--porcelain')).stdout.trim()).toBe('')
+  })
+
+  test('formatConflictSyncedToDocsHints names the files, the branch, and the sync commit', () => {
+    const hints = formatConflictSyncedToDocsHints({
+      files: ['docs/doc.md', 'docs/other.md'],
+      branch: 'feature/foo',
+      syncCommitSha: 'abcdef0123456789',
+    }).join('\n')
+    expect(hints).toContain('docs/doc.md, docs/other.md')
+    expect(hints).toContain('feature/foo')
+    expect(hints).toContain('abcdef0123')
+    expect(hints).toContain('re-run')
+    expect(hints).toContain('do not need to open the clerk workspace')
+  })
+})
+
+describe('END TO END: multi-run migration lifecycle (real git repos + bare origin)', () => {
+  let docsRepo = ''
+  let clerkWork = ''
+  let clerkOrigin = ''
+
+  const run = (repo: string, ...args: string[]) => runCommand('git', args, repo)
+  const runAllowFail = (repo: string, ...args: string[]) => runCommand('git', args, repo, { allowFailure: true })
+
+  async function write(repo: string, file: string, content: string): Promise<void> {
+    await fs.mkdir(path.dirname(path.join(repo, file)), { recursive: true })
+    await fs.writeFile(path.join(repo, file), content, 'utf8')
+  }
+
+  async function commitAll(repo: string, message: string, date: string): Promise<string> {
+    await run(repo, 'add', '-A')
+    await run(repo, 'commit', '-m', message, '--date', date)
+    return (await run(repo, 'rev-parse', 'HEAD')).stdout.trim()
+  }
+
+  async function initRepo(repo: string): Promise<void> {
+    await run(repo, 'init', '-b', 'main')
+    await run(repo, 'config', 'user.email', 'docs-author@example.com')
+    await run(repo, 'config', 'user.name', 'Docs Author')
+    await run(repo, 'config', 'commit.gpgsign', 'false')
+  }
+
+  beforeEach(async () => {
+    docsRepo = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-e2e-docs-'))
+    clerkWork = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-e2e-clerk-'))
+    clerkOrigin = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-e2e-origin-'))
+    await initRepo(docsRepo)
+    await initRepo(clerkWork)
+    await run(clerkOrigin, 'init', '--bare', '-b', 'main')
+  })
+
+  afterEach(async () => {
+    await fs.rm(docsRepo, { recursive: true, force: true })
+    await fs.rm(clerkWork, { recursive: true, force: true })
+    await fs.rm(clerkOrigin, { recursive: true, force: true })
+  })
+
+  const QUICKSTART_V0 = [
+    '# Quickstart',
+    '',
+    'intro text',
+    '',
+    'step one: install the sdk',
+    '',
+    'filler alpha',
+    'filler beta',
+    'filler gamma',
+    '',
+    'step two: configure the app',
+    '',
+  ].join('\n')
+  const quickstart = (stepOne: string, stepTwo: string) =>
+    QUICKSTART_V0.replace('step one: install the sdk', stepOne).replace('step two: configure the app', stepTwo)
+
+  test('create → clerk hotfix races the branch → sync-back → resolve in docs → converge → idempotent re-run', async () => {
+    const STEP1_V0 = 'step one: install the sdk'
+    const STEP1_DOCS = 'step one: install the sdk (docs improvement)'
+    const STEP1_DOCS_V2 = 'step one: install the sdk (docs improvement, v2)'
+    const STEP1_HOTFIX = 'step one: install the sdk (clerk hotfix)'
+    const STEP1_RESOLVED = 'step one: install the sdk (docs improvement v2 + clerk hotfix)'
+    const STEP2_V0 = 'step two: configure the app'
+    const STEP2_DOCS = 'step two: configure the app (more docs)'
+
+    // ---- The user's clerk-docs checkout: main root, then a feature branch with three commits.
+    await write(docsRepo, 'docs/quickstart.mdx', quickstart(STEP1_V0, STEP2_V0))
+    await write(docsRepo, 'docs/other.mdx', 'alpha\n')
+    await write(docsRepo, 'docs/config.txt', 'npm\n')
+    await commitAll(docsRepo, 'root', '2026-01-01T00:00:01Z')
+    await run(docsRepo, 'checkout', '-b', 'feature')
+    await write(docsRepo, 'docs/quickstart.mdx', quickstart(STEP1_DOCS, STEP2_V0))
+    await write(docsRepo, 'docs/other.mdx', 'alpha (docs)\n')
+    await write(docsRepo, 'docs/config.txt', 'npm-tweak\n')
+    await commitAll(docsRepo, 'docs: improve step one and tweak config', '2026-01-01T00:00:02Z')
+    await write(docsRepo, 'docs/quickstart.mdx', quickstart(STEP1_DOCS_V2, STEP2_V0))
+    await write(docsRepo, 'docs/config.txt', 'pnpm\n')
+    await commitAll(docsRepo, 'docs: step one v2 and pnpm', '2026-01-01T00:00:03Z')
+
+    // ---- The clerk workspace: clerk's own files plus the imported clerk-docs tree. The import
+    // carries the docs branch's *final* config state (pnpm) — the classic stale-hunk setup.
+    await write(clerkWork, 'src/app.ts', 'console.log("clerk app")\n')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', quickstart(STEP1_V0, STEP2_V0))
+    await write(clerkWork, 'clerk-docs/docs/other.mdx', 'alpha\n')
+    await write(clerkWork, 'clerk-docs/docs/config.txt', 'pnpm\n')
+    await commitAll(clerkWork, 'clerk: root with docs import', '2026-01-01T00:00:01Z')
+    await run(clerkWork, 'remote', 'add', 'origin', clerkOrigin)
+    await run(clerkWork, 'push', '-u', 'origin', 'main')
+
+    // ---- Simulate the filter-repo rewrite: an unrelated-history `docs` branch inside the clerk
+    // workspace holding the docs commits at clerk-docs/-prefixed paths (blobs are identical to
+    // the docs repo's since blobs are content-addressed).
+    await run(clerkWork, 'checkout', '--orphan', 'docs')
+    await run(clerkWork, 'rm', '-rf', '.')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', quickstart(STEP1_V0, STEP2_V0))
+    await write(clerkWork, 'clerk-docs/docs/other.mdx', 'alpha\n')
+    await write(clerkWork, 'clerk-docs/docs/config.txt', 'npm\n')
+    const docsRootSha = await commitAll(clerkWork, 'root', '2026-01-01T00:00:01Z')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', quickstart(STEP1_DOCS, STEP2_V0))
+    await write(clerkWork, 'clerk-docs/docs/other.mdx', 'alpha (docs)\n')
+    await write(clerkWork, 'clerk-docs/docs/config.txt', 'npm-tweak\n')
+    const d1aPrime = await commitAll(clerkWork, 'docs: improve step one and tweak config', '2026-01-01T00:00:02Z')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', quickstart(STEP1_DOCS_V2, STEP2_V0))
+    await write(clerkWork, 'clerk-docs/docs/config.txt', 'pnpm\n')
+    const d1bPrime = await commitAll(clerkWork, 'docs: step one v2 and pnpm', '2026-01-01T00:00:03Z')
+
+    // ======== RUN 1 (create mode): pick the delta onto the clerk base.
+    await run(clerkWork, 'checkout', '-b', 'migration', 'main')
+    const deltaShas = (await run(clerkWork, 'rev-list', '--reverse', '--no-merges', `${docsRootSha}..docs`)).stdout
+      .trim()
+      .split('\n')
+    const run1 = await cherryPickDeltaCommits(clerkWork, deltaShas, 'docs', docsRootSha)
+    expect(run1.conflictSha).toBeNull()
+    // The stale config hunk (npm → npm-tweak vs clerk's pnpm) was auto-resolved to the final
+    // pnpm state inside the first pick; both commits still landed.
+    expect(run1.applied).toBe(2)
+    expect((await run(clerkWork, 'show', 'migration:clerk-docs/docs/config.txt')).stdout).toBe('pnpm\n')
+    await run(clerkWork, 'push', '-u', 'origin', 'migration')
+
+    // ======== Between runs: a clerk-side hotfix to the same step-one line merges into clerk
+    // main (another PR racing this branch), and the user keeps working docs-side.
+    await run(clerkWork, 'checkout', 'main')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', quickstart(STEP1_HOTFIX, STEP2_V0))
+    await commitAll(clerkWork, 'clerk: hotfix step one wording', '2026-01-01T00:00:04Z')
+    await run(clerkWork, 'push', 'origin', 'main')
+
+    await write(docsRepo, 'docs/quickstart.mdx', quickstart(STEP1_DOCS_V2, STEP2_DOCS))
+    await commitAll(docsRepo, 'docs: expand step two', '2026-01-01T00:00:05Z')
+    await run(clerkWork, 'checkout', 'docs')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', quickstart(STEP1_DOCS_V2, STEP2_DOCS))
+    const d2Prime = await commitAll(clerkWork, 'docs: expand step two', '2026-01-01T00:00:05Z')
+
+    // ======== RUN 2 (update mode): the base merge hits the hotfix conflict; the guard refuses
+    // (clerk-own content), so the conflict is synced back into the docs repo and aborted here.
+    await run(clerkWork, 'fetch', 'origin')
+    await run(clerkWork, 'checkout', '-B', 'migration', 'origin/migration')
+    const merge2 = await runAllowFail(clerkWork, 'merge', 'origin/main', '-m', 'Merge clerk base main into migration')
+    expect(merge2.code).not.toBe(0)
+    expect(await autoResolveConflictsToBranchFinalState(clerkWork, 'docs', docsRootSha, 'merge')).toBeNull()
+    const synced = await syncConflictsBackToDocsRepo(clerkWork, docsRepo, 'feature', 'theirs')
+    expect(synced).not.toBeNull()
+    expect(synced?.docsPaths).toEqual(['docs/quickstart.mdx'])
+    await run(clerkWork, 'merge', '--abort')
+    expect((await run(clerkWork, 'status', '--porcelain')).stdout.trim()).toBe('')
+
+    // The docs worktree has real markers with both sides; the sync commit holds clerk's content.
+    const markers = await fs.readFile(path.join(docsRepo, 'docs/quickstart.mdx'), 'utf8')
+    expect(markers).toContain('<<<<<<<')
+    expect(markers).toContain(STEP1_DOCS_V2)
+    expect(markers).toContain(STEP1_HOTFIX)
+    expect((await run(docsRepo, 'show', `HEAD:docs/quickstart.mdx`)).stdout).toContain(STEP1_HOTFIX)
+    // The non-conflicting docs-side step-two edit survived into the marker file's clean region.
+    expect(markers).toContain(STEP2_DOCS)
+
+    // ---- The user resolves in their own checkout and commits; filter-repo would rewrite the
+    // sync + resolution commits onto the rewritten branch on the next run — mirror that by
+    // copying the *actual* content of those commits from the docs repo (filter-repo only
+    // re-prefixes paths; blobs and subjects are preserved verbatim).
+    await write(docsRepo, 'docs/quickstart.mdx', quickstart(STEP1_RESOLVED, STEP2_DOCS))
+    await commitAll(docsRepo, 'resolve clerk hotfix conflict', '2026-01-01T00:00:07Z')
+    const syncCommitContent = (await run(docsRepo, 'show', `${synced?.syncCommitSha}:docs/quickstart.mdx`)).stdout
+    const syncCommitSubject = (
+      await run(docsRepo, 'log', '-1', '--format=%s', synced?.syncCommitSha ?? 'HEAD^')
+    ).stdout.trim()
+    await run(clerkWork, 'checkout', 'docs')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', syncCommitContent)
+    const sPrime = await commitAll(clerkWork, syncCommitSubject, '2026-01-01T00:00:06Z')
+    await write(clerkWork, 'clerk-docs/docs/quickstart.mdx', quickstart(STEP1_RESOLVED, STEP2_DOCS))
+    const rPrime = await commitAll(clerkWork, 'resolve clerk hotfix conflict', '2026-01-01T00:00:07Z')
+    // Sanity: the sync commit anchored clerk's exact hotfix blob in the docs branch history.
+    expect(syncCommitContent).toBe(quickstart(STEP1_HOTFIX, STEP2_V0))
+
+    // ======== RUN 3 (update mode): everything now converges unattended.
+    await run(clerkWork, 'fetch', 'origin')
+    await run(clerkWork, 'checkout', '-B', 'migration', 'origin/migration')
+    const merge3 = await runAllowFail(clerkWork, 'merge', 'origin/main', '-m', 'Merge clerk base main into migration')
+    expect(merge3.code).not.toBe(0)
+    // The hotfix blob is now anchored in docs history by the sync commit, so the base merge
+    // auto-resolves to the docs final tree (which contains the user's resolution).
+    expect(await autoResolveConflictsToBranchFinalState(clerkWork, 'docs', docsRootSha, 'merge')).toBe('applied')
+
+    // Update mode's delta selection: patch-id comparison plus the fingerprint filter.
+    const cherry3 = await run(clerkWork, 'cherry', 'migration', 'docs', docsRootSha)
+    const unapplied3 = parseGitCherryUnappliedShas(cherry3.stdout)
+    const fingerprints3 = await collectAppliedCommitFingerprints(clerkWork, 'migration', 'main')
+    const newShas3: string[] = []
+    for (const sha of unapplied3) {
+      if (!fingerprints3.has(await commitFingerprint(clerkWork, sha))) newShas3.push(sha)
+    }
+    // Both original docs commits are recognized as applied (auto-resolution broke their
+    // patch-ids, the fingerprints catch them); only the post-run-1 commits remain.
+    expect(newShas3).not.toContain(d1aPrime)
+    expect(newShas3).not.toContain(d1bPrime)
+    expect(newShas3).toEqual([d2Prime, sPrime, rPrime])
+    const run3 = await cherryPickDeltaCommits(clerkWork, newShas3, 'docs', docsRootSha)
+    expect(run3.conflictSha).toBeNull()
+    // All three are already represented on the branch (the base-merge resolution carried the
+    // docs final tree), so they skip as empty instead of duplicating content.
+    expect(run3.applied).toBe(0)
+    expect(run3.skippedEmpty).toBe(3)
+    await run(clerkWork, 'push', 'origin', 'migration')
+
+    // ---- Final-state invariants.
+    expect((await run(clerkWork, 'show', 'migration:clerk-docs/docs/quickstart.mdx')).stdout).toBe(
+      quickstart(STEP1_RESOLVED, STEP2_DOCS),
+    )
+    expect((await run(clerkWork, 'show', 'migration:clerk-docs/docs/other.mdx')).stdout).toBe('alpha (docs)\n')
+    expect((await run(clerkWork, 'show', 'migration:clerk-docs/docs/config.txt')).stdout).toBe('pnpm\n')
+    expect((await run(clerkWork, 'show', 'migration:src/app.ts')).stdout).toBe('console.log("clerk app")\n')
+    // The clerk base (with the hotfix) is an ancestor, so the PR diff contains no base revert.
+    expect((await runAllowFail(clerkWork, 'merge-base', '--is-ancestor', 'origin/main', 'migration')).code).toBe(0)
+    // Each docs commit landed exactly once — no duplicates across the three runs.
+    const subjects = (await run(clerkWork, 'log', '--format=%s', 'migration')).stdout
+    expect(subjects.match(/docs: improve step one and tweak config/g)).toHaveLength(1)
+    expect(subjects.match(/docs: step one v2 and pnpm/g)).toHaveLength(1)
+    expect(subjects.match(/docs: expand step two/g)).toBeNull()
+
+    // ======== RUN 4 (idempotency): nothing changed — the branch must not move at all.
+    const tipBefore = (await run(clerkWork, 'rev-parse', 'migration')).stdout.trim()
+    await run(clerkWork, 'fetch', 'origin')
+    await run(clerkWork, 'checkout', '-B', 'migration', 'origin/migration')
+    const merge4 = await runAllowFail(clerkWork, 'merge', 'origin/main', '-m', 'Merge clerk base main into migration')
+    expect(merge4.code).toBe(0) // already up to date
+    const cherry4 = await run(clerkWork, 'cherry', 'migration', 'docs', docsRootSha)
+    const fingerprints4 = await collectAppliedCommitFingerprints(clerkWork, 'migration', 'main')
+    const newShas4: string[] = []
+    for (const sha of parseGitCherryUnappliedShas(cherry4.stdout)) {
+      if (!fingerprints4.has(await commitFingerprint(clerkWork, sha))) newShas4.push(sha)
+    }
+    const run4 = await cherryPickDeltaCommits(clerkWork, newShas4, 'docs', docsRootSha)
+    expect(run4.conflictSha).toBeNull()
+    expect(run4.applied).toBe(0)
+    expect((await run(clerkWork, 'rev-parse', 'migration')).stdout.trim()).toBe(tipBefore)
+  }, 30000)
 })

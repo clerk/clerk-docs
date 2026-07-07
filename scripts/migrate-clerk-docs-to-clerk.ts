@@ -769,7 +769,7 @@ interface ConflictSyncedToDocsParams {
 function formatConflictSyncedToDocsHints(params: ConflictSyncedToDocsParams): readonly string[] {
   return [
     `Review these files in your clerk-docs checkout: ${params.files.join(', ')} — resolve any conflict markers; a file without markers either merged cleanly or one side deleted it (keep, edit, or delete it to decide).`,
-    `Commit the resolution on "${params.branch}", then re-run this script — the migration will finish on its own.`,
+    `Commit the resolution on "${params.branch}" and push it (git push origin ${params.branch}) — the re-run's preflight refuses a branch that is ahead of origin — then re-run this script and the migration will finish on its own.`,
     `Keep the "record clerk's state" commit (${params.syncCommitSha.slice(0, 10)}) the script just added to your branch: it is what lets the re-run resolve this conflict automatically.`,
     'You do not need to open the clerk workspace: its conflict was aborted and the next run redoes that side from scratch. (A temporary clerk clone left on disk can simply be deleted.)',
   ]
@@ -1129,8 +1129,6 @@ async function runCommand(
     debugLog('Executing command', { command, args, cwd })
   }
   return await new Promise((resolve, reject) => {
-    let stdout = ''
-    let stderr = ''
     let settled = false
 
     const tryFinish = (result: CommandResult): void => {
@@ -1163,30 +1161,41 @@ async function runCommand(
       return
     }
 
+    // Accumulate raw bytes and decode once on close: decoding per chunk corrupts a multibyte
+    // character that straddles a chunk boundary.
+    const stdoutChunks: Buffer[] = []
+    const stderrChunks: Buffer[] = []
     const child = spawn(command, args, { cwd, env: process.env })
-    child.stdout.on('data', (chunk) => {
-      const text = chunk.toString()
-      stdout += text
-      debugLog('Command stdout chunk', { command, chunk: text.trim() })
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutChunks.push(chunk)
+      debugLog('Command stdout chunk', { command, chunk: chunk.toString().trim() })
     })
-    child.stderr.on('data', (chunk) => {
-      const text = chunk.toString()
-      stderr += text
-      debugLog('Command stderr chunk', { command, chunk: text.trim() })
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrChunks.push(chunk)
+      debugLog('Command stderr chunk', { command, chunk: chunk.toString().trim() })
     })
     child.on('error', (err) => {
       if (settled) return
       const msg = err instanceof Error ? err.message : String(err)
       if (options?.allowFailure) {
         debugLog('Spawn error treated as failed command', { command, message: msg })
-        tryFinish({ code: 127, stdout, stderr: stderr ? `${stderr}\n${msg}` : msg })
+        const stderrText = Buffer.concat(stderrChunks).toString()
+        tryFinish({
+          code: 127,
+          stdout: Buffer.concat(stdoutChunks).toString(),
+          stderr: stderrText ? `${stderrText}\n${msg}` : msg,
+        })
         return
       }
       settled = true
       reject(err)
     })
     child.on('close', (code) => {
-      tryFinish({ code: code === null || code === undefined ? 1 : code, stdout, stderr })
+      tryFinish({
+        code: code === null || code === undefined ? 1 : code,
+        stdout: Buffer.concat(stdoutChunks).toString(),
+        stderr: Buffer.concat(stderrChunks).toString(),
+      })
     })
   })
 }
@@ -2272,8 +2281,10 @@ interface DocsConflictSyncResult {
  *
  * Returns null — leaving the old resolve-in-clerk-clone flow as the fallback — when the conflict
  * can't be represented docs-side: a conflicted path outside `clerk-docs/` (e.g. .gitignore), the
- * docs repo no longer on `headRef` or not clean, or clerk's side identical to the docs tip for
- * every path (nothing to record).
+ * docs repo no longer on `headRef` or not clean, a conflicted file whose content is binary or
+ * otherwise non-UTF-8 (blob content round-trips through strings here, which only text survives),
+ * or clerk's side identical to the docs tip for every path (nothing to record). Every write is
+ * precomputed before the first one happens, so a null return leaves the docs checkout untouched.
  */
 async function syncConflictsBackToDocsRepo(
   clerkWorkPath: string,
@@ -2293,26 +2304,99 @@ async function syncConflictsBackToDocsRepo(
   const status = await runCommand('git', ['status', '--porcelain'], docsRepoPath, { allowFailure: true })
   if (status.code !== 0 || status.stdout.trim() !== '') return null
 
-  const catBlob = async (blob: string): Promise<string> =>
-    (await runCommand('git', ['cat-file', 'blob', blob], clerkWorkPath)).stdout
+  const catBlob = async (blob: string, repoPath = clerkWorkPath): Promise<string> =>
+    (await runCommand('git', ['cat-file', 'blob', blob], repoPath)).stdout
 
-  const entries = conflicts.map((conflict) => ({
-    conflict,
-    docsPath: conflict.path.slice(prefix.length),
-    clerkBlob: clerkSide === 'ours' ? conflict.ours : conflict.theirs,
-  }))
+  // Blob content round-trips through UTF-8 strings here; a NUL or replacement character in the
+  // decoded content is proof the bytes didn't survive decoding (binary or non-UTF-8 file), and
+  // writing it back would commit a corrupted blob.
+  const survivesUtf8 = (content: string): boolean => !content.includes('\0') && !content.includes('�')
+
+  interface PlannedSync {
+    docsPath: string
+    /** Clerk's content for the sync commit; null = clerk's side deleted the file. */
+    clerkContent: string | null
+    /** Post-commit working-tree content (markers, or the surviving side of a one-sided deletion); null = leave the sync commit's state in place. */
+    worktreeContent: string | null
+  }
+
+  // Plan every write before performing any: blob reads, the binary guard, and the marker merges
+  // can all still bail to the manual-resolution fallback with the docs checkout untouched.
+  const planned: PlannedSync[] = []
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-conflict-'))
+  try {
+    for (const conflict of conflicts) {
+      const docsPath = conflict.path.slice(prefix.length)
+      const clerkBlob = clerkSide === 'ours' ? conflict.ours : conflict.theirs
+      const clerkContent = clerkBlob ? await catBlob(clerkBlob) : null
+      if (clerkContent !== null && !survivesUtf8(clerkContent)) return null
+      const docsTip = await runCommand('git', ['rev-parse', '-q', '--verify', `HEAD:${docsPath}`], docsRepoPath, {
+        allowFailure: true,
+      })
+      const tipContent = docsTip.code === 0 ? await catBlob(docsTip.stdout.trim(), docsRepoPath) : null
+      if (tipContent !== null && !survivesUtf8(tipContent)) return null
+      if (tipContent === null && clerkContent === null) {
+        // Both endpoints already agree the file is deleted (e.g. a modify/delete conflict from an
+        // old commit touching a package-lock.json the branch itself later deleted). There is
+        // nothing to record or resolve — the guard passes such a path by itself on the re-run —
+        // and `git add` on it would fail on a pathspec matching nothing in the worktree or index.
+        continue
+      }
+      if (tipContent === null || clerkContent === null) {
+        // One side deleted the file: markers can't represent it. Leave the surviving content in
+        // the working tree (docs tip content when clerk deleted; clerk's content is already the
+        // sync commit's state when the docs branch deleted) and let the user keep or delete it,
+        // then commit.
+        planned.push({ docsPath, clerkContent, worktreeContent: clerkContent === null ? tipContent : null })
+        continue
+      }
+      const baseContent = conflict.base ? await catBlob(conflict.base) : ''
+      if (!survivesUtf8(baseContent)) return null
+      const oursFile = path.join(tmpDir, 'ours')
+      const baseFile = path.join(tmpDir, 'base')
+      const theirsFile = path.join(tmpDir, 'theirs')
+      await fs.writeFile(oursFile, tipContent, 'utf8')
+      await fs.writeFile(baseFile, baseContent, 'utf8')
+      await fs.writeFile(theirsFile, clerkContent, 'utf8')
+      const merged = await runCommand(
+        'git',
+        [
+          'merge-file',
+          '-p',
+          '-L',
+          `${headRef} (this branch)`,
+          '-L',
+          'merge base',
+          '-L',
+          'clerk/clerk (clerk-side edits)',
+          oursFile,
+          baseFile,
+          theirsFile,
+        ],
+        docsRepoPath,
+        { allowFailure: true },
+      )
+      // merge-file exits with the number of conflicts (0 = clean merge); errors surface as >= 128.
+      if (merged.code >= 128) return null
+      planned.push({ docsPath, clerkContent, worktreeContent: merged.stdout })
+    }
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true })
+  }
+  // Guard against `git add -A --` with zero pathspecs, which would stage the entire worktree.
+  if (planned.length === 0) return null
 
   // 1. Record clerk's side of the conflicted files as a commit on the docs branch.
-  for (const entry of entries) {
+  for (const entry of planned) {
     const absPath = path.join(docsRepoPath, entry.docsPath)
-    if (entry.clerkBlob) {
+    if (entry.clerkContent !== null) {
       await fs.mkdir(path.dirname(absPath), { recursive: true })
-      await fs.writeFile(absPath, await catBlob(entry.clerkBlob), 'utf8')
+      await fs.writeFile(absPath, entry.clerkContent, 'utf8')
     } else {
       await fs.rm(absPath, { force: true })
     }
   }
-  await runCommand('git', ['add', '-A', '--', ...entries.map((entry) => entry.docsPath)], docsRepoPath)
+  await runCommand('git', ['add', '-A', '--', ...planned.map((entry) => entry.docsPath)], docsRepoPath)
   const staged = await runCommand('git', ['diff', '--cached', '--quiet'], docsRepoPath, { allowFailure: true })
   if (staged.code === 0) return null
   await runCommand(
@@ -2334,60 +2418,13 @@ async function syncConflictsBackToDocsRepo(
   const syncCommitSha = (await runCommand('git', ['rev-parse', 'HEAD'], docsRepoPath)).stdout.trim()
 
   // 2. Write conflict markers (or the surviving side) into the working tree, uncommitted.
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-conflict-'))
-  try {
-    for (const entry of entries) {
-      const absPath = path.join(docsRepoPath, entry.docsPath)
-      const docsTip = await runCommand(
-        'git',
-        ['rev-parse', '-q', '--verify', `${syncCommitSha}^:${entry.docsPath}`],
-        docsRepoPath,
-        { allowFailure: true },
-      )
-      if (docsTip.code !== 0 || !entry.clerkBlob) {
-        // One side deleted the file: markers can't represent it. Leave the surviving content in
-        // the working tree (docs tip content when clerk deleted; clerk's content is already at
-        // HEAD when the docs branch deleted) and let the user keep or delete it, then commit.
-        if (!entry.clerkBlob && docsTip.code === 0) {
-          const tipContent = await runCommand('git', ['cat-file', 'blob', docsTip.stdout.trim()], docsRepoPath)
-          await fs.mkdir(path.dirname(absPath), { recursive: true })
-          await fs.writeFile(absPath, tipContent.stdout, 'utf8')
-        }
-        continue
-      }
-      const oursFile = path.join(tmpDir, 'ours')
-      const baseFile = path.join(tmpDir, 'base')
-      const theirsFile = path.join(tmpDir, 'theirs')
-      const tipContent = await runCommand('git', ['cat-file', 'blob', docsTip.stdout.trim()], docsRepoPath)
-      await fs.writeFile(oursFile, tipContent.stdout, 'utf8')
-      await fs.writeFile(baseFile, entry.conflict.base ? await catBlob(entry.conflict.base) : '', 'utf8')
-      await fs.writeFile(theirsFile, await catBlob(entry.clerkBlob), 'utf8')
-      const merged = await runCommand(
-        'git',
-        [
-          'merge-file',
-          '-p',
-          '-L',
-          `${headRef} (this branch)`,
-          '-L',
-          'merge base',
-          '-L',
-          'clerk/clerk (clerk-side edits)',
-          oursFile,
-          baseFile,
-          theirsFile,
-        ],
-        docsRepoPath,
-        { allowFailure: true },
-      )
-      // merge-file exits with the number of conflicts (0 = clean merge); errors surface as >= 128.
-      if (merged.code >= 128) return null
-      await fs.writeFile(absPath, merged.stdout, 'utf8')
-    }
-  } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true })
+  for (const entry of planned) {
+    if (entry.worktreeContent === null) continue
+    const absPath = path.join(docsRepoPath, entry.docsPath)
+    await fs.mkdir(path.dirname(absPath), { recursive: true })
+    await fs.writeFile(absPath, entry.worktreeContent, 'utf8')
   }
-  return { docsPaths: entries.map((entry) => entry.docsPath), syncCommitSha }
+  return { docsPaths: planned.map((entry) => entry.docsPath), syncCommitSha }
 }
 
 /**
@@ -3113,9 +3150,10 @@ async function updateExistingMigration(
         )
       }
     } else {
-      // Delta update: apply only the clerk-docs commits not already on the migration branch,
-      // matched by patch-id (`git cherry`). Patch-ids also recognize commits carried over by the
-      // older full-history-merge flow and by manual conflict resolutions, so nothing is re-applied.
+      // Delta update: apply only the clerk-docs commits not already on the migration branch.
+      // Patch-ids (`git cherry`) recognize clean applications — including commits carried over by
+      // the older full-history-merge flow; the fingerprint filter below covers applications whose
+      // patch a manual conflict resolution changed.
       const cherry = await runCommand('git', buildGitCherryArgs(migrationBranch, remoteName, headRef), clerkWorkPath)
       const unappliedByPatchId = parseGitCherryUnappliedShas(cherry.stdout)
       // Patch-ids miss commits whose earlier pick was resolved by hand — the resolution's patch

@@ -6,7 +6,7 @@ sdk: nextjs
 
 When building a resource server that needs to accept and verify [OAuth access tokens](!oauth-access-token) issued by Clerk, it's crucial to verify these tokens on your backend to ensure the request is coming from an authenticated client.
 
-Clerk's Next.js SDK provides a built-in [`auth()`](/docs/reference/nextjs/app-router/auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your API route should accept. You can also use the [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) method to check if a request includes a valid machine token (e.g. API key or OAuth token) and enforce access rules accordingly.
+Clerk provides a built-in [`auth()`](/docs/reference/nextjs/app-router/auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your API route should accept. You can also use the [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) method to check if a request includes a valid machine token (e.g. API key or OAuth token) and enforce access rules accordingly.
 
 By default, `acceptsToken` is set to `session_token`, which means OAuth tokens will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To learn more about the supported token types, see the [`auth()` parameters documentation](/docs/reference/nextjs/app-router/auth#parameters).
 
@@ -17,20 +17,21 @@ Below are two examples of verifying OAuth access tokens in a Next.js API route u
 In the following example, the `acceptsToken` parameter is set to only accept `oauth_token`s.
 
 - If the token is invalid or missing, `auth()` will return `null` for `userId` and other properties, and the request will be rejected with a `401` response.
-- If the token is valid, `userId` is returned and the token claims are available for use in the application logic.
+- If the token is valid, `userId` is returned along with the token's granted `scopes` for use in the application logic.
 
 ```tsx {{ filename: 'app/api/example/route.ts' }}
+import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 
 export async function GET() {
-  const { isAuthenticated, claims, userId } = await auth({ acceptsToken: 'oauth_token' })
+  const { isAuthenticated, userId, scopes } = await auth({ acceptsToken: 'oauth_token' })
 
   // If auth() returns null, the token is invalid
   if (!isAuthenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return NextResponse.json({ userId, claims })
+  return NextResponse.json({ userId, scopes })
 }
 ```
 
@@ -70,4 +71,4 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-You can also protect entire route groups using [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware). See how to implement this in [the middleware docs](/docs/reference/nextjs/clerk-middleware#protect-routes-based-on-token-types).
+To enforce token types across your API routes, check the token type in each Route Handler with [`auth({ acceptsToken })`](/docs/reference/nextjs/app-router/auth#verify-machine-requests).

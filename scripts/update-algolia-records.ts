@@ -18,10 +18,11 @@
 // - Final URLs and frontmatter
 
 import { slugifyWithCounter } from '@sindresorhus/slugify'
-import { algoliasearch } from 'algoliasearch'
+import { algoliasearch, type SynonymHit } from 'algoliasearch'
 import 'dotenv/config'
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import readdirp from 'readdirp'
@@ -43,6 +44,11 @@ type SearchRecord = {
   type: RecordType
   keywords: string[]
   availableSDKs: string[]
+  // The specific SDK this record's variant was built for (`activeSdk` frontmatter).
+  // `availableSDKs` is the page's full support list and is identical across a page's
+  // per-SDK variants, so it can't disambiguate them after `distinct` collapses the
+  // group. `sdk` lets search boost the active SDK's variant as the representative.
+  sdk: string | null
   canonical: string
   weight: {
     pageRank: number
@@ -60,7 +66,33 @@ type SearchRecord = {
   }
   distinct_group: string
   record_batch: string
+  // Epoch ms of the moment the record was pushed — stamped in main() immediately before the
+  // chunkedBatch call (NOT at run start; generation takes a minute+), so it's optional on the
+  // built record. The stale-record cleanup only deletes records older than the run's start minus
+  // STALE_RECORD_GRACE_MS, so a concurrent run's fresh push can never be classified as stale.
+  // Records indexed before this field existed have none (treated as stale).
+  indexed_at?: number
 }
+
+// Dot-paths into a SearchRecord (e.g. `content`, `hierarchy.lvl0`, `weight.pageRank`). The Algolia
+// settings below reference record fields as bare strings; deriving the allowed strings from the
+// record shape makes a typo or a renamed/removed field a compile error instead of a silently broken
+// index. Scalars and arrays are leaves; nested objects recurse into `parent.child` paths.
+type Scalar = string | number | boolean | bigint | symbol | null | undefined
+type RecordPath<T> = {
+  [K in Extract<keyof T, string>]: NonNullable<T[K]> extends Scalar | ReadonlyArray<unknown>
+    ? K
+    : K | `${K}.${RecordPath<NonNullable<T[K]>>}`
+}[Extract<keyof T, string>]
+type SearchAttribute = RecordPath<SearchRecord>
+
+// Typed wrappers for Algolia's attribute modifiers. The argument is constrained to a real record
+// path, so the settings can only ever reference fields that exist.
+const plain = <T extends SearchAttribute>(attribute: T) => attribute
+const unordered = <T extends SearchAttribute>(attribute: T) => `unordered(${attribute})` as const
+const filterOnly = <T extends SearchAttribute>(attribute: T) => `filterOnly(${attribute})` as const
+const desc = <T extends SearchAttribute>(attribute: T) => `desc(${attribute})` as const
+const asc = <T extends SearchAttribute>(attribute: T) => `asc(${attribute})` as const
 
 const frontmatterSchema = z.object({
   title: z.string().optional(),
@@ -87,6 +119,12 @@ const ALGOLIA_OUTPUT_DIR = path.join(__dirname, '../.algolia')
 
 const DEBUG_SEARCH_BRANCH = process.env.DEBUG_SEARCH_BRANCH
 const VERCEL_ENV = process.env.VERCEL_ENV as 'production' | 'preview' | 'development' | undefined
+
+// Which repo a Vercel build is running from — see the repo guard in main(). `VERCEL` is '1' on
+// any Vercel build; the owner/slug pair distinguishes clerk/clerk from the clerk/clerk-docs mirror.
+const VERCEL = process.env.VERCEL
+const VERCEL_GIT_REPO_OWNER = process.env.VERCEL_GIT_REPO_OWNER
+const VERCEL_GIT_REPO_SLUG = process.env.VERCEL_GIT_REPO_SLUG
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -124,6 +162,23 @@ function getGitBranch(): string {
   } catch {
     return 'unknown'
   }
+}
+
+// How much older than the current run's start a record must be before the cleanup may delete it.
+// Thirty minutes: several times the worst-case overlap between concurrent Vercel builds (a build
+// takes ~5 minutes) plus clock skew between build machines; short enough that true leftovers
+// (records for removed pages) linger for at most half an hour before a later run cleans them.
+// Lingering removed-page records are invisible to users; wrongly deleting a freshly pushed live
+// set is an outage — when in doubt, size this up, not down.
+export const STALE_RECORD_GRACE_MS = 30 * 60 * 1000
+
+/**
+ * Whether a record from another batch is genuinely stale — old enough to predate this run — as
+ * opposed to a concurrent run's fresh push, which must be spared (see the cleanup in main()).
+ * Records indexed before `indexed_at` existed carry no timestamp and are treated as stale.
+ */
+export function isStaleRecord(record: { indexed_at?: number }, runStart: number): boolean {
+  return record.indexed_at === undefined || record.indexed_at < runStart - STALE_RECORD_GRACE_MS
 }
 
 /**
@@ -300,6 +355,8 @@ function generateRecordsFromDoc(
   const availableSdksRaw = doc.frontmatter.availableSdks?.split(',').filter(Boolean)
   // Use ["all"] for non-SDK-scoped docs (no availableSdks in frontmatter)
   const availableSdksList = availableSdksRaw && availableSdksRaw.length > 0 ? availableSdksRaw : ['all']
+  // The SDK this built variant targets (null for non-SDK-scoped/universal pages)
+  const sdk = doc.frontmatter.activeSdk ?? null
   const canonical = doc.frontmatter.canonical
   const keywords = doc.frontmatter.search?.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? []
 
@@ -319,6 +376,7 @@ function generateRecordsFromDoc(
       type,
       keywords,
       availableSDKs: availableSdksList,
+      sdk,
       canonical,
       weight: {
         pageRank: doc.frontmatter.search?.rank ?? 0,
@@ -605,7 +663,136 @@ function generateRecordsFromDoc(
   return records
 }
 
+// Synonyms are codified and enforced every run (replaceExistingSynonyms), same model as ranking.
+// Acronym ⇄ expansion pairs are auto-derived from the `_tooltips` glossary so they stay in sync as
+// tooltips are added; a curated list covers product-rename/phrasing synonyms that aren't glossary
+// definitions (e.g. "magic link" → "email link", "login" → "sign in"). Tooltip content is excluded
+// from the search index, so without these these terms would miss entirely.
+//
+// The pure logic below (`buildSynonyms` + helpers) is split from the disk I/O (`readSynonyms`) so it
+// can be unit-tested without the filesystem — see `update-algolia-records.test.ts`.
+
+export type TooltipFile = {
+  /** The tooltip file name, e.g. `dkim.mdx`. Used only to derive a stable objectID. */
+  fileName: string
+  content: string
+}
+
+export const isAcronym = (s: string) => /^[A-Z][A-Za-z0-9]{2,7}$/.test(s.trim())
+
+export const cleanSynonym = (s: string) =>
+  s
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // strip markdown links: [text](url) -> text
+    .replace(/&/g, 'and')
+    .replace(/,/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+// Curated product-rename / phrasing synonyms (not glossary acronyms).
+export const CURATED_SYNONYMS: Record<string, string[]> = {
+  'magic-link': ['magic link', 'email link'],
+  i18n: ['i18n', 'internationalization', 'localization', 'l10n'],
+  login: ['login', 'log in', 'sign in', 'signin'],
+  logout: ['logout', 'log out', 'sign out'],
+  signup: ['signup', 'sign up', 'register', 'registration'],
+  'social-connection': ['social login', 'social connection'],
+  sso: ['SSO', 'single sign-on'],
+  rbac: ['RBAC', 'role-based access control'],
+  mfa: ['MFA', '2FA', 'multi-factor authentication', 'two-factor authentication'],
+  jwks: ['JWKS', 'JSON Web Key Set'],
+  org: ['org', 'organization'],
+}
+
+// one-way: searching "webauthn" should surface passkey docs, not the reverse.
+export const ONE_WAY_SYNONYMS: SynonymHit[] = [
+  { objectID: 'webauthn-passkey', type: 'oneWaySynonym', input: 'webauthn', synonyms: ['passkey', 'passkeys'] },
+]
+
+// Extract the first acronym ⇄ expansion pair from a single tooltip's markdown, or null if none.
+//
+//   Format A: **X (Y)** — one of X/Y is the acronym (e.g. "DKIM (DomainKeys Identified Mail)").
+//   Format B: **X** stands for 'Y' (e.g. "WYSIWYG stands for 'What You See Is What You Get'").
+export function extractTooltipSynonym(content: string): { acronym: string; expansion: string } | null {
+  for (const [, bold] of content.matchAll(/\*\*([^*]+?)\*\*/g)) {
+    const paren = cleanSynonym(bold).match(/^(.+?)\s*\(([^)]+)\)\s*(.*)$/)
+    if (!paren) continue
+    const left = paren[1].trim()
+    const right = `${paren[2]} ${paren[3]}`.trim()
+    if (isAcronym(left) && !isAcronym(right)) return { acronym: left, expansion: right }
+    if (isAcronym(right) && !isAcronym(left)) return { acronym: right, expansion: left }
+  }
+
+  const sf = content.match(/\*\*([^*]+?)\*\*\s+stands for\s+['"]([^'"]+)['"]/)
+  if (sf && isAcronym(sf[1].trim())) return { acronym: sf[1].trim(), expansion: cleanSynonym(sf[2]) }
+
+  return null
+}
+
+// Build the full set of synonyms from the tooltip glossary files plus the curated and one-way lists.
+export function buildSynonyms(tooltipFiles: TooltipFile[]): SynonymHit[] {
+  const byId = new Map<string, SynonymHit>()
+
+  // 1. Auto-extract acronym ⇄ expansion pairs from the tooltip glossary.
+  for (const { fileName, content } of tooltipFiles) {
+    if (!fileName.endsWith('.mdx')) continue
+    const pair = extractTooltipSynonym(content)
+    if (!pair) continue
+    const objectID = `tooltip-${pair.acronym.toLowerCase()}`
+    byId.set(objectID, { objectID, type: 'synonym', synonyms: [pair.acronym, pair.expansion] })
+  }
+
+  // 2. Curated product-rename / phrasing synonyms (not glossary acronyms).
+  for (const [objectID, synonyms] of Object.entries(CURATED_SYNONYMS)) {
+    byId.set(objectID, { objectID, type: 'synonym', synonyms })
+  }
+
+  return [...byId.values(), ...ONE_WAY_SYNONYMS]
+}
+
+// Reads the `_tooltips` glossary off disk and hands the file contents to `buildSynonyms`.
+async function readSynonyms(): Promise<SynonymHit[]> {
+  const tooltipsDir = path.join(__dirname, '../docs/_tooltips')
+
+  // A genuinely-absent directory is the only tolerable degrade-to-curated case (and the only one
+  // where dropping the tooltip-derived synonyms is *correct*), so check for it up front and bail.
+  // The reads below are deliberately left un-caught: saveSynonyms runs with replaceExistingSynonyms,
+  // so swallowing a transient/permission failure (EACCES, EMFILE from the concurrent reads, …) would
+  // silently wipe every branch's tooltip-derived synonyms index-wide (synonyms aren't branch-scoped).
+  // Anything other than "not there" should fail the run loudly, not quietly ship half the set.
+  if (!existsSync(tooltipsDir)) {
+    console.warn('⚠︎ _tooltips directory not found; using the curated synonym list only')
+    return buildSynonyms([])
+  }
+
+  const fileNames = (await fs.readdir(tooltipsDir)).filter((file) => file.endsWith('.mdx'))
+  const tooltipFiles = await Promise.all(
+    fileNames.map(async (fileName) => ({
+      fileName,
+      content: await fs.readFile(path.join(tooltipsDir, fileName), 'utf-8'),
+    })),
+  )
+
+  return buildSynonyms(tooltipFiles)
+}
+
 async function main() {
+  // Only clerk/clerk may index from Vercel. The clerk/clerk-docs repo is a public read-only
+  // mirror of the clerk-docs folder, synced on every clerk/clerk main commit
+  // (.github/workflows/sync-clerk-docs.yml in clerk/clerk), so its Vercel project builds the
+  // same commit at the same time as clerk/clerk's. When both ran this script, the two runs
+  // raced the stale-record cleanup below: each pushed the same objectIDs under a different
+  // record_batch, and the later cleanup deleted the other run's entire push as "stale" —
+  // which emptied every live record out of prod search on 2026-07-07. The mirror's
+  // vercel.json buildCommand no longer runs search:update; this guard is defense in depth
+  // for any other surface that builds a non-clerk/clerk checkout. Local runs (no VERCEL env)
+  // are unaffected.
+  if (VERCEL === '1' && !(VERCEL_GIT_REPO_OWNER === 'clerk' && VERCEL_GIT_REPO_SLUG === 'clerk')) {
+    console.log(
+      `Skipping search index update — indexing only runs from clerk/clerk, not ${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`,
+    )
+    process.exit(0)
+  }
+
   if (VERCEL_ENV === 'preview') {
     if (DEBUG_SEARCH_BRANCH !== undefined) {
       console.log(`⚠︎ DEBUG MODE - Using branch: ${DEBUG_SEARCH_BRANCH}`)
@@ -619,6 +806,7 @@ async function main() {
 
   const gitBranch = getGitBranch()
   const recordBatch = randomUUID()
+  const runStart = Date.now()
 
   if (DRY_RUN) {
     console.log('⚠︎ DRY RUN MODE - No changes will be made to Algolia\n')
@@ -747,8 +935,109 @@ async function main() {
 
   const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
 
+  // Search settings the docs search depends on, codified here (not the dashboard) so every
+  // index — prod, dev, and one-off test indexes — stays consistent and human-proof. These are the
+  // source of truth: we overwrite them on every run, so any dashboard edit is reverted on the next
+  // index run. `setSettings` is a top-level partial merge — it only replaces the keys passed below
+  // and leaves everything else (typo tolerance, pagination, highlighting, etc.) untouched. We
+  // declare the relevance settings we deliberately own — never a full settings snapshot, which
+  // would also freeze Algolia's server-managed defaults.
+  //
+  // Scope: records (above) are branch-scoped — tagged `branch:` and filtered by the client, so many
+  // branches share one index without colliding. Settings + synonyms (below) are index-WIDE; Algolia
+  // has no per-branch settings, so a run from any branch re-applies them to every branch's records in
+  // that index. Fine for these canonical codified values; to try *different* settings in isolation,
+  // point ALGOLIA_INDEX_NAME at a personal throwaway index (we don't spin up one per branch).
+  //
+  // Searchable attributes — the search corpus and its attribute-level priority. Order matters: the
+  // `attribute` ranking criterion (below) ranks by which attribute matched, in this order, so a
+  // heading match (`hierarchy.lvlN`) outranks one only in `content` — the foundation the ranking
+  // reorder relies on. Mirrors the DocSearch crawler layout; `unordered(...)` ignores word position
+  // within an attribute. If a new searchable field is ever added to records, add it here too.
+  const searchableAttributes = [
+    unordered('hierarchy.lvl0'),
+    unordered('hierarchy.lvl1'),
+    unordered('hierarchy.lvl2'),
+    unordered('hierarchy.lvl3'),
+    unordered('hierarchy.lvl4'),
+    unordered('hierarchy.lvl5'),
+    unordered('hierarchy.lvl6'),
+    plain('content'),
+    unordered('keywords'),
+  ]
+  //
+  // Faceting — `filterOnly` (filter, no facet counts) since these are only ever used to filter,
+  // never shown as user-facing facets. Required: facetFilters/optionalFilters on a non-faceted
+  // attribute fail or silently no-op.
+  //   - `branch`       — facetFilter on the search query + the stale-record cleanup browse
+  //   - `record_batch` — facetFilter in the stale-record cleanup browse
+  //   - `sdk`          — the active-SDK boost (optionalFilters)
+  // `availableSDKs` is deliberately NOT faceted: the client only retrieves it to render per-result
+  // SDK icons (Search.tsx `SDKsIcon`), never filters or counts on it, and retrieval is independent
+  // of faceting.
+  const attributesForFaceting = [filterOnly('branch'), filterOnly('record_batch'), filterOnly('sdk')]
+  //
+  // Ranking: `attribute`/`exact` are moved above `proximity` (vs Algolia's default order) so a
+  // query that matches a page's title/heading outranks one that only matches the same words in
+  // body content. e.g. for "sign in page" the "Build your own sign-in page" guide and the
+  // Quickstart surface above reference pages whose body merely mentions the phrase, while
+  // reference-name queries like `auth()` still win on their exact title match. See the design doc.
+  const ranking = ['typo', 'geo', 'words', 'filters', 'attribute', 'exact', 'proximity', 'custom']
+  //
+  // Custom ranking — the final tiebreaker (the `custom` criterion above). Matches the weights the
+  // indexer actually writes to each record's `weight` object: `pageRank` (frontmatter `search.rank`),
+  // `level` (heading depth), `position` (document order). `weight.popularity` is intentionally
+  // absent — it's never written to records, so a `desc(weight.popularity)` entry (leftover on some
+  // indexes) is dead config that ranks nothing.
+  const customRanking = [desc('weight.pageRank'), desc('weight.level'), asc('weight.position')]
+  //
+  // Deduplication — the linchpin of the per-SDK variant model. Each SDK variant of a page emits its
+  // own records sharing one `distinct_group` (canonical URL + anchor; see createRecord above).
+  // Collapsing each group to a single representative makes a page appear once instead of once per
+  // SDK, and the `sdk` optionalFilters boost lets the active SDK's variant win that collapse.
+  // `attributeForDistinct` is index-level only — it CANNOT be set per query — so it must be codified
+  // here; without it Algolia ignores `distinct` entirely and every page returns one result per SDK
+  // variant. `distinct: true` defaults dedup on at the index level so it's enforced even if a query
+  // omits the flag (the `clerk/clerk` client also passes `distinct: true`, but we don't rely on it).
+  // Both must stay in sync with the `distinct_group` field written to each record.
+  const attributeForDistinct = plain('distinct_group')
+  const distinct = true
+
+  // Settings deliberately do NOT forward to replicas, though synonyms (below) do. Synonyms should
+  // always be identical across replicas; settings bundle ranking/customRanking, which a standard
+  // replica may legitimately override for an alternate sort — forwarding would clobber it. No
+  // replicas today; if any are added, declare them in this script rather than blanket-forwarding.
+  console.log(`Applying search settings to ${ALGOLIA_INDEX_NAME}`)
+  await algolia.setSettings({
+    indexName: ALGOLIA_INDEX_NAME,
+    indexSettings: {
+      searchableAttributes,
+      attributesForFaceting,
+      ranking,
+      customRanking,
+      attributeForDistinct,
+      distinct,
+    },
+  })
+
+  // Synonyms (codified, enforced — replaceExistingSynonyms) — see readSynonyms above.
+  const synonyms = await readSynonyms()
+  console.log(`Setting ${synonyms.length} synonyms on ${ALGOLIA_INDEX_NAME}`)
+  await algolia.saveSynonyms({
+    indexName: ALGOLIA_INDEX_NAME,
+    synonymHit: synonyms,
+    forwardToReplicas: true,
+    replaceExistingSynonyms: true,
+  })
+
   // Push to Algolia
   console.log('\nPushing records to Algolia...')
+
+  // Stamped here, not at runStart: record generation takes a minute or more, and a stalled run
+  // must not push records that already look older than they are — indexed_at is what OTHER runs'
+  // cleanups judge freshness by. (This run's own cleanup cutoff below uses runStart, which is
+  // earlier and therefore the conservative side for deletions.)
+  const indexedAt = Date.now()
 
   await algolia.chunkedBatch({
     indexName: ALGOLIA_INDEX_NAME,
@@ -757,6 +1046,7 @@ async function main() {
     objects: allRecords.map((record) => ({
       ...record,
       objectID: record.objectID,
+      indexed_at: indexedAt,
     })),
   })
 
@@ -765,26 +1055,49 @@ async function main() {
   // Clean up stale records
   console.log('\nCleaning up stale records...')
 
-  // Browse all records and find stale ones (different batch or branch)
+  // Browse this branch's records from other batches. A different batch alone is NOT enough to
+  // call a record stale: a concurrent run of this script (two quick merges → overlapping Vercel
+  // builds) pushes the same objectIDs under its own record_batch, and deleting on batch alone
+  // raced exactly that way on 2026-07-07 — the later cleanup deleted the other run's entire
+  // fresh push, emptying prod search. isStaleRecord additionally requires the record to predate
+  // this run by STALE_RECORD_GRACE_MS, so another run's fresh push is always spared; its true
+  // leftovers (removed pages) age past the window and get cleaned by a later run.
   const staleObjectIDs: string[] = []
+  let sparedFresh = 0
 
   await algolia.browseObjects({
     indexName: ALGOLIA_INDEX_NAME,
     browseParams: {
       // We want records that are of the branch we are updating, but not the current batch
       facetFilters: [`record_batch:-${recordBatch}`, `branch:${gitBranch}`],
-      attributesToRetrieve: ['objectID'],
+      attributesToRetrieve: ['objectID', 'indexed_at'],
     },
     aggregator: (response) => {
-      for (const hit of response.hits) {
-        staleObjectIDs.push(hit.objectID)
+      for (const hit of response.hits as Array<{ objectID: string; indexed_at?: number }>) {
+        if (isStaleRecord(hit, runStart)) {
+          staleObjectIDs.push(hit.objectID)
+        } else {
+          sparedFresh++
+        }
       }
     },
   })
 
+  if (sparedFresh > 0) {
+    console.log(`⚠︎ Spared ${sparedFresh} recently indexed records from another batch — likely a concurrent run`)
+  }
+
   if (staleObjectIDs.length === 0) {
     console.log('✓ No stale records found')
   } else {
+    // Tripwire: deleting more records than half of what this run just pushed is only expected
+    // after a large restructure or a tagging-scheme change. Make it loud so a future mass
+    // deletion is investigated from the build log instead of discovered as an empty search.
+    if (staleObjectIDs.length > allRecords.length / 2) {
+      console.warn(
+        `⚠︎ Deleting ${staleObjectIDs.length} stale records — more than half of the ${allRecords.length} just pushed. Expected only after a big restructure; if search looks empty, check for competing indexing runs.`,
+      )
+    }
     console.log(`Found ${staleObjectIDs.length} stale records to delete`)
 
     const deletedRecordsBatches = await algolia.chunkedBatch({
@@ -802,4 +1115,9 @@ async function main() {
   console.log('\n✓ Update complete!')
 }
 
-main()
+// Only run when executed directly (e.g. `bun ./scripts/update-algolia-records.ts`), not when this
+// module is imported — e.g. by `update-algolia-records.test.ts`, which needs the exported helpers.
+// `import.meta.main` is a bun runtime flag not present in the Node type defs, hence the cast.
+if ((import.meta as { main?: boolean }).main) {
+  main()
+}

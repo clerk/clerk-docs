@@ -19,6 +19,10 @@ description: Learn how to sync Clerk data to your app with webhooks.
 
 In some cases, you may want to sync Clerk's user table to a user table in your own database. Read the next few sections carefully to determine if this is the right approach for your app.
 
+<If is="llm">
+  **For AI agents:** Skip the manual Dashboard clicks for creating the webhook endpoint: run `npx clerk@latest api ls webhook` to find the endpoints API, then `npx clerk@latest api <path> -X POST -d '<json>'` to create the endpoint and read back its signing secret. Pass the path explicitly — bare `npx clerk@latest api` only opens the interactive builder, which needs a TTY. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
 ## When to sync Clerk data
 
 Syncing data with webhooks can be a suitable approach for some applications, but it comes with important considerations. Webhook deliveries are not guaranteed and may occasionally fail due to problems like network issues, so your implementation should be prepared to handle retries and error scenarios. Additionally, syncing data via webhooks is [eventually consistent](https://en.wikipedia.org/wiki/Eventual_consistency), meaning there can be a delay between when a Clerk event (such as a user being created or updated) occurs and when the corresponding data is reflected in your database. If not managed carefully, this delay can introduce bugs and race conditions.
@@ -93,9 +97,9 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   CLERK_WEBHOOK_SIGNING_SECRET=whsec_123
   ```
 
-  ## Make sure the webhook route is public
+  ## Ensure the webhook route is public
 
-  Incoming webhook events don't contain auth information. They come from an external source and aren't signed in or out, so the route must be public to allow access. If you're using `clerkMiddleware()`, ensure that the `/api/webhooks(.*)` route is set as public. For information on configuring routes, see the [`clerkMiddleware()` guide](/docs/reference/nextjs/clerk-middleware).
+  Incoming webhook events don't contain auth information. They come from an external source and aren't signed in or out, so the route must be public to allow access. Ensure the `/api/webhooks(.*)` route isn't protected anywhere. By default, `clerkMiddleware()` doesn't protect any routes; if you've added auth checks to your middleware, exclude this route.
 
   ## Create a route handler to verify the webhook
 
@@ -179,10 +183,10 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
           console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
           console.log('Webhook payload:', evt.data)
 
-          return res.send('Webhook received')
+          res.send('Webhook received')
         } catch (err) {
           console.error('Error verifying webhook:', err)
-          return res.status(400).send('Error verifying webhook')
+          res.status(400).send('Error verifying webhook')
         }
       })
       ```

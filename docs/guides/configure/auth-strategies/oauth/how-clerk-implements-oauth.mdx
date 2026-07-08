@@ -5,6 +5,10 @@ description: Learn how to configure and secure OAuth flows with Clerk, including
 
 Clerk supports secure, standards-compliant OAuth flows for your applications. You can create OAuth apps, enable dynamic client registration, manage consent screens, and configure public clients. This guide covers all key OAuth features and configurations in Clerk and helps you set up the right OAuth flow for your needs.
 
+<If is="llm">
+  **For AI agents:** Instead of creating and configuring OAuth apps in the Dashboard, manage them with the CLI: run `npx clerk@latest api oauth_applications` to list existing OAuth apps (pass `-d` with the app JSON to create one), and discover the related endpoints with `npx clerk@latest api ls oauth`. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
 ## Build an OAuth app with Clerk
 
 To create or edit an OAuth app, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard. The following sections explain the available settings for configuring your OAuth app.
@@ -35,6 +39,7 @@ Scopes define the level of access and specific user data that will be shared wit
 | `public_metadata` | Grant access to the user's public and unsafe metadata |
 | `private_metadata` | Grant access to the user's private metadata |
 | `openid` | Enables the OpenID Connect flow |
+| `user:org:read` | Grant access to the user's Organization information. Only available when the instance has [Organizations](/docs/guides/organizations/overview) enabled. See [Organizations and OAuth](#organizations-and-oauth) for details. |
 
 > [!NOTE]
 > Support for adding custom OAuth scopes is **not yet available**, but development is underway. The goal is to allow custom scopes to be added, accepted, and checked through Clerk SDKs. An update will be provided when this feature is available.
@@ -83,6 +88,14 @@ The consent screen is enabled by default for all OAuth apps. You can enable or d
 
 > [!IMPORTANT]
 > Enabling the consent screen for all OAuth apps is **strongly recommended**. Without a consent screen, any logged-in user who visits an OAuth authorization URL automatically grants access to any requested scopes. The consent screen acts as a critical security checkpoint, preventing malicious apps from silently gaining access to user accounts.
+>
+> If you need to host the consent page on your own application domain, see [Set up a custom OAuth consent page](/docs/guides/configure/auth-strategies/oauth/custom-consent-page). Clerk strongly recommends using the default [Account Portal](/docs/guides/account-portal/overview) consent page unless you have a specific product requirement that it cannot satisfy.
+
+### Organizations and OAuth {{ id: 'organizations-and-oauth' }}
+
+When your instance has [Organizations](/docs/guides/organizations/overview) enabled, the `user:org:read` scope becomes available for OAuth applications. This scope enables an integration between Organizations and the OAuth consent flow.
+
+When an OAuth client requests the `user:org:read` scope, the OAuth consent screen displays an **Organization selector** that allows the user to choose which Organization to associate with the token. After the user selects an Organization and grants consent, an `org_id` claim is included in the access token and, when the `openid` scope is also requested, the ID token. The `org_id` property is also available at the user info and token introspection endpoints.
 
 ## Token expiration and management
 
@@ -121,13 +134,23 @@ This endpoint exposes all relevant details in a standardized JSON format. A samp
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "refresh_token"],
   "token_endpoint_auth_methods_supported": ["client_secret_basic", "none"],
-  "scopes_supported": ["openid", "profile", "email", "public_metadata", "private_metadata"],
+  "scopes_supported": [
+    "openid",
+    "profile",
+    "email",
+    "public_metadata",
+    "private_metadata",
+    "user:org:read"
+  ],
   "subject_types_supported": ["public"],
   "id_token_signing_alg_values_supported": ["RS256"],
-  "claims_supported": ["sub", "iss", "aud", "exp", "iat", "email", "name"],
+  "claims_supported": ["sub", "iss", "aud", "exp", "iat", "email", "name", "org_id"],
   "service_documentation": "https://clerk.com/docs",
   "ui_locales_supported": ["en"],
   "op_tos_uri": "https://clerk.com/legal/standard-terms",
   "code_challenge_methods_supported": ["S256"]
 }
 ```
+
+> [!NOTE]
+> The `user:org:read` scope and `org_id` claim are only included in this metadata when the instance has Organizations enabled. See [Organizations and OAuth](#organizations-and-oauth) for details.

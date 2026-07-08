@@ -5,7 +5,9 @@ import {
   CURATED_SYNONYMS,
   extractTooltipSynonym,
   isAcronym,
+  isStaleRecord,
   ONE_WAY_SYNONYMS,
+  STALE_RECORD_GRACE_MS,
   type TooltipFile,
 } from './update-algolia-records'
 
@@ -154,5 +156,31 @@ describe('buildSynonyms', () => {
   test('emits unique objectIDs', () => {
     const ids = buildSynonyms(tooltipFiles).map((s) => s.objectID)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('isStaleRecord', () => {
+  const runStart = 1_800_000_000_000
+
+  test('records older than the grace window are stale', () => {
+    expect(isStaleRecord({ indexed_at: runStart - STALE_RECORD_GRACE_MS - 1 }, runStart)).toBe(true)
+  })
+
+  test('records inside the grace window are spared — a concurrent run must never be deleted', () => {
+    expect(isStaleRecord({ indexed_at: runStart - STALE_RECORD_GRACE_MS + 1 }, runStart)).toBe(false)
+    expect(isStaleRecord({ indexed_at: runStart - 1 }, runStart)).toBe(false)
+  })
+
+  test('records pushed after this run started are spared (a later concurrent run)', () => {
+    expect(isStaleRecord({ indexed_at: runStart + 60_000 }, runStart)).toBe(false)
+  })
+
+  test('records exactly at the grace boundary are spared', () => {
+    expect(isStaleRecord({ indexed_at: runStart - STALE_RECORD_GRACE_MS }, runStart)).toBe(false)
+  })
+
+  test('records predating the indexed_at field (no timestamp) are stale', () => {
+    expect(isStaleRecord({}, runStart)).toBe(true)
+    expect(isStaleRecord({ indexed_at: undefined }, runStart)).toBe(true)
   })
 })

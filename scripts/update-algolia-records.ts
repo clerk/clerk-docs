@@ -66,6 +66,12 @@ type SearchRecord = {
   }
   distinct_group: string
   record_batch: string
+  // Epoch ms of the moment the record was pushed — stamped in main() immediately before the
+  // chunkedBatch call (NOT at run start; generation takes a minute+), so it's optional on the
+  // built record. The stale-record cleanup only deletes records older than the run's start minus
+  // STALE_RECORD_GRACE_MS, so a concurrent run's fresh push can never be classified as stale.
+  // Records indexed before this field existed have none (treated as stale).
+  indexed_at?: number
 }
 
 // Dot-paths into a SearchRecord (e.g. `content`, `hierarchy.lvl0`, `weight.pageRank`). The Algolia
@@ -114,6 +120,12 @@ const ALGOLIA_OUTPUT_DIR = path.join(__dirname, '../.algolia')
 const DEBUG_SEARCH_BRANCH = process.env.DEBUG_SEARCH_BRANCH
 const VERCEL_ENV = process.env.VERCEL_ENV as 'production' | 'preview' | 'development' | undefined
 
+// Which repo a Vercel build is running from — see the repo guard in main(). `VERCEL` is '1' on
+// any Vercel build; the owner/slug pair distinguishes clerk/clerk from the clerk/clerk-docs mirror.
+const VERCEL = process.env.VERCEL
+const VERCEL_GIT_REPO_OWNER = process.env.VERCEL_GIT_REPO_OWNER
+const VERCEL_GIT_REPO_SLUG = process.env.VERCEL_GIT_REPO_SLUG
+
 // Parse command line arguments
 const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
@@ -150,6 +162,23 @@ function getGitBranch(): string {
   } catch {
     return 'unknown'
   }
+}
+
+// How much older than the current run's start a record must be before the cleanup may delete it.
+// Thirty minutes: several times the worst-case overlap between concurrent Vercel builds (a build
+// takes ~5 minutes) plus clock skew between build machines; short enough that true leftovers
+// (records for removed pages) linger for at most half an hour before a later run cleans them.
+// Lingering removed-page records are invisible to users; wrongly deleting a freshly pushed live
+// set is an outage — when in doubt, size this up, not down.
+export const STALE_RECORD_GRACE_MS = 30 * 60 * 1000
+
+/**
+ * Whether a record from another batch is genuinely stale — old enough to predate this run — as
+ * opposed to a concurrent run's fresh push, which must be spared (see the cleanup in main()).
+ * Records indexed before `indexed_at` existed carry no timestamp and are treated as stale.
+ */
+export function isStaleRecord(record: { indexed_at?: number }, runStart: number): boolean {
+  return record.indexed_at === undefined || record.indexed_at < runStart - STALE_RECORD_GRACE_MS
 }
 
 /**
@@ -747,6 +776,23 @@ async function readSynonyms(): Promise<SynonymHit[]> {
 }
 
 async function main() {
+  // Only clerk/clerk may index from Vercel. The clerk/clerk-docs repo is a public read-only
+  // mirror of the clerk-docs folder, synced on every clerk/clerk main commit
+  // (.github/workflows/sync-clerk-docs.yml in clerk/clerk), so its Vercel project builds the
+  // same commit at the same time as clerk/clerk's. When both ran this script, the two runs
+  // raced the stale-record cleanup below: each pushed the same objectIDs under a different
+  // record_batch, and the later cleanup deleted the other run's entire push as "stale" —
+  // which emptied every live record out of prod search on 2026-07-07. The mirror's
+  // vercel.json buildCommand no longer runs search:update; this guard is defense in depth
+  // for any other surface that builds a non-clerk/clerk checkout. Local runs (no VERCEL env)
+  // are unaffected.
+  if (VERCEL === '1' && !(VERCEL_GIT_REPO_OWNER === 'clerk' && VERCEL_GIT_REPO_SLUG === 'clerk')) {
+    console.log(
+      `Skipping search index update — indexing only runs from clerk/clerk, not ${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`,
+    )
+    process.exit(0)
+  }
+
   if (VERCEL_ENV === 'preview') {
     if (DEBUG_SEARCH_BRANCH !== undefined) {
       console.log(`⚠︎ DEBUG MODE - Using branch: ${DEBUG_SEARCH_BRANCH}`)
@@ -760,6 +806,7 @@ async function main() {
 
   const gitBranch = getGitBranch()
   const recordBatch = randomUUID()
+  const runStart = Date.now()
 
   if (DRY_RUN) {
     console.log('⚠︎ DRY RUN MODE - No changes will be made to Algolia\n')
@@ -986,6 +1033,12 @@ async function main() {
   // Push to Algolia
   console.log('\nPushing records to Algolia...')
 
+  // Stamped here, not at runStart: record generation takes a minute or more, and a stalled run
+  // must not push records that already look older than they are — indexed_at is what OTHER runs'
+  // cleanups judge freshness by. (This run's own cleanup cutoff below uses runStart, which is
+  // earlier and therefore the conservative side for deletions.)
+  const indexedAt = Date.now()
+
   await algolia.chunkedBatch({
     indexName: ALGOLIA_INDEX_NAME,
     action: 'updateObject',
@@ -993,6 +1046,7 @@ async function main() {
     objects: allRecords.map((record) => ({
       ...record,
       objectID: record.objectID,
+      indexed_at: indexedAt,
     })),
   })
 
@@ -1001,26 +1055,49 @@ async function main() {
   // Clean up stale records
   console.log('\nCleaning up stale records...')
 
-  // Browse all records and find stale ones (different batch or branch)
+  // Browse this branch's records from other batches. A different batch alone is NOT enough to
+  // call a record stale: a concurrent run of this script (two quick merges → overlapping Vercel
+  // builds) pushes the same objectIDs under its own record_batch, and deleting on batch alone
+  // raced exactly that way on 2026-07-07 — the later cleanup deleted the other run's entire
+  // fresh push, emptying prod search. isStaleRecord additionally requires the record to predate
+  // this run by STALE_RECORD_GRACE_MS, so another run's fresh push is always spared; its true
+  // leftovers (removed pages) age past the window and get cleaned by a later run.
   const staleObjectIDs: string[] = []
+  let sparedFresh = 0
 
   await algolia.browseObjects({
     indexName: ALGOLIA_INDEX_NAME,
     browseParams: {
       // We want records that are of the branch we are updating, but not the current batch
       facetFilters: [`record_batch:-${recordBatch}`, `branch:${gitBranch}`],
-      attributesToRetrieve: ['objectID'],
+      attributesToRetrieve: ['objectID', 'indexed_at'],
     },
     aggregator: (response) => {
-      for (const hit of response.hits) {
-        staleObjectIDs.push(hit.objectID)
+      for (const hit of response.hits as Array<{ objectID: string; indexed_at?: number }>) {
+        if (isStaleRecord(hit, runStart)) {
+          staleObjectIDs.push(hit.objectID)
+        } else {
+          sparedFresh++
+        }
       }
     },
   })
 
+  if (sparedFresh > 0) {
+    console.log(`⚠︎ Spared ${sparedFresh} recently indexed records from another batch — likely a concurrent run`)
+  }
+
   if (staleObjectIDs.length === 0) {
     console.log('✓ No stale records found')
   } else {
+    // Tripwire: deleting more records than half of what this run just pushed is only expected
+    // after a large restructure or a tagging-scheme change. Make it loud so a future mass
+    // deletion is investigated from the build log instead of discovered as an empty search.
+    if (staleObjectIDs.length > allRecords.length / 2) {
+      console.warn(
+        `⚠︎ Deleting ${staleObjectIDs.length} stale records — more than half of the ${allRecords.length} just pushed. Expected only after a big restructure; if search looks empty, check for competing indexing runs.`,
+      )
+    }
     console.log(`Found ${staleObjectIDs.length} stale records to delete`)
 
     const deletedRecordsBatches = await algolia.chunkedBatch({

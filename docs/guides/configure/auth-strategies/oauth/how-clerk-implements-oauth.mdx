@@ -1,15 +1,25 @@
 ---
 title: How Clerk implements OAuth
-description: Learn how to configure and secure OAuth flows with Clerk, including dynamic client registration, consent screens, PKCE, public clients, and scopes.
+description: Learn how to configure and secure OAuth flows with Clerk, including Client ID Metadata Documents, dynamic client registration, consent screens, PKCE, public clients, and scopes.
 ---
 
-Clerk supports secure, standards-compliant OAuth flows for your applications. You can create OAuth apps, enable dynamic client registration, manage consent screens, and configure public clients. This guide covers all key OAuth features and configurations in Clerk and helps you set up the right OAuth flow for your needs.
+Clerk supports secure, standards-compliant OAuth flows for your applications. You can create OAuth apps, manage URL-identified clients, enable dynamic client registration, manage consent screens, and configure public clients. This guide covers all key OAuth features and configurations in Clerk and helps you set up the right OAuth flow for your needs.
 
 ## Build an OAuth app with Clerk
 
 To create or edit an OAuth app, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard. The following sections explain the available settings for configuring your OAuth app.
 
+### Client ID Metadata Documents
+
+Clerk supports [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/), which let a public OAuth client use an HTTPS metadata-document URL as its `client_id`. Clerk fetches the document to identify the client and validate its redirect URIs without requiring Dynamic Client Registration.
+
+CIMD clients always use PKCE with the `S256` method and always show the OAuth consent screen. You can explicitly allow clients, control whether previously unknown clients may connect, restrict their scopes, and review their metadata from the **Client ID metadata** tab on the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page.
+
+For configuration instructions and metadata requirements, see [Manage OAuth clients with Client ID Metadata Documents](/docs/guides/configure/auth-strategies/oauth/client-id-metadata-documents).
+
 ### Dynamic client registration
+
+For clients that support Client ID Metadata Documents, prefer CIMD over Dynamic Client Registration because it doesn't expose an unauthenticated client-registration write endpoint. Enable Dynamic Client Registration only for clients that require it.
 
 In addition to configuring OAuth apps manually through the [Clerk Dashboard](https://dashboard.clerk.com/~/oauth-applications), Clerk supports [dynamic client registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing OAuth clients to be created programmatically via a public API endpoint. To enable this feature, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard and enable **Dynamic client registration**.
 
@@ -30,6 +40,7 @@ Scopes define the level of access and specific user data that will be shared wit
 
 | Scope | Access |
 | - | - |
+| `offline_access` | Grant access through a refresh token while the user isn't actively using the client |
 | `profile` | Grant access to the user's personal information, such as first and last name, avatar, and username |
 | `email` | Grant access to the user's email address |
 | `public_metadata` | Grant access to the user's public and unsafe metadata |
@@ -128,6 +139,7 @@ This endpoint exposes all relevant details in a standardized JSON format. A samp
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "refresh_token"],
   "token_endpoint_auth_methods_supported": ["client_secret_basic", "none"],
+  "client_id_metadata_document_supported": true,
   "scopes_supported": [
     "openid",
     "profile",
@@ -145,6 +157,8 @@ This endpoint exposes all relevant details in a standardized JSON format. A samp
   "code_challenge_methods_supported": ["S256"]
 }
 ```
+
+The current Clerk OAuth implementation advertises `client_id_metadata_document_supported: true`, which lets compatible clients select CIMD instead of Dynamic Client Registration. Applications that still use Clerk's legacy OAuth implementation omit this field and don't support CIMD clients.
 
 > [!NOTE]
 > The `user:org:read` scope and `org_id` claim are only included in this metadata when the instance has Organizations enabled. See [Organizations and OAuth](#organizations-and-oauth) for details.

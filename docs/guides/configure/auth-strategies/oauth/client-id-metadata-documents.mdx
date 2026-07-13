@@ -1,0 +1,103 @@
+---
+title: Manage OAuth clients with Client ID Metadata Documents
+description: Learn how Clerk uses Client ID Metadata Documents and how to explicitly allow, review, and block URL-identified OAuth clients.
+---
+
+A Client ID Metadata Document (CIMD) lets an OAuth client use an HTTPS URL as its `client_id`. The URL serves a JSON document that describes the client, including its name and allowed redirect URIs. This lets Clerk identify a client without requiring it to create a registration through [Dynamic Client Registration](https://datatracker.ietf.org/doc/html/rfc7591).
+
+Clerk's current OAuth implementation supports [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/). You control client admission from the Clerk Dashboard: you can explicitly allow individual clients or allow previously unknown clients to connect.
+
+## Client metadata requirements
+
+The following example demonstrates the minimum metadata that a client can publish:
+
+```json {{ filename: 'client-metadata.json' }}
+{
+  "client_id": "https://client.example.com/oauth/client-metadata.json",
+  "client_name": "Example client",
+  "redirect_uris": ["https://client.example.com/oauth/callback"],
+  "token_endpoint_auth_method": "none"
+}
+```
+
+For Clerk to accept the document:
+
+- The `client_id` must be an HTTPS URL with a path.
+- The document's `client_id` must exactly match the URL Clerk fetched.
+- `client_name` and at least one `redirect_uri` must be present.
+- The requested `redirect_uri` must exactly match an entry in `redirect_uris`.
+- The client must be public. Clerk rejects metadata that contains a client secret or selects a secret-based token endpoint authentication method.
+
+Clerk treats all CIMD clients as public OAuth clients, requires Proof Key for Code Exchange (PKCE) with the `S256` method, and always shows the OAuth consent screen.
+
+> [!IMPORTANT]
+> CIMD clients require a reachable OAuth consent flow. Keep the Account Portal enabled or configure an OAuth consent page for your application before you allow a CIMD client or enable unknown clients.
+
+## Explicitly allow a client
+
+Explicitly allowed clients can start OAuth flows regardless of the unknown-client policy.
+
+<Steps>
+  ## Open Client ID metadata settings
+
+  In the Clerk Dashboard, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page and open the **Client ID metadata** tab.
+
+  ## Add the client
+
+  Select **Allow client**, then configure:
+
+  - **Client ID URL**: The HTTPS URL that serves the client's metadata document.
+  - **Display name**: An optional name override. If you omit it, Clerk uses a safe `client_name` from the metadata document, then falls back to the URL's hostname.
+  - **Scopes**: The scopes that the client may request from this Clerk instance.
+
+  The metadata document can't grant itself additional scopes. The scopes selected in the Clerk Dashboard remain authoritative. Clerk always includes `offline_access` for CIMD clients.
+
+  ## Allow the client
+
+  Select **Allow client**. Clerk fetches the metadata document and records the client as **Explicitly allowed**.
+
+  If Clerk can't fetch the document, the client remains explicitly allowed and its metadata status displays **Error**. The OAuth flow can't complete until Clerk can resolve a valid metadata document. From the client's actions menu, select **Refresh metadata** after the document becomes available.
+</Steps>
+
+## Control unknown and previously connected clients
+
+The **Settings** section on the **Client ID metadata** tab provides two policies:
+
+| Setting | Behavior |
+| - | - |
+| **Allow unknown clients** | Lets a CIMD client that hasn't connected before and hasn't been explicitly allowed start an OAuth flow. After Clerk resolves its metadata, Clerk records it as **Implicitly allowed**. |
+| **Block implicitly allowed clients** | Blocks future OAuth flows for clients that were recorded while unknown clients were allowed. This setting becomes available after you turn off **Allow unknown clients**. |
+
+Unknown clients are denied by default.
+
+Turning off **Allow unknown clients** prevents new unknown clients from connecting, but doesn't change clients that Clerk already recorded as implicitly allowed. Enable **Block implicitly allowed clients** if you also want to block those previously connected clients. Blocking an implicitly allowed client doesn't delete its record or revoke tokens that Clerk already issued.
+
+You can explicitly allow an implicit or blocked client from its actions menu. Explicitly allowed clients aren't affected by the **Block implicitly allowed clients** setting.
+
+## Review and manage clients
+
+The **CIMD clients** table displays each client's:
+
+- Client ID URL and display name
+- Allowed scopes
+- Admission status
+- Metadata fetch status
+- Creation date
+
+The admission statuses are:
+
+| Status | Meaning |
+| - | - |
+| **Explicitly allowed** | An administrator allowed the client from the Clerk Dashboard. |
+| **Implicitly allowed** | Clerk recorded the client when **Allow unknown clients** was enabled. |
+| **Blocked** | The client was implicitly allowed, but **Block implicitly allowed clients** is now enabled. |
+
+From a client's actions menu, you can:
+
+- Explicitly allow an implicit or blocked client.
+- Edit the scopes it may request.
+- Refresh its metadata.
+- Delete the saved client.
+
+> [!NOTE]
+> If you delete a client while **Allow unknown clients** is enabled, the client can connect again and Clerk will record it as implicitly allowed.

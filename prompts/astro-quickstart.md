@@ -53,6 +53,8 @@ export const onRequest = clerkMiddleware()
 ```astro
 ---
 import { Show, UserButton, SignInButton, SignUpButton } from '@clerk/astro/components'
+
+const { title } = Astro.props
 ---
 
 <!doctype html>
@@ -62,7 +64,7 @@ import { Show, UserButton, SignInButton, SignUpButton } from '@clerk/astro/compo
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
-    <title>Astro Basics</title>
+    <title>{title}</title>
   </head>
   <body>
     <header>

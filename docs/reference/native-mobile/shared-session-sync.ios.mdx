@@ -1,0 +1,129 @@
+---
+title: Share sessions across apps
+description: Keep Clerk sessions synchronized across trusted iOS apps on the same device.
+sdk: ios
+search:
+  keywords:
+    - cross-app SSO
+    - shared session sync
+    - sibling apps
+---
+
+Shared session sync lets multiple iOS applications on the same device share Clerk authentication state. When a user signs in or out of one participating app, Clerk updates the other apps when they receive the change or return to the foreground.
+
+> [!IMPORTANT]
+> Shared session sync requires Clerk iOS SDK `1.3.2` or later.
+
+This feature applies only to apps on the same device that use the same Clerk publishable key, Apple Developer Team, Keychain service, and Keychain access group. It doesn't share sessions across devices, developer teams, or Clerk instances.
+
+## Before you start
+
+Ensure that every participating app:
+
+- Uses the same Clerk publishable key.
+- Uses Clerk iOS SDK `1.3.2` or later.
+- Belongs to the same Apple Developer Team.
+- Has the Keychain Sharing capability.
+- Is an app that you trust to access the shared Clerk state.
+
+## Enable shared session sync
+
+<Steps>
+  ### Add the Keychain Sharing capability
+
+  In Xcode, select each participating target. Open **Signing & Capabilities**, select **+ Capability**, then add **Keychain Sharing**.
+
+  ### Add the same Keychain access group
+
+  Add the same Keychain group to every target, such as:
+
+  ```text {{ filename: 'Keychain group' }}
+  $(AppIdentifierPrefix)com.example.shared-auth
+  ```
+
+  The resolved value includes your Apple Team ID, such as `TEAMID.com.example.shared-auth`. Pass that full resolved value to Clerk in the next step.
+
+  ### Configure every app
+
+  In each app, configure Clerk with the same publishable key, Keychain service, full access group, and `sharedSessionSync: .enabled`. The following example enables shared session sync:
+
+  ```swift
+  import ClerkKit
+
+  Clerk.configure(
+    publishableKey: "{{pub_key}}",
+    options: .init(
+      keychainConfig: .init(
+        service: "com.example.shared-auth",
+        accessGroup: "TEAMID.com.example.shared-auth"
+      ),
+      sharedSessionSync: .enabled
+    )
+  )
+  ```
+
+  Replace `TEAMID` with your Apple Team ID.
+
+  > [!WARNING]
+  > The `service` defaults to the app's bundle identifier. Because sibling apps have different bundle identifiers, you must set the same explicit `service` in every participating app.
+
+  ### Test the shared session
+
+  Install at least two participating apps on the same device. Sign in to one app, then open the other app and verify that it reflects the same session. Repeat the test after signing out.
+</Steps>
+
+## How shared session sync works
+
+The shared Keychain is the durable source of Clerk state. When one app changes that state, Clerk posts a Darwin notification that tells other participating apps to reread the Keychain. The notification doesn't contain Clerk state.
+
+Clerk reconciles shared state:
+
+- When the SDK initializes.
+- When a participating app publishes a change.
+- When the app returns to the foreground.
+
+You don't need to configure an App Group for this feature.
+
+## Reload shared state manually
+
+Shared state normally updates automatically. To force reconciliation at another point in your app lifecycle, call `Clerk.reloadFromSharedStorage()`. It returns `true` when Clerk's in-memory state changes.
+
+```swift
+let didChange = await Clerk.shared.reloadFromSharedStorage()
+```
+
+## What Clerk synchronizes
+
+Clerk synchronizes only the state required to keep authentication consistent:
+
+- The Clerk client and its sessions.
+- The Clerk environment.
+- The Clerk device token.
+
+Shared session sync doesn't coordinate arbitrary application data.
+
+## Sign-out behavior
+
+Shared session sync publishes the client state that results from a sign-out. It doesn't change whether [`signOut()`](/docs/reference/native-mobile/auth#sign-out) removes all sessions or a specific session. If your app supports multiple sessions, pass a session ID when you want to remove only that session. For a complete example, see the [custom sign-out flow guide](/docs/guides/development/custom-flows/authentication/sign-out).
+
+## Security and limitations
+
+- Only apps on the same device can participate.
+- Every app must opt in and use the same Clerk publishable key.
+- Every app must belong to the same Apple Developer Team and Keychain access group.
+- Any app in the shared Keychain access group can read and write the shared Clerk state.
+- Every app in the access group is inside the shared-session trust boundary.
+
+To sync an iOS app with a companion watchOS app instead, use [Watch Connectivity](/docs/reference/ios/watch-connectivity).
+
+## Troubleshoot shared session sync
+
+If Clerk state doesn't synchronize between apps, verify that:
+
+- Every app enables `sharedSessionSync: .enabled`.
+- Every app uses the same Clerk publishable key and explicit Keychain `service`.
+- Every app uses the same resolved `accessGroup`, including the Apple Team ID prefix.
+- Every target includes the matching Keychain Sharing entitlement.
+- Every app uses Clerk iOS SDK `1.3.2` or later.
+
+If `sharedSessionSync: .enabled` is set without an access group, Clerk logs an error and doesn't enable shared session sync.

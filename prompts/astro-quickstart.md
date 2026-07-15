@@ -18,11 +18,15 @@ No signup required. Without env vars (`PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SEC
 
 ## Install
 
+`@clerk/astro` supports Astro 4.15+, 5, and 6; [Astro 7 support is in progress](https://github.com/clerk/javascript/pull/8974). `npm create astro@latest` scaffolds Astro 7, so for a new project, pin:
+
 ```bash
-npm install @clerk/astro@latest @astrojs/node
+npm install astro@6 @astrojs/node@10 @clerk/astro@latest
 ```
 
-Use the existing package manager if the project already uses `pnpm`, `yarn`, or `bun`.
+Use the project's existing package manager.
+
+For an existing Astro 4.15+/5/6 project, run `npm install @clerk/astro@latest` — keep its Astro version and adapter; if it has none, add `@astrojs/node@10` (Astro 6) or `@astrojs/node@9` (Astro 5), NOT `npx astro add node`. Already on Astro 7? Stop and tell the user support is not yet released. Do NOT force with `--legacy-peer-deps` or `--force`.
 
 ## astro.config.mjs
 
@@ -37,6 +41,8 @@ export default defineConfig({
   output: 'server',
 })
 ```
+
+Existing projects: keep your adapter; add only `clerk()` and `output: 'server'`.
 
 ## src/middleware.ts
 
@@ -113,6 +119,7 @@ import { Show } from '@clerk/astro/components'
 ALWAYS:
 
 - Use `@clerk/astro@latest`
+- Pin `astro@6` and `@astrojs/node@10` for new projects until Astro 7 support ships
 - Use `PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
 - Add `clerk()` in `astro.config.mjs`
 - Add an SSR adapter such as `@astrojs/node`
@@ -133,6 +140,8 @@ NEVER:
 - Use deprecated or incorrect auth UI patterns from other frameworks
 - Tell users to put `CLERK_SECRET_KEY` in client-side code
 - Use `@clerk/nextjs`, `_app.tsx`, `app/layout.tsx`, or other Next.js-specific files in Astro guidance
+- Use `--legacy-peer-deps` or `--force` to install alongside Astro 7
+- Upgrade an existing project's Astro version or adapter to install Clerk
 
 ## Deprecated or Wrong (DO NOT use)
 
@@ -163,6 +172,7 @@ export default defineConfig({
 4. Are components imported from `@clerk/astro/components`?
 5. Is the example using `<Show>` for signed-in and signed-out states?
 6. Is there no React `<ClerkProvider>` or Next.js-specific guidance?
+7. New project: `astro@6` + `@astrojs/node@10`? Existing: Astro version and adapter unchanged?
 
 If any fails, revise.
 

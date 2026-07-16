@@ -16,12 +16,12 @@ import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
-import type { Root } from 'mdast'
+import type { Heading as MdastHeading, Root } from 'mdast'
 import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import { VFile } from 'vfile'
 import { type BuildConfig } from './config'
-import { errorMessages, safeFail, safeMessage, type WarningsSection } from './error-messages'
+import { errorMessages, safeError, safeFail, safeMessage, type WarningsSection } from './error-messages'
 import { readMarkdownFile, type DocsFile } from './io'
 import { checkPartials } from './plugins/checkPartials'
 import { checkTypedoc } from './plugins/checkTypedoc'
@@ -205,6 +205,12 @@ export const parseInMarkdownFile =
           tree,
           (node) => node.type === 'heading',
           (node) => {
+            // The rendered page's <h1> comes from the frontmatter title, so an h1 in
+            // content would produce a second h1 (bad for SEO and accessibility).
+            if ((node as MdastHeading).depth === 1) {
+              safeError(config, vfile, file.filePath, section, 'content-h1', [file.href], node.position)
+            }
+
             const id = extractHeadingFromHeadingNode(node)
 
             if (id !== undefined) {

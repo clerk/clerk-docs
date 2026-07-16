@@ -5,6 +5,12 @@ sdk: go
 ---
 
 <TutorialHero
+  exampleRepo={[
+    {
+      title: "Go Quickstart Repo",
+      link: "https://github.com/clerk/clerk-go-quickstart",
+    },
+  ]}
   beforeYouStart={[
     {
       title: "Set up a Clerk application",
@@ -58,44 +64,53 @@ package main
 
 import (
   "context"
+  "fmt"
 
   "github.com/clerk/clerk-sdk-go/v2"
   "github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 func main() {
-    // Each operation requires a context.Context as the first argument
-    ctx := context.Background()
+  // Each operation requires a context.Context as the first argument
+  ctx := context.Background()
 
-    // Set the API key with your Clerk Secret Key
-    clerk.SetKey("{{secret}}")
+  // Set the API key with your Clerk Secret Key
+  clerk.SetKey("{{secret}}")
 
-    // Create a new user
-    newUser, err := user.Create(ctx, &user.CreateParams{})
-    if err != nil {
-        // Handle error
-    }
+  // Create a new user
+  newUser, err := user.Create(ctx, &user.CreateParams{})
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  fmt.Println(newUser.ID)
 
-    // Get user details
-    userDetails, err := user.Get(ctx, "user_id")
-    if err != nil {
-        // Handle error
-    }
+  // Get user details
+  userDetails, err := user.Get(ctx, newUser.ID)
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  fmt.Println(userDetails.ID)
 
-    // List users
-    userList, err := user.List(ctx, &user.ListParams{})
-    if err != nil {
-        // Handle error
-    }
-    for _, u := range userList.Users {
-        // Process each user
-    }
+  // List users
+  userList, err := user.List(ctx, &user.ListParams{})
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  for _, u := range userList.Users {
+    // Process each user
+    fmt.Println(u.ID)
+  }
 
-    // Delete user
-    deletedResource, err := user.Delete(ctx, "user_id")
-    if err != nil {
-        // Handle error
-    }
+  // Delete user
+  deletedResource, err := user.Delete(ctx, newUser.ID)
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  fmt.Println(deletedResource.Deleted)
 }
 ```
 
@@ -113,11 +128,16 @@ By executing the code in the snippet below, you will:
 > Your Clerk [Secret Key](!secret-key) is required. If you're signed into the Clerk Dashboard, your Secret Key should become visible by selecting the eye icon. Otherwise, you can retrieve your Clerk Secret Key on the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
 
 ```go {{ filename: 'main.go' }}
+package main
+
 import (
-    "github.com/clerk/clerk-sdk-go/v2"
-    "github.com/clerk/clerk-sdk-go/v2/organization"
-    "github.com/clerk/clerk-sdk-go/v2/organizationmembership"
-    "github.com/clerk/clerk-sdk-go/v2/user"
+  "context"
+  "fmt"
+
+  "github.com/clerk/clerk-sdk-go/v2"
+  "github.com/clerk/clerk-sdk-go/v2/organization"
+  "github.com/clerk/clerk-sdk-go/v2/organizationmembership"
+  "github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 func main() {
@@ -129,15 +149,15 @@ func main() {
 
   // Create an organization
   org, err := organization.Create(ctx, &organization.CreateParams{
-      Name: clerk.String("Clerk Inc"),
+    Name: clerk.String("Clerk Inc"),
   })
   if err != nil {
     // You can get additional information on the error, if it can
     // be type-cast to clerk.APIErrorResponse.
     if apiErr, ok := err.(*clerk.APIErrorResponse); ok {
-      apiErr.TraceID
-      apiErr.Error()
-      apiErr.Response.RawJSON
+      fmt.Println(apiErr.TraceID)
+      fmt.Println(apiErr.Error())
+      fmt.Println(string(apiErr.Response.RawJSON))
     }
     // handle the error
     panic(err)
@@ -145,32 +165,35 @@ func main() {
 
   // Update the organization
   org, err = organization.Update(ctx, org.ID, &organization.UpdateParams{
-      Slug: clerk.String("clerk"),
+    Slug: clerk.String("clerk"),
   })
   if err != nil {
     // handle the error
     panic(err)
   }
 
-  // List organization memberships
-  listParams := organizationmembership.ListParams{}
+  // List the organization's memberships
+  listParams := organizationmembership.ListParams{
+    OrganizationID: org.ID,
+  }
   listParams.Limit = clerk.Int64(10)
-  memberships, err := organizationmembership.List(ctx, params)
+  memberships, err := organizationmembership.List(ctx, &listParams)
   if err != nil {
     // handle the error
     panic(err)
   }
-  if memberships.TotalCount < 0 {
-      return
+  if memberships.TotalCount == 0 {
+    return
   }
-  membership := memberships[0]
+  membership := memberships.OrganizationMemberships[0]
 
-  // Get a user
-  usr, err := user.Get(ctx, membership.UserID)
+  // Get more details about the membership's user
+  usr, err := user.Get(ctx, membership.PublicUserData.UserID)
   if err != nil {
     // handle the error
     panic(err)
   }
+  fmt.Println(usr.ID)
 }
 ```
 
@@ -183,46 +206,55 @@ package main
 
 import (
   "context"
+  "fmt"
 
   "github.com/clerk/clerk-sdk-go/v2"
   "github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 func main() {
-    // Each operation requires a context.Context as the first argument.
-    ctx := context.Background()
+  // Each operation requires a context.Context as the first argument.
+  ctx := context.Background()
 
-    // Initialize a client with an API key
-    config := &clerk.ClientConfig{}
-    config.Key = "{{secret}}"
-    client := user.NewClient(config)
+  // Initialize a client with an API key
+  config := &clerk.ClientConfig{}
+  config.Key = clerk.String("{{secret}}")
+  client := user.NewClient(config)
 
-    // Create a new user
-    newUser, err := client.Create(ctx, &user.CreateParams{})
-    if err != nil {
-        // Handle error
-    }
+  // Create a new user
+  newUser, err := client.Create(ctx, &user.CreateParams{})
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  fmt.Println(newUser.ID)
 
-    // Get user details
-    userDetails, err := client.Get(ctx, "user_id")
-    if err != nil {
-        // Handle error
-    }
+  // Get user details
+  userDetails, err := client.Get(ctx, newUser.ID)
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  fmt.Println(userDetails.ID)
 
-    // List users
-    userList, err := client.List(ctx, &user.ListParams{})
-    if err != nil {
-        // Handle error
-    }
-    for _, u := range userList.Users {
-        // Process each user
-    }
+  // List users
+  userList, err := client.List(ctx, &user.ListParams{})
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  for _, u := range userList.Users {
+    // Process each user
+    fmt.Println(u.ID)
+  }
 
-    // Delete user
-    deletedResource, err := client.Delete(ctx, "user_id")
-    if err != nil {
-        // Handle error
-    }
+  // Delete user
+  deletedResource, err := client.Delete(ctx, newUser.ID)
+  if err != nil {
+    // Handle error
+    panic(err)
+  }
+  fmt.Println(deletedResource.Deleted)
 }
 ```
 

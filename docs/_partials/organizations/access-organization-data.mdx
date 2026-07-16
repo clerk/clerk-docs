@@ -12,7 +12,7 @@
           // https://clerk.com/docs/reference/backend/types/auth-object
           const { isAuthenticated, orgId, orgRole } = await auth()
 
-          // Check if user is authenticated
+          // Check if the user is authenticated
           if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
 
           // Check if there is an Active Organization
@@ -27,10 +27,10 @@
           return (
             <div class="p-8">
               <h1 class="text-2xl font-bold mb-4">
-                Welcome to the <strong>{organization.name}</strong> organization
+                Welcome to the <strong>{organization.name}</strong> Organization
               </h1>
               <p class="mb-6">
-                Your role in this organization: <strong>{orgRole}</strong>
+                Your Role in this Organization: <strong>{orgRole}</strong>
               </p>
             </div>
           )
@@ -70,7 +70,6 @@
             return { organization: null, orgRole: null, hasOrganization: false }
           }
 
-          // Initialize clerkClient
           // Use the `getOrganization()` method to get the Backend `Organization` object
           const organization = await clerkClient(args).organizations.getOrganization({
             organizationId: orgId,
@@ -109,7 +108,7 @@
           return (
             <div>
               <h1>Welcome to the {loaderData.organization?.name} Organization</h1>
-              <p>Your role in this organization: {loaderData.orgRole}</p>
+              <p>Your Role in this Organization: {loaderData.orgRole}</p>
             </div>
           )
         }
@@ -128,6 +127,8 @@
         const { isAuthenticated, orgId, orgRole } = Astro.locals.auth()
 
         let organization = null
+
+        // Check if the user is authenticated and has an Active Organization
         if (isAuthenticated && orgId) {
           organization = await clerkClient(Astro).organizations.getOrganization({ organizationId: orgId })
         }
@@ -142,10 +143,10 @@
               organization && (
                 <div class="p-8">
                   <h1 class="text-2xl font-bold mb-4">
-                    Welcome to the <strong>{organization.name}</strong> organization
+                    Welcome to the <strong>{organization.name}</strong> Organization
                   </h1>
                   <p class="mb-6">
-                    Your role in this organization: <strong>{orgRole}</strong>
+                    Your Role in this Organization: <strong>{orgRole}</strong>
                   </p>
                 </div>
               )
@@ -189,41 +190,90 @@
         })
         ```
       </If>
+
+      <If sdk="tanstack-react-start">
+        ```tsx {{ filename: 'src/routes/index.tsx', collapsible: true }}
+        import { createFileRoute, redirect } from '@tanstack/react-router'
+        import { createServerFn } from '@tanstack/react-start'
+        import { clerkClient, auth } from '@clerk/tanstack-react-start/server'
+
+        const authStateFn = createServerFn({ method: 'GET' }).handler(async () => {
+          // Use `auth()` to access the `Auth` object
+          // https://clerk.com/docs/reference/backend/types/auth-object
+          const { isAuthenticated, orgId, orgRole } = await auth()
+
+          // Check if the user is authenticated
+          if (!isAuthenticated) {
+            // This might error if you're redirecting to a path that doesn't exist yet
+            // You can create a sign-in route to handle this
+            // See https://clerk.com/docs/tanstack-react-start/guides/development/custom-sign-in-or-up-page
+            throw redirect({
+              to: '/sign-in/$',
+            })
+          }
+
+          // Check if there is an Active Organization
+          if (!orgId) return { orgId: null, orgRole: null, organizationName: null }
+
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await clerkClient().organizations.getOrganization({ organizationId: orgId })
+
+          return { orgId, orgRole, organizationName: organization.name }
+        })
+
+        export const Route = createFileRoute('/')({
+          component: Home,
+          beforeLoad: () => authStateFn(),
+          loader: async ({ context }) => {
+            return {
+              orgId: context.orgId,
+              orgRole: context.orgRole,
+              organizationName: context.organizationName,
+            }
+          },
+        })
+
+        function Home() {
+          const state = Route.useLoaderData()
+
+          if (!state.organizationName) return <p>Set an Active Organization to access this page.</p>
+
+          return (
+            <div className="p-8">
+              <h1 className="text-2xl font-bold mb-4">
+                Welcome to the <strong>{state.organizationName}</strong> Organization
+              </h1>
+              <p className="mb-6">
+                Your Role in this Organization: <strong>{state.orgRole}</strong>
+              </p>
+            </div>
+          )
+        }
+        ```
+      </If>
     </Tab>
 
     <Tab>
       <If notSdk={["astro", "nuxt"]}>
-        Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's Organization memberships.
+        Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization), including the current user's membership and Role.
       </If>
 
       <If sdk="nextjs">
         ```tsx {{ filename: 'app/page.tsx' }}
         'use client'
 
-        import { useOrganization, useOrganizationList } from '@clerk/nextjs'
+        import { useOrganization } from '@clerk/nextjs'
 
         export default function Page() {
-          const { organization } = useOrganization()
-          const { userMemberships } = useOrganizationList({
-            userMemberships: true,
-          })
+          const { organization, membership } = useOrganization()
 
           return (
             <div className="p-8">
               <h1 className="text-2xl font-bold mb-4">
-                Welcome to the <strong>{organization?.name}</strong> organization
+                Welcome to the <strong>{organization?.name}</strong> Organization
               </h1>
               <p className="mb-6">
-                Your role in this organization:{' '}
-                <strong>
-                  {/* Find the organization membership that matches the
-                       currently active organization and return the role */}
-                  {
-                    userMemberships?.data?.find(
-                      (membership) => membership.organization.id === organization?.id,
-                    )?.role
-                  }
-                </strong>
+                Your Role in this Organization: <strong>{membership?.role}</strong>
               </p>
             </div>
           )
@@ -233,28 +283,44 @@
 
       <If sdk="react-router">
         ```tsx {{ filename: 'src/welcome/welcome.tsx' }}
-        import { useOrganization, useOrganizationList } from '@clerk/react-router'
+        import { useOrganization } from '@clerk/react-router'
 
         export function Welcome() {
-          const { organization } = useOrganization()
-          const { userMemberships } = useOrganizationList({
-            userMemberships: true,
-          })
+          const { organization, membership } = useOrganization()
 
           return (
             <div className="p-8">
               <h1 className="text-2xl font-bold mb-4">
-                Welcome to the <strong>{organization?.name}</strong> organization
+                Welcome to the <strong>{organization?.name}</strong> Organization
               </h1>
               <p className="mb-6">
-                Your role in this organization:{' '}
-                <strong>
-                  {
-                    userMemberships?.data?.find(
-                      (membership) => membership.organization.id === organization?.id,
-                    )?.role
-                  }
-                </strong>
+                Your Role in this Organization: <strong>{membership?.role}</strong>
+              </p>
+            </div>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="tanstack-react-start">
+        ```tsx {{ filename: 'src/routes/index.tsx' }}
+        import { useOrganization } from '@clerk/tanstack-react-start'
+        import { createFileRoute } from '@tanstack/react-router'
+
+        export const Route = createFileRoute('/')({
+          component: Home,
+        })
+
+        function Home() {
+          const { organization, membership } = useOrganization()
+
+          return (
+            <div className="p-8">
+              <h1 className="text-2xl font-bold mb-4">
+                Welcome to the <strong>{organization?.name}</strong> Organization
+              </h1>
+              <p className="mb-6">
+                Your Role in this Organization: <strong>{membership?.role}</strong>
               </p>
             </div>
           )
@@ -314,24 +380,14 @@
 </If>
 
 <If sdk="react">
-  Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's Organization memberships.
+  Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization), including the current user's membership and Role.
 
   ```tsx {{ filename: 'src/App.tsx', collapsible: true }}
   import './App.css'
-  import {
-    Show,
-    SignInButton,
-    UserButton,
-    OrganizationSwitcher,
-    useOrganization,
-    useOrganizationList,
-  } from '@clerk/react'
+  import { Show, SignInButton, UserButton, OrganizationSwitcher, useOrganization } from '@clerk/react'
 
   function App() {
-    const { organization } = useOrganization()
-    const { userMemberships } = useOrganizationList({
-      userMemberships: true,
-    })
+    const { organization, membership } = useOrganization()
 
     return (
       <>
@@ -348,17 +404,10 @@
           <Show when="signed-in">
             <div>
               <h1 className="text-2xl font-bold mb-4">
-                Welcome to the <strong>{organization?.name}</strong> organization
+                Welcome to the <strong>{organization?.name}</strong> Organization
               </h1>
               <p className="mb-6">
-                Your role in this organization:{' '}
-                <strong>
-                  {
-                    userMemberships?.data?.find(
-                      (membership) => membership.organization.id === organization?.id,
-                    )?.role
-                  }
-                </strong>
+                Your Role in this Organization: <strong>{membership?.role}</strong>
               </p>
             </div>
           </Show>

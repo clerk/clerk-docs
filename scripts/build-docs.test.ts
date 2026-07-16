@@ -198,7 +198,7 @@ title: Simple Test
 description: This is a simple test page
 ---
 
-# Simple Test Page
+## Simple Test Page
 
 Testing with a simple page.`,
         },
@@ -230,7 +230,7 @@ canonical: /docs/simple-test
 sourceFile: /docs/simple-test.mdx
 ---
 
-# Simple Test Page
+## Simple Test Page
 
 Testing with a simple page.`)
 
@@ -2490,6 +2490,108 @@ description: Duplicate Headings page
     )
   })
 
+  test('should error on h1 headings in content', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+# Quickstart
+
+## Section`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(
+      'Doc "/docs/quickstart" contains an h1 heading (# ...) in its content. The page title comes from the frontmatter "title", so use an h2 (##) or lower',
+    )
+  })
+
+  test('should error on h1 headings pulled in from a partial', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/intro.mdx',
+        content: `# Partial Title`,
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+<Include src="_partials/intro" />
+
+## Section`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain('contains an h1 heading (# ...) in its content')
+  })
+
+  test('should not error on h2 and lower headings', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+## Section
+
+### Subsection`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
   test('should not error on duplicate headings if they are in different <If /> components', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -2507,11 +2609,11 @@ sdk: react, nextjs
 ---
 
 <If sdk="react">
-  # Title {{ id: 'title' }}
+  ## Title {{ id: 'title' }}
 </If>
 
 <If sdk="nextjs">
-  # Title {{ id: 'title' }}
+  ## Title {{ id: 'title' }}
 </If>`,
       },
     ])
@@ -2614,7 +2716,7 @@ description: Quickstart page
       },
       {
         path: './docs/_partials/dup-heading.mdx',
-        content: `# Partial Heading {{ id: 'shared-id' }}`,
+        content: `## Partial Heading {{ id: 'shared-id' }}`,
       },
       {
         // Core doc (no `sdk` frontmatter) that contains an <If /> component, so
@@ -2858,7 +2960,7 @@ title: Test Page
 description: Testing nested partials
 ---
 
-# Test Page
+## Test Page
 
 <Include src="_partials/level-1-partial" />
 
@@ -3078,7 +3180,7 @@ title: Test Page
 description: Testing deeply nested partials
 ---
 
-# Test Page
+## Test Page
 
 <Include src="_partials/level-1-partial" />
 
@@ -3510,7 +3612,7 @@ sdk: react, nextjs
       },
       {
         path: './docs/_partials/test-partial.mdx',
-        content: `# Heading`,
+        content: `## Heading`,
       },
       {
         path: './docs/test-page-1.mdx',
@@ -3561,7 +3663,7 @@ title: Checklist Test
 description: Testing GFM task lists
 ---
 
-# Checklist
+## Checklist
 
 - [ ] First task
 - [x] Second task`,
@@ -3603,7 +3705,7 @@ title: Checklist Test
 description: Testing GFM task lists inside partials
 ---
 
-# Checklist
+## Checklist
 
 <Include src="_partials/checklist" />`,
       },
@@ -4078,7 +4180,7 @@ description: x
 sdk: nextjs
 ---
 
-# API Documentation`,
+## API Documentation`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -4088,7 +4190,7 @@ description: x
 sdk: react
 ---
 
-# React`,
+## React`,
       },
       {
         path: './docs/page-2.mdx',
@@ -4133,7 +4235,7 @@ description: x
 sdk: nextjs
 ---
 
-# API Documentation`,
+## API Documentation`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -4143,7 +4245,7 @@ description: x
 sdk: react
 ---
 
-# React`,
+## React`,
       },
       {
         path: './docs/page-2.mdx',
@@ -4502,7 +4604,7 @@ title: Page 1
 description: This is a test page
 ---
 
-# Heading
+## Heading
 
 [Valid Link to self](#heading)`,
       },
@@ -4570,7 +4672,7 @@ title: Standard Card
 description: Just a standard card
 ---
 
-# Standard Card`,
+## Standard Card`,
       },
       {
         path: './docs/sdk-scoped-page.mdx',
@@ -4580,7 +4682,7 @@ description: A card that is scoped to a specific SDK
 sdk: react
 ---
 
-# SDK Scoped Page`,
+## SDK Scoped Page`,
       },
       {
         path: './docs/index.mdx',
@@ -4638,7 +4740,7 @@ description: This is a test page
 sdk: react, nextjs
 ---
 
-# Content
+## Content
 `,
       },
       {
@@ -4960,7 +5062,7 @@ title: Core Target
 description: Target doc
 ---
 
-# Core Target`,
+## Core Target`,
       },
       {
         path: './docs/core-page.mdx',
@@ -4969,7 +5071,7 @@ title: Core Page
 description: Core page
 ---
 
-# Core page
+## Core page
 
 See [Core Target][core-ref].
 
@@ -5011,7 +5113,7 @@ description: x
 sdk: nextjs, react, expo
 ---
 
-# Doc 1
+## Doc 1
 
 Documentation specific to Next.js`,
       },
@@ -5064,7 +5166,7 @@ description: x
 sdk: nextjs
 ---
 
-# Doc 1
+## Doc 1
 
 Documentation specific to Next.js`,
       },
@@ -5076,7 +5178,7 @@ description: x
 sdk: react
 ---
 
-# Doc 1 for React
+## Doc 1 for React
 `,
       },
       {
@@ -5152,7 +5254,7 @@ description: x
 sdk: react
 ---
 
-# Guide 1`,
+## Guide 1`,
       },
       {
         path: './docs/guide-2.mdx',
@@ -5162,7 +5264,7 @@ description: x
 sdk: react
 ---
 
-# Guide 2`,
+## Guide 2`,
       },
       {
         path: './docs/guide-2.nextjs.mdx',
@@ -5224,7 +5326,7 @@ description: x
 sdk: react
 ---
 
-# Guide 1 for React
+## Guide 1 for React
 
 [\`<Guide 2>\`](/docs/guide-2)
 `,
@@ -5236,7 +5338,7 @@ title: Guide 1 for Nextjs
 description: x
 sdk: nextjs
 ---
-# Guide 1 for Nextjs
+## Guide 1 for Nextjs
 `,
       },
       {
@@ -5247,7 +5349,7 @@ description: x
 sdk: react, nextjs
 ---
 
-# Guide 2 Component
+## Guide 2 Component
 `,
       },
     ])
@@ -6079,7 +6181,7 @@ sdk: react, nextjs, astro
       },
       {
         path: './docs/_partials/partial.mdx',
-        content: `# Original Content`,
+        content: `## Original Content`,
       },
       {
         path: './docs/cached-doc.mdx',
@@ -6131,7 +6233,7 @@ sdk: react
       },
       {
         path: './docs/billing/_partials/local-partial.mdx',
-        content: `# Original Local Content`,
+        content: `## Original Local Content`,
       },
       {
         path: './docs/billing/for-b2c.mdx',
@@ -6435,7 +6537,7 @@ title: Page C
       },
       {
         path: './typedoc/component.mdx',
-        content: `# Original Content`,
+        content: `## Original Content`,
       },
       {
         path: './docs/cached-doc.mdx',
@@ -6730,7 +6832,7 @@ title: Index
 description: This page has a description
 ---
 
-# Page exists but not in manifest`,
+## Page exists but not in manifest`,
         },
       ])
 
@@ -6771,7 +6873,7 @@ title: Problem File
 description: This page has a description
 ---
 
-# Test Page
+## Test Page
 
 [Missing Link](/docs/non-existent)
 
@@ -6977,7 +7079,7 @@ description: This page has a description
 title: Missing Description
 ---
 
-# This page is missing a description
+## This page is missing a description
 `,
         },
       ])
@@ -7032,7 +7134,7 @@ title: Target Page
 description: The page being linked to
 ---
 
-# Target Page
+## Target Page
 `,
         },
       ])
@@ -7091,7 +7193,7 @@ sdk: react, expo
 description: This page has a description
 ---
 
-# SDK Document
+## SDK Document
 `,
         },
       ])
@@ -7136,7 +7238,7 @@ description: Test page with partial
 
 <Include src="_partials/test-partial" />
 
-# Test Page`,
+## Test Page`,
         },
       ])
 
@@ -7180,14 +7282,14 @@ title: API Documentation
 description: Generated API docs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/client" />
 `,
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API
+        content: `## Client API
 
 \`\`\`typescript
 interface Client {
@@ -7233,7 +7335,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API
+        content: `## Client API
 
 \`\`\`typescript
 interface Client {
@@ -7308,14 +7410,14 @@ title: API Documentation
 description: Generated API docs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/non-existent" />
 `,
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API
+        content: `## Client API
 
 \`\`\`typescript
 interface Client {
@@ -7388,7 +7490,7 @@ description: Reference to API docs
       },
       {
         path: './typedoc/api/client-with-sections.mdx',
-        content: `# Client API
+        content: `## Client API
 
 ## Client Methods
 
@@ -7439,7 +7541,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API`,
+        content: `## Client API`,
       },
     ])
 
@@ -7557,7 +7659,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API`,
+        content: `## Client API`,
       },
       {
         path: './docs/api-doc.mdx',
@@ -7566,7 +7668,7 @@ title: API Documentation
 description: Generated API docs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/client" />
 `,
@@ -7596,7 +7698,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API`,
+        content: `## Client API`,
       },
       {
         path: './docs/api-doc.mdx',
@@ -7606,7 +7708,7 @@ description: Generated API docs
 sdk: react, nextjs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/client" />
 `,

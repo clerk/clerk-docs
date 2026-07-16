@@ -181,6 +181,171 @@ export function isStaleRecord(record: { indexed_at?: number }, runStart: number)
   return record.indexed_at === undefined || record.indexed_at < runStart - STALE_RECORD_GRACE_MS
 }
 
+// Branches whose records are LIVE in each shared index — everything else is orphaned accumulation
+// (DOCS-11871). Hardcoded on purpose: the set changes roughly once per Core version, and a reviewed
+// PR is the right (auditable) way to change what the sweep may delete — an env var typo must never
+// be able to widen it. Each entry names its consumer:
+//   prod_docs `main`            — clerk.com/docs; the client filters facetFilters ['branch:main']
+//                                 (clerk/clerk src/app/docs/Search.tsx via DOCS_PRODUCTION_BRANCH).
+//   prod_docs `core-1`/`core-2` — the archived Core docs (clerk-frozen-core-{1,2}.clerkstage.dev,
+//                                 branch domains on the clerk Vercel project) query prod_docs with
+//                                 branch:core-1 / branch:core-2. Frozen legacy sets; no writer
+//                                 refreshes them; they must never be swept.
+//   dev_docs `main`             — local dev + preview deploys read dev_docs filtering branch:main.
+// core-3 is deliberately absent everywhere: merged into main, /docs/core-3 308-redirects to /docs,
+// no deployment queries it.
+export const INDEX_LIVE_BRANCHES: Record<string, readonly string[]> = {
+  prod_docs: ['main', 'core-1', 'core-2'],
+  dev_docs: ['main'],
+}
+
+/**
+ * The effective allowlist for the orphan sweep: the index's live branches plus the current run's
+ * own branch (belt-and-suspenders — its records also carry a fresh indexed_at, but the sweep must
+ * never depend on a single guard). Returns null for an index with no INDEX_LIVE_BRANCHES entry
+ * (personal/throwaway indexes): no allowlist means the sweep skips entirely rather than guessing.
+ */
+export function resolveSweepAllowlist(indexName: string, gitBranch: string): Set<string> | null {
+  const liveBranches = INDEX_LIVE_BRANCHES[indexName]
+  if (liveBranches === undefined) return null
+  return new Set([...liveBranches, gitBranch])
+}
+
+/**
+ * Negated facet filters selecting every record whose `branch` is NOT allowlisted. Array elements
+ * are ANDed by Algolia, so ['branch:-main', 'branch:-core-1'] = NOT main AND NOT core-1. Records
+ * with no `branch` attribute match every negation and are sweep candidates — correct, since every
+ * query client filters on branch:<value>, which such records can never match.
+ */
+export function buildSweepFilters(allowlist: Set<string>): string[] {
+  return [...allowlist].map((branch) => `branch:-${branch}`)
+}
+
+// Hard ceiling on how many records a single orphan sweep may delete. Sized between the largest
+// legitimate orphan event (a full retired branch set — core-2 is ~34k) and index-wipe scale
+// (branch:main alone is ~64k): a sweep that wants more than this is a bug or a tagging-scheme
+// change, and it aborts without deleting anything. The env var can LOWER this, never raise it —
+// a set above the ceiling needs a supervised cleanup (DOCS-11872), and no env typo may widen the
+// blast radius.
+export const DEFAULT_ORPHAN_SWEEP_MAX = 50_000
+
+/** off = sweep code never runs (default) · dry = browse + log candidates, delete nothing · on = delete. */
+export function parseOrphanSweepMode(value: string | undefined): 'off' | 'dry' | 'on' {
+  return z.enum(['off', 'dry', 'on']).catch('off').parse(value)
+}
+
+export function parseOrphanSweepMax(value: string | undefined): number {
+  const parsed = z.coerce.number().int().positive().catch(DEFAULT_ORPHAN_SWEEP_MAX).parse(value)
+  return Math.min(parsed, DEFAULT_ORPHAN_SWEEP_MAX)
+}
+
+/**
+ * Preview builds never delete: an `on` sweep during any DEBUG_SEARCH_BRANCH preview run would
+ * sweep colleagues' >30-min-old dev_docs test branches, since dev_docs's allowlist only covers
+ * main plus the run's own branch. Downgrade to dry — visibility without deletion. Supervised
+ * dev_docs cleanups run locally instead, where VERCEL_ENV is unset.
+ */
+export function effectiveSweepMode(
+  requested: 'off' | 'dry' | 'on',
+  vercelEnv: string | undefined,
+): 'off' | 'dry' | 'on' {
+  return vercelEnv === 'preview' && requested === 'on' ? 'dry' : requested
+}
+
+export type SweepHit = { objectID: string; indexed_at?: number; branch?: string }
+
+/**
+ * Splits the orphan sweep's browse results into deletions and spared records. Hits arrive already
+ * filtered to non-allowlisted branches (buildSweepFilters); this applies the same isStaleRecord
+ * grace as the own-branch cleanup — a fresh push under an unexpected branch value is a concurrent
+ * writer, not an orphan — and builds a per-branch histogram for the build-log audit trail.
+ */
+export function partitionOrphans(
+  hits: SweepHit[],
+  runStart: number,
+): { toDelete: string[]; sparedFresh: number; byBranch: Record<string, number> } {
+  const toDelete: string[] = []
+  let sparedFresh = 0
+  const byBranch: Record<string, number> = {}
+
+  for (const hit of hits) {
+    if (isStaleRecord(hit, runStart)) {
+      toDelete.push(hit.objectID)
+      const branch = hit.branch ?? '<no branch>'
+      byBranch[branch] = (byBranch[branch] ?? 0) + 1
+    } else {
+      sparedFresh++
+    }
+  }
+
+  return { toDelete, sparedFresh, byBranch }
+}
+
+/**
+ * Orphan-branch sweep (DOCS-11871). The own-branch cleanup in main() only ever sees this run's
+ * branch, so records under any OTHER branch value accumulate forever (e.g. 33k dead core-3 records
+ * found 2026-06). This sweeps records whose branch is not in the index's live set, reusing the
+ * same isStaleRecord grace window — a concurrent writer's fresh push under an unexpected branch is
+ * spared. NOTE: for known-live archive branches (core-1/core-2) the allowlist is the ONLY guard —
+ * their legacy records predate indexed_at — which is why INDEX_LIVE_BRANCHES is hardcoded and
+ * PR-reviewed. Algolia access is injected (browse/deleteObjects) so every decision path is
+ * unit-tested; the only untested code is the two thin wrappers at the call site.
+ */
+export async function runOrphanSweep(options: {
+  indexName: string
+  gitBranch: string
+  runStart: number
+  mode: 'dry' | 'on'
+  cap: number
+  browse: (facetFilters: string[]) => Promise<SweepHit[]>
+  deleteObjects: (objectIDs: string[]) => Promise<number>
+}): Promise<{
+  outcome: 'skipped' | 'clean' | 'aborted' | 'dry' | 'swept'
+  candidates: string[]
+  sparedFresh: number
+  byBranch: Record<string, number>
+}> {
+  const { indexName, gitBranch, runStart, mode, cap, browse, deleteObjects } = options
+
+  const allowlist = resolveSweepAllowlist(indexName, gitBranch)
+  if (allowlist === null) {
+    console.log(`✓ Skipping orphan sweep — "${indexName}" has no INDEX_LIVE_BRANCHES entry (personal/throwaway index?)`)
+    return { outcome: 'skipped', candidates: [], sparedFresh: 0, byBranch: {} }
+  }
+
+  const hits = await browse(buildSweepFilters(allowlist))
+  const { toDelete, sparedFresh, byBranch } = partitionOrphans(hits, runStart)
+
+  // The histogram is the audit trail: every non-off run records in the build log exactly which
+  // branches would be (or were) deleted, and how many records each held.
+  console.log(`Orphan sweep candidates: ${toDelete.length} ${JSON.stringify(byBranch)}`)
+  if (sparedFresh > 0) {
+    console.log(`⚠︎ Spared ${sparedFresh} recently indexed records under non-live branches — a concurrent writer?`)
+  }
+
+  const result = { candidates: toDelete, sparedFresh, byBranch }
+
+  if (toDelete.length === 0) {
+    console.log('✓ No orphaned records found')
+    return { outcome: 'clean', ...result }
+  }
+  if (toDelete.length > cap) {
+    console.warn(
+      `⚠︎ ABORTING orphan sweep: ${toDelete.length} candidates exceed the ${cap} cap. ` +
+        `Nothing deleted. A set this large needs a supervised cleanup (see DOCS-11872), not automation.`,
+    )
+    return { outcome: 'aborted', ...result }
+  }
+  if (mode === 'dry') {
+    console.log(`⚠︎ DRY: would delete ${toDelete.length} orphaned records (no changes made)`)
+    return { outcome: 'dry', ...result }
+  }
+
+  const sweptRecords = await deleteObjects(toDelete)
+  console.log(`✓ Swept ${sweptRecords} orphaned records`)
+  return { outcome: 'swept', ...result }
+}
+
 /**
  * Strips backticks from a string (used for cleaning titles in search results)
  */
@@ -1110,6 +1275,52 @@ async function main() {
     const deletedRecords = deletedRecordsBatches.reduce((acc, batch) => acc + batch.objectIDs.length, 0)
 
     console.log(`✓ Deleted ${deletedRecords} stale records`)
+  }
+
+  // Resolved here, not at module top level: parseOrphanSweepMax closes over the mid-file
+  // DEFAULT_ORPHAN_SWEEP_MAX const, which is in its temporal dead zone during module init.
+  const requestedSweepMode = parseOrphanSweepMode(process.env.ALGOLIA_ORPHAN_SWEEP)
+  const sweepMode = effectiveSweepMode(requestedSweepMode, VERCEL_ENV)
+
+  if (sweepMode !== requestedSweepMode) {
+    console.warn(
+      `⚠︎ Downgrading orphan sweep to "dry" on a Preview build — "on" here could delete colleagues' ` +
+        `DEBUG_SEARCH_BRANCH test records in dev_docs. Run supervised cleanups locally instead.`,
+    )
+  }
+
+  if (sweepMode !== 'off') {
+    console.log(`\nOrphan-branch sweep (mode: ${sweepMode})...`)
+    await runOrphanSweep({
+      indexName: ALGOLIA_INDEX_NAME,
+      gitBranch,
+      runStart,
+      mode: sweepMode,
+      cap: parseOrphanSweepMax(process.env.ALGOLIA_ORPHAN_SWEEP_MAX),
+      browse: async (facetFilters) => {
+        const hits: SweepHit[] = []
+        await algolia.browseObjects({
+          indexName: ALGOLIA_INDEX_NAME,
+          browseParams: {
+            facetFilters,
+            attributesToRetrieve: ['objectID', 'indexed_at', 'branch'],
+          },
+          aggregator: (response) => {
+            hits.push(...(response.hits as SweepHit[]))
+          },
+        })
+        return hits
+      },
+      deleteObjects: async (objectIDs) => {
+        const batches = await algolia.chunkedBatch({
+          indexName: ALGOLIA_INDEX_NAME,
+          action: 'deleteObject',
+          waitForTasks: true,
+          objects: objectIDs.map((objectID) => ({ objectID })),
+        })
+        return batches.reduce((acc, batch) => acc + batch.objectIDs.length, 0)
+      },
+    })
   }
 
   console.log('\n✓ Update complete!')

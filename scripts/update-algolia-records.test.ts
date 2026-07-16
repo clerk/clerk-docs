@@ -1,12 +1,21 @@
 import { describe, expect, test } from 'vitest'
 import {
+  buildSweepFilters,
   buildSynonyms,
   cleanSynonym,
   CURATED_SYNONYMS,
+  DEFAULT_ORPHAN_SWEEP_MAX,
+  effectiveSweepMode,
   extractTooltipSynonym,
+  INDEX_LIVE_BRANCHES,
   isAcronym,
   isStaleRecord,
   ONE_WAY_SYNONYMS,
+  parseOrphanSweepMax,
+  parseOrphanSweepMode,
+  partitionOrphans,
+  resolveSweepAllowlist,
+  runOrphanSweep,
   STALE_RECORD_GRACE_MS,
   type TooltipFile,
 } from './update-algolia-records'
@@ -182,5 +191,238 @@ describe('isStaleRecord', () => {
   test('records predating the indexed_at field (no timestamp) are stale', () => {
     expect(isStaleRecord({}, runStart)).toBe(true)
     expect(isStaleRecord({ indexed_at: undefined }, runStart)).toBe(true)
+  })
+})
+
+describe('resolveSweepAllowlist', () => {
+  test('prod_docs allows main plus the live archive branches', () => {
+    expect(resolveSweepAllowlist('prod_docs', 'main')).toEqual(new Set(['main', 'core-1', 'core-2']))
+  })
+
+  test('the current run branch is always allowlisted, even when not in the live set', () => {
+    expect(resolveSweepAllowlist('dev_docs', 'nick/some-test-branch')).toEqual(
+      new Set(['main', 'nick/some-test-branch']),
+    )
+  })
+
+  test('an unknown index has no allowlist — the sweep must skip, never guess', () => {
+    expect(resolveSweepAllowlist('manovotny_docs', 'main')).toBeNull()
+    expect(resolveSweepAllowlist('some_throwaway', 'main')).toBeNull()
+  })
+
+  test('core-3 is not allowlisted anywhere', () => {
+    for (const index of Object.keys(INDEX_LIVE_BRANCHES)) {
+      expect(resolveSweepAllowlist(index, 'main')?.has('core-3')).toBe(false)
+    }
+  })
+})
+
+describe('parseOrphanSweepMode', () => {
+  test('unset defaults to off — the sweep ships dark', () => {
+    expect(parseOrphanSweepMode(undefined)).toBe('off')
+  })
+
+  test('garbage defaults to off, never to a destructive mode', () => {
+    expect(parseOrphanSweepMode('yes')).toBe('off')
+    expect(parseOrphanSweepMode('ON ')).toBe('off')
+    expect(parseOrphanSweepMode('')).toBe('off')
+  })
+
+  test('recognizes the three modes exactly', () => {
+    expect(parseOrphanSweepMode('off')).toBe('off')
+    expect(parseOrphanSweepMode('dry')).toBe('dry')
+    expect(parseOrphanSweepMode('on')).toBe('on')
+  })
+})
+
+describe('parseOrphanSweepMax', () => {
+  test('unset or invalid falls back to the default cap', () => {
+    expect(parseOrphanSweepMax(undefined)).toBe(DEFAULT_ORPHAN_SWEEP_MAX)
+    expect(parseOrphanSweepMax('not-a-number')).toBe(DEFAULT_ORPHAN_SWEEP_MAX)
+    expect(parseOrphanSweepMax('-5')).toBe(DEFAULT_ORPHAN_SWEEP_MAX)
+    expect(parseOrphanSweepMax('0')).toBe(DEFAULT_ORPHAN_SWEEP_MAX)
+  })
+
+  test('a positive integer can lower the cap', () => {
+    expect(parseOrphanSweepMax('100')).toBe(100)
+  })
+
+  test('the env var can never RAISE the cap above the hardcoded ceiling', () => {
+    expect(parseOrphanSweepMax('999999')).toBe(DEFAULT_ORPHAN_SWEEP_MAX)
+  })
+})
+
+describe('effectiveSweepMode', () => {
+  test('preview builds downgrade on to dry — never delete colleagues test branches', () => {
+    expect(effectiveSweepMode('on', 'preview')).toBe('dry')
+  })
+
+  test('preview builds pass dry and off through unchanged', () => {
+    expect(effectiveSweepMode('dry', 'preview')).toBe('dry')
+    expect(effectiveSweepMode('off', 'preview')).toBe('off')
+  })
+
+  test('production and local runs keep the requested mode', () => {
+    expect(effectiveSweepMode('on', 'production')).toBe('on')
+    expect(effectiveSweepMode('on', undefined)).toBe('on')
+    expect(effectiveSweepMode('dry', 'production')).toBe('dry')
+  })
+})
+
+describe('partitionOrphans', () => {
+  const runStart = 1_800_000_000_000
+  const old = runStart - STALE_RECORD_GRACE_MS - 1
+
+  test('legacy records with no indexed_at are candidates (the pre-#2893 orphans)', () => {
+    const result = partitionOrphans([{ objectID: 'a', branch: 'core-3' }], runStart)
+    expect(result.toDelete).toEqual(['a'])
+    expect(result.sparedFresh).toBe(0)
+    expect(result.byBranch).toEqual({ 'core-3': 1 })
+  })
+
+  test('fresh records inside the grace window are spared — a concurrent push is never deleted', () => {
+    const result = partitionOrphans([{ objectID: 'b', branch: 'pr-123', indexed_at: runStart - 1 }], runStart)
+    expect(result.toDelete).toEqual([])
+    expect(result.sparedFresh).toBe(1)
+    expect(result.byBranch).toEqual({})
+  })
+
+  test('old records past the grace window are candidates', () => {
+    const result = partitionOrphans([{ objectID: 'c', branch: 'pr-123', indexed_at: old }], runStart)
+    expect(result.toDelete).toEqual(['c'])
+  })
+
+  test('histogram aggregates per branch, counting only deletions', () => {
+    const result = partitionOrphans(
+      [
+        { objectID: 'a', branch: 'core-3' },
+        { objectID: 'b', branch: 'core-3', indexed_at: old },
+        { objectID: 'c', branch: 'nick/test', indexed_at: old },
+        { objectID: 'd', branch: 'nick/test', indexed_at: runStart - 1 },
+      ],
+      runStart,
+    )
+    expect(result.toDelete).toEqual(['a', 'b', 'c'])
+    expect(result.sparedFresh).toBe(1)
+    expect(result.byBranch).toEqual({ 'core-3': 2, 'nick/test': 1 })
+  })
+
+  test('records with no branch attribute are candidates, bucketed as <no branch>', () => {
+    const result = partitionOrphans([{ objectID: 'e' }], runStart)
+    expect(result.toDelete).toEqual(['e'])
+    expect(result.byBranch).toEqual({ '<no branch>': 1 })
+  })
+})
+
+describe('runOrphanSweep', () => {
+  const runStart = 1_800_000_000_000
+  const base = {
+    gitBranch: 'main',
+    runStart,
+    cap: 50,
+    browse: async () => [],
+    deleteObjects: async () => 0,
+  }
+
+  test('an index with no allowlist entry is skipped — no browse, no delete', async () => {
+    let browsed = false
+    const result = await runOrphanSweep({
+      ...base,
+      indexName: 'someones_throwaway',
+      mode: 'on',
+      browse: async () => {
+        browsed = true
+        return []
+      },
+    })
+    expect(result.outcome).toBe('skipped')
+    expect(browsed).toBe(false)
+  })
+
+  test('browses with filters derived from the resolved allowlist', async () => {
+    let seen: string[] = []
+    await runOrphanSweep({
+      ...base,
+      indexName: 'prod_docs',
+      mode: 'dry',
+      browse: async (filters) => {
+        seen = filters
+        return []
+      },
+    })
+    expect(new Set(seen)).toEqual(new Set(['branch:-main', 'branch:-core-1', 'branch:-core-2']))
+  })
+
+  test('a clean index reports clean', async () => {
+    const result = await runOrphanSweep({ ...base, indexName: 'prod_docs', mode: 'on' })
+    expect(result.outcome).toBe('clean')
+  })
+
+  test('dry mode never deletes', async () => {
+    let deleted = false
+    const result = await runOrphanSweep({
+      ...base,
+      indexName: 'prod_docs',
+      mode: 'dry',
+      browse: async () => [{ objectID: 'a', branch: 'core-3' }],
+      deleteObjects: async () => {
+        deleted = true
+        return 1
+      },
+    })
+    expect(result.outcome).toBe('dry')
+    expect(result.candidates).toEqual(['a'])
+    expect(deleted).toBe(false)
+  })
+
+  test('aborts above the cap without deleting — even in on mode', async () => {
+    let deleted = false
+    const hits = Array.from({ length: 51 }, (_, i) => ({ objectID: `x${i}`, branch: 'core-3' }))
+    const result = await runOrphanSweep({
+      ...base,
+      indexName: 'prod_docs',
+      mode: 'on',
+      browse: async () => hits,
+      deleteObjects: async () => {
+        deleted = true
+        return 0
+      },
+    })
+    expect(result.outcome).toBe('aborted')
+    expect(deleted).toBe(false)
+  })
+
+  test('on mode deletes exactly the stale candidates and spares fresh ones', async () => {
+    let received: string[] = []
+    const result = await runOrphanSweep({
+      ...base,
+      indexName: 'prod_docs',
+      mode: 'on',
+      browse: async () => [
+        { objectID: 'old', branch: 'core-3' },
+        { objectID: 'fresh', branch: 'core-3', indexed_at: runStart - 1 },
+      ],
+      deleteObjects: async (ids) => {
+        received = ids
+        return ids.length
+      },
+    })
+    expect(result.outcome).toBe('swept')
+    expect(received).toEqual(['old'])
+    expect(result.sparedFresh).toBe(1)
+  })
+})
+
+describe('buildSweepFilters', () => {
+  test('produces one negated branch facet filter per allowlisted branch', () => {
+    const filters = buildSweepFilters(new Set(['main', 'core-1', 'core-2']))
+    expect(filters).toHaveLength(3)
+    expect(filters).toContain('branch:-main')
+    expect(filters).toContain('branch:-core-1')
+    expect(filters).toContain('branch:-core-2')
+  })
+
+  test('derives from the allowlist — a duplicate run branch is not repeated (Set dedupes)', () => {
+    expect(buildSweepFilters(new Set(['main']))).toEqual(['branch:-main'])
   })
 })

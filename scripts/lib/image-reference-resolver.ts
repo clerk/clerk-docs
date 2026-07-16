@@ -5,6 +5,12 @@ export const previewAssetBasePath = '/docs/images/ui-components'
 export const previewAssetExtensions = ['svg', 'png', 'jpg', 'jpeg', 'webp', 'gif'] as const
 
 const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---/
+// Trailing punctuation (commas/semicolons/colons) accidentally captured at the end of an asset path.
+const trailingPunctuationRegex = /[,;:]+$/
+// Splits a URL off its query string or hash fragment.
+const queryOrHashRegex = /[?#]/
+// A valid preview slug: lowercase alphanumerics and hyphens only.
+const slugRegex = /^[a-z0-9-]+$/
 
 function extractFrontmatter(content: string): Record<string, unknown> | undefined {
   const frontmatterMatch = content.match(frontmatterRegex)
@@ -23,16 +29,16 @@ function extractFrontmatter(content: string): Record<string, unknown> | undefine
 }
 
 function normalizeAssetPath(path: string): string {
-  return path.replace(/[,;:]+$/, '')
+  return path.replace(trailingPunctuationRegex, '')
 }
 
 function getPreviewSlug(previewSrc: string): string | undefined {
-  const normalizedSrc = previewSrc.split(/[?#]/)[0]
+  const normalizedSrc = previewSrc.split(queryOrHashRegex)[0]
   if (!normalizedSrc.startsWith('/')) return undefined
 
   const slug = normalizedSrc.slice(1)
   if (!slug) return undefined
-  if (!/^[a-z0-9-]+$/.test(slug)) return undefined
+  if (!slugRegex.test(slug)) return undefined
 
   return slug
 }

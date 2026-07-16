@@ -16,6 +16,8 @@ import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { existsSync } from 'node:fs'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+
 export const checkTypedoc =
   (
     config: BuildConfig,
@@ -38,7 +40,7 @@ export const checkTypedoc =
         true,
         'docs',
         filePath,
-        z.string(),
+        stringSchema,
       )
 
       if (typedocSrc === undefined) return node

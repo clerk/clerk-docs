@@ -1,16 +1,29 @@
 ### 🔎 Previews:
 
+<!-- Please use these bullet points to add the Vercel preview link for pages that you've updated -->
+
 -
 
-### What does this solve?
+### What does this solve? What changed?
 
-- <!--- Describe your changes in detail. Why does this change need to happen? Include any links to Slack discussions, Linear comments, etc. -->
+<!--
+PLEASE FILL OUT WITH AS MUCH CONTEXT AS POSSIBLE
+Why does this change need to happen?
+How does this PR solve that problem you mentioned above?
+Describe your changes. Link relevant source code PR (from clerk/javascript, clerk/clerk, etc.)
+-->
 
-### What changed?
+-
 
-- <!--- How does this PR solve the problem? -->
+### Deadline
 
-### Checklist
+<!--
+DO NOT LEAVE EMPTY.
+When do you need this PR reviewed/shipped by? If no deadline, write something like "No rush".
+-->
 
-- [ ] I have clicked on "Files changed" and performed a thorough self-review
-- [ ] All existing checks pass
+-
+
+### Other resources
+
+<!-- Link relevant Linear tickets, Slack discussions, etc. -->

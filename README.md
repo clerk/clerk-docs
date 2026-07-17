@@ -18,21 +18,21 @@
   <a href="https://clerk.com/discord">
     <img alt="Discord" src="https://img.shields.io/discord/856971667393609759?color=7389D8&label&logo=discord&logoColor=ffffff" />
   </a>
-  <a href="https://twitter.com/clerkdev">
-    <img alt="Twitter" src="https://img.shields.io/twitter/url.svg?label=%40clerkdev&style=social&url=https%3A%2F%2Ftwitter.com%2Fclerkdev" />
+  <a href="https://x.com/clerk">
+    <img alt="Follow on X" src="https://img.shields.io/twitter/url.svg?label=%40clerk&style=social&url=https%3A%2F%2Fx.com%2Fclerk" />
   </a> 
   <br />
   <br />
-  <img alt="Clerk Hero Image" src="https://github.com/clerk/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
+  <img alt="Clerk Hero Image" src="/.github/media/readme-hero.svg">
 </div>
 
 ## Community
 
 Clerk is more than authentication, and we want to convey every feature of Clerk as best as we can to make authentication and user management simpler for everyone. Explaining these concepts can sometimes be tricky, but with the help of a community, we can collaborate, share ideas, find the right words, and achieve greater clarity.
 
-We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./CONTRIBUTING.md).
+We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./contributing/CONTRIBUTING.md).
 
-> This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](https://clerk.com/support).
+> This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](https://clerk.com/contact/support).
 
 ## Found an issue?
 
@@ -47,6 +47,6 @@ Feel free to create an [issue](https://github.com/clerk/clerk-docs/issues) with 
 
 ## Connect with us
 
-You can discuss ideas, ask questions, and meet others from the community in our [Discord](https://clerk.com/discord).
+You can discuss ideas and meet others from the community in [Discord](https://clerk.com/discord).
 
-If you prefer, you can also find support through our [Twitter](https://twitter.com/ClerkDev), or you can [email](mailto:support@clerk.dev) us!
+You can also follow [@clerk on X](https://x.com/clerk) for updates, or [email the support team](mailto:support@clerk.com) directly.

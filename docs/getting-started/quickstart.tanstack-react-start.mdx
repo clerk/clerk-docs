@@ -1,0 +1,206 @@
+---
+title: TanStack React Start Quickstart
+description: Learn how to use Clerk to quickly and easily add secure authentication and user management to your TanStack React Start application.
+sdk: tanstack-react-start
+---
+
+<TutorialHero
+  exampleRepo={[
+    {
+      title: "TanStack React Start Quickstart Repo",
+      link: "https://github.com/clerk/clerk-tanstack-react-start-quickstart"
+
+    }
+  ]}
+/>
+
+<Steps>
+  ## Create a new TanStack React Start app
+
+  If you don't already have a TanStack React Start app, run the following commands to [create a new one](https://tanstack.com/start/latest/docs/framework/react/getting-started).
+
+  ```npm
+  npm create @tanstack/start@latest clerk-tanstack-react-start
+  cd clerk-tanstack-react-start
+  ```
+
+  ## Install `@clerk/tanstack-react-start`
+
+  The [Clerk TanStack React Start SDK](/docs/reference/tanstack-react-start/overview) gives you access to prebuilt components, hooks, and helpers to make user authentication easier.
+
+  Run the following command to install the SDK:
+
+  ```npm {{ filename: 'terminal' }}
+  npm install @clerk/tanstack-react-start
+  ```
+
+  <SignedIn>
+    ## Set your Clerk API keys
+
+    Add the following keys to your `.env` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
+
+    ```env {{ filename: '.env' }}
+    VITE_CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+    ```
+  </SignedIn>
+
+  ## Add `clerkMiddleware()` to your app
+
+  [`clerkMiddleware()`](/docs/reference/tanstack-react-start/clerk-middleware) grants you access to user authentication state throughout your app. It also allows you to protect specific routes from unauthenticated users. To add `clerkMiddleware()` to your app, follow these steps:
+
+  1. Create a `src/start.ts` file with the following code:
+
+     ```tsx {{ filename: 'src/start.ts' }}
+     import { clerkMiddleware } from '@clerk/tanstack-react-start/server'
+     import { createStart } from '@tanstack/react-start'
+
+     export const startInstance = createStart(() => {
+       return {
+         requestMiddleware: [clerkMiddleware()],
+       }
+     })
+     ```
+
+  1. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/reference/tanstack-react-start/clerk-middleware) to learn how to require authentication for specific routes.
+
+  ## Add `<ClerkProvider>` to your app
+
+  <Include src="_partials/clerk-provider/explanation" />
+
+  Add the `<ClerkProvider>` component to your app's root route, as shown in the following example:
+
+  ```tsx {{ filename: 'src/routes/__root.tsx', ins: [1, 39], fold: [[2, 31]] }}
+  import { ClerkProvider } from '@clerk/tanstack-react-start'
+  import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+  import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+  import appCss from '../styles.css?url'
+
+  export const Route = createRootRoute({
+    head: () => ({
+      meta: [
+        {
+          charSet: 'utf-8',
+        },
+        {
+          name: 'viewport',
+          content: 'width=device-width, initial-scale=1',
+        },
+        {
+          title: 'TanStack Start Starter',
+        },
+      ],
+      links: [
+        {
+          rel: 'stylesheet',
+          href: appCss,
+        },
+      ],
+    }),
+
+    shellComponent: RootDocument,
+  })
+
+  function RootDocument({ children }: { children: React.ReactNode }) {
+    return (
+      <html lang="en">
+        <head>
+          <HeadContent />
+        </head>
+        <body>
+          <ClerkProvider>{children}</ClerkProvider>
+          <TanStackRouterDevtools />
+          <Scripts />
+        </body>
+      </html>
+    )
+  }
+  ```
+
+  ## Protect your pages
+
+  ### Client-side
+
+  To protect your pages on the client-side, you can use Clerk's [prebuilt control components](/docs/reference/components/overview#control-components) that control the visibility of content based on the user's authentication state.
+
+  The following example uses the following components:
+
+  <Include src="_partials/quickstarts/create-header-components-step" />
+
+  ```tsx {{ filename: 'src/routes/index.tsx', mark: [1, [12, 18]] }}
+  import { UserButton, Show, SignInButton, SignUpButton } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/')({
+    component: Home,
+  })
+
+  function Home() {
+    return (
+      <div>
+        <h1>Index Route</h1>
+        <Show when="signed-in">
+          <UserButton />
+        </Show>
+        <Show when="signed-out">
+          <SignInButton />
+          <SignUpButton />
+        </Show>
+      </div>
+    )
+  }
+  ```
+
+  ### Server-side
+
+  To protect your routes, create a [server function](https://tanstack.com/start/latest/docs/framework/react/guide/server-functions) that checks the user's authentication state via the [`auth()`](/docs/reference/tanstack-react-start/auth) method. If the user is not authenticated, they are redirected to a sign-in page. If authenticated, the user's `userId` is passed to the route, allowing access to the `<Home />` component, which welcomes the user and displays their `userId`. The [`beforeLoad()`](https://tanstack.com/router/latest/docs/framework/react/api/router/RouteOptionsType#beforeload-method) method ensures authentication is checked before loading the page, and the [`loader()`](https://tanstack.com/router/latest/docs/framework/react/api/router/RouteOptionsType#loader-method) method returns the user data for use in the component.
+
+  > [!TIP]
+  > Ensure that your app has the [TanStack Start server handler](https://tanstack.com/start/latest/docs/framework/react/guide/server-routes#handling-server-route-requests) configured in order for your server routes to work.
+
+  ```tsx {{ filename: 'src/routes/index.tsx' }}
+  import { createFileRoute, redirect } from '@tanstack/react-router'
+  import { createServerFn } from '@tanstack/react-start'
+  import { auth } from '@clerk/tanstack-react-start/server'
+
+  const authStateFn = createServerFn().handler(async () => {
+    const { isAuthenticated, userId } = await auth()
+
+    if (!isAuthenticated) {
+      // This will error because you're redirecting to a path that doesn't exist yet
+      // You can create a sign-in route to handle this
+      // See https://clerk.com/docs/tanstack-react-start/guides/development/custom-sign-in-or-up-page
+      throw redirect({
+        to: '/sign-in',
+      })
+    }
+
+    return { userId }
+  })
+
+  export const Route = createFileRoute('/')({
+    component: Home,
+    beforeLoad: async () => await authStateFn(),
+    loader: async ({ context }) => {
+      return { userId: context.userId }
+    },
+  })
+
+  function Home() {
+    const state = Route.useLoaderData()
+
+    return <h1>Welcome! Your ID is {state.userId}!</h1>
+  }
+  ```
+
+  <Include src="_partials/quickstarts/run-project-step" />
+
+  <Include src="_partials/quickstarts/create-first-user-step" />
+
+  <Include src="_partials/quickstarts/keyless-callout" />
+</Steps>
+
+## Next steps
+
+<Include src="_partials/quickstarts/next-steps/frontend-sdks" />

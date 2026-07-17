@@ -1,0 +1,299 @@
+---
+title: Build a custom multi-session flow
+description: Learn how to use the Clerk API to add multi-session handling to your application.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+A multi-session application is an application that allows multiple accounts to be signed in from the same browser at the same time. The user can switch from one account to another seamlessly. Each account is independent from the rest and has access to different resources.
+
+This guide provides you with the necessary information to build a custom multi-session flow using the Clerk API.
+
+To implement the multi-session feature to your application, you need to handle the following scenarios:
+
+- [Switching between different accounts](#switch-between-sessions)
+- [Adding new accounts](#add-a-new-session)
+- [Signing out from one account, while remaining signed in to the rest](#sign-out-active-session)
+- [Signing out from all accounts](#sign-out-all-sessions)
+
+## Enable multi-session in your application
+
+To enable multi-session in your application, you need to configure it in the Clerk Dashboard.
+
+1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+1. Toggle on **Multi-session handling**.
+1. Select **Save changes**.
+
+## Get the session and user
+
+<If notSdk={["js-frontend", "ios", "android"]}>
+  Use the [`useClerk()`](/docs/reference/hooks/use-clerk) hook to access the current session and user.
+
+  ```jsx
+  // Import the useClerk() hook from whatever SDK you're using
+  import { useClerk } from '@clerk/react'
+
+  // Get the session and user
+  const { session, user } = useClerk()
+  ```
+</If>
+
+<If sdk="js-frontend">
+  Use the [`Clerk`](/docs/reference/objects/clerk) object to access the current session and user.
+
+  ```js
+  // Get the session
+  const currentSession = window.Clerk.session
+
+  // Get the user
+  const currentUser = window.Clerk.user
+  ```
+</If>
+
+<If sdk={["ios", "android"]}>
+  Use the [`Clerk`](/docs/reference/native-mobile/clerk) object to access the current session and user.
+
+  <If sdk="ios">
+    ```swift
+    // Get the current session
+    var currentSession: Session? { clerk.session }
+
+    // Get the current user
+    var currentUser: User? { clerk.user }
+    ```
+  </If>
+
+  <If sdk="android">
+    ```kotlin
+    // Get the current session
+    val currentSession = Clerk.session
+
+    // Get the current user
+    val currentUser = Clerk.user
+    ```
+  </If>
+</If>
+
+## Switch between sessions
+
+<If notSdk={["js-frontend", "ios", "android"]}>
+  Use the [`useClerk()`](/docs/reference/hooks/use-clerk) hook to access the [`Client`](/docs/reference/objects/client) object and the [`setActive()`](/docs/reference/objects/clerk#set-active) method. You can use the `Client` object to access available sessions, and then use `setActive()` to set a specific session as active.
+
+  ```jsx
+  // Import the useClerk() hook from whatever SDK you're using
+  import { useClerk } from '@clerk/react'
+
+  const { client, setActive } = useClerk()
+
+  // You can get all the available sessions through the client
+  const availableSessions = client.sessions
+  const currentSession = availableSessions[0].id
+
+  // Use setActive() to set the session as active
+  await setActive({
+    session: currentSession.id,
+    navigate: async ({ session, decorateUrl }) => {
+      if (session?.currentTask) {
+        //  Handle pending session tasks
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+        console.log(session?.currentTask)
+        return
+      }
+
+      const url = decorateUrl('/')
+      if (url.startsWith('http')) {
+        window.location.href = url
+      } else {
+        router.push(url)
+      }
+    },
+  })
+  ```
+</If>
+
+<If sdk="js-frontend">
+  Use the [`Clerk`](/docs/reference/objects/clerk) object to access the [`Client`](/docs/reference/objects/client) object and the [`setActive()`](/docs/reference/objects/clerk#set-active) method. You can use the `Client` object to access available sessions, and then use `setActive()` to set a specific session as active.
+
+  ```js
+  // You can get all the available sessions through the client
+  const availableSessions = window.Clerk.client.sessions
+
+  // Use setActive() to set the session as active
+  await window.Clerk.setActive({
+    session: availableSessions[0].id,
+    navigate: async ({ session, decorateUrl }) => {
+      if (session?.currentTask) {
+        //  Handle pending session tasks
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+        console.log(session?.currentTask)
+        return
+      }
+
+      const url = decorateUrl('/')
+      if (url.startsWith('http')) {
+        window.location.href = url
+      } else {
+        window.location.href = url
+      }
+    },
+  })
+  ```
+</If>
+
+<If sdk={["ios", "android"]}>
+  Use [`clerk.auth`](/docs/reference/native-mobile/auth#sessions) to access the `sessions` property and the [`setActive()`](/docs/reference/native-mobile/auth#set-current-session) method. You can use the `sessions` property to access available sessions, and then use `setActive()` to set a specific session as active.
+
+  <If sdk="ios">
+    ```swift
+    // You can get all the available sessions through the client.
+    var availableSessions: [Session] { clerk.auth.sessions }
+
+    // Use setActive() to set the session as active.
+    try await clerk.auth.setActive(sessionId: availableSessions[0].id)
+    ```
+  </If>
+
+  <If sdk="android">
+    ```kotlin
+    import com.clerk.api.Clerk
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+
+    val availableSessions = Clerk.client.sessions
+    val sessionId = availableSessions.firstOrNull()?.id ?: return
+
+    Clerk.auth
+      .setActive(sessionId = sessionId)
+      .onSuccess {
+        // Session switched
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+    ```
+  </If>
+</If>
+
+## Add a new session
+
+To add a new session, simply link to your existing sign-in flow. New sign-ins will automatically add to the list of available sessions on the client. To create a sign-in flow, see one of the following popular guides:
+
+- [Email and password](/docs/guides/development/custom-flows/authentication/email-password)
+- [Passwordless authentication](/docs/guides/development/custom-flows/authentication/email-sms-otp)
+- [Social sign-in (OAuth)](/docs/guides/configure/auth-strategies/social-connections/overview)
+
+## Sign out all sessions
+
+<If notSdk={["js-frontend", "ios", "android"]}>
+  Use the [`useClerk()`](/docs/reference/hooks/use-clerk) hook to access the [`signOut()`](/docs/reference/objects/clerk#sign-out) method and sign out of all sessions on the current client.
+
+  ```jsx
+  // Import the useClerk() hook from whatever SDK you're using
+  import { useClerk } from '@clerk/react'
+
+  const { signOut } = useClerk()
+
+  // Use signOut() to sign out all active sessions
+  await signOut()
+  ```
+</If>
+
+<If sdk="js-frontend">
+  Use [`signOut()`](/docs/reference/objects/clerk#sign-out) to deactivate all sessions on the current client.
+
+  ```js
+  // Use signOut() to sign out all active sessions
+  await window.Clerk.signOut()
+  ```
+</If>
+
+<If sdk={["ios", "android"]}>
+  Use `clerk.auth` to access the [`signOut()`](/docs/reference/native-mobile/auth#sign-out) method and sign out of all sessions on the current client.
+
+  <If sdk="ios">
+    ```swift
+    // Use signOut() to sign out all active sessions
+    try await clerk.auth.signOut()
+    ```
+  </If>
+
+  <If sdk="android">
+    ```kotlin
+    import com.clerk.api.Clerk
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+
+    // Use signOut() to sign out all active sessions
+    Clerk.auth
+      .signOut()
+      .onSuccess {
+        // Signed out
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+    ```
+  </If>
+</If>
+
+## Sign out active session
+
+<If notSdk={["js-frontend", "ios", "android"]}>
+  Use the [`useClerk()`](/docs/reference/hooks/use-clerk) hook to access the current session and the [`signOut()`](/docs/reference/objects/clerk#sign-out) method. Sign out of the current active session by passing the session ID.
+
+  ```jsx
+  import { useClerk } from '@clerk/react'
+
+  // Get the signOut() method and the active session
+  const { signOut, session } = useClerk()
+
+  // Use signOut() to sign out the active session
+  await signOut(session.id)
+  ```
+</If>
+
+<If sdk="js-frontend">
+  Use [`signOut()`](/docs/reference/objects/clerk#sign-out) to sign out of a specific session by passing the session ID.
+
+  ```js
+  // Get the current session
+  const currentSession = window.Clerk.session
+
+  // Use signOut() to sign out the active session
+  await window.Clerk.signOut(currentSession.id)
+  ```
+</If>
+
+<If sdk={["ios", "android"]}>
+  Use `clerk.auth` to access the [`signOut()`](/docs/reference/native-mobile/auth#sign-out) method and sign out of a specific session by passing the session ID.
+
+  <If sdk="ios">
+    ```swift
+    // Use signOut() to sign out a specific session
+    try await clerk.auth.signOut(sessionId: session.id)
+    ```
+  </If>
+
+  <If sdk="android">
+    ```kotlin
+    import com.clerk.api.Clerk
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+
+    val currentSessionId = Clerk.session?.id ?: return
+
+    // Use signOut() to sign out a specific session
+    Clerk.auth
+      .signOut(sessionId = currentSessionId)
+      .onSuccess {
+        // Signed out from the active session
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+    ```
+  </If>
+</If>

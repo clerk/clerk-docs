@@ -1,0 +1,290 @@
+---
+title: '`Session` object'
+description: The Session object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
+search:
+  rank: 1
+  keywords:
+     - getToken()
+     - SessionResource
+sdk: js-frontend, astro, chrome-extension, expo, nextjs, react, react-router, tanstack-react-start, nuxt, vue
+---
+
+The `Session` object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
+
+The `Session` object includes methods for recording session activity and ending the session client-side. For security reasons, sessions can also expire server-side.
+
+As soon as a [`User`](/docs/reference/objects/user) signs in, Clerk creates a `Session` for the current [`Client`](/docs/reference/objects/client). Clients can have more than one sessions at any point in time, but only one of those sessions will be **active**.
+
+In certain scenarios, a session might be replaced by another one. This is often the case with [multi-session applications](/docs/guides/secure/session-options#multi-session-applications).
+
+All sessions that are **expired**, **removed**, **replaced**, **ended** or **abandoned** are not considered valid.
+
+> [!NOTE]
+> For more information regarding the different session states, see the [guide on session management](/docs/guides/secure/session-options).
+
+## Example
+
+<If sdk="js-frontend">
+  The `Session` object is available on the [`Clerk`](/docs/reference/objects/clerk) object.
+
+  ```js {{ filename: 'src/main.js' }}
+  import { Clerk } from '@clerk/clerk-js'
+
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+  // Initialize Clerk with your Clerk Publishable Key
+  const clerk = new Clerk(publishableKey)
+
+  // Load Clerk
+  await clerk.load()
+
+  // Access the session object
+  const session = clerk.session
+  ```
+</If>
+
+<If notSdk={["js-frontend", "astro", "vue", "nuxt"]}>
+  <Include src="_partials/hooks/use-session" />
+</If>
+
+<If sdk="astro">
+  <Include src="_partials/astro/session-store" />
+</If>
+
+<If sdk={["vue", "nuxt"]}>
+  <Include src="_partials/vue-nuxt/use-session" />
+</If>
+
+## Properties
+
+<Typedoc src="shared/session-resource/properties" />
+
+## Methods
+
+{/* DOCS NOTE: Some of these parameters sections are manually written because as you will see, they are complex types that are difficult to generate with Typedoc. For example, many of these are union types where each of the union members share a property like `code`. So if we were to generate a single parameters table for all of the values, `code` would be duplicated for each of the union members, and the table wouldn't really make sense. */}
+
+<Typedoc src="shared/session-resource/methods/attempt-first-factor-verification" />
+
+#### `SessionVerifyAttemptFirstFactorParams`
+
+```ts
+type SessionVerifyAttemptFirstFactorParams =
+  | EmailCodeAttempt
+  | PhoneCodeAttempt
+  | PasswordAttempt
+  | PasskeyAttempt
+
+type EmailCodeAttempt = {
+  strategy: 'email_code'
+  code: string
+}
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type PasswordAttempt = {
+  strategy: 'password'
+  password: string
+}
+
+type PasskeyAttempt = {
+  strategy: 'passkey'
+  publicKeyCredential: PublicKeyCredentialWithAuthenticatorAssertionResponse
+}
+```
+
+<Typedoc src="shared/session-resource/methods/attempt-second-factor-verification" />
+
+#### `SessionVerifyAttemptSecondFactorParams`
+
+```ts
+type SessionVerifyAttemptSecondFactorParams = PhoneCodeAttempt | TOTPAttempt | BackupCodeAttempt
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type TOTPAttempt = {
+  strategy: 'totp'
+  code: string
+}
+
+type BackupCodeAttempt = {
+  strategy: 'backup_code'
+  code: string
+}
+```
+
+<Typedoc src="shared/session-resource/methods/check-authorization" />
+
+#### `CheckAuthorizationParams`
+
+```typescript
+type WithReverification<T> = T & {
+  /**
+   * The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use.** See https://clerk.com/docs/reference/backend/types/auth-object#reverification-config for more information.
+   */
+  reverification?: ReverificationConfig
+}
+
+type CheckAuthorizationParams = WithReverification<
+  | {
+      /**
+       * The [Role](https://clerk.com/docs/guides/organizations/control-access/roles-and-permissions) to check for.
+       */
+      role: OrganizationCustomRoleKey
+      /**
+       * The [Permission](https://clerk.com/docs/guides/organizations/control-access/roles-and-permissions) to check for.
+       */
+      permission?: never
+      /**
+       * The [Feature](https://clerk.com/docs/guides/secure/features) to check for.
+       */
+      feature?: never
+      /**
+       * The [Plan](https://clerk.com/docs/guides/billing/overview) to check for.
+       */
+      plan?: never
+    }
+  | {
+      role?: never
+      permission: OrganizationPermissionKey
+      feature?: never
+      plan?: never
+    }
+  | {
+      role?: never
+      permission?: never
+      feature: Autocomplete<`user:${string}` | `org:${string}`>
+      plan?: never
+    }
+  | {
+      role?: never
+      permission?: never
+      feature?: never
+      plan: Autocomplete<`user:${string}` | `org:${string}`>
+    }
+  | { role?: never; permission?: never; feature?: never; plan?: never }
+>
+```
+
+<Typedoc src="shared/session-resource/methods/clear-cache" />
+
+<Typedoc src="shared/session-resource/methods/end" />
+
+<Typedoc src="shared/session-resource/methods/get-token" />
+
+<Typedoc src="shared/session-resource/methods/prepare-first-factor-verification" />
+
+#### `SessionVerifyPrepareFirstFactorParams`
+
+```ts
+type SessionVerifyPrepareFirstFactorParams =
+  | EmailCodeConfig
+  | PhoneCodeConfig
+  | PassKeyConfig
+  | Omit<EnterpriseSSOConfig, 'actionCompleteRedirectUrl'>
+
+type EmailCodeConfig = {
+  /**
+   * The strategy type.
+   */
+  strategy: 'email_code'
+  /**
+   * The ID of the email address used for the email code factor.
+   */
+  emailAddressId: string
+  /**
+   * Indicates whether the email address is set as the primary email address, as multiple can be added to a user's profile.
+   */
+  primary?: boolean
+}
+
+type PhoneCodeConfig = {
+  /**
+   * The strategy type.
+   */
+  strategy: 'phone_code'
+  /**
+   * The ID of the phone number used for the phone code factor.
+   */
+  phoneNumberId: string
+  /**
+   * Indicates whether the phone number is set as the primary phone number, as multiple can be added to a user's profile.
+   */
+  primary?: boolean
+  /**
+   * Indicates whether the phone number is set as the default identifier.
+   */
+  default?: boolean
+  /**
+   * The channel used for the phone code factor.
+   */
+  channel?: 'sms' | 'whatsapp'
+}
+
+type PassKeyConfig = {
+  /**
+   * The strategy type.
+   */
+  strategy: 'passkey'
+}
+
+type EnterpriseSSOConfig = {
+  /**
+   * The strategy type.
+   */
+  strategy: 'enterprise_sso'
+  /**
+   * The ID of the enterprise connection.
+   * @experimental
+   */
+  enterpriseConnectionId?: string
+  /**
+   * The name of the enterprise connection.
+   * @experimental
+   */
+  enterpriseConnectionName?: string
+  /**
+   * The URL to redirect to after the OAuth flow is completed.
+   */
+  redirectUrl: string
+  /**
+   * The OIDC prompt parameter to use for the OAuth flow.
+   */
+  oidcPrompt?: string
+  /**
+   * The ID of the email address used for the enterprise SSO factor.
+   * @experimental
+   */
+  emailAddressId?: string
+}
+```
+
+<Typedoc src="shared/session-resource/methods/prepare-second-factor-verification" />
+
+#### `PhoneCodeSecondFactorConfig`
+
+```ts
+type PhoneCodeSecondFactorConfig = {
+  /**
+   * The strategy type.
+   */
+  strategy: 'phone_code'
+  /**
+   * The ID of the phone number used for the phone code second factor.
+   */
+  phoneNumberId?: string
+}
+```
+
+<Typedoc src="shared/session-resource/methods/remove" />
+
+<Typedoc src="shared/session-resource/methods/start-verification" />
+
+<Typedoc src="shared/session-resource/methods/touch" />
+
+<Typedoc src="shared/session-resource/methods/verify-with-passkey" />

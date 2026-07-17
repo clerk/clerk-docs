@@ -1,0 +1,147 @@
+---
+title: Expo Native Components (beta)
+description: Prebuilt native authentication and user management components for iOS and Android.
+sdk: expo
+---
+
+<Include src="_partials/expo/beta-callout" />
+
+The Clerk Expo SDK provides prebuilt native UI components rendered with **SwiftUI** on iOS and **Jetpack Compose** on Android. These components provide a fully native authentication experience for Expo apps.
+
+`<AuthView />` and `<UserProfileView />` render inline in your React Native view hierarchy, so you can place them in a modal, route, full-screen view, or any other layout that fits your app. `<UserButton />` renders the platform-native Clerk button and opens `<UserProfileView />` when tapped.
+
+## Available components
+
+| Component | Description |
+| - | - |
+| [`<AuthView />`](/docs/reference/expo/native-components/auth-view) | Full sign-in and sign-up authentication UI |
+| [`<UserButton />`](/docs/reference/expo/native-components/user-button) | Circular avatar button that opens the user profile |
+| [`<UserProfileView />`](/docs/reference/expo/native-components/user-profile-view) | Complete profile management interface |
+
+## Requirements
+
+Native components require:
+
+- Expo SDK 53 or later. See the [quickstart](/docs/expo/getting-started/quickstart) guide.
+
+- A [development build](https://docs.expo.dev/develop/development-builds/introduction/) (`npx expo run:ios` or `npx expo run:android`), as these components are not available in Expo Go.
+
+- The `@clerk/expo` plugin configured in your `app.json` file. See the [available plugin options](#expo-plugin-options).
+
+  ```json {{ filename: 'app.json' }}
+  {
+    "expo": {
+      "plugins": ["@clerk/expo"]
+    }
+  }
+  ```
+
+- If using social connections, you must register your native application credentials in the Clerk Dashboard. See the [Sign in with Google](/docs/guides/configure/auth-strategies/sign-in-with-google) and [Sign in with Apple](/docs/guides/configure/auth-strategies/sign-in-with-apple) guides for setup steps.
+
+### Expo plugin options
+
+The plugin accepts the following options:
+
+<Properties>
+  - `appleSignIn`
+  - `boolean`
+
+  Whether to add the `com.apple.developer.applesignin` entitlement. Set to `false` if your app does not use Apple Sign In. Defaults to `true`.
+
+  ---
+
+  - `keychainService`
+  - `string`
+
+  Custom keychain service identifier. Required if you need extension targets (widgets, App Clips, Watch) to share the keychain with the main app.
+
+  ---
+
+  - `theme`
+  - `string`
+
+  Path to a JSON file that customizes the appearance of the native components on iOS and Android (colors, dark mode, border radius, and font family). See the [Theming](/docs/reference/expo/native-components/theming) reference for platform-specific details and the full schema.
+</Properties>
+
+#### Example
+
+```json {{ filename: 'app.json' }}
+{
+  "expo": {
+    "plugins": [
+      [
+        "@clerk/expo",
+        {
+          "appleSignIn": false,
+          "keychainService": "com.example.myapp"
+        }
+      ]
+    ]
+  }
+}
+```
+
+## Respond to auth changes
+
+Use hooks like [`useAuth()`](/docs/reference/hooks/use-auth), [`useUser()`](/docs/reference/hooks/use-user), or [`useSession()`](/docs/reference/hooks/use-session) to read authentication state and update your UI after auth changes.
+
+<Include src="_partials/expo/session-sync-callout" />
+
+The following example demonstrates one way to open [`<AuthView />`](/docs/reference/expo/native-components/auth-view) from a sign-in button.
+
+<Include src="_partials/expo/auth-view-modal-lifecycle-callout" />
+
+```tsx {{ filename: 'src/app/index.tsx' }}
+import { AuthView } from '@clerk/expo/native'
+import { useAuth, useUser } from '@clerk/expo'
+import { useState } from 'react'
+import { Button, Modal, Text, View } from 'react-native'
+
+export default function HomeScreen() {
+  const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false })
+  const { user } = useUser()
+  const [isAuthOpen, setIsAuthOpen] = useState(false)
+
+  return (
+    <View>
+      {isSignedIn ? (
+        <Text>User ID: {user?.id}</Text>
+      ) : (
+        <Button title="Sign in" onPress={() => setIsAuthOpen(true)} />
+      )}
+      <Modal
+        animationType="slide"
+        visible={isAuthOpen}
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsAuthOpen(false)}
+      >
+        <AuthView onDismiss={() => setIsAuthOpen(false)} />
+      </Modal>
+    </View>
+  )
+}
+```
+
+When rendering [`<AuthView />`](/docs/reference/expo/native-components/auth-view) or [`<UserProfileView />`](/docs/reference/expo/native-components/user-profile-view) directly in a route or full-screen view, pass `isDismissible={false}` if users must complete the flow to continue.
+
+```tsx
+<AuthView isDismissible={false} />
+```
+
+```tsx
+<UserProfileView isDismissible={false} style={{ flex: 1 }} />
+```
+
+## Web compatibility
+
+For Expo web projects, use the web-specific components from `@clerk/expo/web`:
+
+```tsx {{ filename: 'src/app/sign-in.web.tsx' }}
+import { SignIn } from '@clerk/expo/web'
+
+export default function SignInScreen() {
+  return <SignIn />
+}
+```
+
+See the [web component reference](/docs/reference/components/overview) for more information.

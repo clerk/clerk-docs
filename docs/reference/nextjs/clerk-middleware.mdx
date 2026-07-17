@@ -1,0 +1,264 @@
+---
+title: clerkMiddleware()
+description: The clerkMiddleware() helper integrates Clerk authentication into your Next.js application through Middleware.
+sdk: nextjs
+---
+
+The `clerkMiddleware()` helper integrates Clerk authentication into your Next.js application through Middleware. `clerkMiddleware()` is compatible with both the App and Pages routers.
+
+<If is="llm">
+  **For AI agents:** Run `npx clerk@latest init --framework next` to scaffold this middleware (plus `<ClerkProvider>` and env keys) automatically, instead of writing it by hand. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
+## Configure `clerkMiddleware()`
+
+<Include src="_partials/nextjs/nextjs-15-callout" />
+
+Create a `proxy.ts` file at the root of your project, or in your `src/` directory if you have one.
+
+> [!NOTE]
+> For more information about Middleware in Next.js, see the [Next.js documentation](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+    // Always run for Clerk-specific frontend API routes
+    '/__clerk/(.*)',
+  ],
+}
+```
+
+## Protecting routes
+
+Middleware is not the best place to protect routes. Instead, **protect access as close to the resource as possible**, in the code that reads or mutates the data. This way, the same code that touches the data also enforces who can reach it.
+
+- To require a signed-in user, see the [guide on protecting content from unauthenticated users](/docs/guides/secure/protect-content).
+- To require a specific Role, Permission, Feature, or Plan, see the [guide on authorization checks](/docs/guides/secure/authorization-checks).
+- For machine requests (API keys, OAuth tokens, machine tokens), check the token type in the Route Handler with [`auth({ acceptsToken })`](/docs/reference/nextjs/app-router/auth#verify-machine-requests).
+
+> [!WARNING]
+> `createRouteMatcher()` is deprecated. If you're currently using it to protect routes, migrate to resource-based auth checks. See the [guide on migrating away from `createRouteMatcher()`](/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher) for more information.
+
+## Debug your Middleware
+
+If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddleware()`. Add `{ debug: true }` to `clerkMiddleware()` and you will get debug logs in your terminal.
+
+```tsx {{ filename: 'proxy.ts', mark: [[4, 7]] }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  { debug: true },
+)
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+    // Always run for Clerk-specific frontend API routes
+    '/__clerk/(.*)',
+  ],
+}
+```
+
+If you would like to set up debugging for your development environment only, you can use the `process.env.NODE_ENV` variable to conditionally enable debugging. For example, `{ debug: process.env.NODE_ENV === 'development' }`.
+
+## Combine Middleware
+
+You can combine other Middleware with Clerk's Middleware by returning the second Middleware from `clerkMiddleware()`.
+
+```js {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+import createMiddleware from 'next-intl/middleware'
+
+import { AppConfig } from './utils/AppConfig'
+
+const intlMiddleware = createMiddleware({
+  locales: AppConfig.locales,
+  localePrefix: AppConfig.localePrefix,
+  defaultLocale: AppConfig.defaultLocale,
+})
+
+export default clerkMiddleware(async (auth, req) => {
+  return intlMiddleware(req)
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+    // Always run for Clerk-specific frontend API routes
+    '/__clerk/(.*)',
+  ],
+}
+```
+
+## Frontend API proxy
+
+<Include src="_partials/frontend-api-proxy/explanation" />
+
+### Basic usage
+
+<Include src="_partials/frontend-api-proxy/basic-usage-nextjs" />
+
+### Multi-domain support
+
+<Include src="_partials/frontend-api-proxy/multi-domain-usage-nextjs" />
+
+### Custom proxy path
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware({
+  frontendApiProxy: {
+    enabled: true,
+    path: '/custom-clerk-proxy',
+  },
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+    // Always run for the custom proxy path
+    '/custom-clerk-proxy/(.*)',
+  ],
+}
+```
+
+### `FrontendApiProxyOptions`
+
+<Include src="_partials/frontend-api-proxy/properties" />
+
+### App Router route handlers
+
+As an alternative to handling the proxy in middleware, you can use route handlers in a Next.js App Router. **This is useful if you prefer to keep proxy logic separate from your middleware.**
+
+> [!NOTE]
+> In Next.js App Router, folders that start with `_` are treated as [private folders](https://nextjs.org/docs/app/getting-started/project-structure#private-folders). To create a literal `__clerk` route segment, use `%5F%5Fclerk` in the file path. The resulting route is still `/__clerk/*`.
+
+#### `createFrontendApiProxyHandlers()`
+
+Returns an object with `GET`, `POST`, `PUT`, `DELETE`, and `PATCH` handlers that can be directly exported from a route file.
+
+<Include src="_partials/frontend-api-proxy/create-frontend-api-proxy-handlers" />
+
+#### `clerkFrontendApiProxy()`
+
+For more control, you can use `clerkFrontendApiProxy()` directly in individual route handlers.
+
+```ts {{ filename: 'app/api/%5F%5Fclerk/[[...path]]/route.ts' }}
+import { clerkFrontendApiProxy } from '@clerk/nextjs/server'
+
+export async function GET(request: Request) {
+  return clerkFrontendApiProxy(request)
+}
+
+export async function POST(request: Request) {
+  return clerkFrontendApiProxy(request)
+}
+```
+
+## `clerkMiddleware()` options
+
+<Include src="_partials/clerk-middleware-options" />
+
+It's also possible to dynamically set options based on the incoming request:
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => ({
+    // Provide `domain` based on the request host
+    domain: req.nextUrl.host,
+  }),
+)
+```
+
+### Dynamic keys
+
+> [!NOTE]
+> Dynamic keys are not accessible on the client-side.
+
+The following options, known as "Dynamic Keys," are shared to the Next.js application server through `clerkMiddleware`, enabling access by server-side helpers like [`auth()`](/docs/reference/nextjs/app-router/auth):
+
+- `signUpUrl`
+- `signInUrl`
+- `secretKey`
+- `publishableKey`
+
+Dynamic keys are encrypted and shared during request time using a [AES encryption algorithm](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard). When providing a `secretKey`, the `CLERK_ENCRYPTION_KEY` environment variable is mandatory and used as the encryption key. If no `secretKey` is provided to `clerkMiddleware`, the encryption key defaults to `CLERK_SECRET_KEY`.
+
+When providing `CLERK_ENCRYPTION_KEY`, it is recommended to use a 32-byte (256-bit), pseudorandom value. You can use `openssl` to generate a key:
+
+```sh {{ filename: 'terminal' }}
+openssl rand --hex 32
+```
+
+For multi-tenant applications, you can dynamically define Clerk keys depending on the incoming request. Here's an example:
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+// You would typically fetch these keys from a external store or environment variables.
+const tenantKeys = {
+  tenant1: { publishableKey: 'pk_tenant1...', secretKey: 'sk_tenant1...' },
+  tenant2: { publishableKey: 'pk_tenant2...', secretKey: 'sk_tenant2...' },
+}
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => {
+    // Resolve tenant based on the request
+    const tenant = getTenant(req)
+    return tenantKeys[tenant]
+  },
+)
+```
+
+### `OrganizationSyncOptions`
+
+<Include src="_partials/organization-sync-options" />
+
+## `createRouteMatcher()`
+
+> [!WARNING]
+> `createRouteMatcher()` is deprecated and logs a runtime deprecation warning when called. To protect routes, migrate to resource-based auth checks (see the [migration guide](/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher)). For non-auth path logic, use the framework's native matching instead.
+
+`createRouteMatcher()` is a Clerk helper function that accepts an array of routes and checks if the route the user is trying to visit matches one of the routes passed to it. The paths provided to this helper can be in the same format as the paths provided to the Next.js Middleware matcher.
+
+The `createRouteMatcher()` helper returns a function that, if called with the `req` object from the Middleware, will return `true` if the user is trying to access a route that matches one of the routes passed to `createRouteMatcher()`.
+
+> [!NOTE]
+> When matching a subtree of routes, prefer the `:path*` form: it maps directly to how the router matches path segments. For example, use `/dashboard/:path*` instead of `/dashboard(.*)`.
+
+```tsx
+import { createRouteMatcher } from '@clerk/nextjs/server'
+
+const isDashboardRoute = createRouteMatcher(['/dashboard/:path*'])
+```
+
+For non-auth path logic in your Middleware, use the framework's native matching (`config.matcher` and `req.nextUrl.pathname`). For an example, see [Geo blocking](/docs/guides/development/geo-blocking).

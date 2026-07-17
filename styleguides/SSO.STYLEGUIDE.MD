@@ -31,7 +31,7 @@ These are the guidelines we use to write our SSO guides.
 
   For _production instances_, you must provide custom credentials.
 
-  To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
+  To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
   ```
 
 - Use `<Steps />` to lay out the steps
@@ -54,7 +54,7 @@ These are the guidelines we use to write our SSO guides.
      1. Select **Add connection**.
 
      > [!NOTE]
-     > If the modal or page is no longer open, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page in the Clerk Dashboard. Select the connection. Under **Use custom credentials**, paste the values into their respective fields.
+     > If the modal or page is no longer open, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page in the Clerk Dashboard. Select the connection. Under **Use custom credentials**, paste the values into their respective fields.
      ```
 
 - The `Test your connection` section should be included in the `<Steps />` and formatted as follows:
@@ -72,7 +72,7 @@ Screenshots should be used little to none in the docs. The instructions should b
 > ❌ In the example below, the instructions are not explicit, as it tells the reader to select **Microsoft** but doesn't specify where to find it.
 
 ```mdx
-1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
 1. Select **Add connection**.
 1. Select **For all users**.
 1. Select **Microsoft**.
@@ -81,7 +81,7 @@ Screenshots should be used little to none in the docs. The instructions should b
 > ✅ In the example below, the instructions are explicit and include all necessary details without the need for a visual reference.
 
 ```mdx
-1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
 1. Select **Add connection** and select **For all users**.
 1. In the **Choose provider** dropdown, select **Microsoft**.
 1. Select **Add connection**.

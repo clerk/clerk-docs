@@ -1,0 +1,96 @@
+---
+title: Test the sign-up form
+description: Learn how to test the sign-up form with Playwright, including additional fields like first and last name.
+---
+
+The Clerk `<SignUp />` component renders form fields based on your instance configuration in the [Clerk Dashboard](https://dashboard.clerk.com), including in testing mode. If your instance requires additional fields — such as first and last name, username, or legal acceptance — those fields will appear in the sign-up form and must be filled in your test.
+
+This guide demonstrates how to write a sign-up test that handles these fields. It builds on the setup from the [overview](/docs/guides/development/testing/playwright/overview).
+
+> [!IMPORTANT]
+> See the [demo repo](https://github.com/clerk/clerk-playwright-nextjs) that demonstrates testing a Clerk-powered application using [Testing Tokens](/docs/guides/development/testing/overview#testing-tokens).
+
+## Sign-up test with conditional fields
+
+The following example uses `isVisible()` checks so the test works regardless of which fields are enabled in your instance. This means the same test works whether your instance requires first and last name, username, both, or neither.
+
+```tsx {{ filename: 'e2e/app.spec.ts' }}
+import { setupClerkTestingToken } from '@clerk/testing/playwright'
+import { test } from '@playwright/test'
+
+test('sign up', async ({ page }) => {
+  await setupClerkTestingToken({ page })
+
+  await page.goto('/sign-up')
+  await page.waitForSelector('.cl-signUp-root', { state: 'attached' })
+
+  // Fill in first and last name if the fields are present.
+  // These fields appear when "First and last name" is enabled
+  // in the Clerk Dashboard under "User & authentication > User model".
+  const firstNameInput = page.locator('input[name=firstName]')
+  if (await firstNameInput.isVisible()) {
+    await firstNameInput.fill('Test')
+  }
+  const lastNameInput = page.locator('input[name=lastName]')
+  if (await lastNameInput.isVisible()) {
+    await lastNameInput.fill('User')
+  }
+
+  // Fill in the username if the field is present.
+  const usernameInput = page.locator('input[name=username]')
+  if (await usernameInput.isVisible()) {
+    await usernameInput.fill('testuser' + Date.now())
+  }
+
+  await page
+    .locator('input[name=emailAddress]')
+    .fill(`testuser+clerk_test_${Date.now()}@example.com`)
+  await page.locator('input[name=password]').fill('your-test-password')
+
+  // Fill in the phone number if the field is present.
+  const phoneInput = page.locator('input[name=phoneNumber]')
+  if (await phoneInput.isVisible()) {
+    await phoneInput.fill('+15555550100')
+  }
+
+  // Check the legal checkbox if present
+  const legalCheckbox = page.locator('input[name=legalAccepted]')
+  if (await legalCheckbox.isVisible()) {
+    await legalCheckbox.check()
+  }
+
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+  // Wait for Clerk to prepare the email verification
+  await page.waitForResponse(
+    (resp) => resp.url().includes('prepare_verification') && resp.status() === 200,
+  )
+
+  // Enter test OTP code (424242 works with +clerk_test emails)
+  await page.getByRole('textbox', { name: 'Enter verification code' }).pressSequentially('424242')
+
+  await page.waitForURL('**/protected')
+})
+```
+
+## Available sign-up field selectors
+
+The following table lists the input selectors for fields that can appear in the `<SignUp />` component, depending on your instance configuration:
+
+| Field | Selector | Dashboard setting |
+| - | - | - |
+| First name | `input[name=firstName]` | User & authentication > User model > First and last name |
+| Last name | `input[name=lastName]` | User & authentication > User model > First and last name |
+| Username | `input[name=username]` | User & authentication > Username |
+| Email address | `input[name=emailAddress]` | User & authentication > Email |
+| Password | `input[name=password]` | User & authentication > Password |
+| Phone number | `input[name=phoneNumber]` | User & authentication > Phone |
+| Legal acceptance | `input[name=legalAccepted]` | User & authentication > Legal acceptance |
+
+## Test email addresses and OTP codes
+
+To avoid sending real emails during tests, use the `+clerk_test` email pattern. Emails containing `+clerk_test` (e.g., `testuser+clerk_test_123@example.com`) can be verified with the test OTP code `424242`. This is only available in development instances. See [Testing Tokens](/docs/guides/development/testing/overview#testing-tokens) for more information.
+
+## Cleaning up test users
+
+Sign-up tests create users in your Clerk instance. To prevent test users from accumulating, use a [Playwright global teardown](https://playwright.dev/docs/test-global-setup-teardown) to delete users created during the test run. The [demo repo](https://github.com/clerk/clerk-playwright-nextjs) demonstrates this pattern using the Clerk Backend API to clean up after each run.

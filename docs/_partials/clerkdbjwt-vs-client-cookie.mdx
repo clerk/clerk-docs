@@ -1,0 +1,14 @@
+In production, Clerk uses a [client token](/docs/guides/how-clerk-works/overview#client-token) to represent the user's session. This client token is stored as an `HttpOnly` cookie (`__client`) on the [Clerk FAPI](/docs/guides/how-clerk-works/overview#the-frontend-api) domain. Because, in production, FAPI is hosted on a subdomain of your application (e.g., `clerk.example.com`) via a CNAME record, your app's frontend and FAPI are on the same site. This allows the client token to be securely and reliably sent with each request from your frontend to FAPI using **same-site** cookies.
+
+However, in development, your app's frontend typically runs on a `localhost` domain, while FAPI for development instances is hosted on a domain ending with `accounts.dev`. As a result, requests from your app's frontend to FAPI are **cross-site**, and the client token cannot be securely and reliably stored or transmitted using cookies.
+
+> [!QUIZ]
+> Why can't the client token be securely and reliably stored and transmitted in a cookie when cross-site requests are made?
+>
+> ---
+>
+> In order for cookies to be sent cross-site, the cookie would need to be set with [`SameSite=None`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#none). In theory this would resolve the issue, but in reality, modern browsers are increasingly restrictive on cross-site cookie behavior due to the abuse of cookies for tracking and advertising. Safari specifically [does not support `SameSite=None` for cookies at all](https://support.apple.com/guide/iphone/browse-the-web-privately-iphb01fc3c85/ios) unless a browser flag is enabled. Other browsers also have restrictions around cross-site cookie behavior, which leads to a frustrating and unreliable experience for local development.
+
+To address these limitations, development instances use a different approach to maintain session state. An object called the "dev browser", which is linked directly to the client token within Clerk's internals, is used to maintain session state across the session lifetime, and is transmitted via querystring (`__clerk_db_jwt`) rather than via cookie. This strategy allows for a more reliable experience for local development, as it does not require the use of cross-site cookies.
+
+While this enables smooth local development workflows, it is not secure enough for production use. Including a sensitive value like the client token in a querystring is not a strong security practice, as it can be seen directly in server logs, browser history, internet providers' logs, and could be potentially intercepted by third-parties via malicious browser extensions or network interceptors. This is why the `__clerk_db_jwt` object is not used in production instances and the same-site cookie (`__client`) is used instead.

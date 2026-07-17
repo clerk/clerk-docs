@@ -1,0 +1,256 @@
+---
+title: Implement basic Role Based Access Control (RBAC) with metadata
+description: Learn how to leverage Clerk's publicMetadata to implement your own basic Role Based Access Controls.
+sdk: nextjs
+---
+
+To control which users can access certain parts of your app, you can use the [Roles](/docs/guides/organizations/control-access/roles-and-permissions#roles) feature. Although Clerk offers Roles as part of the [Organizations](/docs/guides/organizations/overview) feature set, not every app implements Organizations. **This guide covers a workaround to set up a basic Role Based Access Control (RBAC) system for products that don't use Clerk's Organizations or Roles.**
+
+This guide assumes that you're using Next.js App Router, but you can adapt the concepts to any SDK.
+
+<Steps>
+  ## Configure the session token
+
+  Clerk provides [user metadata](/docs/guides/users/extending), which can be used to store information, and in this case, it can be used to store a user's Role. Since `publicMetadata` can only be read but not modified in the browser, it is the safest and most appropriate choice for storing information.
+
+  To build a basic RBAC system, you first need to make `publicMetadata` available to the application directly from the session token. By attaching `publicMetadata` to the user's session, you can access the data without needing to make a network request each time.
+
+  1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+  1. Under **Customize session token**, in the **Claims** editor, enter the following JSON and select **Save**. If you have already customized your session token, you may need to merge this with what you currently have.
+
+  ```json
+  {
+    "metadata": "{{user.public_metadata}}"
+  }
+  ```
+
+  ## Create a global TypeScript definition
+
+  1. In your application's root folder, create a `types/` directory.
+  1. Inside this directory, create a `globals.d.ts` file with the following code. This file will provide auto-completion and prevent TypeScript errors when working with Roles. For this guide, only the `admin` and `moderator` roles will be defined.
+
+  ```ts {{ filename: 'types/globals.d.ts' }}
+  export {}
+
+  // Create a type for the Roles
+  export type Roles = 'admin' | 'moderator'
+
+  declare global {
+    interface CustomJwtSessionClaims {
+      metadata: {
+        role?: Roles
+      }
+    }
+  }
+  ```
+
+  ## Set the admin Role for your user
+
+  Later in the guide, you will add a basic admin tool to change a user's Role. For now, manually add the `admin` Role to your own user account.
+
+  1. In the Clerk Dashboard, navigate to the [**Users**](https://dashboard.clerk.com/~/users) page.
+  1. Select your own user account.
+  1. Scroll down to the **User metadata** section and next to the **Public** option, select **Edit**.
+  1. Add the following JSON and select **Save**.
+
+  ```json
+  {
+    "role": "admin"
+  }
+  ```
+
+  ## Create the admin dashboard
+
+  Now, it's time to create an admin dashboard. The first step is to create the `/admin` route.
+
+  1. In your `app/` directory, create an `admin/` folder.
+  1. In the `admin/` folder, create a `page.tsx` file with the following placeholder code.
+
+  ```tsx {{ filename: 'app/admin/page.tsx' }}
+  export default function AdminDashboard() {
+    return <p>This is the protected admin dashboard restricted to users with the `admin` Role.</p>
+  }
+  ```
+
+  ## Protect the admin dashboard
+
+  To protect the `/admin` route, in the `app/admin/page.tsx` file, add the following code. It reads the user's Role from the `metadata` session claim you configured earlier and redirects to the home page if they aren't an `admin`.
+
+  ```tsx {{ filename: 'app/admin/page.tsx' }}
+  import { auth } from '@clerk/nextjs/server'
+  import { redirect } from 'next/navigation'
+
+  export default async function AdminDashboard() {
+    const { sessionClaims } = await auth()
+
+    // Protect the page from users who are not admins
+    if (sessionClaims?.metadata?.role !== 'admin') {
+      redirect('/')
+    }
+
+    return <p>This is the protected admin dashboard restricted to users with the `admin` Role.</p>
+  }
+  ```
+
+  ## Create server actions for managing a user's Role
+
+  1. In your `app/admin/` directory, create an `_actions.ts` file with the following code. The `setRole()` action checks that the current user has the `admin` Role before updating the specified user's Role using the [`updateUserMetadata()`](/docs/reference/backend/user/update-user-metadata) method. The `removeRole()` action removes the Role from the specified user.
+
+  ```ts {{ filename: 'app/admin/_actions.ts' }}
+  'use server'
+
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+
+  export async function setRole(formData: FormData) {
+    const { sessionClaims } = await auth()
+
+    // Check that the user trying to set the Role is an admin
+    if (sessionClaims?.metadata?.role !== 'admin') {
+      return { message: 'Not Authorized' }
+    }
+
+    // Initialize `clerkClient`
+    const client = await clerkClient()
+
+    try {
+      // Use the `updateUserMetadata()` method to update the user's Role
+      const res = await client.users.updateUserMetadata(formData.get('id') as string, {
+        publicMetadata: { role: formData.get('role') },
+      })
+      return { message: res.publicMetadata }
+    } catch (err) {
+      return { message: err }
+    }
+  }
+
+  export async function removeRole(formData: FormData) {
+    const { sessionClaims } = await auth()
+
+    // Check that the user trying to remove the Role is an admin
+    if (sessionClaims?.metadata?.role !== 'admin') {
+      return { message: 'Not Authorized' }
+    }
+
+    const client = await clerkClient()
+
+    try {
+      const res = await client.users.updateUserMetadata(formData.get('id') as string, {
+        publicMetadata: { role: null },
+      })
+      return { message: res.publicMetadata }
+    } catch (err) {
+      return { message: err }
+    }
+  }
+  ```
+
+  ## Create a component for searching for users
+
+  1. In your `app/admin/` directory, create a `SearchUsers.tsx` file with the following code. The `<SearchUsers />` component includes a form for searching for users. When submitted, it appends the search term to the URL as a search parameter. Your `/admin` route will then perform a query based on the updated URL.
+
+  ```tsx {{ filename: 'app/admin/SearchUsers.tsx' }}
+  'use client'
+
+  import { usePathname, useRouter } from 'next/navigation'
+
+  export const SearchUsers = () => {
+    const router = useRouter()
+    const pathname = usePathname()
+
+    return (
+      <div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            const form = e.currentTarget
+            const formData = new FormData(form)
+            const queryTerm = formData.get('search') as string
+            router.push(pathname + '?search=' + queryTerm)
+          }}
+        >
+          <label htmlFor="search">Search for users</label>
+          <input id="search" name="search" type="text" />
+          <button type="submit">Submit</button>
+        </form>
+      </div>
+    )
+  }
+  ```
+
+  ## Refactor the admin dashboard
+
+  With the server action and the search form set up, it's time to refactor the `app/admin/page.tsx`.
+
+  1. Replace the code in your `app/admin/page.tsx` file with the following code. It checks whether a search parameter has been appended to the URL by the search form. If a search parameter is present, it queries for users matching the entered term. If one or more users are found, the component displays a list of users, showing their first and last names, primary email address, and current Role. Each user has `Make Admin` and `Make Moderator` buttons, which include hidden inputs for the user ID and Role. These buttons use the `setRole()` server action to update the user's Role.
+
+  ```tsx {{ filename: 'app/admin/page.tsx' }}
+  import { redirect } from 'next/navigation'
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { SearchUsers } from './SearchUsers'
+  import { removeRole, setRole } from './_actions'
+
+  export default async function AdminDashboard(params: {
+    searchParams: Promise<{ search?: string }>
+  }) {
+    const { sessionClaims } = await auth()
+
+    if (sessionClaims?.metadata?.role !== 'admin') {
+      redirect('/')
+    }
+
+    const query = (await params.searchParams).search
+
+    const client = await clerkClient()
+
+    const users = query ? (await client.users.getUserList({ query })).data : []
+
+    return (
+      <>
+        <p>This is the protected admin dashboard restricted to users with the `admin` Role.</p>
+
+        <SearchUsers />
+
+        {users.map((user) => {
+          return (
+            <div key={user.id}>
+              <div>
+                {user.firstName} {user.lastName}
+              </div>
+
+              <div>
+                {
+                  user.emailAddresses.find((email) => email.id === user.primaryEmailAddressId)
+                    ?.emailAddress
+                }
+              </div>
+
+              <div>{user.publicMetadata.role as string}</div>
+
+              <form action={setRole}>
+                <input type="hidden" value={user.id} name="id" />
+                <input type="hidden" value="admin" name="role" />
+                <button type="submit">Make Admin</button>
+              </form>
+
+              <form action={setRole}>
+                <input type="hidden" value={user.id} name="id" />
+                <input type="hidden" value="moderator" name="role" />
+                <button type="submit">Make Moderator</button>
+              </form>
+
+              <form action={removeRole}>
+                <input type="hidden" value={user.id} name="id" />
+                <button type="submit">Remove Role</button>
+              </form>
+            </div>
+          )
+        })}
+      </>
+    )
+  }
+  ```
+
+  ## Finished 🎉
+
+  The foundation of a custom RBAC (Role-Based Access Control) system is now set up. Roles are attached directly to the user's session, allowing your application to read them from the session claims without the need for additional network requests. The final component is the admin dashboard, which enables admins to efficiently search for users and manage Roles.
+</Steps>

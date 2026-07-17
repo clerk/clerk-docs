@@ -1,0 +1,118 @@
+---
+title: Enterprise Single Sign-On (SSO)
+description: Clerk provides Enterprise SSO to authenticate users via federated Identity Providers such as Azure AD, Okta, Google Workspace and more.
+---
+
+Enterprise Single Sign-On (SSO) allows users to sign in seamlessly using their Identity Provider (IdP) credentials (e.g.,Azure AD, Okta, or Google Workspace) and have their user data synchronized with Clerk. Clerk supports multiple protocols for implementing Enterprise SSO, including SAML and OIDC. Learn more about the process in the guides on [authentication flows](/docs/guides/configure/auth-strategies/enterprise-connections/authentication-flows) and [account linking](/docs/guides/configure/auth-strategies/enterprise-connections/account-linking).
+
+## SAML
+
+Clerk supports Enterprise SSO via the SAML protocol, enabling you to create authentication strategies for an IdP. The following IdPs are supported:
+
+- [Microsoft Azure AD](/docs/guides/configure/auth-strategies/enterprise-connections/saml/azure)
+- [Google Workspace](/docs/guides/configure/auth-strategies/enterprise-connections/saml/google)
+- [Okta Workforce](/docs/guides/configure/auth-strategies/enterprise-connections/saml/okta).
+
+However, you can also [integrate with any other IdP](/docs/guides/configure/auth-strategies/enterprise-connections/saml/custom-provider) that supports the SAML protocol.
+
+### Allow subdomains
+
+Authenticating via SAML SSO requires the user's email address domain to match the exact domain the SAML connection has been configured with. By default, subdomains are not supported. For example, a user with the email address `john@sales.example.com` wouldn't be able to use a SAML connection with the `example.com` domain to authenticate.
+
+To configure subdomains for a SAML connection:
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+1. Select the SAML connection you want to allow subdomains for.
+1. Select the **Advanced** tab.
+1. Enable or disable the **Allow subdomains** option.
+1. Select **Save**.
+
+> [!NOTE]
+> To enable the **Allow subdomains** option, your SAML connection domain must be an [eTLD+1](https://developer.mozilla.org/en-US/docs/Glossary/eTLD).
+
+### Configure a SAML login hint
+
+During a [Service Provider-initiated (SP-initiated)](/docs/guides/configure/auth-strategies/enterprise-connections/authentication-flows#service-provider-initiated-flow-recommended) SAML sign-in, Clerk can send your Identity Provider (IdP) a `login_hint` parameter. This can help the IdP identify the user before they sign in.
+
+> [!NOTE]
+> Named SAML providers send the user's email address by default. Custom SAML connections don't send a login hint until you configure one.
+
+To configure a login hint for a SAML connection:
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+1. Select the SAML connection you want to configure.
+1. Select the **Settings** tab.
+1. In the **Login hint** section, select one of the following options:
+   - **Email address** to send the user's email address.
+   - **Custom attribute** to send a custom value instead. Select one of the custom attributes configured for the connection. Clerk sends the value from the user's `publicMetadata`.
+   - **Off** to send no login hint.
+1. Select **Save**.
+
+Before you select **Custom attribute**, [configure the custom attribute](/docs/guides/configure/auth-strategies/enterprise-connections/custom-attribute-mapping#define-custom-attributes) for the connection. If the selected attribute isn't set for a user or doesn't contain a single text value, Clerk omits the login hint for that sign-in.
+
+### Native applications
+
+<Include src="_partials/allowlist-redirect-urls" />
+
+## OIDC
+
+Clerk supports Enterprise SSO via the OpenID Connect (OIDC) protocol, either through [EASIE](#easie) or by [integrating with any OIDC-compatible provider](/docs/guides/configure/auth-strategies/enterprise-connections/oidc/custom-provider).
+
+### EASIE
+
+[EASIE](https://easie.dev) SSO is a way for applications to provide enterprise-grade SSO through a multi-tenant OpenID provider. It is designed to be an easier alternative to SAML SSO.
+
+The following IdPs are supported: Google Workspace and Microsoft Entra ID. For _development instances_, Clerk uses preconfigured shared credentials and redirect URIs—no other configuration is needed. For _production instances_, you must provide custom credentials. Follow the steps outlined in the guides to complete the setup:
+
+- [Google](/docs/guides/configure/auth-strategies/enterprise-connections/easie/google)
+- [Microsoft](/docs/guides/configure/auth-strategies/enterprise-connections/easie/microsoft)
+
+#### Automatic deprovisioning
+
+Clerk prevents users linked to deprovisioned accounts in the OpenID provider from accessing the app.
+
+Before creating a new session token for an EASIE user, Clerk verifies whether the user has been deprovisioned from their OpenID provider (e.g., [suspended](https://support.google.com/a/answer/33312?hl=en) or [deleted](https://support.google.com/a/answer/33314?hl=en) in Google Workspace, or [deleted](https://learn.microsoft.com/en-us/entra/fundamentals/how-to-create-delete-users#delete-a-user) in Microsoft Entra). This verification process might involve a delay of up to 10 minutes. If deprovisioning is detected, Clerk revokes that user's existing sessions and responds to any requests for a new session token with a `401 Unauthorized` error.
+
+It is ultimately the app's responsibility to handle this unauthenticated state and display something appropriate to the user. For example, Next.js apps using [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) will automatically redirect the user to the sign-in page.
+
+## SAML vs. EASIE
+
+The primary security difference between EASIE SSO and SAML SSO is that EASIE depends on a multi-tenant identity provider, while SAML depends on a single-tenant identity provider. Relying on a multi-tenant provider **increases** the risk that a user from one tenant will mistakenly be granted access to the resources of another tenant. While Clerk implements [measures to address this risk](https://easie.dev/#mitigating-tenant-crossover-vulnerabilities:~:text=4.%20Mitigating%20tenant%20crossover%20vulnerabilities), apps that require single-tenant IdPs should opt for SAML.
+
+For more information, see the [EASIE docs](https://easie.dev#security).
+
+## Frequently asked questions (FAQ)
+
+### Can I use multiple identifiers or authentication methods with enterprise connections?
+
+Yes, multiple identifiers (such as email, username, or other attributes) can be configured and used for SAML and OIDC connections. However, for EASIE connections, there can only be one identifier or authentication method.
+
+By default, additional identifiers are **disabled** for new connections. To enable multiple identifiers for a SAML or OIDC connection:
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+1. Select the enterprise connection you want to allow multiple identifiers for.
+1. Select the **Advanced** tab.
+1. Enable the **Allow additional identifiers** option.
+1. Select **Save**.
+
+### Will Enterprise SSO work for my existing users?
+
+Yes, Enterprise SSO will work for your existing users as well! If you enable SAML or EASIE, any existing users with an email address that matches the SAML or EASIE connection domain will have to authenticate on the IdP side and an Enterprise account will be linked to their existing account.
+
+### What happens if I have multi-factor enabled at Clerk?
+
+Once the user returns from the IdP, they will need to complete additional authentication factors. This is useful if you want to add extra factors beyond what your IdP supports or if your IdP doesn’t support them. This feature is optional and can be disabled if not needed.
+
+### What happens if I delete the Enterprise Connection? Will my users be deleted?
+
+The users will not be deleted, so your app will not break. However, they will need to use another [sign-in option](/docs/guides/configure/auth-strategies/sign-up-sign-in-options) such as password or email codes to authenticate themselves moving forward.
+
+### Does Clerk support IdP-initiated SSO?
+
+Yes, for SAML only. Clerk supports both Service Provider-initiated (SP-initiated) and Identity Provider-initiated (IdP-initiated) SSO flows. For more information, see the [authentication flows guide](/docs/guides/configure/auth-strategies/enterprise-connections/authentication-flows).
+
+### How much does it cost?
+
+For development instances, Enterprise connections are always free but limited to a maximum of 25.
+
+Production instances require the Pro or Business plan. Please see [pricing](/pricing){{ target: '_blank' }} for more information.

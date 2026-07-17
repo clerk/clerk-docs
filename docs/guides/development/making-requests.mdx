@@ -1,0 +1,265 @@
+---
+title: Making authenticated requests
+description: Learn about various ways to make authenticated requests to the backend when using Clerk SDKs.
+---
+
+It's important to authenticate requests to ensure that the user is who they say they are and that they have permission to perform the action they are trying to perform.
+
+A request is considered **authenticated** when the backend can securely identify the user and device that is making the request. This is done by passing the user's [session token](/docs/guides/sessions/session-tokens) to the backend. The session token contains cryptographically signed claims about the user's identity and authentication state.
+
+Authenticating a request depends on what _type_ of request you are making. If the request is made from the [same origin](#same-origin-requests) as the server, Clerk automatically includes the session token in the request. If the request is made from a [different origin](#cross-origin-requests), you must manually pass the session token in the Authorization header.
+
+## Required headers
+
+The following headers are required for Clerk to authenticate a request. It contains information that Clerk uses to determine whether a request is in a signed in or signed out state, or if a [handshake](/docs/guides/how-clerk-works/overview#the-handshake) must be performed.
+
+- [`Authorization`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization): This should include the user's session token as a Bearer token.
+- [`Accept`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept)
+- [`Host`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Host)
+- [`Origin`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin)
+- [`Referer`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referer)
+- [`Sec-Fetch-Dest`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-Fetch-Dest)
+- [`User-Agent`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent)
+- [`X-Forwarded-Host`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-Host)
+- [`X-Forwarded-Proto`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-Proto)
+  - Alternatively, you can use [`CloudFront-Forwarded-Proto`](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/adding-cloudfront-headers.html#cloudfront-headers-other)
+
+## Examples
+
+To make authenticated requests, the approach differs based on whether your client and server are on the [same origin](#same-origin-requests) or [different origins](#cross-origin-requests).
+
+### Same-origin requests
+
+If your client and server are on the same origin (e.g. making an API call to `foo.com/api` from JavaScript running on `foo.com`), the [session token](/docs/guides/sessions/session-tokens) is automatically passed to the backend in a cookie. All requests to same-origin endpoints are **authenticated by default**; simply make the request as you normally would and the session token will be included.
+
+Use the following tabs to see how to make authenticated same-origin requests using different frameworks.
+
+<Tabs items={["Hook", "JavaScript"]}>
+  <Tab>
+    You can use the native browser [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) as you normally would and the request will be authenticated. The cookie holding the session token is automatically included with same-origin requests.
+
+    <Tabs items={["Fetch", "Fetch with SWR", "Fetch with TanStack Query"]}>
+      <Tab>
+        ```jsx
+        export default async function useFetch() {
+          const authenticatedFetch = async (...args) => {
+            return fetch(...args).then((res) => res.json())
+          }
+          return authenticatedFetch
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx
+        import useSWR from 'swr'
+
+        export default async function useClerkSWR(url: string) {
+          const fetcher = async (...args: [RequestInfo]) => {
+            return fetch(...args).then((res) => res.json())
+          }
+
+          return useSWR(url, fetcher)
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        <Include src="_partials/tanstack-query/making-requests-callout" />
+
+        ```tsx
+        import { useQuery } from '@tanstack/react-query'
+
+        // Define your query keys as constants to avoid typos
+        export const queryKeys = {
+          foo: ['foo'] as const,
+          // Add other query keys as needed
+        }
+
+        // Define the response type for type safety
+        interface FooResponse {
+          // Add your response type here
+          id: string
+          name: string
+        }
+
+        export function useFooQuery() {
+          return useQuery({
+            queryKey: queryKeys.foo,
+            queryFn: async (): Promise<FooResponse> => {
+              // Make the authenticated request
+              const response = await fetch('/api/foo')
+
+              if (!response.ok) {
+                // Include status code and status text in error message
+                throw new Error(`API Error: ${response.status} ${response.statusText}`)
+              }
+
+              const data = await response.json()
+              return data as FooResponse
+            },
+            // Add common configuration options
+            retry: 2,
+            staleTime: 5 * 60 * 1000, // 5 minutes
+          })
+        }
+
+        // Usage in component:
+        function MyComponent() {
+          const { data, isLoading, error } = useFooQuery()
+
+          if (isLoading) return <div>Loading...</div>
+          if (error) return <div>Error: {error.message}</div>
+          if (!data) return null
+
+          return <div>{data.name}</div>
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
+
+  <Tab>
+    You can use the native browser [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) as you normally would and the request will be authenticated.
+
+    ```js
+    fetch('/api/foo').then((res) => res.json())
+    ```
+  </Tab>
+</Tabs>
+
+### Cross-origin requests
+
+If your client and server are on different origins (e.g. making an API call to a server on `api.foo.com` from JavaScript running on a client at `foo.com`), the [session token](/docs/guides/sessions/session-tokens) needs to be passed as a Bearer token in the Authorization header.
+
+You can retrieve the session token using the `getToken()` method. Since `getToken()` returns a Promise, you'll need to await its resolution before making the request.
+
+Use the following tabs to see how to access the `getToken()` method depending on your framework.
+
+<Tabs items={["Hook", "JavaScript"]}>
+  <Tab>
+    Use the [`useAuth()`](/docs/reference/hooks/use-auth) hook to access the `getToken()` method.
+
+    <Tabs items={["Fetch", "Fetch with SWR", "Fetch with TanStack Query"]}>
+      <Tab>
+        ```js
+        export default function useFetch() {
+          // Use `useAuth()` to access the `getToken()` method
+          const { getToken } = useAuth()
+
+          const authenticatedFetch = async (...args) => {
+            // Use `getToken()` to get the current session token
+            const token = await getToken()
+
+            return fetch(...args, {
+              headers: { Authorization: `Bearer ${token}` }, // Include the session token as a Bearer token in the Authorization header
+            }).then((res) => res.json())
+          }
+
+          return authenticatedFetch
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```js
+        import useSWR from 'swr'
+
+        export default function useClerkSWR(url) {
+          // Use `useAuth()` to access the `getToken()` method
+          const { getToken } = useAuth()
+
+          const fetcher = async (...args) => {
+            // Use `getToken()` to get the current session token
+            const token = await getToken()
+
+            return fetch(...args, {
+              headers: { Authorization: `Bearer ${token}` }, // Include the session token as a Bearer token in the Authorization header
+            }).then((res) => res.json())
+          }
+
+          return useSWR(url, fetcher)
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        <Include src="_partials/tanstack-query/making-requests-callout" />
+
+        ```tsx
+        import { useQuery } from '@tanstack/react-query'
+
+        // Define your query keys as constants to avoid typos
+        export const queryKeys = {
+          foo: ['foo'] as const,
+          // Add other query keys as needed
+        }
+
+        // Define the response type for type safety
+        interface FooResponse {
+          // Add your response type here
+          id: string
+          name: string
+        }
+
+        export function useFooQuery() {
+          // Use `useAuth()` to access the `getToken()` method
+          const { getToken } = useAuth()
+
+          return useQuery({
+            queryKey: queryKeys.foo,
+            queryFn: async (): Promise<FooResponse> => {
+              // Use `getToken()` to get the current session token
+              const token = await getToken()
+
+              // Make the request
+              const response = await fetch('/api/foo', {
+                headers: {
+                  Authorization: `Bearer ${token}`, // Include the session token as a Bearer token in the Authorization header
+                  'Content-Type': 'application/json',
+                },
+              })
+
+              if (!response.ok) {
+                // Include status code and status text in error message
+                throw new Error(`API Error: ${response.status} ${response.statusText}`)
+              }
+
+              const data = await response.json()
+              return data as FooResponse
+            },
+            // Add common configuration options
+            retry: 2,
+            staleTime: 5 * 60 * 1000, // 5 minutes
+          })
+        }
+
+        // Usage in component:
+        function MyComponent() {
+          const { data, isLoading, error } = useFooQuery()
+
+          if (isLoading) return <div>Loading...</div>
+          if (error) return <div>Error: {error.message}</div>
+          if (!data) return null
+
+          return <div>{data.name}</div>
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
+
+  <Tab>
+    Use the global `Clerk.session` object to access the [`getToken()`](/docs/reference/objects/session#get-token) method.
+
+    ```js
+    (async () => {
+      fetch('/api/foo', {
+        headers: {
+          Authorization: `Bearer ${await Clerk.session.getToken()}`,
+        },
+      }).then((res) => res.json())
+    })()
+    ```
+  </Tab>
+</Tabs>

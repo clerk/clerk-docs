@@ -1,0 +1,98 @@
+---
+title: Testing with Playwright
+description: Use Playwright to write end-to-end tests with Clerk.
+---
+
+[Playwright](https://playwright.dev) is an open-source, end-to-end testing framework that automates web application testing across multiple browsers. This guide will help you set up your environment for creating authenticated tests with Clerk, assuming you have some familiarity with both Clerk and Playwright.
+
+<If is="llm">
+  **For AI agents:** Run `npx clerk@latest env pull` to write your Clerk API keys into your project's env file (merges without clobbering) instead of copying them from the Dashboard by hand. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
+> [!IMPORTANT]
+> See the [demo repo](https://github.com/clerk/clerk-playwright-nextjs) that demonstrates testing a Clerk-powered application using [Testing Tokens](/docs/guides/development/testing/overview#testing-tokens). To run the tests, you'll need dev instance Clerk API keys and have **Email** and **Password** authentication enabled in the Clerk Dashboard. A test user is created automatically during setup.
+
+<Steps>
+  ## Install `@clerk/testing`
+
+  Clerk's testing package provides integration helpers for popular testing frameworks. Run the following command to install it:
+
+  <CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+    ```sh {{ filename: 'terminal' }}
+    npm i @clerk/testing --save-dev
+    ```
+
+    ```sh {{ filename: 'terminal' }}
+    yarn add -D @clerk/testing
+    ```
+
+    ```sh {{ filename: 'terminal' }}
+    pnpm add @clerk/testing -D
+    ```
+  </CodeBlockTabs>
+
+  ## Set your API keys
+
+  In your test runner, set your [Publishable Key](!publishable-key) and [Secret Key](!secret-key) as the `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` environment variables, respectively.
+
+  > [!WARNING]
+  > Ensure that the Secret Key is provided securely to prevent exposure to third parties. For example, if you are using GitHub Actions, refer to [_Using secrets in GitHub Actions_](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions).
+
+  ## Configure Playwright with Clerk
+
+  The `clerkSetup()` function obtains a Testing Token when your test suite starts, making it available for all subsequent tests to use. This ensures that you don't have to manually generate a Testing Token for each test.
+
+  To configure Playwright with Clerk, call the `clerkSetup()` function in your [global setup file](https://playwright.dev/docs/test-global-setup-teardown), as shown in the following example:
+
+  ```tsx {{ filename: 'global.setup.ts' }}
+  import { clerkSetup } from '@clerk/testing/playwright'
+  import { test as setup } from '@playwright/test'
+
+  // Setup must be run serially, this is necessary if Playwright is configured to run fully parallel: https://playwright.dev/docs/test-parallel
+  setup.describe.configure({ mode: 'serial' })
+
+  setup('global setup', async ({}) => {
+    await clerkSetup()
+  })
+  ```
+
+  > [!NOTE]
+  > Instead of calling `clerkSetup()`, you can manually set the Testing Token by setting the `CLERK_TESTING_TOKEN` environment variable to the [Testing Token](/docs/guides/development/testing/overview#testing-tokens) that you create through the Backend API.
+
+  ## Use `setupClerkTestingToken()`
+
+  Now that Playwright is configured with Clerk, you can use the `setupClerkTestingToken()` function to include the Testing Token in individual test cases. This function injects the Testing Token for the specific test, ensuring the test can bypass Clerk's bot detection mechanisms. See the following example:
+
+  ```tsx {{ filename: 'my-test.spec.ts' }}
+  import { setupClerkTestingToken } from '@clerk/testing/playwright'
+  import { test } from '@playwright/test'
+
+  test('sign up', async ({ page }) => {
+    await setupClerkTestingToken({ page })
+
+    await page.goto('/sign-up')
+    // Add additional test logic here
+  })
+  ```
+
+  > [!TIP]
+  > The `<SignUp />` component renders form fields based on your instance configuration in the Clerk Dashboard, including in testing mode. If your instance requires additional fields like first and last name, username, or legal acceptance, those fields will appear in the sign-up form and must be filled in your test. See [Test the sign-up form](/docs/guides/development/testing/playwright/test-sign-up-flows) for a complete example.
+</Steps>
+
+## Troubleshooting
+
+### Sign-up form fields missing (e.g., first and last name)
+
+If the `<SignUp />` component only renders email and password fields in your Playwright tests but shows all fields in a normal browser, check your Playwright config for the `--disable-web-security` Chrome launch argument.
+
+This flag strips the `Origin` header from cross-origin requests, which causes Clerk's API to reject the environment configuration request. Without the environment config, the component falls back to a minimal form.
+
+Remove `--disable-web-security` from your `launchOptions.args` to fix this.
+
+### `setupClerkTestingToken` error: "Clerk Frontend API URL is required"
+
+Make sure `clerkSetup()` is called in a [project-based setup](https://playwright.dev/docs/test-global-setup-teardown), not a function-based `globalSetup`.
+
+With a function-based `globalSetup`, the setup runs in a separate process and the environment variables set by `clerkSetup()` (`CLERK_FAPI` and `CLERK_TESTING_TOKEN`) don't propagate to your test workers.
+
+Use a project-based setup as shown in the [Configure Playwright with Clerk](#configure-playwright-with-clerk) section above, and declare it as a [dependency](https://playwright.dev/docs/test-projects#dependencies) for your test projects.

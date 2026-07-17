@@ -1,0 +1,127 @@
+---
+title: Express Quickstart
+description: Learn how to use Clerk to quickly and easily add secure authentication and user management to your Express server.
+sdk: expressjs
+---
+
+<TutorialHero
+  exampleRepo={[
+    {
+      title: "Express Quickstart Repo",
+      link: "https://github.com/clerk/clerk-express-quickstart"
+    }
+  ]}
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+Learn how to integrate Clerk into your Express backend for secure user authentication and management. This guide focuses on backend implementation and requires a [Clerk frontend SDK](/docs#explore-by-frontend-framework) to function correctly.
+
+<Steps>
+  ## Create a new Express app
+
+  If you don't already have an Express app, run the following commands to [create a new one](https://expressjs.com/en/starter/installing.html).
+
+  ```npm
+  mkdir clerk-express
+  cd clerk-express
+  npm init -y
+  npm install express
+  ```
+
+  ## Install `@clerk/express`
+
+  The [Clerk Express SDK](/docs/reference/express/overview) provides a range of backend utilities to simplify user authentication and management in your application.
+
+  Run the following command to install the SDK:
+
+  ```npm
+  npm install @clerk/express
+  ```
+
+  ## Set your Clerk API keys
+
+  <Include src="_partials/quickstarts/set-clerk-api-keys" />
+
+  ```sh {{ filename: '.env' }}
+  CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_SECRET_KEY={{secret}}
+  ```
+
+  Node can load `.env` files natively. When running your app, use the `--env-file=.env` flag so environment variables can be accessed at import time.
+
+  ## Add `clerkMiddleware()` to your app
+
+  The [`clerkMiddleware()`](/docs/reference/express/clerk-middleware) function checks the request's cookies and headers for a session JWT and, if found, attaches the [`Auth`](/docs/reference/backend/types/auth-object){{ target: '_blank' }} object to the `request` object under the `auth` key.
+
+  ```ts {{ filename: 'index.ts', mark: [2, 7] }}
+  import express from 'express'
+  import { clerkMiddleware } from '@clerk/express'
+
+  const app = express()
+  const PORT = 3000
+
+  app.use(clerkMiddleware())
+
+  // Start the server and listen on the specified port
+  app.listen(PORT, () => {
+    console.log(`Example app listening at http://localhost:${PORT}`)
+  })
+  ```
+
+  ## Protect your routes using `getAuth()`
+
+  To protect your routes, use the [`getAuth()`](/docs/reference/express/get-auth) helper in the route body. `getAuth()` returns the request's auth state, so you can choose how your application responds when the user isn't authenticated.
+
+  In the following example, `getAuth()` is used to protect the `/protected` route. If the user isn't authenticated, the route returns a `401` status code. If the user is authenticated, the `userId` is passed to [`clerkClient.users.getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} to fetch the current user's `User` object.
+
+  ```ts {{ filename: 'index.ts' }}
+  import express from 'express'
+  import { clerkMiddleware, clerkClient, getAuth } from '@clerk/express'
+
+  const app = express()
+  const PORT = 3000
+
+  app.use(clerkMiddleware())
+
+  app.get('/protected', async (req, res) => {
+    // Use `getAuth()` to get the user's `userId`
+    const { isAuthenticated, userId } = getAuth(req)
+
+    if (!isAuthenticated) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+
+    // Use the `getUser()` method to get the user's User object
+    const user = await clerkClient.users.getUser(userId)
+
+    res.json({ user })
+  })
+
+  // Start the server and listen on the specified port
+  app.listen(PORT, () => {
+    console.log(`Example app listening at http://localhost:${PORT}`)
+  })
+  ```
+
+  ## Add global TypeScript type (optional)
+
+  If you're using TypeScript, add a global type reference to your project to enable auto-completion and type checking for the `auth` object in Express request handlers.
+
+  1. In your application's root folder, create a `types/` directory.
+  1. Inside this directory, create a `globals.d.ts` file with the following code.
+
+  ```ts {{ filename: 'types/globals.d.ts' }}
+  /// <reference types="@clerk/express/env" />
+  ```
+</Steps>
+
+## Next steps
+
+<Include src="_partials/quickstarts/next-steps/backend-sdks" />

@@ -1,0 +1,101 @@
+---
+title: Add Microsoft Entra ID as a SAML connection
+description: Learn how to allow users to sign up and sign in to your Clerk app with their Microsoft account using SAML SSO.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Upgrade to a paid plan",
+      link: "/pricing",
+      icon: "plus-circle",
+    },
+    {
+      title: "Enable email for your app.",
+      link: "/docs/guides/configure/auth-strategies/sign-up-sign-in-options",
+      icon: "key",
+    }
+  ]}
+/>
+
+Clerk supports [Enterprise SSO](/docs/guides/configure/auth-strategies/enterprise-connections/overview) via the SAML protocol, enabling you to create authentication strategies for an Identity Provider (IdP).
+
+When you configure a SAML connection with Microsoft Entra ID (formerly [Azure Active Directory](https://learn.microsoft.com/en-us/entra/fundamentals/new-name)) as your IdP, your users can sign up and sign in to your application with their Microsoft account. In this guide, **you** configure the connection in the Clerk Dashboard, while **the customer** (whoever manages the Microsoft Entra ID application) configures it on the Microsoft side.
+
+<Include src="_partials/authentication/saml/self-serve-sso-callout" />
+
+<Steps>
+  ## Create a Microsoft Entra ID SAML connection in Clerk
+
+  1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+  1. Select **Add connection** and select **For specific domains or organizations**.
+  1. Under **SAML**, select **Microsoft Entra ID (Formerly AD)**.
+  1. Enter the **Domain**. This is the email domain of the users you want to allow to sign in to your application. Optionally, select an **Organization**.
+  1. Enter the **Name**. This will be displayed on the sign-in form.
+  1. Select **Add connection**. You'll be redirected to the connection's configuration page. Note that the connection is disabled by default.
+  1. In the **Service Provider Configuration** section, save the **Reply URL (Assertion Consumer Service URL)** and **Identifier (Entity ID)** values somewhere secure. You'll need to give these to the customer so they can configure their Microsoft Entra ID application.
+
+  ## Configure SAML application
+
+  Now that the enterprise connection is configured in Clerk and the **Reply URL** and **Identifier** are known, the customer's Microsoft application needs to be configured. At a high level, the process is:
+
+  - Create a new enterprise application in Microsoft Azure and assign users or groups.
+  - Add the **Reply URL** and **Identifier** from Clerk to the application's SAML configuration.
+  - Configure the attribute claims.
+  - Share the application's **App Federation Metadata URL**.
+
+  To get you started, you can use the following email template with detailed instructions. Remember to share the **Reply URL** and **Identifier (Entity ID)**:
+
+  <Copyable as="html">
+    Here are the instructions for setting up SAML SSO with Microsoft Entra ID:
+
+    **Step 1: Create a new enterprise application**
+
+    1. Sign in to the [Microsoft Azure portal](https://azure.microsoft.com/en-us/get-started/azure-portal) and go to **Enterprise applications**.
+    1. Select **New application**, then **Create your own application**.
+    1. In the modal that opens, enter your application name, select **Integrate any other application you don't find in the gallery (Non-gallery)**, then select **Create**.
+    1. In the **Getting Started** section, select **Assign users and groups**. (For group options, see [Microsoft's docs](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal?pivots=portal).)
+    1. Select **Add user/group**, choose the users or groups to assign, then select **Assign**.
+
+    **Step 2: Add your service provider details**
+
+    1. In the side navigation, open the **Manage** dropdown and select **Single sign-on**.
+    1. In the **Select a single sign-on method** section, select **SAML**.
+    1. Find the **Basic SAML Configuration** section and select **Edit**.
+    1. Copy the **Identifier (Entity ID)** and **Reply URL (Assertion Consumer Service URL)** values provided to you into their respective fields.
+    1. Select **Save**, then close the panel.
+
+    **Step 3: Configure attributes and claims**
+
+    Your SAML response must include the following attributes:
+
+    | Attribute | Required | Claim name | Value |
+    | - | - | - | - |
+    | Email address | ✅ | `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress` | `user.mail` |
+    | First name | ❌ | `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname` | `user.givenname` |
+    | Last name | ❌ | `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname` | `user.surname` |
+
+    These are usually the defaults, but it's worth confirming, since many SAML errors come from incorrect attribute mappings. On the **SAML-based Sign-on** page, find the **Attributes & Claims** section, select **Edit**, and verify the attributes above are present.
+
+    **Step 4: Share the application's metadata URL**
+
+    On the **SAML-based Sign-on** page, find the **SAML Certificates** section, copy the **App Federation Metadata Url**, and reply to this email with it.
+  </Copyable>
+
+  ## Add App Federation Metadata URL in the Clerk Dashboard
+
+  After following the instructions in the email, your customer should have sent you the Microsoft app's **App Federation Metadata URL**. Now, you're going to add it to the Clerk connection, completing the SAML connection configuration.
+
+  1. Navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page in the Clerk Dashboard.
+  1. Select the SAML connection.
+  1. In the **Identity Provider Configuration** section, under **App Federation Metadata Url**, paste the **App Federation Metadata URL**.
+  1. Select **Fetch & save**. Keep the page open for the next step.
+
+  ## Map IdP claims to Clerk fields
+
+  <Include src="_partials/authentication/saml/map-claims" />
+
+  ## Enable the connection in Clerk
+
+  <Include src="_partials/authentication/saml/enable-connection" />
+</Steps>

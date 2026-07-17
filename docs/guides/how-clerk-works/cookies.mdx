@@ -1,0 +1,123 @@
+---
+title: Cookies
+description: Learn how cookies enable secure authentication and manage browser-server interactions.
+---
+
+Cookies play a vital role in authentication, state management, and browser-server communication. By understanding their attributes, developers can ensure secure and efficient use in their applications.
+
+## What are cookies?
+
+Cookies are small pieces of information stored in the browser and sent automatically alongside some requests coming from that browser.
+
+By default, HTTP requests are "stateless" and lack memory of previous interactions. Cookies change this behavior, as they are stored long term and can be sent alongside each request.
+
+### Setting cookies
+
+Cookies are typically created by the server and communicated to the browser through the [`Set-Cookie` HTTP header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie). When the browser receives this header, it stores the cookie and includes it in future requests to the **same domain**. Here's an example:
+
+```http
+HTTP/2 200
+Content-Type: text/html
+Set-Cookie: session_id=sess123
+
+<html>
+  <body>
+    <p>Hello, world!</p>
+  </body>
+</html>
+```
+
+This response sets a `session_id` cookie with the value `sess123`. To view cookies in your browser's developer tools, navigate to the **Application** tab. Then in the **Storage** section, select **Cookies**. Here's an example from Clerk's website:
+
+![cookies in browser console](/docs/images/how-clerk-works/devtools-cookies.png)
+
+## Cookie domains and scope
+
+Each cookie has a [`Domain`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#define_where_cookies_are_sent) that indicates **the domain from which the cookie was set**. This determines when the cookie will be included in requests.
+
+For example:
+
+- If a cookie is set by `example.com` without a `Domain` value, it will be sent only with requests _to_ `example.com`.
+- If the cookie's `Domain` value is _explicitly_ set to `example.com`, it will also be sent with requests to subdomains like `sub.example.com`.
+- However, cookies set by subdomains (e.g., `sub.example.com`) won't be sent with requests to the parent domain (`example.com`).
+
+## Tracking cookies and privacy concerns
+
+Historically, cookies were often used for tracking user behavior across websites.
+
+For example, say you [hotlink](https://developer.mozilla.org/en-US/docs/Glossary/Hotlink) an image from `facebook.com` on to your website, `example.com`, as such:
+
+```
+<!doctype html>
+<html>
+  <body>
+    <p>Check out this cool picture of me on vacation that I posted on FB</p>
+    <img src='http://facebook.com/images/h0e208whe8r0.jpg alt='Me on vacation' />
+  <body>
+</html>
+```
+
+To display the image, `example.com` requests the image from `facebook.com`. Let's say Facebook's web server:
+
+1. Retrieves the image
+1. Creates an entry for you as a user in their database with a unique ID
+1. Records that you visited `example.com`
+1. Sets a cookie with your unique ID and [the `SameSite` value set to "none"](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value)
+
+The response from Facebook would look something like:
+
+```
+HTTP/2 200
+Set-Cookie: fb_tracker=user123; SameSite=none
+
+...the content of the image
+```
+
+Now let's say you visit another website, `foobar.com`, and that website is using a script from Facebook for tracking the effectiveness of Facebook ads. So now `foobar.com` makes a request to `facebook.com`, and Facebook gets back the cookie that it set from the image on `example.com`. But how could this happen? Let's revisit this statement one more time:
+
+> Cookies are typically created by the server and communicated to the browser through the [`Set-Cookie` HTTP header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie). When the browser receives this header, it stores the cookie and includes it in future requests to the **same domain**.
+
+Despite being set on `example.com`, the cookie's domain value is `facebook.com`, since it was set _by_ Facebook. And remember that the cookie was set with the `SameSite` value set to “none”, which, according to [the docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value), means that the browser sends the cookie **with both cross-site and same-site requests.**
+
+So in this scenario, even if the cookie was set on a different website, the browser still sends the cookie back to Facebook, because the cookie has `facebook.com` set as its domain. Facebook then gets the cookie, is able to identify you as a user, and can identify that you also visited `foobar.com`. Any other site that you visit that loads anything from Facebook is an opportunity for Facebook to get back the cookie and use it to build a profile of your browsing habits and history.
+
+Clerk doesn't do any of this type of tracking. However, this example is still helpful for building a foundation around the edges of how cookies are stored and transmitted.
+
+## Controlling cross-site cookie behavior with `SameSite`
+
+The `SameSite` attribute of cookies plays a crucial role in controlling cross-site cookie behavior. Clerk uses the `SameSite=Lax` setting to ensure a secure and user-friendly experience. This setting allows cookies to be sent with top-level navigation (e.g., clicking a link) but not with other cross-site requests (e.g., loading images).
+
+See MDN's guide on [`SameSite`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value) for more details.
+
+## Sharing cookies across subdomains
+
+Sharing cookies across subdomains is controlled by the `Domain` attribute.
+
+- A cookie **explicitly** set with `Domain=example.com` will be sent with requests to both `example.com` and `sub.example.com`.
+- A cookie set without a domain value will only be sent to the domain that created it (e.g., `example.com`) and not its subdomains.
+
+Cookies **explicitly** set with a domain appear in devtools with a leading period (e.g., `.example.com`). Cookies set without a domain value appear without the leading period (e.g., `example.com`).
+
+## Controlling JavaScript access with `HttpOnly`
+
+By default, cookies can be accessed via `document.cookie` in JavaScript. While this can be useful, it exposes cookies to risks like [Cross-Site Scripting (XSS) attacks](https://owasp.org/www-community/attacks/xss/). Setting the [`HttpOnly`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#httponly) flag prevents JavaScript from accessing the cookie, enhancing security. These cookies are still sent with HTTP requests but are inaccessible to client-side scripts.
+
+## How Clerk uses cookies
+
+Clerk leverages cookies in a secure, privacy-compliant manner to facilitate seamless user authentication across domains and subdomains. Clerk sets cookies when your users interact with your application in ways that trigger requests for services, such as signing in or signing up. This cannot be disabled.
+
+These cookies:
+
+- Are required for Clerk to function, and should not be blocked by you or your users.
+- Do not store any personally identifiable information by default.
+- Can be configured by modifying the [session token](/docs/guides/sessions/session-tokens) in the [Clerk Dashboard](https://dashboard.clerk.com/~/jwt-templates).
+
+| Cookie Subgroup | Cookies | More Information |
+| - | - | - |
+| .clerk.com | `__session`, `__client_uat` | First party |
+| .clerk.com, .dashboard.clerk.com (cloudflare) | `_cfuvid` | Third party [Cloudflare Cookies](https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/) |
+
+> [!WARNING]
+> You should seek legal advice before using this information to craft your privacy policy.
+
+To learn more about how Clerk uses cookies to store user information, see the [guide on how Clerk works](/docs/guides/how-clerk-works/overview).

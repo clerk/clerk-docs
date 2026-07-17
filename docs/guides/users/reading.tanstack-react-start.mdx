@@ -1,0 +1,116 @@
+---
+title: Read user data
+description: Learn how to use Clerk's hooks and helpers to read user data in your TanStack React Start application.
+metadata:
+  title: Read session and user data in your TanStack React Start app with Clerk
+sdk: tanstack-react-start
+---
+
+Clerk provides a set of [hooks and helpers](/docs/reference/tanstack-react-start/overview#client-side-helpers) that you can use to read user data in your TanStack React Start application. Here are examples of how to use these helpers in both the client and server-side to get you started.
+
+## Server-side
+
+The [`auth()`](/docs/reference/tanstack-react-start/auth) helper returns the [`Auth`](/docs/reference/backend/types/auth-object) object of the currently active user, which contains important information like the current user's session ID, user ID, and Organization ID, and the `isAuthenticated` property, which can be used to protect your API routes.
+
+In some cases, you may need the full [`Backend User`](/docs/reference/backend/types/backend-user) object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server. The `clerkClient()` helper returns an instance of [`clerkClient`](/docs/reference/backend/overview), which exposes Clerk's Backend API resources through methods such as the [`getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} method. This method returns the full `Backend User` object.
+
+In the following example, the `userId` is passed to the `getUser()` method to get the user's full `Backend User` object.
+
+<Tabs items={["Server function", "API Route"]}>
+  <Tab>
+    ```tsx {{ filename: 'src/routes/index.tsx' }}
+    import { createFileRoute, redirect } from '@tanstack/react-router'
+    import { createServerFn } from '@tanstack/react-start'
+    import { clerkClient, auth } from '@clerk/tanstack-react-start/server'
+    import { UserButton } from '@clerk/tanstack-react-start'
+
+    const authStateFn = createServerFn().handler(async () => {
+      // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+      // Accessing the `Auth` object differs depending on the SDK you're using
+      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+      const { isAuthenticated, userId } = await auth()
+
+      // Protect the server function from unauthenticated users
+      if (!isAuthenticated) {
+        // This might error if you're redirecting to a path that doesn't exist yet
+        // You can create a sign-in route to handle this
+        // See https://clerk.com/docs/guides/development/custom-sign-in-or-up-page
+        throw redirect({
+          to: '/sign-in/$',
+        })
+      }
+
+      // Get the user's full `Backend User` object
+      const user = await clerkClient().users.getUser(userId)
+
+      return { userId, firstName: user?.firstName }
+    })
+
+    export const Route = createFileRoute('/')({
+      component: Home,
+      beforeLoad: () => authStateFn(),
+      loader: async ({ context }) => {
+        return { userId: context.userId, firstName: context.firstName }
+      },
+    })
+
+    function Home() {
+      const state = Route.useLoaderData()
+
+      return (
+        <div>
+          <h1>Welcome, {state.firstName}!</h1>
+          <p>Your ID is {state.userId}</p>
+          <UserButton />
+        </div>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'src/routes/api/example.ts' }}
+    import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+    import { json } from '@tanstack/react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+
+    export const ServerRoute = createFileRoute('/api/example')({
+      server: {
+        handlers: {
+          GET: async () => {
+            // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+            // Accessing the `Auth` object differs depending on the SDK you're using
+            // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+            const { isAuthenticated, userId } = await auth()
+
+            // Protect the API route from unauthenticated users
+            if (!isAuthenticated) {
+              return new Response('User not authenticated', {
+                status: 404,
+              })
+            }
+
+            // Get the user's full `Backend User` object
+            const user = await clerkClient().users.getUser(userId)
+
+            // Return the `Backend User` object
+            return json({ user })
+          },
+        },
+      },
+    })
+    ```
+  </Tab>
+</Tabs>
+
+## Client-side
+
+To access session and user data on the client-side, use Clerk's `useAuth()` and `useUser()` hooks.
+
+### `useAuth()`
+
+<Include src="_partials/hooks/use-auth" />
+
+### `useUser()`
+
+<Include src="_partials/hooks/use-user" />

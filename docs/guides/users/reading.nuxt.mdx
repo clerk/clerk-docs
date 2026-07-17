@@ -1,0 +1,50 @@
+---
+title: Read user data
+description: Learn how to use Clerk's composables to read user data in your Nuxt application.
+metadata:
+  title: Read session and user data in your Nuxt app with Clerk
+sdk: nuxt
+---
+
+Clerk provides [composables](/docs/reference/nuxt/overview#client-side-helpers) to read user data in your Nuxt application.
+
+## Client-side
+
+### `useAuth()`
+
+<Include src="_partials/vue-nuxt/use-auth" />
+
+### `useUser()`
+
+<Include src="_partials/vue-nuxt/use-user" />
+
+## Server-side
+
+The `Auth` object is available at `event.context.auth()` in your [event handlers](https://h3.unjs.io/guide/event-handler). This JavaScript object contains important authentication information like the current user's session ID, user ID, and Organization ID, and an `isAuthenticated` property to protect your API routes from unauthenticated users.
+
+In some cases, you may need the full [`Backend User`](/docs/reference/backend/types/backend-user){{ target: '_blank' }} object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server. The `clerkClient()` helper returns an instance of [`clerkClient`](/docs/reference/backend/overview), which exposes Clerk's Backend API resources through methods such as the [`getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} method. This method returns the full `Backend User` object.
+
+The following example uses the `Auth` object to access the `userId` and `isAuthenticated` properties. The `userId` is passed to the `getUser()` method to get the user's full `Backend User` object. The `isAuthenticated` property is used to protect the API route from unauthenticated users.
+
+```ts {{ filename: 'server/api/auth/index.ts' }}
+import { clerkClient } from '@clerk/nuxt/server'
+
+export default defineEventHandler(async (event) => {
+  // Use `auth` to access the `isAuthenticated` and `userId` properties
+  const { isAuthenticated, userId } = event.context.auth()
+
+  // Protect the API route by checking if the user is signed in
+  if (!isAuthenticated) {
+    // Add logic to handle unauthenticated users:
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized: No user ID provided',
+    })
+  }
+
+  // Get the user's full `Backend User` object
+  const user = await clerkClient(event).users.getUser(userId)
+
+  return user
+})
+```

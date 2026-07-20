@@ -1,0 +1,113 @@
+<If sdk={["nextjs", "tanstack-react-start"]}>
+  In the following example, the `acceptsToken` parameter allows both `session_token`s and `oauth_token`s.
+
+  - If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated`. Check `isAuthenticated` before reading the other properties, like `userId`.
+  - If the token is an `oauth_token`, the code checks that it includes the required `'profile'` scope. If not, the request is rejected with a `401` response.
+  - If the token is valid and the required scope is present, `isAuthenticated` is `true` and `userId` is returned. Because the `'profile'` scope grants access to the user's identity, this example uses the `userId` to fetch and return the user's profile data.
+
+  <If sdk="nextjs">
+    ```tsx {{ filename: 'app/api/example/route.ts' }}
+    import { NextResponse } from 'next/server'
+    import { auth, clerkClient } from '@clerk/nextjs/server'
+
+    export async function POST() {
+      // Accept both session_token and oauth_token types
+      const authObject = await auth({
+        acceptsToken: ['session_token', 'oauth_token'],
+      })
+
+      // If isAuthenticated is false, the token is invalid
+      if (!authObject.isAuthenticated) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      // Check if the token is an oauth_token and if it doesn't have the required scope
+      if (authObject.tokenType === 'oauth_token' && !authObject.scopes.includes('profile')) {
+        return NextResponse.json({ error: 'OAuth token missing the "profile" scope' }, { status: 401 })
+      }
+
+      // The 'profile' scope grants access to the user's identity,
+      // so fetch and return the authenticated user's profile data
+      const client = await clerkClient()
+      const user = await client.users.getUser(authObject.userId)
+
+      return NextResponse.json({ id: user.id, firstName: user.firstName, lastName: user.lastName })
+    }
+    ```
+
+    To enforce token types across your API routes, check the token type in each Route Handler with [`auth({ acceptsToken })`](/docs/reference/nextjs/app-router/auth#verify-machine-requests).
+  </If>
+
+  <If sdk="tanstack-react-start">
+    ```tsx {{ filename: 'app/routes/api/example.tsx' }}
+    import { json } from '@tanstack/react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+
+    export const ServerRoute = createFileRoute('/api/example')({
+      server: {
+        handlers: {
+          POST: async () => {
+            // Accept both session_token and oauth_token types
+            const authObject = await auth({
+              acceptsToken: ['session_token', 'oauth_token'],
+            })
+
+            // If isAuthenticated is false, the token is invalid
+            if (!authObject.isAuthenticated) {
+              return json({ error: 'Unauthorized' }, { status: 401 })
+            }
+
+            // Check if the token is an oauth_token and if it doesn't have the required scope
+            if (authObject.tokenType === 'oauth_token' && !authObject.scopes.includes('profile')) {
+              return json({ error: 'OAuth token missing the "profile" scope' }, { status: 401 })
+            }
+
+            // The 'profile' scope grants access to the user's identity,
+            // so fetch and return the authenticated user's profile data
+            const user = await clerkClient().users.getUser(authObject.userId)
+
+            return json({ id: user.id, firstName: user.firstName, lastName: user.lastName })
+          },
+        },
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk="react-router">
+  In the following example, the `acceptsToken` parameter allows both `session_token`s and `oauth_token`s.
+
+  - If the token is invalid or missing, `getAuth()` will return `false` for `isAuthenticated`. Check `isAuthenticated` before reading the other properties, like `userId`.
+  - If the token is an `oauth_token`, the code checks that it includes the required `'profile'` scope. If not, the request is rejected with a `401` response.
+  - If the token is valid and the required scope is present, `isAuthenticated` is `true` and `userId` is returned. Because the `'profile'` scope grants access to the user's identity, this example uses the `userId` to fetch and return the user's profile data.
+
+  ```ts {{ filename: 'app/routes/api.example.ts' }}
+  import { getAuth, clerkClient } from '@clerk/react-router/server'
+  import type { Route } from './+types/api.example'
+
+  export async function action(args: Route.ActionArgs) {
+    // Accept both session_token and oauth_token types
+    const authObject = await getAuth(args, {
+      acceptsToken: ['session_token', 'oauth_token'],
+    })
+
+    // If isAuthenticated is false, the token is invalid
+    if (!authObject.isAuthenticated) {
+      throw new Response('Unauthorized', { status: 401 })
+    }
+
+    // Check if the token is an oauth_token and if it doesn't have the required scope
+    if (authObject.tokenType === 'oauth_token' && !authObject.scopes.includes('profile')) {
+      throw new Response('OAuth token missing the "profile" scope', { status: 401 })
+    }
+
+    // The 'profile' scope grants access to the user's identity,
+    // so fetch and return the authenticated user's profile data
+    const user = await clerkClient(args).users.getUser(authObject.userId)
+
+    return Response.json({ id: user.id, firstName: user.firstName, lastName: user.lastName })
+  }
+  ```
+</If>

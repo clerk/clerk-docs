@@ -33,6 +33,7 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import yaml from 'yaml'
 import { z } from 'zod'
+import { VALID_SDKS } from './lib/schemas'
 
 type RecordType = 'lvl0' | 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6' | 'content' | 'property'
 
@@ -44,11 +45,13 @@ type SearchRecord = {
   type: RecordType
   keywords: string[]
   availableSDKs: string[]
-  // The specific SDK this record's variant was built for (`activeSdk` frontmatter).
+  // The SDK(s) the client's active-SDK optionalFilters boost can match on this record.
+  // Per-SDK variants carry the single SDK the variant was built for (`activeSdk` frontmatter):
   // `availableSDKs` is the page's full support list and is identical across a page's
   // per-SDK variants, so it can't disambiguate them after `distinct` collapses the
-  // group. `sdk` lets search boost the active SDK's variant as the representative.
-  sdk: string | null
+  // group — `sdk` lets search boost the active SDK's variant as the representative.
+  // Universal (non-SDK-scoped) pages carry every current SDK key — see recordSDK.
+  sdk: string | string[]
   canonical: string
   weight: {
     pageRank: number
@@ -485,6 +488,21 @@ function filePathToUrl(filePath: string, distPath: string): string {
 }
 
 /**
+ * The `sdk` value written to a doc's records — what the client's active-SDK `optionalFilters`
+ * boost can match. Per-SDK variants carry the single SDK the variant was built for (`activeSdk`
+ * frontmatter). Universal (non-SDK-scoped) pages carry every current SDK key instead of nothing:
+ * the `filters` ranking criterion sits above `attribute`/`exact` on this index, so a record
+ * matching zero of the client's `sdk:` boosts structurally loses to ANY boosted record that
+ * matches the query — exact-title universal pages ("How Clerk works") were buried under
+ * body-content matches from SDK-scoped pages (DOCS-11910). Carrying the full list makes
+ * universal records tie the active SDK's own records on `filters`, and the tie falls through
+ * to `attribute`/`exact`, where title matches win.
+ */
+export function recordSDK(activeSdk: string | undefined): string | string[] {
+  return activeSdk ?? [...VALID_SDKS]
+}
+
+/**
  * Generates search records from a processed document
  */
 function generateRecordsFromDoc(
@@ -520,8 +538,8 @@ function generateRecordsFromDoc(
   const availableSdksRaw = doc.frontmatter.availableSdks?.split(',').filter(Boolean)
   // Use ["all"] for non-SDK-scoped docs (no availableSdks in frontmatter)
   const availableSdksList = availableSdksRaw && availableSdksRaw.length > 0 ? availableSdksRaw : ['all']
-  // The SDK this built variant targets (null for non-SDK-scoped/universal pages)
-  const sdk = doc.frontmatter.activeSdk ?? null
+  // The SDK(s) the active-SDK boost can match on this doc's records — see recordSDK
+  const sdk = recordSDK(doc.frontmatter.activeSdk)
   const canonical = doc.frontmatter.canonical
   const keywords = doc.frontmatter.search?.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? []
 
@@ -865,12 +883,20 @@ export const CURATED_SYNONYMS: Record<string, string[]> = {
   rbac: ['RBAC', 'role-based access control'],
   mfa: ['MFA', '2FA', 'multi-factor authentication', 'two-factor authentication'],
   jwks: ['JWKS', 'JSON Web Key Set'],
-  org: ['org', 'organization'],
+  // Plural forms are required: Algolia synonyms are literal (ignorePlurals is off), and the
+  // flagship page is titled "Organizations" — singular-only synonyms leave "org"/"orgs"
+  // matching Backend Organization* reference pages instead (DOCS-11910).
+  org: ['org', 'orgs', 'organization', 'organizations'],
+  'multi-tenant': ['multi-tenant', 'multitenant', 'multi-tenancy', 'multitenancy'],
 }
 
 // one-way: searching "webauthn" should surface passkey docs, not the reverse.
 export const ONE_WAY_SYNONYMS: SynonymHit[] = [
   { objectID: 'webauthn-passkey', type: 'oneWaySynonym', input: 'webauthn', synonyms: ['passkey', 'passkeys'] },
+  // One-way on purpose: "b2b" should surface Organizations (the marketing framing at
+  // clerk.com/organizations), but "organizations" queries must not start matching every
+  // B2B-titled page — the billing-for-b2b guide already owns exact "b2b" title matches.
+  { objectID: 'b2b-organizations', type: 'oneWaySynonym', input: 'b2b', synonyms: ['organizations'] },
 ]
 
 // Extract the first acronym ⇄ expansion pair from a single tooltip's markdown, or null if none.

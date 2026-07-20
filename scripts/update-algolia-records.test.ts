@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { VALID_SDKS } from './lib/schemas'
 import {
   buildSweepFilters,
   buildSynonyms,
@@ -14,6 +15,7 @@ import {
   parseOrphanSweepMax,
   parseOrphanSweepMode,
   partitionOrphans,
+  recordSDK,
   resolveSweepAllowlist,
   runOrphanSweep,
   STALE_RECORD_GRACE_MS,
@@ -424,5 +426,18 @@ describe('buildSweepFilters', () => {
 
   test('derives from the allowlist — a duplicate run branch is not repeated (Set dedupes)', () => {
     expect(buildSweepFilters(new Set(['main']))).toEqual(['branch:-main'])
+  })
+})
+
+describe('recordSDK', () => {
+  test('per-SDK variants carry the single SDK the variant was built for', () => {
+    expect(recordSDK('nextjs')).toBe('nextjs')
+  })
+
+  // Universal pages must tie (not lose to, not beat) SDK-scoped records on the `filters`
+  // criterion, whichever SDK the client boosts — anything less buries exact-title pages like
+  // "How Clerk works" under body-content matches (DOCS-11910).
+  test('universal pages carry every current SDK key so the active-SDK boost always matches', () => {
+    expect(recordSDK(undefined)).toEqual([...VALID_SDKS])
   })
 })

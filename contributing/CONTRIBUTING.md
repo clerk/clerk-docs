@@ -150,7 +150,7 @@ The content rendered on https://clerk.com/docs is pulled from the `main` branch 
 
 The documentation content is located in the [`/docs` directory](../docs/). Each MDX file located in this directory will be rendered under https://clerk.com/docs at its path relative to the root `/docs` directory, without the file extension.
 
-For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at https://clerk.com/docs/quickstarts/setup-clerk.
+For example, the file at `/docs/getting-started/quickstart/setup-clerk.mdx` can be found at https://clerk.com/docs/getting-started/quickstart/setup-clerk.
 
 ### Sidenav
 
@@ -194,7 +194,7 @@ type LinkItem = {
   /**
    * The item link. Internal links should be relative
    *
-   * @example '/docs/quickstarts/nextjs'
+   * @example '/docs/getting-started/quickstart/overview'
    * @example 'https://example.com'
    */
   href: string
@@ -209,7 +209,7 @@ type LinkItem = {
    * Icon to display next to the item text
    *
    * @example 'globe'
-   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
+   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/docs/icons.tsx}
    */
   icon?: string
   /**
@@ -253,7 +253,7 @@ type SubNavItem = {
    * Icon to display next to the item text
    *
    * @example 'globe'
-   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
+   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/docs/icons.tsx}
    */
   icon?: string
   /**
@@ -283,7 +283,7 @@ type SubNavItem = {
 <details>
 <summary>Visual representation of the manifest TypeScript types</summary>
 
-![Visual representation of the manifest TypeScript types](/.github/media/manifest.png)
+![Visual representation of the manifest TypeScript types](../.github/media/manifest.png)
 
 </details>
 
@@ -293,29 +293,29 @@ type SubNavItem = {
 
 To update the SDK selector, the files you need are in `clerk/clerk`:
 
-- https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDKSelector.tsx
+- https://github.com/clerk/clerk/blob/main/src/app/docs/SDKSelector.tsx
   - This is the logic behind how the SDK selector works and sets an SDK as active for the Docs. It's unlikely you'll touch this file, unless you are changing the logic behind how the SDK selector works.
-- https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDK.tsx
-  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most popular SDKs at the top (Next.js, React, JavaScript, Expo, TanStack React Start, React Router, Express), and then the rest are alphabetized.
+- https://github.com/clerk/clerk/blob/main/src/app/docs/SDK.tsx
+  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most popular SDKs at the top (Next.js, React, Expo, TanStack React Start, React Router, Express), and then the rest are alphabetized.
 
 #### Add a new SDK
 
 If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
+To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/getting-started/quickstart/overview](https://clerk.com/docs/getting-started/quickstart/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
-1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
+1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `getting-started/quickstart/overview.mdx`.
 1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
 
 In the `clerk/clerk` repo:
 
-1. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
-1. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `route`, `category`.
+1. In the `app/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+1. In the `app/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `route`, `category`.
 
 #### Add an external SDK
 
@@ -332,8 +332,8 @@ Now, the sidenav is set up to render the items for the new SDK you've added, and
 
 In the `clerk/clerk` repo:
 
-1. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
-1. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
+1. In the `app/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+1. In the `app/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
 
 #### Update the 'key' of an SDK
 
@@ -341,7 +341,7 @@ If you need to update the key of an SDK, because the logic is shared in `clerk-d
 
 In the `clerk/clerk` repo:
 
-1. In `clerk/src/app/(website)/docs/SDK.tsx`, change the necessary key in the `sdks` object.
+1. In `clerk/src/app/docs/SDK.tsx`, change the necessary key in the `sdks` object.
 1. In that same file, update the `sdkKeyMigrations` object by adding the old key as the key and the new key as the value. For example, if you were changing the `sdk` key to be `js` instead of `javascript`, you would do the following updates:
 
    ```diff
@@ -427,8 +427,6 @@ The `metadata` frontmatter field can be used to define additional information ab
 
 </details>
 
-</details>
-
 <details>
 <summary>Add page authors</summary>
 
@@ -460,8 +458,6 @@ The `metadata` frontmatter field can be used to define additional information ab
 +     canonical: https://docs.example.com/
   ---
 ```
-
-</details>
 
 </details>
 
@@ -543,13 +539,53 @@ The `metadata` frontmatter field can be used to define additional information ab
 
 The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:
 
-| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
-| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `exclude`  | `boolean`       | `false` | Whether to exclude the page from search entirely                                                                                                                                                                                                                                           |
-| `rank`     | `number`        | `0`     | The value to use for `weight.pageRank` in the index. See [Custom Ranking](https://www.algolia.com/doc/guides/managing-results/must-do/custom-ranking/) and [Boost search results with `pageRank`](https://docsearch.algolia.com/docs/record-extractor/#boost-search-results-with-pagerank) |
-| `keywords` | `Array<string>` | `[]`    | Additional [searchable](https://www.algolia.com/doc/guides/managing-results/must-do/searchable-attributes/) keywords to include when indexing the page. These are not visible to users.                                                                                                    |
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exclude`  | `boolean`       | `false` | Whether to exclude the page from search entirely                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `rank`     | `number`        | `0`     | The value to use for `weight.pageRank` in the index. See [Custom Ranking](https://www.algolia.com/doc/guides/managing-results/must-do/custom-ranking/) and [Boost search results with `pageRank`](https://docsearch.algolia.com/docs/record-extractor/#boost-search-results-with-pagerank)                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `keywords` | `Array<string>` | `[]`    | Additional [searchable](https://www.algolia.com/doc/guides/managing-results/must-do/searchable-attributes/) keywords to include when indexing the page. These are not visible to users. Adding a keyword lets a page match a search term that doesn't appear in its title or content, but keywords are the lowest-priority searchable attribute — a match on a keyword alone ranks below a match in the title, headings, or body. To boost a page's overall ranking, use `rank`. For example, [`docs/guides/secure/restricting-access.mdx`](https://clerk.com/docs/guides/secure/restricting-access) sets the `allowlist` keyword (alongside `rank: 1`) so it surfaces when searching for "allowlist". |
 
-You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
+##### Examples
+
+<details>
+<summary>Exclude a page from search</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   exclude: true
+  ---
+```
+
+</details>
+
+<details>
+<summary>Boost a page in search results</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   rank: 1
+  ---
+```
+
+</details>
+
+<details>
+<summary>Show a page in results when searching for "supercalifragilisticexpialidocious"</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   keywords:
++     - supercalifragilisticexpialidocious
+  ---
+```
+
+</details>
 
 #### Preview
 
@@ -591,45 +627,6 @@ The `shadcn` subfield supports the following framework keys:
 +   src: '/sign-in'
 +   shadcn:
 +     nextjs: 'nextjs-sign-in-page'
-  ---
-```
-
-</details>
-
-<details>
-<summary>Exclude a page from search</summary>
-
-```diff
-  ---
-  title: Example
-+ search: false
-  ---
-```
-
-</details>
-
-<details>
-<summary>Boost a page in search results</summary>
-
-```diff
-  ---
-  title: Example
-+ search:
-+   rank: 1
-  ---
-```
-
-</details>
-
-<details>
-<summary>Show a page in results when searching for "supercalifragilisticexpialidocious"</summary>
-
-```diff
-  ---
-  title: Example
-+ search:
-+   keywords:
-+     - supercalifragilisticexpialidocious
   ---
 ```
 
@@ -742,7 +739,7 @@ export function Layout() {
 ```
 ````
 
-![Code block with marked lines screenshot](/.github/media/code-block-mark.png)
+![Code block with marked lines screenshot](../.github/media/code-block-mark.png)
 
 You can also highlight specific strings using the `mark` prop. For example, to highlight `cssLayerName: 'clerk'`:
 
@@ -773,7 +770,7 @@ export function Layout() {
 ```
 ````
 
-![Code block with diff lines screenshot](/.github/media/code-block-diff.png)
+![Code block with diff lines screenshot](../.github/media/code-block-diff.png)
 
 </details>
 
@@ -813,9 +810,9 @@ export function Example() {
 <details>
 <summary>Fold example</summary>
 
-| Default                                                                                   | Expanded                                                                                   |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| <img width="1204" height="416" alt="" src="/.github/media/code-block-fold-default.png" /> | <img width="1204" height="478" alt="" src="/.github/media/code-block-fold-expanded.png" /> |
+| Default                                                                                     | Expanded                                                                                     |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| <img width="1204" height="416" alt="" src="../.github/media/code-block-fold-default.png" /> | <img width="1204" height="478" alt="" src="../.github/media/code-block-fold-expanded.png" /> |
 
 </details>
 
@@ -830,7 +827,7 @@ You can also truncate a code block by using the `collapsible` prop. This will re
 <details>
 <summary>Collapsible example</summary>
 
-![Code block with collapsible lines screenshot](/.github/media/code-block-collapsible.png)
+![Code block with collapsible lines screenshot](../.github/media/code-block-collapsible.png)
 
 </details>
 
@@ -917,7 +914,7 @@ Do these actions to complete Step 2.
 
 The image below shows what this example looks like once rendered.
 
-![An example of a <Steps /> component](/.github/media/steps.png)
+![An example of a <Steps /> component](../.github/media/steps.png)
 
 ### Callouts
 
@@ -950,7 +947,7 @@ Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/
 
 The image below shows what this example looks like once rendered.
 
-![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION, QUIZ](/.github/media/callouts.png)
+![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION, QUIZ](../.github/media/callouts.png)
 
 You can optionally specify an `id` attribute for a callout which allows for direct linking, e.g. `/docs/example#useful-info`:
 
@@ -970,7 +967,7 @@ You can create a collapsible section within a callout by using a thematic break 
 > Occaecati esse ut iure in quam praesentium nesciunt nemo. Repellat aperiam eaque quia. Aperiam voluptatem consequuntur numquam tenetur. Quibusdam repellat modi qui dolor ducimus ut neque adipisci dolorem. Voluptates dolores nisi est fuga.
 ```
 
-![An example of a collapsible section inside a quiz callout](/.github/media/callout-details.png)
+![An example of a collapsible section inside a quiz callout](../.github/media/callout-details.png)
 
 ### `<CodeBlockTabs />`
 
@@ -1029,7 +1026,7 @@ Example output:
 
 The image below shows what this example looks like once rendered.
 
-![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/.github/media/code-block-tabs.png)
+![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](../.github/media/code-block-tabs.png)
 
 ### `<Tabs />`
 
@@ -1073,18 +1070,18 @@ Tooltips should follow the same styleguide as links - only add them on the first
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
 
-| Property                      | Type                                                                                                                           | Description                                                                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                                                                               |
-| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                                                                                   |
-| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'` or `'Example repositories'`, but can be passed any string. |
+| Property                      | Type                                                                                                               | Description                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `beforeYouStart`              | { title: string; link: string; icon: [string](https://github.com/clerk/clerk/blob/main/src/app/docs/icons.tsx) }[] | Links to things that learners should complete before the tutorial.                                                                               |
+| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                  | Links to example repositories.                                                                                                                   |
+| `exampleRepoTitle` (optional) | string                                                                                                             | The title for the example repository/repositories. Defaults to `'Example repository'` or `'Example repositories'`, but can be passed any string. |
 
 ```mdx
 <TutorialHero
   beforeYouStart={[
     {
       title: 'Set up a Clerk application',
-      link: '/docs/quickstarts/setup-clerk',
+      link: '/docs/getting-started/quickstart/setup-clerk',
       icon: 'clerk',
     },
     {
@@ -1142,12 +1139,12 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>default</code> variant</summary>
 
-![Cards default variant screenshot](/.github/media/cards-default.png)
+![Cards default variant screenshot](../.github/media/cards-default.png)
 
 ```mdx
 <Cards>
 
-- [Quickstarts & Tutorials](/docs/quickstarts/overview)
+- [Quickstarts & Tutorials](/docs/getting-started/quickstart/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
 
 ---
@@ -1163,12 +1160,12 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>default</code> variant with icons</summary>
 
-![Cards default variant with icons screenshot](/.github/media/cards-default-icons.png)
+![Cards default variant with icons screenshot](../.github/media/cards-default-icons.png)
 
 ```mdx
 <Cards>
 
-- [Quickstarts & Tutorials](/docs/quickstarts/overview)
+- [Quickstarts & Tutorials](/docs/getting-started/quickstart/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
 - ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
@@ -1186,12 +1183,12 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>plain</code> variant with icons</summary>
 
-![Cards plain variant with icons screenshot](/.github/media/cards-plain-icons.png)
+![Cards plain variant with icons screenshot](../.github/media/cards-plain-icons.png)
 
 ```mdx
 <Cards variant="plain">
 
-- [Quickstarts & Tutorials](/docs/quickstarts/overview)
+- [Quickstarts & Tutorials](/docs/getting-started/quickstart/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
 - ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
@@ -1209,7 +1206,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>image</code> variant</summary>
 
-![Cards image variant screenshot](/.github/media/cards-image.png)
+![Cards image variant screenshot](../.github/media/cards-image.png)
 
 ```mdx
 <Cards variant="image">
@@ -1220,7 +1217,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [What is the “User” object?](/docs/guides/users/managing)
+- [What is the "User" object?](/docs/guides/users/managing)
 - The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
 - ![alt text](/user-object.png)
 
@@ -1232,7 +1229,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>cta</code> variant</summary>
 
-![Cards cta variant screenshot](/.github/media/cards-cta.png)
+![Cards cta variant screenshot](../.github/media/cards-cta.png)
 
 ```mdx
 <Cards variant="cta">
@@ -1243,9 +1240,9 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [Need help?](/https://clerk.com/contact/support 'Get help')
+- [Need help?](https://clerk.com/contact/support 'Get help')
 - Contact the support team to get answers to your questions.
-- ![alt text(/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1283,7 +1280,7 @@ description continued…
 <details>
 <summary>Example</summary>
 
-![Properties screenshot](/.github/media/properties.png)
+![Properties screenshot](../.github/media/properties.png)
 
 ```mdx
 <Properties>
@@ -1437,7 +1434,7 @@ Available values for the `sdk` prop:
 | ---------------------- | ---------------------- |
 | Next.js                | "nextjs"               |
 | React                  | "react"                |
-| Javascript             | "js-frontend"          |
+| JavaScript             | "js-frontend"          |
 | Chrome Extension       | "chrome-extension"     |
 | Expo                   | "expo"                 |
 | Android                | "android"              |
@@ -1451,8 +1448,6 @@ Available values for the `sdk` prop:
 | Nuxt                   | "nuxt"                 |
 | Vue                    | "vue"                  |
 | Ruby / Rails / Sinatra | "ruby"                 |
-| Python                 | "python"               |
-| Community SDKs         | "community-sdk"        |
 
 To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).
 
@@ -1517,7 +1512,7 @@ The `<AccordionPanel />` accepts a `title` and `children`.
 
 The image below shows what this example looks like once rendered.
 
-![An example of an <Accordion /> component](/.github/media/accordion.png)
+![An example of an <Accordion /> component](../.github/media/accordion.png)
 
 ### Images and static assets
 
@@ -1567,9 +1562,9 @@ The `width` and `height` props can now be used to specify the (max) display size
 ![alt text](/docs/images/my-image.png){{ width: 345 }}
 ```
 
-| Without `width`                                                                        | With `width`                                                                        |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| <img width="1320" height="2736" alt="" src="/.github/media/image-width-without.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-width-with.png" /> |
+| Without `width`                                                                          | With `width`                                                                          |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| <img width="1320" height="2736" alt="" src="../.github/media/image-width-without.png" /> | <img width="1320" height="1834" alt="" src="../.github/media/image-width-with.png" /> |
 
 </details>
 
@@ -1578,9 +1573,9 @@ The `width` and `height` props can now be used to specify the (max) display size
 
 `align` can be set to `left`, `center`, or `right` to align an image horizontally. The default is `left`.
 
-| `left`                                                                              | `center`                                                                              | `right`                                                                              |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| <img width="1320" height="1834" alt="" src="/.github/media/image-align-left.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-center.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-right.png" /> |
+| `left`                                                                                | `center`                                                                                | `right`                                                                                |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| <img width="1320" height="1834" alt="" src="../.github/media/image-align-left.png" /> | <img width="1320" height="1834" alt="" src="../.github/media/image-align-center.png" /> | <img width="1320" height="1834" alt="" src="../.github/media/image-align-right.png" /> |
 
 </details>
 
@@ -1589,9 +1584,9 @@ The `width` and `height` props can now be used to specify the (max) display size
 
 The `variant` prop can be used to display an image in a different style. Possible values are `default` and `browser`.
 
-| `default`                                                                                | `browser`                                                                                |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| <img width="1706" height="1328" alt="" src="/.github/media/image-variant-default.png" /> | <img width="1706" height="1328" alt="" src="/.github/media/image-variant-browser.png" /> |
+| `default`                                                                                  | `browser`                                                                                  |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| <img width="1706" height="1328" alt="" src="../.github/media/image-variant-default.png" /> | <img width="1706" height="1328" alt="" src="../.github/media/image-variant-browser.png" /> |
 
 When using the `browser` variant the caption is displayed in the menu bar.
 
@@ -1611,9 +1606,9 @@ The `Gallery` component displays multiple images in a grid layout. On mobile the
 </Gallery>
 ```
 
-| Desktop                                                                            | Mobile                                                                           |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
+| Desktop                                                                              | Mobile                                                                             |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| <img width="1266" height="1468" alt="" src="../.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="../.github/media/gallery-mobile.png" /> |
 
 </details>
 

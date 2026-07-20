@@ -52,6 +52,10 @@ Ensure you have setup a new connection within the third-party [client](!oauth-cl
 
 ### Create a Clerk OAuth application
 
+<If is="llm">
+  **For AI agents:** Instead of creating the OAuth application through the Dashboard modal below, use the CLI: run `npx clerk@latest api ls oauth` to discover the OAuth applications endpoints, then create one with `npx clerk@latest api oauth_applications -d '<json>'` — the create response includes the Client ID and Client Secret. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
 To create a Clerk OAuth application:
 
 1. In the Clerk Dashboard, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page.
@@ -83,7 +87,7 @@ Other available settings that may be useful include:
 
 ## Get additional user information with the OAuth 2.0 flow
 
-After a user has successfully completed an OAuth 2.0 flow, you can retrieve additional user information from Clerk's [`/oauth/userinfo`](/docs/reference/frontend-api/tag/oauth2-identify-provider/post/oauth/userinfo){{ target: '_blank' }} endpoint. When making the request to this endpoint, you must include the OAuth access token in the `Authorization` header.
+After a user has successfully completed an OAuth 2.0 flow, you can retrieve additional user information from Clerk's [`/oauth/userinfo`](/docs/reference/frontend-api/tag/oauth2-identity-provider/POST/oauth/userinfo){{ target: '_blank' }} endpoint. When making the request to this endpoint, you must include the OAuth access token in the `Authorization` header.
 
 This example is written for Next.js App Router **but can be adapted for any framework/language**. It assumes the OAuth flow has already been completed and that you have obtained an [access token](!oauth-access-token) from Clerk.
 
@@ -124,7 +128,7 @@ export async function GET() {
 
 ```json
 {
-  "object": "string",
+  "object": "oauth_user_info",
   "instance_id": "string",
   "user_id": "string",
   "sub": "string",
@@ -138,9 +142,15 @@ export async function GET() {
   "picture": "string",
   "public_metadata": {},
   "private_metadata": {},
-  "unsafe_metadata": {}
+  "unsafe_metadata": {},
+  "org_id": "string",
+  "org_name": "string",
+  "org_slug": "string"
 }
 ```
+
+> [!NOTE]
+> The `org_id`, `org_name`, and `org_slug` properties are only present in the response when Organizations are enabled, the `user:org:read` scope was granted, and an Organization is associated with the token. See [Organizations and OAuth](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#organizations-and-oauth).
 
 The `/oauth/userinfo` endpoint provides the following user properties, depending on the granted scopes:
 
@@ -158,10 +168,13 @@ The `/oauth/userinfo` endpoint provides the following user properties, depending
 | `public_metadata` | The user's public metadata |
 | `private_metadata` | The user's private metadata |
 | `unsafe_metadata` | The user's unsafe metadata |
+| `org_id` | The ID of an Organization to which the user belongs. See [Organizations and OAuth](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#organizations-and-oauth). |
+| `org_name` | The name of the user's Organization |
+| `org_slug` | The [slug](!slug) for the user's Organization |
 
 ### Get token information
 
-For validating [access tokens](!oauth-access-token) or refresh tokens and retrieving additional token metadata, Clerk provides a standard OAuth 2.0 [Token Introspection Endpoint](https://datatracker.ietf.org/doc/html/rfc7662) at [`/oauth/token_info`](/docs/reference/frontend-api/tag/oauth2-identify-provider/post/oauth/token_info){{ target: '_blank' }}.
+For validating [access tokens](!oauth-access-token) or refresh tokens and retrieving additional token metadata, Clerk provides a standard OAuth 2.0 [Token Introspection Endpoint](https://datatracker.ietf.org/doc/html/rfc7662) at [`/oauth/token_info`](/docs/reference/frontend-api/tag/oauth2-identity-provider/POST/oauth/token_info){{ target: '_blank' }}.
 
 The endpoint returns detailed token information such as if the token is still active, the Client ID, and the granted scopes.
 
@@ -173,21 +186,27 @@ This example is written for Next.js App Router **but can be adapted for any fram
 ```tsx {{ filename: 'app/api/tokeninfo/route.ts' }}
 import { NextRequest, NextResponse } from 'next/server'
 
-// Assume you already have the access token and refresh token available here
+// Assume you already have the access token and refresh token.
+// You can get your OAuth app's Client ID and Client Secret from the Clerk Dashboard:
+// https://dashboard.clerk.com/~/oauth-applications
+// In production, store these as environment variables loaded from `process.env.*`
+// rather than hardcoded here.
 const tokens = {
   accessToken: 'YOUR_ACCESS_TOKEN_HERE',
   refreshToken: 'YOUR_REFRESH_TOKEN_HERE',
 }
+const clientId = 'YOUR_CLIENT_ID_HERE'
+const clientSecret = 'YOUR_CLIENT_SECRET_HERE'
 
 export async function POST(req: NextRequest) {
   try {
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
     // Your Frontend API URL can be found on the API keys page in the Clerk Dashboard
     // https://dashboard.clerk.com/~/api-keys
     const response = await fetch(`${process.env.CLERK_FRONTEND_API_URL}/oauth/token_info`, {
       method: 'POST',
       headers: {
-        // Include the access token as a Bearer token in the Authorization header
-        Authorization: `Bearer ${tokens.accessToken}`,
+        Authorization: `Basic ${credentials}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
@@ -216,9 +235,13 @@ export async function POST(req: NextRequest) {
   "client_id": "string",
   "iat": 0,
   "scope": "string",
-  "sub": "string"
+  "sub": "string",
+  "org_id": "string"
 }
 ```
+
+> [!NOTE]
+> The `org_id` property is only present in the response when Organizations are enabled, the `user:org:read` scope was granted, and an Organization is associated with the token. See [Organizations and OAuth](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#organizations-and-oauth).
 
 ## Get additional user information with the OAuth 2.0 flow using the OpenID Connect (OIDC) protocol
 
@@ -304,3 +327,4 @@ Depending on the granted scopes, the ID token can include the following addition
 | `public_metadata` | The user's public metadata |
 | `private_metadata` | The user's private metadata |
 | `unsafe_metadata` | The user's unsafe metadata |
+| `org_id` | The ID of an Organization to which the user belongs. See [Organizations and OAuth](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#organizations-and-oauth). |

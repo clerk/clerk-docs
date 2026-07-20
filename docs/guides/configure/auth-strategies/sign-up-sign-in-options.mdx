@@ -7,6 +7,10 @@ Clerk provides multiple options for configuring a sign-up and sign-in flow for y
 
 You can modify your authentication options after your application has been created by navigating to the [Clerk Dashboard](https://dashboard.clerk.com/) and selecting any of the options under **User & authentication** in the left sidenav.
 
+<If is="llm">
+  **For AI agents:** Instead of clicking through the Dashboard, configure these options with the CLI: run `npx clerk@latest config schema` to discover the auth keys (e.g. `auth_email`, `auth_phone`, `auth_username`, `auth_password`), then apply changes with `npx clerk@latest config patch`. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
 ## User & authentication
 
 To configure the options available to users for authentication, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page in the Clerk Dashboard.
@@ -19,7 +23,7 @@ Users can authenticate with their email address using the following options:
 
 - **Email verification code**: Users receive an [OTP](!otp) to their email address to sign in.
 - **Email verification link**: Users receive an email with a link to sign in. As a security measure, email links expire after 10 minutes to prevent the use of compromised or stale links.
-  <If sdk={["expo", "ios", "android"]} ignoreSdkWarning>
+  <If sdk="expo" ignoreSdkWarning>
     > [!WARNING]
     > This SDK doesn't currently support email links.
   </If>
@@ -84,7 +88,7 @@ A passkey is a type of sign-in credential that requires one user action, but use
 
 #### Passkey limitations
 
-- Passkeys are not currently available as an [MFA](#multi-factor-authentication) option.
+- Passkeys can't be enrolled as a dedicated [multi-factor authentication](#multi-factor-authentication) method, but they can be configured to [satisfy the multi-factor requirement](#passkeys-and-multi-factor-authentication) when a user signs in with one.
 - Not all devices and browsers are compatible with passkeys. Passkeys are built on WebAuthn technology and you should check [the Browser Compatibility docs](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API#browser_compatibility) for an up-to-date list.
 - Your users can have a max of 10 passkeys per account.
 
@@ -98,6 +102,7 @@ In this section, you can:
 
 - Allow users to set their first and last name.
 - Allow users to delete their accounts.
+- Control whether users can change their email address, phone number, or username after sign-up. See [Restrict changes](#restrict-changes).
 
 ## Restrict changes
 
@@ -106,13 +111,13 @@ By default, users can add, remove, and modify their own email addresses, phone n
 To restrict identifier changes:
 
 1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-1. Under the identifier you want to lock down (email address, phone number, or username), enable the **Restrict changes** setting.
+1. In the [**User model**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication?user_auth_tab=user-profile) section, under **User permissions**, turn off **Allow users to change their \[identifier]** for each identifier you want to lock down (for example, **Allow users to change their email address**). This toggle only appears for identifiers that are used for sign-up or sign-in.
 
-When enabled:
+When changes are restricted:
 
 - Users can still view their identifiers in [`<UserProfile />`](/docs/reference/components/user/user-profile) but cannot add, remove, or modify them.
 - For email addresses, the restriction also prevents connecting an OAuth account that would add a new email address.
-- Admins retain full control and can still modify user identifiers through the [Dashboard](https://dashboard.clerk.com/~/users) or the [Backend API](/docs/reference/backend-api).
+- Admins retain full control and can still modify user identifiers through the [Dashboard](https://dashboard.clerk.com/~/users) or the [Backend API](/docs/reference/backend-api){{ target: '_blank' }}.
 
 > [!TIP]
 > This feature prevents changes _after_ sign-up. If you want to control _who can sign up_ in the first place, see [restrictions](/docs/guides/secure/restricting-access) for allowlists, blocklists, and disposable email blocking.
@@ -152,9 +157,19 @@ To configure MFA strategies:
    If you leave this setting disabled, users can choose to enable MFA for their own accounts through their account settings.
 1. Select **Save**.
 
-<Include src="_partials/duo-authenticator-app-callout.mdx" />
-
 If you're building a custom user interface instead of using the [Account Portal](/docs/guides/account-portal/overview) or [prebuilt components](/docs/reference/components/overview), you can use [the Clerk API](/docs/guides/development/custom-flows/authentication/multi-factor-authentication) to build a [custom flow](!custom-flow) that allows users to sign in with MFA.
+
+### Passkeys and multi-factor authentication
+
+A [passkey](#passkeys) is itself a multi-factor credential — a single sign-in combines two authentication factors (a physical device and a PIN or biometric) — so a passkey sign-in can satisfy your application's multi-factor requirement on its own. When this behavior is in effect, a user who signs in with a passkey isn't prompted to complete a second factor.
+
+For instances created on or after **July 8, 2026**, this is the default behavior and can't be disabled.
+
+For instances created before **July 8, 2026**, this behavior is off by default, but you can opt in:
+
+1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+1. Enable **Sign-in with passkey**, if it isn't already — the following setting only appears once passkey sign-in is on.
+1. Toggle on **Passkeys satisfy multi-factor authentication**.
 
 ### Reset a user's MFA
 

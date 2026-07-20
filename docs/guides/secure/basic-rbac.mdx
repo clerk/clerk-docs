@@ -59,26 +59,6 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
   }
   ```
 
-  ## Create a reusable function to check Roles
-
-  Create a helper function to simplify checking Roles.
-
-  1. In your application's root directory, create a `utils/` folder.
-  1. Inside this directory, create a `roles.ts` file with the following code. The `checkRole()` helper uses the [`auth()`](/docs/reference/nextjs/app-router/auth) helper to access the user's session claims. From the session claims, it accesses the `metadata` object to check the user's Role. The `checkRole()` helper accepts a Role of type `Roles`, which you created in the [Create a global TypeScript definition](#create-a-global-type-script-definition) step. It returns `true` if the user has that Role or `false` if they do not.
-
-  ```ts {{ filename: 'utils/roles.ts' }}
-  import { Roles } from '@/types/globals'
-  import { auth } from '@clerk/nextjs/server'
-
-  export const checkRole = async (role: Roles) => {
-    const { sessionClaims } = await auth()
-    return sessionClaims?.metadata.role === role
-  }
-  ```
-
-  > [!NOTE]
-  > You can customize the behavior of the `checkRole()` helper function to suit your needs. For example, you could modify it to return the Roles a user has or create a `protectByRole()` function that handles Role-based redirects.
-
   ## Create the admin dashboard
 
   Now, it's time to create an admin dashboard. The first step is to create the `/admin` route.
@@ -94,56 +74,17 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
 
   ## Protect the admin dashboard
 
-  To protect the `/admin` route, choose **one** of the two following methods:
-
-  1. **Middleware**: Apply Role-based access control globally at the route level. This method restricts access to all routes matching `/admin` before the request reaches the actual page.
-  1. **Page-level Role check**: Apply Role-based access control directly in the `/admin` page component. This method protects this specific page. To protect other pages in the admin dashboard, apply this protection to each route.
-
-  > [!IMPORTANT]
-  > You only need to follow **one** of the following methods to secure your `/admin` route.
-
-  ### Option 1: Protect the `/admin` route using middleware
-
-  <Include src="_partials/nextjs/nextjs-15-callout" />
-
-  1. In your app's root directory, create a `proxy.ts` file with the following code. The `createRouteMatcher()` function identifies routes starting with `/admin`. `clerkMiddleware()` intercepts requests to the `/admin` route, and checks the user's Role in their `metadata` to verify that they have the `admin` Role. If they don't, it redirects them to the home page.
-
-  ```tsx {{ filename: 'proxy.ts' }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-  import { NextResponse } from 'next/server'
-
-  const isAdminRoute = createRouteMatcher(['/admin(.*)'])
-
-  export default clerkMiddleware(async (auth, req) => {
-    // Protect all routes starting with `/admin`
-    if (isAdminRoute(req) && (await auth()).sessionClaims?.metadata?.role !== 'admin') {
-      const url = new URL('/', req.url)
-      return NextResponse.redirect(url)
-    }
-  })
-
-  export const config = {
-    matcher: [
-      // Skip Next.js internals and all static files, unless found in search params
-      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-      // Always run for API routes
-      '/(api|trpc)(.*)',
-    ],
-  }
-  ```
-
-  ### Option 2: Protect the `/admin` route at the page-level
-
-  1. Add the following code to the `app/admin/page.tsx` file. The `checkRole()` function checks if the user has the `admin` Role. If they don't, it redirects them to the home page.
+  To protect the `/admin` route, in the `app/admin/page.tsx` file, add the following code. It reads the user's Role from the `metadata` session claim you configured earlier and redirects to the home page if they aren't an `admin`.
 
   ```tsx {{ filename: 'app/admin/page.tsx' }}
-  import { checkRole } from '@/utils/roles'
+  import { auth } from '@clerk/nextjs/server'
   import { redirect } from 'next/navigation'
 
   export default async function AdminDashboard() {
+    const { sessionClaims } = await auth()
+
     // Protect the page from users who are not admins
-    const isAdmin = await checkRole('admin')
-    if (!isAdmin) {
+    if (sessionClaims?.metadata?.role !== 'admin') {
       redirect('/')
     }
 
@@ -158,17 +99,18 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
   ```ts {{ filename: 'app/admin/_actions.ts' }}
   'use server'
 
-  import { checkRole } from '@/utils/roles'
-  import { clerkClient } from '@clerk/nextjs/server'
+  import { auth, clerkClient } from '@clerk/nextjs/server'
 
   export async function setRole(formData: FormData) {
-    // Initialize `clerkClient`
-    const client = await clerkClient()
+    const { sessionClaims } = await auth()
 
     // Check that the user trying to set the Role is an admin
-    if (!checkRole('admin')) {
+    if (sessionClaims?.metadata?.role !== 'admin') {
       return { message: 'Not Authorized' }
     }
+
+    // Initialize `clerkClient`
+    const client = await clerkClient()
 
     try {
       // Use the `updateUserMetadata()` method to update the user's Role
@@ -182,6 +124,13 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
   }
 
   export async function removeRole(formData: FormData) {
+    const { sessionClaims } = await auth()
+
+    // Check that the user trying to remove the Role is an admin
+    if (sessionClaims?.metadata?.role !== 'admin') {
+      return { message: 'Not Authorized' }
+    }
+
     const client = await clerkClient()
 
     try {
@@ -236,15 +185,16 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
 
   ```tsx {{ filename: 'app/admin/page.tsx' }}
   import { redirect } from 'next/navigation'
-  import { checkRole } from '@/utils/roles'
+  import { auth, clerkClient } from '@clerk/nextjs/server'
   import { SearchUsers } from './SearchUsers'
-  import { clerkClient } from '@clerk/nextjs/server'
   import { removeRole, setRole } from './_actions'
 
   export default async function AdminDashboard(params: {
     searchParams: Promise<{ search?: string }>
   }) {
-    if (!checkRole('admin')) {
+    const { sessionClaims } = await auth()
+
+    if (sessionClaims?.metadata?.role !== 'admin') {
       redirect('/')
     }
 
@@ -302,5 +252,5 @@ This guide assumes that you're using Next.js App Router, but you can adapt the c
 
   ## Finished 🎉
 
-  The foundation of a custom RBAC (Role-Based Access Control) system is now set up. Roles are attached directly to the user's session, allowing your application to access them without the need for additional network requests. The `checkRole()` helper function simplifies Role checks and reduces code complexity. The final component is the admin dashboard, which enables admins to efficiently search for users and manage Roles.
+  The foundation of a custom RBAC (Role-Based Access Control) system is now set up. Roles are attached directly to the user's session, allowing your application to read them from the session claims without the need for additional network requests. The final component is the admin dashboard, which enables admins to efficiently search for users and manage Roles.
 </Steps>

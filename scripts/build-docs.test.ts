@@ -8792,3 +8792,84 @@ description: x
     )
   })
 })
+
+describe('Output directory handling', () => {
+  test('builds over a stale dist symlink left behind by dev mode', async () => {
+    // `pnpm dev` symlinks dist/ into a temp dir; once the OS purges that temp dir the
+    // link dangles. A standard build must still be able to replace it.
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: This is a simple test page
+---
+
+Testing with a simple page.`,
+      },
+    ])
+
+    const distPath = pathJoin('./dist')
+    await fs.symlink(pathJoin('./this-target-does-not-exist'), distPath)
+    expect(await fileExists(distPath)).toBe(false) // dangling: follows the link
+    expect((await fs.lstat(distPath)).isSymbolicLink()).toBe(true) // but the entry is there
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    expect(output).toBe('')
+    expect((await fs.lstat(distPath)).isDirectory()).toBe(true)
+    expect(await fileExists(pathJoin('./dist/simple-test.mdx'))).toBe(true)
+  })
+
+  test('builds over a live dist symlink without touching its target', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: This is a simple test page
+---
+
+Testing with a simple page.`,
+      },
+      { path: './live-target/sentinel.txt', content: 'do not delete me' },
+    ])
+
+    await fs.symlink(pathJoin('./live-target'), pathJoin('./dist'))
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    expect(output).toBe('')
+    // lstat, not fileExists: the latter follows the link, so it would pass even if the build
+    // wrote straight through a still-present symlink instead of replacing it.
+    expect((await fs.lstat(pathJoin('./dist'))).isDirectory()).toBe(true)
+    expect(await fileExists(pathJoin('./dist/simple-test.mdx'))).toBe(true)
+    // Removing the link must not recurse into what it pointed at, nor write into it
+    expect(await fileExists(pathJoin('./live-target/sentinel.txt'))).toBe(true)
+    expect(await fileExists(pathJoin('./live-target/simple-test.mdx'))).toBe(false)
+  })
+})

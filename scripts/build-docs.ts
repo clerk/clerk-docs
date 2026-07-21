@@ -1316,10 +1316,14 @@ ${yaml.stringify({
     // We don't need to worry about temp folders as the ci runner will be destroyed after this anyways
   } else {
     // During a standard build
-    // If the dist folder already exists, remove it
-    if (existsSync(config.distFinalPath)) {
-      await fs.rm(config.distFinalPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    }
+    // Clear whatever is at dist: a real folder from a previous build, or a symlink left by
+    // dev mode (`--watch` symlinks dist to a temp dir, which the OS purges later, leaving a
+    // dangling link). `force` makes this a no-op when nothing is there, and rm never follows
+    // the link, so a live dev symlink's target is left alone.
+    // Don't gate this on existsSync() — it follows symlinks and reports false for a dangling
+    // one, which skipped the removal and made the fs.cp below fail with ERR_FS_CP_DIR_TO_NON_DIR,
+    // wedging every subsequent build in that checkout.
+    await fs.rm(config.distFinalPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     // Copy over our new dist folder from temp
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
     // Remove the temp dist folder

@@ -1,18 +1,18 @@
 ---
 title: Configure Clerk Content-Security-Policy headers
-description: Learn how to configure your Content Security Policy to work with the Clerk APIs.
+description: Learn how to configure your Content Security Policy to work with Clerk and its abuse and fraud protections.
 ---
 
 [Content-Security-Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) (CSP) headers secure your document by preventing resources from being loaded from unexpected sources. This protects your apps from [XSS](/docs/guides/secure/best-practices/xss-leak-protection) attacks and data injections.
 
-For Clerk to work correctly in your application, the following CSP directives are required:
+For Clerk to work correctly and protect your application against abuse and fraud, the following CSP directives are required:
 
-1. `script-src` - This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`, as well as cloudflare's bot protection host, `https://challenges.cloudflare.com`.
-1. `connect-src` - This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`.
+1. `script-src` - This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`, Cloudflare's bot protection host, `https://challenges.cloudflare.com`, and Clerk's abuse and fraud protection hosts through `https://*.protect.clerk.com`.
+1. `connect-src` - This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`, and Clerk's abuse and fraud protection hosts through `https://*.protect.clerk.com`.
 1. `img-src` - This value should be `https://img.clerk.com`.
 1. `worker-src` - Use the `'self'` value to indicate that workers can be loaded from first-party scripts. The `blob:` schema value also needs to be included.
 1. `style-src` - This value should include `'unsafe-inline'` due to Clerk's usage of runtime CSS-in-JS for styling.
-1. `frame-src` - This value should include cloudflare's bot protection host, `https://challenges.cloudflare.com`.
+1. `frame-src` - This value should include Cloudflare's bot protection host, `https://challenges.cloudflare.com`, and Clerk's abuse and fraud protection hosts through `https://*.protect.clerk.com`.
 
 There are two ways to configure your CSP headers:
 
@@ -22,25 +22,29 @@ There are two ways to configure your CSP headers:
 ## Automatic CSP configuration
 
 > [!WARNING]
-> Automatic CSP configuration is available only for `@clerk/nextjs >=6.14.0`.
+> Automatic CSP configuration is available only for `@clerk/nextjs >=6.14.0`. Upgrade to `@clerk/nextjs >=7.5.21` to include Clerk's abuse and fraud protection domains automatically.
 
 Clerk provides built-in support for automatically injecting CSP headers by adding the `contentSecurityPolicy` option to your `clerkMiddleware()`. There are two modes available depending on how strict you want your CSP to be:
 
 - [`default` configuration](#default-configuration)
 - [`strict` configuration](#strict-configuration)
 
+Both modes automatically include Clerk's abuse and fraud protection domains for every application, regardless of plan or enabled features.
+
 ### `default` configuration
 
 The `default` configuration will apply the following CSP directives:
 
-- `connect-src` - `'self' https://clerk-telemetry.com https://*.clerk-telemetry.com https://api.stripe.com https://maps.googleapis.com https://{{fapi_url}}`
+- `connect-src` - `'self' https://clerk-telemetry.com https://*.clerk-telemetry.com https://api.stripe.com https://maps.googleapis.com https://img.clerk.com https://images.clerkstage.dev https://*.protect.clerk.com https://{{fapi_url}}`
 - `default-src` - `'self'`
 - `form-action` - `'self'`
-- `frame-src` - `'self' https://challenges.cloudflare.com https://*.js.stripe.com https://js.stripe.com https://hooks.stripe.com`
+- `frame-src` - `'self' https://challenges.cloudflare.com https://*.js.stripe.com https://js.stripe.com https://hooks.stripe.com https://*.protect.clerk.com`
 - `img-src` - `'self' https://img.clerk.com`
-- `script-src` - `'self' 'unsafe-inline' https http https://*.js.stripe.com https://js.stripe.com https://maps.googleapis.com`
+- `script-src` - `'self' 'unsafe-inline' https: http: https://*.js.stripe.com https://js.stripe.com https://maps.googleapis.com https://*.protect.clerk.com`
 - `style-src` - `'self' 'unsafe-inline'`
 - `worker-src` - `'self' blob:`
+
+In development environments, both modes also include `'unsafe-eval'` in the `script-src` directive, which [Next.js requires in development](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy#without-nonces). It is not included in production.
 
 <Include src="_partials/nextjs/nextjs-15-callout" />
 
@@ -138,12 +142,12 @@ The following example demonstrates a Next.js config file that sets the necessary
 ```js {{ filename: 'next.config.js' }}
 const cspHeader = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://{{fapi_url}} https://challenges.cloudflare.com;
-  connect-src 'self' https://{{fapi_url}};
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://{{fapi_url}} https://challenges.cloudflare.com https://*.protect.clerk.com;
+  connect-src 'self' https://{{fapi_url}} https://*.protect.clerk.com;
   img-src 'self' https://img.clerk.com;
   worker-src 'self' blob:;
   style-src 'self' 'unsafe-inline';
-  frame-src 'self' https://challenges.cloudflare.com;
+  frame-src 'self' https://challenges.cloudflare.com https://*.protect.clerk.com;
   form-action 'self';
 `
 
@@ -204,11 +208,11 @@ function applyCsp(req) {
     script-src 'self' 'strict-dynamic' 'nonce-${nonce}' https: http: ${
       process.env.NODE_ENV === 'production' ? '' : `'unsafe-eval'`
     };
-    connect-src 'self' https://{{fapi_url}};
+    connect-src 'self' https://{{fapi_url}} https://*.protect.clerk.com;
     img-src 'self' https://img.clerk.com;
     worker-src 'self' blob:;
     style-src 'self';
-    frame-src 'self' https://challenges.cloudflare.com;
+    frame-src 'self' https://challenges.cloudflare.com https://*.protect.clerk.com;
     form-action 'self';
   `
   // Replace newline characters and spaces

@@ -91,7 +91,7 @@ Modifications such as correcting misspelled words, addressing grammatical or pun
 
 The structure of the issue should be:
 
-- **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav"
+- **Title**: Summarize the problem you want to solve in one sentence, using an active voice. For example, "Fix broken "Home" link on sidenav"
 - **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can be helpful tools!
 
 ## Creating a pull request
@@ -104,10 +104,10 @@ If this is your first time, or you need a refresher on how to create a PR, you c
 
 The structure of the PR should be:
 
-- **Title**: Summarize the change you made, using an active voice. E.g. "Fix broken "Home" link on sidenav"
+- **Title**: Summarize the change you made, using an active voice. For example, "Fix broken "Home" link on sidenav"
   - If there is an issue that this PR is meant to resolve, the titles will probably be the same.
 - **Description**: GitHub PRs are our source of truth, so descriptions should include as much relevant context as possible. Aim to be as detailed as possible (see [example](https://github.com/clerk/clerk-docs/pull/3003)).
-  - If the PR is a result of a new feature or update, include links to the relevant source code PRs in their respective repos (e.g. `clerk/javascript`) and clearly explain the behavior before —> now. If they are `clerk/dashboard` changes, include screenshots/videos showing the before —> now updates. If this context already exists in the source code PR (`clerk/javascript`, `clerk/dashboard`, `clerk/clerk`, etc.), then just copy it over to the `clerk-docs` PR description, or vice-versa (if it’s in `clerk-docs` PR description, add it to the source code PR description). Writing up context shouldn’t be too hard - AI is very much your friend here!
+  - If the PR is a result of a new feature or update, include links to the relevant source code PRs in their respective repos (e.g., `clerk/javascript`) and clearly explain the behavior before —> now. If they are `clerk/dashboard` changes, include screenshots/videos showing the before —> now updates. If this context already exists in the source code PR (`clerk/javascript`, `clerk/dashboard`, `clerk/clerk`, etc.), then just copy it over to the `clerk-docs` PR description, or vice-versa (if it’s in `clerk-docs` PR description, add it to the source code PR description). Writing up context shouldn’t be too hard - AI is very much your friend here!
   - The **Deadline** should always be filled out, even if the date is tentative/flexible. Try to provide a reasonable exact date so that it's trackable in the PR description. If there's truly no rush on it, write something like "No rush".
 
 ## Preview your changes
@@ -300,9 +300,9 @@ To update the SDK selector, the files you need are in `clerk/clerk`:
 
 #### Add a new SDK
 
-If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
+If the SDK has docs that are internal, i.e., maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g., Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/getting-started/quickstart/overview](https://clerk.com/docs/getting-started/quickstart/overview).
+To add a new SDK, you'll need the SDK name (e.g., `Next.js`), key (e.g., `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/getting-started/quickstart/overview](https://clerk.com/docs/getting-started/quickstart/overview).
 
 In this repo (`clerk/clerk-docs`):
 
@@ -319,9 +319,9 @@ In the `clerk/clerk` repo:
 
 #### Add an external SDK
 
-If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
+If the SDK has docs that are external, e.g., Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e., maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview).
+To add a new SDK, you'll need the SDK name (e.g., `Python`), key (e.g., `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview).
 
 In this repo (`clerk/clerk-docs`):
 
@@ -379,7 +379,7 @@ description: Some brief, but effective description of the page's content.
 ---
 ```
 
-- **`title`** - The title of the page. Used to populate the HTML `<title>` tag and the h1 of the page. Supports markdown e.g. ``title: '`<SignUp>`'``
+- **`title`** - The title of the page. Used to populate the HTML `<title>` tag and the h1 of the page. Supports markdown, e.g., ``title: '`<SignUp>`'``
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 
 A `title` is **required** — the build fails without one. A `description` is strongly recommended on every page and the build **warns** when it's missing, but a missing `description` won't block the build.
@@ -669,7 +669,7 @@ Say you have a doc where you want to support multiple SDKs, but it'd require cha
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.
 
-Headings should be written in **sentence-casing**, where only the first word of the heading is capitalized. E.g. "This is a heading".
+Headings should be written in **sentence-casing**, where only the first word of the heading is capitalized. For example, "This is a heading".
 
 h1's are not necessary and are considered tech-debt, as the `title` property in the [frontmatter](#file-metadata) will set the h1.
 
@@ -949,7 +949,7 @@ The image below shows what this example looks like once rendered.
 
 ![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION, QUIZ](../.github/media/callouts.png)
 
-You can optionally specify an `id` attribute for a callout which allows for direct linking, e.g. `/docs/example#useful-info`:
+You can optionally specify an `id` attribute for a callout which allows for direct linking, e.g., `/docs/example#useful-info`:
 
 ```mdx
 > [!NOTE useful-info]
@@ -1633,7 +1633,7 @@ The build does not execute code blocks, and Prettier only checks formatting, so 
 
 When you document a new feature or reference, some conventions are easy to miss because the build can't enforce them. Work through this checklist:
 
-- **Is the feature in beta or experimental?** Add a beta callout partial (follow an existing one, e.g. [`agent-tasks-beta-callout.mdx`](../docs/_partials/agent-tasks-beta-callout.mdx)) and include it on the relevant pages, then add a `(Beta)` `tag` to the matching `manifest.json` entries. Valid `tag` values are defined by the `tag` enum in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts).
+- **Is the feature in beta or experimental?** Add a beta callout partial (follow an existing one, e.g., [`agent-tasks-beta-callout.mdx`](../docs/_partials/agent-tasks-beta-callout.mdx)) and include it on the relevant pages, then add a `(Beta)` `tag` to the matching `manifest.json` entries. Valid `tag` values are defined by the `tag` enum in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts).
 - **Are you documenting a new SDK type or interface?** Give it its own page under `/docs/reference/types/<name>` with a matching `manifest.json` entry, rather than documenting it inline within a method reference. These type pages are hand-authored — see [`agent-task.mdx`](../docs/reference/types/agent-task.mdx) for an example. This is distinct from reference content rendered with [`<Typedoc />`](#typedoc-), which is auto-generated from `clerk/javascript`.
 
 ## Help wanted!

@@ -53,7 +53,7 @@ When writing titles that contain component references in MDX pages, wrap the com
 
 Clerk's own product and feature names are proper nouns — capitalize them consistently. This follows the same reasoning as the Next.js convention above. Use judgment; this isn't an exhaustive list, but when a name refers to a specific Clerk feature, treat it as a proper noun.
 
-Terms treated as proper nouns include: Agent Task, Billing, Feature, Membership Request, Organization, Organization ID (when it refers to a Clerk Organization's ID, e.g. `org_xxx`), Permission, Plan, Role, Role Set, and Subscription.
+Terms treated as proper nouns include: Agent Task, Billing, Feature, Membership Request, Organization, Organization ID (when it refers to a Clerk Organization's ID, e.g., `org_xxx`), Permission, Plan, Role, Role Set, and Subscription.
 
 > ❌
 > Create an agent task to test your authentication flows.
@@ -82,13 +82,23 @@ Use "sign in" and "sign out" rather than "log in" or "log out".
 
 ### Write out abbreviations when introducing them
 
-If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g. APIs, IDEs or OSes.
+If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g., APIs, IDEs or OSes.
 
 > ❌
 > An AST is a tree representation of code. AST's are a fundamental part of the way a compiler works.
 
 > ✅
 > An abstract syntax tree (AST) is a tree representation of code. ASTs are a fundamental part of the way a compiler works.
+
+### Use a comma after "e.g." and "i.e."
+
+Always follow `e.g.` and `i.e.` with a comma. Keep both periods; don't drop them or replace them with "eg"/"ie". This rule applies to prose and to comments within code examples, but not to code itself (identifiers, string values, etc.).
+
+> ❌
+> Pass a unique identifier, e.g. a user ID.
+
+> ✅
+> Pass a unique identifier, e.g., a user ID.
 
 ### Avoid "we/us/our/ours"
 

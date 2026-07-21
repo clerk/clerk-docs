@@ -97,6 +97,67 @@ const filterOnly = <T extends SearchAttribute>(attribute: T) => `filterOnly(${at
 const desc = <T extends SearchAttribute>(attribute: T) => `desc(${attribute})` as const
 const asc = <T extends SearchAttribute>(attribute: T) => `asc(${attribute})` as const
 
+// ---------------------------------------------------------------------------
+// Codified relevance settings — exported so `search-regression.ts` can assert a live index
+// actually carries them before trusting any query results. Declared and overwritten on every
+// index run (see the setSettings call in main()); dashboard edits revert on the next run.
+// ---------------------------------------------------------------------------
+//
+// Searchable attributes — the search corpus and its attribute-level priority. Order matters: the
+// `attribute` ranking criterion (below) ranks by which attribute matched, in this order, so a
+// heading match (`hierarchy.lvlN`) outranks one only in `content` — the foundation the ranking
+// reorder relies on. Mirrors the DocSearch crawler layout; `unordered(...)` ignores word position
+// within an attribute. If a new searchable field is ever added to records, add it here too.
+export const SEARCHABLE_ATTRIBUTES = [
+  unordered('hierarchy.lvl0'),
+  unordered('hierarchy.lvl1'),
+  unordered('hierarchy.lvl2'),
+  unordered('hierarchy.lvl3'),
+  unordered('hierarchy.lvl4'),
+  unordered('hierarchy.lvl5'),
+  unordered('hierarchy.lvl6'),
+  plain('content'),
+  unordered('keywords'),
+]
+//
+// Faceting — `filterOnly` (filter, no facet counts) since these are only ever used to filter,
+// never shown as user-facing facets. Required: facetFilters/optionalFilters on a non-faceted
+// attribute fail or silently no-op.
+//   - `branch`       — facetFilter on the search query + the stale-record cleanup browse
+//   - `record_batch` — facetFilter in the stale-record cleanup browse
+//   - `sdk`          — the active-SDK boost (optionalFilters)
+// `availableSDKs` is deliberately NOT faceted: the client only retrieves it to render per-result
+// SDK icons (Search.tsx `SDKsIcon`), never filters or counts on it, and retrieval is independent
+// of faceting.
+export const ATTRIBUTES_FOR_FACETING = [filterOnly('branch'), filterOnly('record_batch'), filterOnly('sdk')]
+//
+// Ranking: `attribute`/`exact` are moved above `proximity` (vs Algolia's default order) so a
+// query that matches a page's title/heading outranks one that only matches the same words in
+// body content. e.g. for "sign in page" the "Build your own sign-in page" guide and the
+// Quickstart surface above reference pages whose body merely mentions the phrase, while
+// reference-name queries like `auth()` still win on their exact title match. See the design doc.
+export const RANKING = ['typo', 'geo', 'words', 'filters', 'attribute', 'exact', 'proximity', 'custom']
+//
+// Custom ranking — the final tiebreaker (the `custom` criterion above). Matches the weights the
+// indexer actually writes to each record's `weight` object: `pageRank` (frontmatter `search.rank`),
+// `level` (heading depth), `position` (document order). `weight.popularity` is intentionally
+// absent — it's never written to records, so a `desc(weight.popularity)` entry (leftover on some
+// indexes) is dead config that ranks nothing.
+export const CUSTOM_RANKING = [desc('weight.pageRank'), desc('weight.level'), asc('weight.position')]
+//
+// Deduplication — the linchpin of the per-SDK variant model. Each SDK variant of a page emits its
+// own records sharing one `distinct_group` (canonical URL + anchor; see createRecord in
+// generateRecordsFromDoc). Collapsing each group to a single representative makes a page appear
+// once instead of once per SDK, and the `sdk` optionalFilters boost lets the active SDK's variant
+// win that collapse. `attributeForDistinct` is index-level only — it CANNOT be set per query — so
+// it must be codified here; without it Algolia ignores `distinct` entirely and every page returns
+// one result per SDK variant. `distinct: true` defaults dedup on at the index level so it's
+// enforced even if a query omits the flag (the `clerk/clerk` client also passes `distinct: true`,
+// but we don't rely on it). Both must stay in sync with the `distinct_group` field written to
+// each record.
+export const ATTRIBUTE_FOR_DISTINCT = plain('distinct_group')
+export const DISTINCT = true
+
 const frontmatterSchema = z.object({
   title: z.string().optional(),
   description: z.string().nullable(),
@@ -1140,60 +1201,9 @@ async function main() {
   // that index. Fine for these canonical codified values; to try *different* settings in isolation,
   // point ALGOLIA_INDEX_NAME at a personal throwaway index (we don't spin up one per branch).
   //
-  // Searchable attributes — the search corpus and its attribute-level priority. Order matters: the
-  // `attribute` ranking criterion (below) ranks by which attribute matched, in this order, so a
-  // heading match (`hierarchy.lvlN`) outranks one only in `content` — the foundation the ranking
-  // reorder relies on. Mirrors the DocSearch crawler layout; `unordered(...)` ignores word position
-  // within an attribute. If a new searchable field is ever added to records, add it here too.
-  const searchableAttributes = [
-    unordered('hierarchy.lvl0'),
-    unordered('hierarchy.lvl1'),
-    unordered('hierarchy.lvl2'),
-    unordered('hierarchy.lvl3'),
-    unordered('hierarchy.lvl4'),
-    unordered('hierarchy.lvl5'),
-    unordered('hierarchy.lvl6'),
-    plain('content'),
-    unordered('keywords'),
-  ]
+  // The settings themselves are codified at module scope (SEARCHABLE_ATTRIBUTES and friends,
+  // above) so the regression suite shares them.
   //
-  // Faceting — `filterOnly` (filter, no facet counts) since these are only ever used to filter,
-  // never shown as user-facing facets. Required: facetFilters/optionalFilters on a non-faceted
-  // attribute fail or silently no-op.
-  //   - `branch`       — facetFilter on the search query + the stale-record cleanup browse
-  //   - `record_batch` — facetFilter in the stale-record cleanup browse
-  //   - `sdk`          — the active-SDK boost (optionalFilters)
-  // `availableSDKs` is deliberately NOT faceted: the client only retrieves it to render per-result
-  // SDK icons (Search.tsx `SDKsIcon`), never filters or counts on it, and retrieval is independent
-  // of faceting.
-  const attributesForFaceting = [filterOnly('branch'), filterOnly('record_batch'), filterOnly('sdk')]
-  //
-  // Ranking: `attribute`/`exact` are moved above `proximity` (vs Algolia's default order) so a
-  // query that matches a page's title/heading outranks one that only matches the same words in
-  // body content. e.g. for "sign in page" the "Build your own sign-in page" guide and the
-  // Quickstart surface above reference pages whose body merely mentions the phrase, while
-  // reference-name queries like `auth()` still win on their exact title match. See the design doc.
-  const ranking = ['typo', 'geo', 'words', 'filters', 'attribute', 'exact', 'proximity', 'custom']
-  //
-  // Custom ranking — the final tiebreaker (the `custom` criterion above). Matches the weights the
-  // indexer actually writes to each record's `weight` object: `pageRank` (frontmatter `search.rank`),
-  // `level` (heading depth), `position` (document order). `weight.popularity` is intentionally
-  // absent — it's never written to records, so a `desc(weight.popularity)` entry (leftover on some
-  // indexes) is dead config that ranks nothing.
-  const customRanking = [desc('weight.pageRank'), desc('weight.level'), asc('weight.position')]
-  //
-  // Deduplication — the linchpin of the per-SDK variant model. Each SDK variant of a page emits its
-  // own records sharing one `distinct_group` (canonical URL + anchor; see createRecord above).
-  // Collapsing each group to a single representative makes a page appear once instead of once per
-  // SDK, and the `sdk` optionalFilters boost lets the active SDK's variant win that collapse.
-  // `attributeForDistinct` is index-level only — it CANNOT be set per query — so it must be codified
-  // here; without it Algolia ignores `distinct` entirely and every page returns one result per SDK
-  // variant. `distinct: true` defaults dedup on at the index level so it's enforced even if a query
-  // omits the flag (the `clerk/clerk` client also passes `distinct: true`, but we don't rely on it).
-  // Both must stay in sync with the `distinct_group` field written to each record.
-  const attributeForDistinct = plain('distinct_group')
-  const distinct = true
-
   // Settings deliberately do NOT forward to replicas, though synonyms (below) do. Synonyms should
   // always be identical across replicas; settings bundle ranking/customRanking, which a standard
   // replica may legitimately override for an alternate sort — forwarding would clobber it. No
@@ -1202,12 +1212,12 @@ async function main() {
   await algolia.setSettings({
     indexName: ALGOLIA_INDEX_NAME,
     indexSettings: {
-      searchableAttributes,
-      attributesForFaceting,
-      ranking,
-      customRanking,
-      attributeForDistinct,
-      distinct,
+      searchableAttributes: SEARCHABLE_ATTRIBUTES,
+      attributesForFaceting: ATTRIBUTES_FOR_FACETING,
+      ranking: RANKING,
+      customRanking: CUSTOM_RANKING,
+      attributeForDistinct: ATTRIBUTE_FOR_DISTINCT,
+      distinct: DISTINCT,
     },
   })
 

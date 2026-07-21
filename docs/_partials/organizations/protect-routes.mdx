@@ -90,10 +90,13 @@
         }
 
         export default function Protected({ loaderData }: Route.ComponentProps) {
+          // Show the error message if the loader returned one
+          if ('error' in loaderData) return <p>{loaderData.error}</p>
+
           return (
             <p>
               You are currently signed in as an <strong>admin</strong> in the{' '}
-              <strong>{loaderData?.organization?.name}</strong> Organization.
+              <strong>{loaderData.organization.name}</strong> Organization.
             </p>
           )
         }
@@ -154,7 +157,7 @@
         export default defineEventHandler(async (event) => {
           // Use `event.context.auth()` to access the `Auth` object
           // https://clerk.com/docs/reference/backend/types/auth-object
-          const { isAuthenticated, orgId } = event.context.auth()
+          const { isAuthenticated, orgId, has } = event.context.auth()
           const requiredOrgName = 'Acme Corp'
 
           // Check if the user is authenticated
@@ -170,6 +173,14 @@
             throw createError({
               statusCode: 404,
               statusMessage: 'Set an Active Organization to access this page.',
+            })
+          }
+
+          // Check if the user has the `org:admin` Role
+          if (!has({ role: 'org:admin' })) {
+            throw createError({
+              statusCode: 403,
+              statusMessage: 'You must be an admin to access this page.',
             })
           }
 

@@ -1,6 +1,7 @@
 ---
 title: Check Roles and Permissions with Authorization Checks
 description: Limit access to content or entire routes based on a user's Organization Role or Permissions.
+sdk: nextjs, react, tanstack-react-start, react-router, astro, nuxt
 metadata:
   title: Check Roles and Permissions in Organizations
 ---
@@ -11,153 +12,21 @@ Within Organizations, authorization checks can be performed by checking a user's
 
 ## Examples
 
-For examples on how to perform authorization checks, see the [guide on authorization checks](/docs/guides/secure/authorization-checks).
+You can protect content and even entire routes based on Organization membership, Roles, and Permissions by performing [authorization checks](!authorization-check).
 
-<Tabs items={['Client-side', 'Server-side']}>
-  <Tab>
-    You can protect content and even entire routes based on Organization membership, Roles, and Permissions by performing [authorization checks](!authorization-check).
+In the following example, the page is restricted to authenticated users, users who have the `org:admin` Role, and users who belong to the `Acme Corp` Organization. It uses the [`has()`](/docs/reference/backend/types/auth-object#has) helper to perform the authorization check for the `org:admin` Role.
 
-    In the following example, the page is restricted to authenticated users, users who have the `org:admin` Role, and users who belong to the `Acme Corp` Organization.
+<Include src="_partials/organizations/protect-routes" />
 
-    - The [`Auth`](/docs/reference/backend/types/auth-object) object is used to access the `isSignedIn` property and `has()` method.
-    - The `isSignedIn` property is used to check if the user is signed in.
-    - The `has()` method is used to check if the user has the `org:admin` Role.
-    - The [`useOrganization()`](/docs/reference/hooks/use-organization) hook is used to access the organization data.
-    - The Organization name is checked to ensure it matches the required Organization name. If a user is not in the required Organization, the page will display a message and the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component will be rendered to allow the user to switch to the required Organization.
+<If notSdk={["react", "nuxt"]}>
+  When a user isn't in the required Organization, render an [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) alongside the message to let them switch to the required Organization.
+</If>
 
-    ```tsx {{ filename: 'app/protected/page.tsx' }}
-    'use client'
-    import { OrganizationSwitcher, useAuth, useOrganization } from '@clerk/nextjs'
+<If sdk="nuxt">
+  In the client-side example, when a user isn't in the required Organization, render an [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) alongside the message to let them switch to the required Organization. The server-side example is an API route that throws an HTTP error instead of rendering a message, so render the `<OrganizationSwitcher />` in the client UI that consumes the route.
+</If>
 
-    export default function Page() {
-      // The `useAuth()` hook gives you access to properties like `isSignedIn` and `has()`
-      const { isSignedIn, has } = useAuth()
-      const { organization } = useOrganization()
-
-      // Check if the user is authenticated
-      if (!isSignedIn) {
-        return <p>You must be signed in to access this page.</p>
-      }
-
-      // Check if there is an Active Organization
-      if (!organization) {
-        return (
-          <>
-            <p>Set an Active Organization to access this page.</p>
-            <OrganizationSwitcher />
-          </>
-        )
-      }
-
-      // Check if the user has the `org:admin` Role
-      if (!has({ role: 'org:admin' })) {
-        return <p>You must be an admin to access this page.</p>
-      }
-
-      // Check if Organization name matches (e.g., 'Acme Corp')
-      const requiredOrgName = 'Acme Corp'
-      if (organization.name !== requiredOrgName) {
-        return (
-          <>
-            <p>
-              This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
-              Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
-            </p>
-            <OrganizationSwitcher />
-          </>
-        )
-      }
-
-      return (
-        <p>
-          You are currently signed in as an <strong>admin</strong> in the{' '}
-          <strong>{organization.name}</strong> Organization.
-        </p>
-      )
-    }
-    ```
-
-    For more examples on how to perform authorization checks, see the [dedicated guide](/docs/guides/secure/authorization-checks).
-  </Tab>
-
-  <Tab>
-    You can protect content and even entire routes based on Organization membership, Roles, and Permissions by performing [authorization checks](!authorization-check).
-
-    In the following example, the page is restricted to authenticated users, users who have the `org:admin` Role, and users who belong to the `Acme Corp` Organization.
-
-    - The [`Auth`](/docs/reference/backend/types/auth-object) object is used to access the `isAuthenticated` and `orgId` properties, as well as the `has()` method.
-    - The `isAuthenticated` property is used to check if the user is authenticated.
-    - The `orgId` property is used to check if there is an Active Organization.
-    - The `has()` method is used to check if the user has the `org:admin` Role.
-    - To fetch the Organization server-side, the [`clerkClient()`](/docs/reference/nextjs/overview#clerk-client) helper is used to access the [`getOrganization()`](/docs/reference/backend/organization/get-organization) method.
-    - The Organization name is checked to ensure it matches the required Organization name. If a user is not in the required Organization, the page will display a message and the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component will be rendered to allow the user to switch to the required Organization.
-
-    This example is written for Next.js App Router, but can be adapted to other frameworks by using the appropriate method for accessing the [`Auth` object](/docs/reference/backend/types/auth-object), and the appropriate initialization for `clerkClient()`.
-
-    ```tsx {{ filename: 'app/protected/page.tsx' }}
-    import { auth, clerkClient } from '@clerk/nextjs/server'
-    import { OrganizationSwitcher } from '@clerk/nextjs'
-
-    export default async function Page() {
-      // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
-      // Accessing the `Auth` object differs depending on the SDK you're using
-      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-      const { isAuthenticated, orgId, has } = await auth()
-
-      // Check if the user is authenticated
-      if (!isAuthenticated) {
-        return <p>You must be signed in to access this page.</p>
-      }
-
-      // Check if there is an Active Organization
-      if (!orgId) {
-        return (
-          <>
-            <p>Set an Active Organization to access this page.</p>
-            <OrganizationSwitcher />
-          </>
-        )
-      }
-
-      // Check if the user has the `org:admin` Role
-      if (!has({ role: 'org:admin' })) {
-        return <p>You must be an admin to access this page.</p>
-      }
-
-      // To fetch the Active Organization server-side,
-      // first initialize `clerkClient`.
-      // This varies depending on the SDK you're using
-      // https://clerk.com/docs/reference/backend/overview
-      // Then use the `clerkClient()` to access the `getOrganization()` method
-      const client = await clerkClient()
-      const organization = await client.organizations.getOrganization({ organizationId: orgId })
-
-      // Check if Organization name matches (e.g., 'Acme Corp')
-      const requiredOrgName = 'Acme Corp'
-      if (organization.name !== requiredOrgName) {
-        return (
-          <>
-            <p>
-              This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
-              Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
-            </p>
-            <OrganizationSwitcher />
-          </>
-        )
-      }
-
-      return (
-        <p>
-          You are currently signed in as an <strong>admin</strong> in the{' '}
-          <strong>{organization.name}</strong> Organization.
-        </p>
-      )
-    }
-    ```
-
-    For more examples on how to perform authorization checks, see the [dedicated guide](/docs/guides/secure/authorization-checks).
-  </Tab>
-</Tabs>
+For more examples on how to perform authorization checks, see the [dedicated guide](/docs/guides/secure/authorization-checks).
 
 ## Next steps
 

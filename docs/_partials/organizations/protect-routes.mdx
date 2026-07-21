@@ -111,40 +111,41 @@
 
         // Use the `locals.auth()` local to access the `Auth` object
         // https://clerk.com/docs/reference/backend/types/auth-object
-        const { isAuthenticated, has, orgId, orgRole } = Astro.locals.auth()
+        const { isAuthenticated, has, orgId } = Astro.locals.auth()
 
         const requiredOrgName = 'Acme Corp'
 
+        // Check if the user has the `org:admin` Role
+        const isAdmin = has({ role: 'org:admin' })
+
+        // Use the `getOrganization()` method to get the Backend `Organization` object,
+        // but only once every access check has passed
         let organization = null
-        if (isAuthenticated && orgId) {
+        if (isAuthenticated && orgId && isAdmin) {
           organization = await clerkClient(Astro).organizations.getOrganization({ organizationId: orgId })
         }
         ---
 
         <Layout title="Protected Page">
-          <!-- Check if the user is authenticated -->
-          {!isAuthenticated && <p>You must be signed in to access this page.</p>}
-
-          <!-- Check if there is an Active Organization -->
-          {!organization && <p>Set an Active Organization to access this page.</p>}
-
-          <!-- Check if the user has the `org:admin` Role -->
-          {!has({ role: 'org:admin' }) && <p>You must be an admin to access this page.</p>}
-
-          <!-- Check if Organization name matches (e.g., 'Acme Corp') -->
           {
-            organization &&
-              (organization.name !== requiredOrgName ? (
-                <p>
-                  This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
-                  Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
-                </p>
-              ) : (
-                <p>
-                  You are currently signed in as an <strong>admin</strong> in the{' '}
-                  <strong>{organization.name}</strong> Organization.
-                </p>
-              ))
+            /* Show the appropriate message based on the user's authentication, Active Organization, and Role */
+            !isAuthenticated ? (
+              <p>You must be signed in to access this page.</p>
+            ) : !orgId ? (
+              <p>Set an Active Organization to access this page.</p>
+            ) : !isAdmin ? (
+              <p>You must be an admin to access this page.</p>
+            ) : organization.name !== requiredOrgName ? (
+              <p>
+                This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+                to the <strong>{requiredOrgName}</strong> Organization to access this page.
+              </p>
+            ) : (
+              <p>
+                You are currently signed in as an <strong>admin</strong> in the{' '}
+                <strong>{organization.name}</strong> Organization.
+              </p>
+            )
           }
         </Layout>
         ```

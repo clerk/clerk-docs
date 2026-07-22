@@ -7,6 +7,7 @@ import simpleGit from 'simple-git'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { build } from './build-docs'
 import { createConfig } from './lib/config'
+import { getLastCommitDate } from './lib/getLastCommitDate'
 import { createBlankStore, invalidateFile } from './lib/store'
 import * as ioModule from './lib/io'
 
@@ -8871,5 +8872,103 @@ Testing with a simple page.`,
     // Removing the link must not recurse into what it pointed at, nor write into it
     expect(await fileExists(pathJoin('./live-target/sentinel.txt'))).toBe(true)
     expect(await fileExists(pathJoin('./live-target/simple-test.mdx'))).toBe(false)
+  })
+})
+
+describe('Symlinked base paths', () => {
+  test('resolves lastUpdated when basePath reaches the repo through a symlink', async () => {
+    // `git rev-parse --show-toplevel` reports the canonical path, so a basePath that still
+    // contains a symlink (macOS os.tmpdir(), /var -> /private/var) would miss every entry in
+    // the commit-date map and silently drop lastUpdated. Constructed explicitly here so the
+    // case is covered on Linux CI too, where /tmp is not a symlink.
+    const { tempDir, initialCommitDate } = await createTempFiles(
+      [
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          }),
+        },
+        {
+          path: './docs/simple-test.mdx',
+          content: `---
+title: Simple Test
+description: This is a simple test page
+---
+
+Testing with a simple page.`,
+        },
+      ],
+      { setupGit: true },
+    )
+
+    // createTempFiles returns <root>/scripts, a virtual path emulating __dirname, so link the
+    // real root and reach the same tree through the link.
+    const canonicalRoot = await fs.realpath(path.dirname(tempDir))
+    const linkedRoot = `${canonicalRoot}-link`
+    await fs.symlink(canonicalRoot, linkedRoot)
+    onTestFinished(async () => {
+      await fs.rm(linkedRoot, { force: true })
+    })
+    const symlinkedDir = path.join(linkedRoot, 'scripts')
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: symlinkedDir, // deliberately NOT canonicalized
+        validSdks: ['nextjs', 'react'],
+        flags: {
+          skipGit: false,
+          skipApiErrors: true,
+        },
+      }),
+    )
+
+    expect(output).toBe('')
+    expect(await readFile(path.join(linkedRoot, './dist/simple-test.mdx'))).toContain(
+      `lastUpdated: ${initialCommitDate.toISOString()}`,
+    )
+  })
+
+  test('resolves lastUpdated for a doc reached through an in-tree symlinked directory', async () => {
+    // The commit-date map is keyed by path.resolve(repoRoot, gitPath) (lexical), while lookups
+    // are realpath'd (physical). They only stay in sync because getLastCommitDate canonicalizes
+    // the *lookup* path, not just the repo root — so a doc reached through a symlink inside the
+    // tree collapses to git's canonical key. Git never tracks a file *through* a symlink (it
+    // records docs/real/page.mdx and the symlink node separately, never docs/aliased/page.mdx),
+    // so the lexical map key is already canonical. Pins that invariant: if it broke, dates would
+    // silently disappear for symlinked sections exactly as they did for symlinked base paths.
+    const { pathJoin, git, initialCommitDate } = await createTempFiles(
+      [
+        {
+          path: './docs/real/page.mdx',
+          content: `---
+title: Real Page
+description: A real page under a real directory
+---
+
+Content.`,
+        },
+      ],
+      { setupGit: true },
+    )
+
+    // Add an in-tree directory symlink (docs/aliased -> real) in a later commit, so the real
+    // file's date (initialCommitDate) is distinct from the symlink's.
+    await fs.symlink('real', pathJoin('docs/aliased'))
+    await git!.add('.')
+    const laterDate = new Date(initialCommitDate.getTime() + 86_400_000)
+    await git!.commit('Add in-tree symlink', undefined, { '--date': laterDate.toISOString() })
+
+    const getDate = getLastCommitDate({ docsPath: pathJoin('docs'), flags: { skipGit: false } } as Parameters<
+      typeof getLastCommitDate
+    >[0])
+
+    const viaSymlink = await getDate(pathJoin('docs/aliased/page.mdx'))
+    const viaCanonical = await getDate(pathJoin('docs/real/page.mdx'))
+
+    // The file resolves through the symlink, and to its own commit date — not the symlink's.
+    expect(viaCanonical?.toISOString()).toBe(initialCommitDate.toISOString())
+    expect(viaSymlink?.toISOString()).toBe(initialCommitDate.toISOString())
   })
 })

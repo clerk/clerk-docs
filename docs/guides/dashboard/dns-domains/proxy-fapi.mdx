@@ -40,6 +40,11 @@ When using a proxy, all requests to the Frontend API will be made through your d
   - `Clerk-Secret-Key`: Your Clerk [Secret Key](!secret-key).
   - `X-Forwarded-For`: The IP address of the original client making the request.
 
+  > [!WARNING]
+  > `X-Forwarded-For` must carry the **original end user's** IP address as the first (leftmost) value. Clerk uses this IP for security and rate-limiting features, so an incorrect value can cause legitimate users to be treated as automated traffic.
+  >
+  > If your proxy server is itself behind a CDN or load balancer (for example AWS CloudFront, Cloudflare, or a cloud load balancer), the immediate connection your proxy sees is the CDN — **not** your user. Setting `X-Forwarded-For` to the immediate peer (for example nginx's `$remote_addr`, or Cloudflare's `CF-Connecting-IP`) then forwards the CDN's datacenter IP instead of the user's. In a fronted setup, take the real client IP from the header your CDN provides (for example CloudFront's `CloudFront-Viewer-Address`, or the leftmost value of the `X-Forwarded-For` your CDN passes to your origin) and forward that instead.
+
   #### Example configuration
 
   <Tabs items={["Next.js", "Express", "Nginx", "Cloudflare Workers"]}>
@@ -96,6 +101,8 @@ When using a proxy, all requests to the Frontend API will be made through your d
             proxy_pass       https://frontend-api.clerk.dev;
             proxy_set_header Clerk-Proxy-Url https://app.dev/__clerk;
             proxy_set_header Clerk-Secret-Key sk_live_***;
+            # $remote_addr is the immediate client. If this server is behind a CDN or
+            # load balancer, it's the CDN's IP — forward the real client IP instead (see warning above).
             proxy_set_header X-Forwarded-For $remote_addr;
             proxy_redirect   off;
           }

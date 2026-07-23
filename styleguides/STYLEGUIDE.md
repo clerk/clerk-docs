@@ -366,6 +366,16 @@ npm i @clerk/nextjs
 ​```
 ````
 
+### Use angle brackets for placeholders in shell commands
+
+When a shell command contains a value the reader must substitute, write the placeholder as `<snake_case_name>` with a descriptive name. Don't use curly braces — they collide with literal JSON in the same command and read as OpenAPI path-template syntax — and don't use generic names like `<id>` when a specific one fits. Angle brackets also match the CLI's own `--help` output.
+
+> ❌
+> Run `npx clerk@latest api /domains/{domain_id} -X PATCH -d '{"proxy_url": "..."}'`.
+
+> ✅
+> Run `npx clerk@latest api /domains/<domain_id> -X PATCH -d '{"proxy_url": "..."}'`.
+
 ### Pass properties to components; parameters to functions
 
 Be sure to use the correct term with components vs functions.

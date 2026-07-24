@@ -55,17 +55,28 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
       invalidate(path)
     })
 
+    let newConfig: BuildConfig | undefined
+    let isLive = false
+
     try {
       const now = performance.now()
 
       // This duplicates the config, re-creating the temp dist folder used so the new run doesn't collide with the old one
-      const newConfig = await config.changeTempDist()
+      newConfig = await config.changeTempDist()
 
       const output = await buildFunc(newConfig, store, abortController.signal)
 
-      await fs.rm(lastTempDistPath, { recursive: true }) // clean up the old temp dist folder
-
+      // The build has symlinked dist at this folder, so it is live from here on and must not be
+      // cleaned up by the catch below, whatever else fails.
+      const previousTempDistPath = lastTempDistPath
       lastTempDistPath = newConfig.distTempPath
+      isLive = true
+
+      // `force` because this folder may already be gone — the OS clears /var/folders out from
+      // under long-running dev sessions. Without it a successful rebuild reports as a failure
+      // and skips the completion signal below.
+      await fs.rm(previousTempDistPath, { recursive: true, force: true }) // clean up the old temp dist folder
+
       abortController = null
 
       if (config.flags.controlled) {
@@ -81,6 +92,21 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
       }
     } catch (error) {
       console.error(error)
+
+      // A rebuild that never went live still owns the temp folder it created. Aborts are routine
+      // here — every save that lands while a build is in flight cancels it — so without this each
+      // one leaks a folder under /var/folders for the life of the session.
+      if (newConfig !== undefined && !isLive) {
+        const abandonedPath = newConfig.distTempPath
+
+        // Unless the build got far enough to point dist at it, in which case deleting it would
+        // leave dist dangling.
+        const distTarget = await fs.readlink(config.distFinalPath).catch(() => null)
+
+        if (distTarget === null || path.resolve(path.dirname(config.distFinalPath), distTarget) !== abandonedPath) {
+          await fs.rm(abandonedPath, { recursive: true, force: true }).catch(() => {})
+        }
+      }
 
       return
     }

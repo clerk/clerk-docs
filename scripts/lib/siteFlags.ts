@@ -3,6 +3,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 
+const siteFlagsSchema = z.record(z.string(), z.boolean())
+
 export async function readSiteFlags(config: BuildConfig) {
   const { inputPath, outputPath } = config.siteFlags ?? {}
   if (!inputPath || !outputPath) {
@@ -15,7 +17,7 @@ export async function readSiteFlags(config: BuildConfig) {
     throw new Error(`Site flags not found at ${inputPath}`)
   }
 
-  return z.record(z.string(), z.boolean()).parse(JSON.parse(flags))
+  return siteFlagsSchema.parse(JSON.parse(flags))
 }
 
 export type Flags = Awaited<ReturnType<typeof readSiteFlags>>

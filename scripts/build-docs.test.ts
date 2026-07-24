@@ -7,6 +7,7 @@ import simpleGit from 'simple-git'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { build } from './build-docs'
 import { createConfig } from './lib/config'
+import { getLastCommitDate } from './lib/getLastCommitDate'
 import { createBlankStore, invalidateFile } from './lib/store'
 import * as ioModule from './lib/io'
 
@@ -198,7 +199,7 @@ title: Simple Test
 description: This is a simple test page
 ---
 
-# Simple Test Page
+## Simple Test Page
 
 Testing with a simple page.`,
         },
@@ -230,7 +231,7 @@ canonical: /docs/simple-test
 sourceFile: /docs/simple-test.mdx
 ---
 
-# Simple Test Page
+## Simple Test Page
 
 Testing with a simple page.`)
 
@@ -2490,6 +2491,108 @@ description: Duplicate Headings page
     )
   })
 
+  test('should error on h1 headings in content', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+# Quickstart
+
+## Section`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(
+      'Doc "/docs/quickstart" contains an h1 heading (# ...) in its content. The page title comes from the frontmatter "title", so use an h2 (##) or lower',
+    )
+  })
+
+  test('should error on h1 headings pulled in from a partial', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/intro.mdx',
+        content: `# Partial Title`,
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+<Include src="_partials/intro" />
+
+## Section`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain('contains an h1 heading (# ...) in its content')
+  })
+
+  test('should not error on h2 and lower headings', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+## Section
+
+### Subsection`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
   test('should not error on duplicate headings if they are in different <If /> components', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -2507,11 +2610,11 @@ sdk: react, nextjs
 ---
 
 <If sdk="react">
-  # Title {{ id: 'title' }}
+  ## Title {{ id: 'title' }}
 </If>
 
 <If sdk="nextjs">
-  # Title {{ id: 'title' }}
+  ## Title {{ id: 'title' }}
 </If>`,
       },
     ])
@@ -2601,6 +2704,51 @@ description: Quickstart page
 
     expect(output).toContain(
       'Doc "/docs/quickstart.mdx" contains a duplicate heading id "title", please ensure all heading ids are unique',
+    )
+  })
+
+  test('should error on duplicate heading contributed by an embedded partial in a core doc with <If /> components', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/dup-heading.mdx',
+        content: `## Partial Heading {{ id: 'shared-id' }}`,
+      },
+      {
+        // Core doc (no `sdk` frontmatter) that contains an <If /> component, so
+        // heading validation only happens in the dedicated <If /> pass. The
+        // authored heading collides with a heading embedded from a partial.
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+# Authored Heading {{ id: 'shared-id' }}
+
+<Include src="_partials/dup-heading" />
+
+<If sdk="react">
+  Conditional content
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toContain(
+      'Doc "/docs/quickstart.mdx" contains a duplicate heading id "shared-id", please ensure all heading ids are unique',
     )
   })
 
@@ -2813,7 +2961,7 @@ title: Test Page
 description: Testing nested partials
 ---
 
-# Test Page
+## Test Page
 
 <Include src="_partials/level-1-partial" />
 
@@ -3033,7 +3181,7 @@ title: Test Page
 description: Testing deeply nested partials
 ---
 
-# Test Page
+## Test Page
 
 <Include src="_partials/level-1-partial" />
 
@@ -3465,7 +3613,7 @@ sdk: react, nextjs
       },
       {
         path: './docs/_partials/test-partial.mdx',
-        content: `# Heading`,
+        content: `## Heading`,
       },
       {
         path: './docs/test-page-1.mdx',
@@ -3516,7 +3664,7 @@ title: Checklist Test
 description: Testing GFM task lists
 ---
 
-# Checklist
+## Checklist
 
 - [ ] First task
 - [x] Second task`,
@@ -3558,7 +3706,7 @@ title: Checklist Test
 description: Testing GFM task lists inside partials
 ---
 
-# Checklist
+## Checklist
 
 <Include src="_partials/checklist" />`,
       },
@@ -4033,7 +4181,7 @@ description: x
 sdk: nextjs
 ---
 
-# API Documentation`,
+## API Documentation`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -4043,7 +4191,7 @@ description: x
 sdk: react
 ---
 
-# React`,
+## React`,
       },
       {
         path: './docs/page-2.mdx',
@@ -4088,7 +4236,7 @@ description: x
 sdk: nextjs
 ---
 
-# API Documentation`,
+## API Documentation`,
       },
       {
         path: './docs/api-doc.react.mdx',
@@ -4098,7 +4246,7 @@ description: x
 sdk: react
 ---
 
-# React`,
+## React`,
       },
       {
         path: './docs/page-2.mdx',
@@ -4457,7 +4605,7 @@ title: Page 1
 description: This is a test page
 ---
 
-# Heading
+## Heading
 
 [Valid Link to self](#heading)`,
       },
@@ -4525,7 +4673,7 @@ title: Standard Card
 description: Just a standard card
 ---
 
-# Standard Card`,
+## Standard Card`,
       },
       {
         path: './docs/sdk-scoped-page.mdx',
@@ -4535,7 +4683,7 @@ description: A card that is scoped to a specific SDK
 sdk: react
 ---
 
-# SDK Scoped Page`,
+## SDK Scoped Page`,
       },
       {
         path: './docs/index.mdx',
@@ -4593,7 +4741,7 @@ description: This is a test page
 sdk: react, nextjs
 ---
 
-# Content
+## Content
 `,
       },
       {
@@ -4915,7 +5063,7 @@ title: Core Target
 description: Target doc
 ---
 
-# Core Target`,
+## Core Target`,
       },
       {
         path: './docs/core-page.mdx',
@@ -4924,7 +5072,7 @@ title: Core Page
 description: Core page
 ---
 
-# Core page
+## Core page
 
 See [Core Target][core-ref].
 
@@ -4966,7 +5114,7 @@ description: x
 sdk: nextjs, react, expo
 ---
 
-# Doc 1
+## Doc 1
 
 Documentation specific to Next.js`,
       },
@@ -5019,7 +5167,7 @@ description: x
 sdk: nextjs
 ---
 
-# Doc 1
+## Doc 1
 
 Documentation specific to Next.js`,
       },
@@ -5031,7 +5179,7 @@ description: x
 sdk: react
 ---
 
-# Doc 1 for React
+## Doc 1 for React
 `,
       },
       {
@@ -5107,7 +5255,7 @@ description: x
 sdk: react
 ---
 
-# Guide 1`,
+## Guide 1`,
       },
       {
         path: './docs/guide-2.mdx',
@@ -5117,7 +5265,7 @@ description: x
 sdk: react
 ---
 
-# Guide 2`,
+## Guide 2`,
       },
       {
         path: './docs/guide-2.nextjs.mdx',
@@ -5179,7 +5327,7 @@ description: x
 sdk: react
 ---
 
-# Guide 1 for React
+## Guide 1 for React
 
 [\`<Guide 2>\`](/docs/guide-2)
 `,
@@ -5191,7 +5339,7 @@ title: Guide 1 for Nextjs
 description: x
 sdk: nextjs
 ---
-# Guide 1 for Nextjs
+## Guide 1 for Nextjs
 `,
       },
       {
@@ -5202,7 +5350,7 @@ description: x
 sdk: react, nextjs
 ---
 
-# Guide 2 Component
+## Guide 2 Component
 `,
       },
     ])
@@ -5764,7 +5912,7 @@ title: Original Title
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -5836,7 +5984,7 @@ sdk: react, nextjs
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -5911,7 +6059,7 @@ sdk: react, nextjs
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -5986,7 +6134,7 @@ sdk: react, nextjs
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6034,7 +6182,7 @@ sdk: react, nextjs, astro
       },
       {
         path: './docs/_partials/partial.mdx',
-        content: `# Original Content`,
+        content: `## Original Content`,
       },
       {
         path: './docs/cached-doc.mdx',
@@ -6048,7 +6196,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6086,7 +6234,7 @@ sdk: react
       },
       {
         path: './docs/billing/_partials/local-partial.mdx',
-        content: `# Original Local Content`,
+        content: `## Original Local Content`,
       },
       {
         path: './docs/billing/for-b2c.mdx',
@@ -6100,7 +6248,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6159,7 +6307,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6248,7 +6396,7 @@ title: Page B
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6390,7 +6538,7 @@ title: Page C
       },
       {
         path: './typedoc/component.mdx',
-        content: `# Original Content`,
+        content: `## Original Content`,
       },
       {
         path: './docs/cached-doc.mdx',
@@ -6404,7 +6552,7 @@ sdk: react
     ])
 
     // Create store to maintain cache across builds
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -6431,6 +6579,241 @@ sdk: react
     const updatedContent = await readFile(pathJoin('./dist/cached-doc.mdx'))
     expect(updatedContent).toContain('Updated Content')
   })
+
+  test('should update doc content when an embedded tooltip changes', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+        }),
+      },
+      {
+        path: './docs/cached-doc.mdx',
+        content: `---
+title: Original Title
+description: x
+---
+
+[Tooltip](!ABC)`,
+      },
+      {
+        path: './docs/_tooltips/ABC.mdx',
+        content: `Original tooltip content`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+      tooltips: {
+        inputPath: '../docs/_tooltips',
+        outputPath: './_tooltips',
+      },
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    // Check initial content
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain('Original tooltip content')
+
+    // Update the tooltip content
+    await fs.writeFile(pathJoin('./docs/_tooltips/ABC.mdx'), `Updated tooltip content`)
+
+    invalidate(pathJoin('./docs/_tooltips/ABC.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(config, store)
+
+    // Check updated content
+    const updatedContent = await readFile(pathJoin('./dist/cached-doc.mdx'))
+    expect(updatedContent).toContain('Updated tooltip content')
+    expect(updatedContent).not.toContain('Original tooltip content')
+  })
+
+  test('should re-collapse a doc when an SDK variant file is deleted', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, expo
+---
+
+Documentation specific to Next.js and Expo`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'expo'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build - the react variant makes the doc available for react too
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(true)
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo,react\n')
+
+    // Delete the react variant
+    await fs.rm(pathJoin('./docs/api-doc.react.mdx'))
+
+    invalidate(pathJoin('./docs/api-doc.react.mdx'))
+
+    // Second build with same store (should re-collapse the doc back to nextjs/expo)
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(false)
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo\n')
+  })
+
+  test('should expand a doc when a new SDK variant file is added', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, expo
+---
+
+Documentation specific to Next.js and Expo`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'expo'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build - no react variant yet
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(false)
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo\n')
+
+    // Add a new react variant
+    await fs.writeFile(
+      pathJoin('./docs/api-doc.react.mdx'),
+      `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+    )
+
+    invalidate(pathJoin('./docs/api-doc.react.mdx'))
+
+    // Second build with same store (should expand the doc to include react)
+    await build(config, store)
+
+    expect(await fileExists(pathJoin('./dist/react/api-doc.mdx'))).toBe(true)
+    expect(await readFile(pathJoin('./dist/react/api-doc.mdx'))).toContain('Documentation specific to React.js')
+    expect(await readFile(pathJoin('./dist/nextjs/api-doc.mdx'))).toContain('availableSdks: nextjs,expo,react\n')
+  })
+
+  test('should reflect manifest changes on rebuild with the same store', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Doc A', href: '/docs/doc-a' }]],
+        }),
+      },
+      {
+        path: './docs/doc-a.mdx',
+        content: `---
+title: Doc A
+description: x
+---
+
+# Doc A`,
+      },
+      {
+        path: './docs/doc-b.mdx',
+        content: `---
+title: Doc B
+description: x
+---
+
+# Doc B`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore(true)
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build - doc-b exists on disk but isn't in the manifest yet
+    await build(config, store)
+
+    const firstManifest = await readFile(pathJoin('./dist/manifest.json'))
+    expect(firstManifest).toContain('/docs/doc-a')
+    expect(firstManifest).not.toContain('/docs/doc-b')
+
+    // Add doc-b to the manifest
+    await fs.writeFile(
+      pathJoin('./docs/manifest.json'),
+      JSON.stringify({
+        navigation: [
+          [
+            { title: 'Doc A', href: '/docs/doc-a' },
+            { title: 'Doc B', href: '/docs/doc-b' },
+          ],
+        ],
+      }),
+    )
+
+    invalidate(pathJoin('./docs/manifest.json'))
+
+    // Second build with same store (should reflect the updated manifest)
+    await build(config, store)
+
+    const secondManifest = await readFile(pathJoin('./dist/manifest.json'))
+    expect(secondManifest).toContain('/docs/doc-a')
+    expect(secondManifest).toContain('/docs/doc-b')
+  })
 })
 
 describe('Configuration Options', () => {
@@ -6450,7 +6833,7 @@ title: Index
 description: This page has a description
 ---
 
-# Page exists but not in manifest`,
+## Page exists but not in manifest`,
         },
       ])
 
@@ -6491,7 +6874,7 @@ title: Problem File
 description: This page has a description
 ---
 
-# Test Page
+## Test Page
 
 [Missing Link](/docs/non-existent)
 
@@ -6697,7 +7080,7 @@ description: This page has a description
 title: Missing Description
 ---
 
-# This page is missing a description
+## This page is missing a description
 `,
         },
       ])
@@ -6752,7 +7135,7 @@ title: Target Page
 description: The page being linked to
 ---
 
-# Target Page
+## Target Page
 `,
         },
       ])
@@ -6811,7 +7194,7 @@ sdk: react, expo
 description: This page has a description
 ---
 
-# SDK Document
+## SDK Document
 `,
         },
       ])
@@ -6856,7 +7239,7 @@ description: Test page with partial
 
 <Include src="_partials/test-partial" />
 
-# Test Page`,
+## Test Page`,
         },
       ])
 
@@ -6900,14 +7283,14 @@ title: API Documentation
 description: Generated API docs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/client" />
 `,
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API
+        content: `## Client API
 
 \`\`\`typescript
 interface Client {
@@ -6953,7 +7336,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API
+        content: `## Client API
 
 \`\`\`typescript
 interface Client {
@@ -7028,14 +7411,14 @@ title: API Documentation
 description: Generated API docs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/non-existent" />
 `,
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API
+        content: `## Client API
 
 \`\`\`typescript
 interface Client {
@@ -7108,7 +7491,7 @@ description: Reference to API docs
       },
       {
         path: './typedoc/api/client-with-sections.mdx',
-        content: `# Client API
+        content: `## Client API
 
 ## Client Methods
 
@@ -7159,7 +7542,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API`,
+        content: `## Client API`,
       },
     ])
 
@@ -7277,7 +7660,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API`,
+        content: `## Client API`,
       },
       {
         path: './docs/api-doc.mdx',
@@ -7286,7 +7669,7 @@ title: API Documentation
 description: Generated API docs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/client" />
 `,
@@ -7316,7 +7699,7 @@ description: Generated API docs
       },
       {
         path: './typedoc/api/client.mdx',
-        content: `# Client API`,
+        content: `## Client API`,
       },
       {
         path: './docs/api-doc.mdx',
@@ -7326,7 +7709,7 @@ description: Generated API docs
 sdk: react, nextjs
 ---
 
-# API Documentation
+## API Documentation
 
 <Typedoc src="api/client" />
 `,
@@ -8119,7 +8502,7 @@ description: x
       basePath: tempDir,
       validSdks: ['react', 'nextjs', 'expo'],
     })
-    const store = createBlankStore()
+    const store = createBlankStore(true)
     const invalidate = invalidateFile(store, config)
 
     await build(config, store)
@@ -8408,5 +8791,184 @@ description: x
     expect(output).toContain(
       'warning Matching file not found for path: /docs/invalid-link. Expected file to exist at /docs/invalid-link.mdx',
     )
+  })
+})
+
+describe('Output directory handling', () => {
+  test('builds over a stale dist symlink left behind by dev mode', async () => {
+    // `pnpm dev` symlinks dist/ into a temp dir; once the OS purges that temp dir the
+    // link dangles. A standard build must still be able to replace it.
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: This is a simple test page
+---
+
+Testing with a simple page.`,
+      },
+    ])
+
+    const distPath = pathJoin('./dist')
+    await fs.symlink(pathJoin('./this-target-does-not-exist'), distPath)
+    expect(await fileExists(distPath)).toBe(false) // dangling: follows the link
+    expect((await fs.lstat(distPath)).isSymbolicLink()).toBe(true) // but the entry is there
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    expect(output).toBe('')
+    expect((await fs.lstat(distPath)).isDirectory()).toBe(true)
+    expect(await fileExists(pathJoin('./dist/simple-test.mdx'))).toBe(true)
+  })
+
+  test('builds over a live dist symlink without touching its target', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: This is a simple test page
+---
+
+Testing with a simple page.`,
+      },
+      { path: './live-target/sentinel.txt', content: 'do not delete me' },
+    ])
+
+    await fs.symlink(pathJoin('./live-target'), pathJoin('./dist'))
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    expect(output).toBe('')
+    // lstat, not fileExists: the latter follows the link, so it would pass even if the build
+    // wrote straight through a still-present symlink instead of replacing it.
+    expect((await fs.lstat(pathJoin('./dist'))).isDirectory()).toBe(true)
+    expect(await fileExists(pathJoin('./dist/simple-test.mdx'))).toBe(true)
+    // Removing the link must not recurse into what it pointed at, nor write into it
+    expect(await fileExists(pathJoin('./live-target/sentinel.txt'))).toBe(true)
+    expect(await fileExists(pathJoin('./live-target/simple-test.mdx'))).toBe(false)
+  })
+})
+
+describe('Symlinked base paths', () => {
+  test('resolves lastUpdated when basePath reaches the repo through a symlink', async () => {
+    // `git rev-parse --show-toplevel` reports the canonical path, so a basePath that still
+    // contains a symlink (macOS os.tmpdir(), /var -> /private/var) would miss every entry in
+    // the commit-date map and silently drop lastUpdated. Constructed explicitly here so the
+    // case is covered on Linux CI too, where /tmp is not a symlink.
+    const { tempDir, initialCommitDate } = await createTempFiles(
+      [
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          }),
+        },
+        {
+          path: './docs/simple-test.mdx',
+          content: `---
+title: Simple Test
+description: This is a simple test page
+---
+
+Testing with a simple page.`,
+        },
+      ],
+      { setupGit: true },
+    )
+
+    // createTempFiles returns <root>/scripts, a virtual path emulating __dirname, so link the
+    // real root and reach the same tree through the link.
+    const canonicalRoot = await fs.realpath(path.dirname(tempDir))
+    const linkedRoot = `${canonicalRoot}-link`
+    await fs.symlink(canonicalRoot, linkedRoot)
+    onTestFinished(async () => {
+      await fs.rm(linkedRoot, { force: true })
+    })
+    const symlinkedDir = path.join(linkedRoot, 'scripts')
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: symlinkedDir, // deliberately NOT canonicalized
+        validSdks: ['nextjs', 'react'],
+        flags: {
+          skipGit: false,
+          skipApiErrors: true,
+        },
+      }),
+    )
+
+    expect(output).toBe('')
+    expect(await readFile(path.join(linkedRoot, './dist/simple-test.mdx'))).toContain(
+      `lastUpdated: ${initialCommitDate.toISOString()}`,
+    )
+  })
+
+  test('resolves lastUpdated for a doc reached through an in-tree symlinked directory', async () => {
+    // The commit-date map is keyed by path.resolve(repoRoot, gitPath) (lexical), while lookups
+    // are realpath'd (physical). They only stay in sync because getLastCommitDate canonicalizes
+    // the *lookup* path, not just the repo root — so a doc reached through a symlink inside the
+    // tree collapses to git's canonical key. Git never tracks a file *through* a symlink (it
+    // records docs/real/page.mdx and the symlink node separately, never docs/aliased/page.mdx),
+    // so the lexical map key is already canonical. Pins that invariant: if it broke, dates would
+    // silently disappear for symlinked sections exactly as they did for symlinked base paths.
+    const { pathJoin, git, initialCommitDate } = await createTempFiles(
+      [
+        {
+          path: './docs/real/page.mdx',
+          content: `---
+title: Real Page
+description: A real page under a real directory
+---
+
+Content.`,
+        },
+      ],
+      { setupGit: true },
+    )
+
+    // Add an in-tree directory symlink (docs/aliased -> real) in a later commit, so the real
+    // file's date (initialCommitDate) is distinct from the symlink's.
+    await fs.symlink('real', pathJoin('docs/aliased'))
+    await git!.add('.')
+    const laterDate = new Date(initialCommitDate.getTime() + 86_400_000)
+    await git!.commit('Add in-tree symlink', undefined, { '--date': laterDate.toISOString() })
+
+    const getDate = getLastCommitDate({ docsPath: pathJoin('docs'), flags: { skipGit: false } } as Parameters<
+      typeof getLastCommitDate
+    >[0])
+
+    const viaSymlink = await getDate(pathJoin('docs/aliased/page.mdx'))
+    const viaCanonical = await getDate(pathJoin('docs/real/page.mdx'))
+
+    // The file resolves through the symlink, and to its own commit date — not the symlink's.
+    expect(viaCanonical?.toISOString()).toBe(initialCommitDate.toISOString())
+    expect(viaSymlink?.toISOString()).toBe(initialCommitDate.toISOString())
   })
 })

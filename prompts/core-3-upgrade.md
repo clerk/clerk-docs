@@ -168,6 +168,7 @@ const { checkout, errors, fetchStatus } = useCheckout({ planId, planPeriod })
 - `Clerk` export removed — use `useClerk()` hook
 - Minimum Expo SDK: 53
 - `useSignInWithApple` → `@clerk/expo/apple`, `useSignInWithGoogle` → `@clerk/expo/google`
+- Native Google Sign-In moved to a separate optional package: apps using `useSignInWithGoogle` must install `@clerk/expo-google-signin` and add it to `plugins` in the app config alongside `@clerk/expo`, then rebuild
 - `publishableKey` prop now required in `ClerkProvider` (env vars inside `node_modules` not inlined in RN production builds)
 
 ### Astro

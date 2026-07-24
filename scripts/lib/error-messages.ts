@@ -54,6 +54,8 @@ export const errorMessages = {
     `Doc "${href}" is attempting to write out a doc to ${path} but the first part of the path is a valid SDK, this causes a file path conflict.`,
   'duplicate-heading-id': (href: string, id: string): string =>
     `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
+  'content-h1': (href: string): string =>
+    `Doc "${href}" contains an h1 heading (# ...) in its content. The page title comes from the frontmatter "title", so use an h2 (##) or lower`,
 
   // Include component errors
   'include-src-not-partials': (): string =>

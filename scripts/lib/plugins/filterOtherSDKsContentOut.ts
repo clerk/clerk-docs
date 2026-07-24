@@ -7,6 +7,8 @@ import type { Node } from 'unist'
 import type { VFile } from 'vfile'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+
 // Filter out content that is only available to other sdk's
 // Only runs for sdk-specific documents
 
@@ -27,7 +29,7 @@ export const filterOtherSDKsContentOut =
         false,
         'docs',
         filePath,
-        z.string(),
+        stringSchema,
       )
 
       if (notSdk !== undefined) {
@@ -52,7 +54,7 @@ export const filterOtherSDKsContentOut =
         false,
         'docs',
         filePath,
-        z.string(),
+        stringSchema,
       )
 
       // If no `sdk` prop and no `notSdk` prop, keep the node

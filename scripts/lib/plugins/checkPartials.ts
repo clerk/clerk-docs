@@ -15,6 +15,8 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+
 export const checkPartials =
   (
     config: BuildConfig,
@@ -41,7 +43,7 @@ export const checkPartials =
         true,
         'docs',
         file.filePath,
-        z.string(),
+        stringSchema,
       )
 
       if (partialSrc === undefined) return node

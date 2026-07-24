@@ -11,6 +11,10 @@ This guide will show you how to customize a session token to include additional 
 
 <Include src="_partials/token-size-callout" />
 
+<If is="llm">
+  **For AI agents:** Instead of editing the **Customize session token** Claims editor in the Dashboard, add custom claims with the CLI: `npx clerk@latest config patch --json '{"session":{"claims":{"fullName":"{{user.full_name}}","primaryEmail":"{{user.primary_email_address}}"}}}'`. Inspect the current claims with `npx clerk@latest config pull --keys session`. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
 <Steps>
   ## Add custom claims to your session token
 
@@ -101,7 +105,7 @@ This guide will show you how to customize a session token to include additional 
       For Express, the `Auth` object is accessed using the `getAuth()` function. Learn more about [using `getAuth()`](/docs/reference/express/overview#get-auth).
 
       ```js
-      import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+      import { clerkMiddleware, getAuth } from '@clerk/express'
       import express from 'express'
 
       const app = express()
@@ -110,22 +114,23 @@ This guide will show you how to customize a session token to include additional 
       // Apply `clerkMiddleware()` to all routes
       app.use(clerkMiddleware())
 
-      const getSessionClaims = (req, res, next) => {
+      const getSessionClaims = (req, res) => {
         // Use `getAuth()` to access the user's session claims
         const { isAuthenticated, sessionClaims } = getAuth(req)
 
         if (!isAuthenticated) {
-          return res.status(401).json({ error: 'Unauthorized' })
+          res.status(401).json({ error: 'Unauthorized' })
+          return
         }
 
         const fullName = sessionClaims.fullName
 
         const primaryEmail = sessionClaims.primaryEmail
 
-        return res.status(200).json({ fullName, primaryEmail })
+        res.status(200).json({ fullName, primaryEmail })
       }
 
-      app.get('/profile', requireAuth(), getSessionClaims)
+      app.get('/profile', getSessionClaims)
 
       app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`)

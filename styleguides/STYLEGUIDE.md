@@ -6,7 +6,7 @@ These are the guidelines we use to write our docs.
 
 ### Alphabetize
 
-Try to keep things in alphabetic order, except our most popular SDKs are prioritized first: Next.js, React, JavaScript, Expo, TanStack React Start, React Router, and Express. For example, our SDK selector prioritizes these SDKs in this order, and then alphabetizes the rest. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
+Try to keep things in alphabetic order, except our most popular SDKs are prioritized first: Next.js, React, Expo, TanStack React Start, React Router, and Express. For example, our SDK selector prioritizes these SDKs in this order, and then alphabetizes the rest. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
 
 ### De-dupe reference links and tooltips
 
@@ -49,6 +49,27 @@ When writing titles that contain component references in MDX pages, wrap the com
 > ✅
 > Add it to your app's Middleware.
 
+### Capitalize Clerk feature proper nouns
+
+Clerk's own product and feature names are proper nouns — capitalize them consistently. This follows the same reasoning as the Next.js convention above. Use judgment; this isn't an exhaustive list, but when a name refers to a specific Clerk feature, treat it as a proper noun.
+
+Terms treated as proper nouns include: Agent Task, Billing, Feature, Membership Request, Organization, Organization ID (when it refers to a Clerk Organization's ID, e.g., `org_xxx`), Permission, Plan, Role, Role Set, and Subscription.
+
+> ❌
+> Create an agent task to test your authentication flows.
+
+> ✅
+> Create an Agent Task to test your authentication flows.
+
+Keep lowercase:
+
+- **Generic usage**, where the word doesn't refer to the Clerk feature. For example, "your organization's directory service" (the reader's company), "billing information" (payment details like invoices and payment methods), and Clerk's own pricing tiers ("the Hobby plan", "the application's Clerk plan").
+- **Bold UI labels** that mirror Clerk Dashboard text exactly, even when the Dashboard uses lowercase. For example, **Create first organization automatically**.
+- **Component-rendered text**, such as button labels and default values. For example, the `<OrganizationSwitcher />` component's "Create an organization" button and the "My organization" fallback name.
+- **Code**, including inline code, code blocks, prop values, string literals, URL paths, and API field or parameter names.
+- **`invitation(s)`, `membership(s)`, and `webhook(s)`**, which aren't treated as feature proper nouns, even in phrases like "Organization invitation", "Organization membership", and "webhook event". Note that "Membership Request" _is_ a proper noun, per the list above.
+- **Compound adjectives** built on industry terms, like "role-based access control".
+
 ### Use "sign in" instead of "log in"
 
 Use "sign in" and "sign out" rather than "log in" or "log out".
@@ -61,13 +82,23 @@ Use "sign in" and "sign out" rather than "log in" or "log out".
 
 ### Write out abbreviations when introducing them
 
-If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g. APIs, IDEs or OSes.
+If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g., APIs, IDEs or OSes.
 
 > ❌
 > An AST is a tree representation of code. AST's are a fundamental part of the way a compiler works.
 
 > ✅
 > An abstract syntax tree (AST) is a tree representation of code. ASTs are a fundamental part of the way a compiler works.
+
+### Use a comma after "e.g." and "i.e."
+
+Always follow `e.g.` and `i.e.` with a comma. Keep both periods; don't drop them or replace them with "eg"/"ie". This rule applies to prose and to comments within code examples, but not to code itself (identifiers, string values, etc.).
+
+> ❌
+> Pass a unique identifier, e.g. a user ID.
+
+> ✅
+> Pass a unique identifier, e.g., a user ID.
 
 ### Avoid "we/us/our/ours"
 
@@ -181,6 +212,16 @@ Use "ensure" instead of "make sure."
 
 > ✅
 > Ensure you have the correct permissions.
+
+### Prebuilt vs. pre-built
+
+Use "prebuilt" instead of "pre-built."
+
+> ❌
+> Clerk's pre-built components handle authentication and user management for you.
+
+> ✅
+> Clerk's prebuilt components handle authentication and user management for you.
 
 ### Sidenav vs. sidebar
 
@@ -324,6 +365,16 @@ npm i @clerk/nextjs
 npm i @clerk/nextjs
 ​```
 ````
+
+### Use angle brackets for placeholders in shell commands
+
+When a shell command contains a value the reader must substitute, write the placeholder as `<snake_case_name>` with a descriptive name. Don't use curly braces — they collide with literal JSON in the same command and read as OpenAPI path-template syntax — and don't use generic names like `<id>` when a specific one fits. Angle brackets also match the CLI's own `--help` output.
+
+> ❌
+> Run `npx clerk@latest api /domains/{domain_id} -X PATCH -d '{"proxy_url": "..."}'`.
+
+> ✅
+> Run `npx clerk@latest api /domains/<domain_id> -X PATCH -d '{"proxy_url": "..."}'`.
 
 ### Pass properties to components; parameters to functions
 

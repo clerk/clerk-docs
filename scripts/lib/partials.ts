@@ -20,6 +20,11 @@ import { extractComponentPropValueFromNode } from './utils/extractComponentPropV
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+
+// Matches backslashes so Windows-style path separators can be normalized to '/'.
+const backslashRegex = /\\/g
+
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   // Read all partials from the docs directory, including:
   // 1. Global partials in /docs/_partials/
@@ -111,7 +116,7 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
           false,
           'partials',
           filePath,
-          z.string(),
+          stringSchema,
         )
 
         if (!partialSrc) return
@@ -121,7 +126,9 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
 
         if (partialSrc.startsWith('./') || partialSrc.startsWith('../')) {
           const parentDir = path.dirname(filePath)
-          nestedPath = path.normalize(path.join(parentDir, `${removeMdxSuffix(partialSrc)}.mdx`)).replace(/\\/g, '/')
+          nestedPath = path
+            .normalize(path.join(parentDir, `${removeMdxSuffix(partialSrc)}.mdx`))
+            .replace(backslashRegex, '/')
         } else if (partialSrc.startsWith('_partials/')) {
           nestedPath = `${removeMdxSuffix(partialSrc)}.mdx`
         } else {
@@ -184,7 +191,7 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
                 false,
                 'partials',
                 filePath,
-                z.string(),
+                stringSchema,
               )
 
               if (partialSrc) {

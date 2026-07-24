@@ -1,6 +1,6 @@
 ---
 title: '`clerkMiddleware()` | Astro'
-description: The clerkMiddleware() function allows you to protect your Astro application using Middleware.
+description: The clerkMiddleware() function integrates Clerk authentication into your Astro application through Middleware.
 sdk: astro
 ---
 
@@ -16,30 +16,14 @@ import { clerkMiddleware } from '@clerk/astro/server'
 export const onRequest = clerkMiddleware()
 ```
 
-## `createRouteMatcher()`
+## `createRouteMatcher()` (removed) {{ id: 'create-route-matcher' }}
 
-`createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes. `createRouteMatcher()` accepts an array of routes and checks if the route the user is trying to visit matches one of the routes passed to it.
+> [!WARNING]
+> `createRouteMatcher()` was removed in `@clerk/astro` v4. Middleware-based auth checks rely on path matching, which can diverge from how Astro routes requests and leave protected resources reachable. Move auth checks into each Astro page, API route, or server-side handler that accesses protected data, as shown below.
 
-The `createRouteMatcher()` helper returns a function that, if called with the `context.request` object from the Middleware, will return `true` if the user is trying to access a route that matches one of the routes passed to `createRouteMatcher()`.
+`createRouteMatcher()` was a Clerk helper function that accepted an array of routes and checked if the route the user was trying to visit matched one of them, so that auth checks could run in the Middleware for matching routes:
 
-In the following example, `createRouteMatcher()` sets all `/dashboard` and `/forum` routes as protected routes.
-
-```ts
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-```
-
-## Protect routes
-
-You can protect routes by checking either or both of the following:
-
-- [User authentication status](#protect-routes-based-on-user-authentication-status) -- user is signed in or out
-- [User authorization status](#protect-routes-based-on-user-authorization-status) -- user has the required Role or Permission
-
-### Protect routes based on user authentication status
-
-To protect routes based on user authentication status, use [`auth().isAuthenticated`](/docs/reference/backend/types/auth-object){{ target: '_blank' }} to check if `isAuthenticated` is true. If it's not, the user is not authenticated, and you can redirect them to the sign-in page.
-
-```tsx {{ filename: 'src/middleware.ts' }}
+```ts {{ filename: 'src/middleware.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
 
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
@@ -48,53 +32,48 @@ export const onRequest = clerkMiddleware((auth, context) => {
   const { isAuthenticated, redirectToSignIn } = auth()
 
   if (!isAuthenticated && isProtectedRoute(context.request)) {
-    // Add custom logic to run before redirecting
-
     return redirectToSignIn()
   }
 })
 ```
 
-### Protect routes based on user authorization status
+To migrate, move the auth check into each resource the matcher protected. Keep `clerkMiddleware()` itself; it's still required for Clerk to work. Role and Permission checks with [`has()`](/docs/reference/backend/types/auth-object#has){{ target: '_blank' }} also move onto the resource. Middleware logic unrelated to auth protection, such as locale redirects or headers, can stay, using plain `URL` or pathname checks.
 
-To protect routes based on user authorization status, use [`auth().has()`](/docs/reference/backend/types/auth-object#has){{ target: '_blank' }} to check if the user has the required Roles or Custom Permissions.
+<CodeBlockTabs options={["Astro page", "API route"]}>
+  ```astro {{ filename: 'src/pages/dashboard.astro' }}
+  ---
+  const { userId, redirectToSignIn } = Astro.locals.auth()
 
-```tsx {{ filename: 'src/middleware.ts' }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
+  if (!userId) return redirectToSignIn()
+  ---
 
-const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
+  <h1>Dashboard</h1>
+  ```
 
-export const onRequest = clerkMiddleware((auth, context) => {
-  const { has, redirectToSignIn } = auth()
+  ```ts {{ filename: 'src/pages/api/data.ts' }}
+  import type { APIRoute } from 'astro'
 
-  // Restrict admin routes to users with specific Permissions
-  if (
-    (isProtectedRoute(context.request) && !has({ permission: 'org:admin:example1' })) ||
-    !has({ permission: 'org:admin:example2' })
-  ) {
-    // Add logic to run if the user does not have the required Permissions; for example, redirecting to the sign-in page
-    return redirectToSignIn()
+  export const GET: APIRoute = ({ locals }) => {
+    const { userId } = locals.auth()
+
+    if (!userId) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    return Response.json({ userId })
   }
-})
-```
+  ```
+</CodeBlockTabs>
 
-## Protect all routes
+For more resource-based protection patterns, including a reusable `requireAuth()` helper, see [Read user data](/docs/astro/guides/users/reading).
 
-To protect all routes in your application and define specific routes as public, you can use any of the above methods and simply invert the `if` condition.
+If you want to hand this migration to a coding agent, use the following prompt:
 
-```tsx
-import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
-
-const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
-
-export const onRequest = clerkMiddleware((auth, context) => {
-  const { isAuthenticated, redirectToSignIn, userId } = auth()
-
-  if (!isPublicRoute(context.request) && !isAuthenticated) {
-    return redirectToSignIn()
-  }
-})
-```
+<LLMPrompt
+  displayText="Use this prebuilt prompt to migrate your project with AI assistance."
+  src="prompts/astro-migrate-from-create-route-matcher.md"
+  embed
+/>
 
 ## `clerkMiddleware()` options
 

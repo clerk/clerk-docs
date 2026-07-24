@@ -1,0 +1,318 @@
+---
+title: '`OrganizationSwitcher`'
+description: Clerk's OrganizationSwitcher renders an account switcher interface that lets signed-in users switch between their Personal and Organization accounts.
+sdk: ios, android
+---
+
+<If sdk="ios">
+  ![The OrganizationSwitcher renders an account switcher interface that lets signed-in users switch between their Personal and Organization accounts.](/docs/images/ui-components/ios-organization-switcher-v2.png){{ style: { maxWidth: '425px' } }}
+</If>
+
+<If sdk="android">
+  ![The OrganizationSwitcher renders an account switcher interface that lets signed-in users switch between their Personal and Organization accounts.](/docs/images/ui-components/android-organization-switcher.png){{ style: { maxWidth: '425px' } }}
+</If>
+
+The `OrganizationSwitcher` renders an account switcher interface that lets signed-in users switch between their Personal and Organization accounts. It displays the [Active Organization](!active-organization), or the user's [Personal Account](!personal-account) when no Organization is selected, and provides built-in native controls for managing the Active Organization, switching accounts, accepting Organization invitations and suggestions, and creating an Organization when permitted.
+
+`OrganizationSwitcher` only renders when a user is signed in and Organizations are enabled for the instance. When Organization selection is required, the Personal Account option is hidden automatically.
+
+`OrganizationSwitcher` renders the Organization or account trigger only. Render [`UserButton`](/docs/reference/views/user/user-button) separately when your layout also needs a profile control.
+
+> [!NOTE]
+> When Organization selection is required, [`AuthView`](/docs/reference/views/authentication/auth-view) automatically handles the `choose_organization` session task. Continue rendering `AuthView` while the session has a pending task, then render your signed-in UI once the task is complete.
+
+## Parameters
+
+<If sdk="ios">
+  <Properties>
+    - `hidePersonal`
+    - `Bool`
+
+    Whether the [Personal Account](!personal-account) option should be hidden even when the option is allowed. Defaults to `false`.
+
+    ---
+
+    - `displayMode`
+    - `OrganizationSwitcherDisplayMode`
+
+    Controls the trigger style. Defaults to `.normal`.
+
+    The supported values are:
+
+    - `.normal`
+    - `.compact`
+    - `.normal(size:)`
+    - `.compact(size:)`
+
+    `.normal` shows the active account avatar, account name, and disclosure chevron. `.compact` shows only the avatar-sized account trigger. The default base avatar size is `36` points.
+
+    ---
+
+    - `skipInvitationScreen`
+    - `Bool`
+
+    Whether creating an Organization should skip the post-create invitation step. Defaults to `false`.
+
+    ---
+
+    - `label`
+    - `() -> LabelContent`
+
+    Custom content shown inside the switcher button.
+  </Properties>
+</If>
+
+<If sdk="android">
+  <Properties>
+    - `modifier`
+    - `Modifier`
+
+    A modifier that gets applied to `OrganizationSwitcher`.
+
+    ---
+
+    - `clerkTheme`
+    - `ClerkTheme?`
+
+    The theme to apply to the `OrganizationSwitcher`.
+
+    ---
+
+    - `onOrganizationChanged`
+    - `(() -> Unit)?`
+
+    Called after the user successfully switches to an Organization or [Personal Account](!personal-account).
+
+    ---
+
+    - `hidePersonal`
+    - `Boolean`
+
+    Whether the [Personal Account](!personal-account) option should be hidden even when the option is allowed. Defaults to `false`.
+
+    ---
+
+    - `displayMode`
+    - `OrganizationSwitcherDisplayMode`
+
+    Controls the trigger style. Defaults to `OrganizationSwitcherDisplayMode.Normal`.
+
+    The supported values are:
+
+    - `OrganizationSwitcherDisplayMode.Normal`
+    - `OrganizationSwitcherDisplayMode.Compact`
+    - `OrganizationSwitcherDisplayMode.normal(size)`
+    - `OrganizationSwitcherDisplayMode.compact(size)`
+
+    `Normal` shows the active account avatar, account name, and disclosure chevron. `Compact` shows only the avatar-sized account trigger. The default base avatar size is `36.dp`.
+
+    ---
+
+    - `onManageOrganization`
+    - `((OrganizationMembership) -> Unit)?`
+
+    Called when the user selects the **Manage organization** action. When `null`, the switcher opens the default [`OrganizationProfileView`](/docs/reference/views/organization/organization-profile-view).
+
+    ---
+
+    - `onCreateOrganization`
+    - `((OrganizationCreationDefaults?) -> Unit)?`
+
+    Called when the user selects the **Create organization** action. When `null`, the switcher opens the default Organization creation flow.
+
+    ---
+
+    - `organizationProfileCustomRows`
+    - `List<OrganizationProfileCustomRow>`
+
+    Custom rows forwarded to the default [`OrganizationProfileView`](/docs/reference/views/organization/organization-profile-view) opened by the switcher.
+
+    ---
+
+    - `organizationProfileCustomDestination`
+    - `(@Composable (String) -> Unit)?`
+
+    Custom destination builder forwarded to the default [`OrganizationProfileView`](/docs/reference/views/organization/organization-profile-view). The destination receives the tapped row's `routeKey`.
+  </Properties>
+</If>
+
+## Usage
+
+The following examples show how to use the `OrganizationSwitcher` in your app.
+
+### Basic usage
+
+<If sdk="ios">
+  ```swift
+  import ClerkKit
+  import ClerkKitUI
+  import SwiftUI
+
+  struct HomeView: View {
+    @Environment(Clerk.self) private var clerk
+
+    var body: some View {
+      if clerk.user != nil {
+        HStack(spacing: 16) {
+          OrganizationSwitcher()
+          UserButton()
+        }
+      } else {
+        AuthView()
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.foundation.layout.fillMaxSize
+  import androidx.compose.foundation.layout.padding
+  import androidx.compose.foundation.layout.statusBarsPadding
+  import androidx.compose.runtime.Composable
+  import androidx.compose.runtime.getValue
+  import androidx.compose.ui.Modifier
+  import androidx.compose.ui.unit.dp
+  import androidx.lifecycle.compose.collectAsStateWithLifecycle
+  import com.clerk.api.Clerk
+  import com.clerk.api.session.pendingTaskKey
+  import com.clerk.ui.auth.AuthView
+  import com.clerk.ui.organizationswitcher.OrganizationSwitcher
+
+  @Composable
+  fun HomeScreen() {
+      val session by Clerk.sessionFlow.collectAsStateWithLifecycle()
+      val user by Clerk.userFlow.collectAsStateWithLifecycle()
+
+      if (user != null && session?.pendingTaskKey == null) {
+          Column(
+              modifier = Modifier
+                  .fillMaxSize()
+                  .statusBarsPadding()
+                  .padding(24.dp),
+          ) {
+              OrganizationSwitcher()
+          }
+      } else {
+          AuthView()
+      }
+  }
+  ```
+</If>
+
+### Compact switcher
+
+<If sdk="ios">
+  ```swift
+  OrganizationSwitcher(
+    hidePersonal: false,
+    displayMode: .compact(size: 40)
+  )
+  ```
+
+  ### Custom switcher label
+
+  The following example demonstrates how to render a custom switcher label.
+
+  ```swift
+  import ClerkKitUI
+  import SwiftUI
+
+  OrganizationSwitcher {
+    Text("Switch account")
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import androidx.compose.ui.unit.dp
+  import com.clerk.ui.organizationswitcher.OrganizationSwitcher
+  import com.clerk.ui.organizationswitcher.OrganizationSwitcherDisplayMode
+
+  OrganizationSwitcher(
+      displayMode = OrganizationSwitcherDisplayMode.compact(size = 40.dp),
+  )
+  ```
+
+  ### Override default flows
+
+  ```kotlin
+  OrganizationSwitcher(
+      onOrganizationChanged = {
+          // Refresh Organization-scoped data.
+      },
+      onManageOrganization = { membership ->
+          // Navigate to your own Organization settings screen.
+      },
+      onCreateOrganization = { creationDefaults ->
+          // Navigate to your own Organization creation flow.
+      },
+  )
+  ```
+</If>
+
+### Customize the default Organization profile
+
+<If sdk="ios">
+  Custom rows are shown in the switcher's default [`OrganizationProfileView`](/docs/reference/views/organization/organization-profile-view) only when you provide both `.organizationProfileRows()` and `.organizationProfileDestination()`.
+
+  ```swift
+  import ClerkKitUI
+  import SwiftUI
+
+  enum OrganizationRoute: Hashable {
+    case settings
+  }
+
+  OrganizationSwitcher()
+    .organizationProfileRows([
+      .init(
+        route: .settings,
+        title: "Settings",
+        icon: .system(name: "gear"),
+        placement: .after(.members)
+      ),
+    ])
+    .organizationProfileDestination { (route: OrganizationRoute) in
+      switch route {
+      case .settings:
+        // Replace this placeholder with the custom view for your Settings row.
+        OrganizationSettingsContent()
+      }
+    }
+  ```
+</If>
+
+<If sdk="android">
+  Custom rows are shown in the switcher's default [`OrganizationProfileView`](/docs/reference/views/organization/organization-profile-view) only when you provide both `organizationProfileCustomRows` and `organizationProfileCustomDestination`.
+
+  ```kotlin
+  import androidx.compose.material.icons.Icons
+  import androidx.compose.material.icons.filled.Settings
+  import com.clerk.ui.organizationprofile.custom.OrganizationProfileCustomRow
+  import com.clerk.ui.organizationprofile.custom.OrganizationProfileCustomRowPlacement
+  import com.clerk.ui.organizationprofile.custom.OrganizationProfileRow
+  import com.clerk.ui.organizationprofile.custom.OrganizationProfileRowIcon
+  import com.clerk.ui.organizationswitcher.OrganizationSwitcher
+
+  OrganizationSwitcher(
+      organizationProfileCustomRows = listOf(
+          OrganizationProfileCustomRow(
+              routeKey = "settings",
+              title = "Settings",
+              icon = OrganizationProfileRowIcon.Vector(Icons.Filled.Settings),
+              placement = OrganizationProfileCustomRowPlacement.After(OrganizationProfileRow.Members),
+          )
+      ),
+      organizationProfileCustomDestination = { routeKey ->
+          when (routeKey) {
+              // Replace this placeholder with the custom view for your Settings row.
+              "settings" -> OrganizationSettingsContent()
+          }
+      },
+  )
+  ```
+</If>

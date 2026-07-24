@@ -7,36 +7,65 @@ sdk: expo
 > [!NOTE]
 > This documents the native `<AuthView />` from `@clerk/expo/native`. For web projects, use the [web `<SignIn />`](/docs/reference/components/authentication/sign-in) or [`<SignUp />`](/docs/reference/components/authentication/sign-up) components from `@clerk/expo/web`.
 
+| iOS | Android |
+| - | - |
+| ![The AuthView renders a comprehensive authentication interface that handles both user sign-in and sign-up flows on iOS.](/docs/images/ui-components/ios-auth-view.png){{ width: 303, height: 590, style: { objectFit: 'contain' } }} | ![The AuthView renders a comprehensive authentication interface that handles both user sign-in and sign-up flows on Android.](/docs/images/ui-components/android-auth-view.png){{ width: 303, height: 590, style: { objectFit: 'contain' } }} |
+
 The `<AuthView />` component renders a complete native authentication interface using SwiftUI on iOS and Jetpack Compose on Android. It handles all authentication flows including email, phone, OAuth, passkeys, and multi-factor authentication. All methods enabled in your [Clerk Dashboard](https://dashboard.clerk.com) are automatically supported.
+
+The `<AuthView />` renders inline in your React Native view hierarchy, so you can place it in a modal, route, full-screen view, or any other layout that fits your app.
 
 <Include src="_partials/expo/expo-requirements-callout" />
 
 ## Usage
 
-The following examples show how to use the `<AuthView />` in your Expo app. Use [`useAuth()`](/docs/reference/hooks/use-auth) or [`useUser()`](/docs/reference/hooks/use-user) in a `useEffect` to react to authentication state changes.
+The following examples show how to use the `<AuthView />` in your Expo app. You can use [`useAuth()`](/docs/reference/hooks/use-auth) or [`useUser()`](/docs/reference/hooks/use-user) to read authentication state and update your UI after auth changes.
 
-### Basic usage
+### Render in a modal
+
+The following example demonstrates one way to render `<AuthView />` inside a React Native `<Modal>`. The native dismiss button is shown by default. Use `onDismiss` to close the modal in React Native state.
 
 <Include src="_partials/expo/session-sync-callout" />
 
-```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+<Include src="_partials/expo/auth-view-modal-lifecycle-callout" />
+
+```tsx {{ filename: 'src/app/index.tsx' }}
 import { AuthView } from '@clerk/expo/native'
-import { useAuth } from '@clerk/expo'
-import { useRouter } from 'expo-router'
-import { useEffect } from 'react'
+import { useAuth, useUser } from '@clerk/expo'
+import { useState } from 'react'
+import { Button, Modal, StyleSheet, Text, View } from 'react-native'
 
-export default function SignInScreen() {
+export default function AuthButton() {
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false })
-  const router = useRouter()
+  const { user } = useUser()
+  const [isAuthOpen, setIsAuthOpen] = useState(false)
 
-  useEffect(() => {
-    if (isSignedIn) {
-      router.replace('/(home)')
-    }
-  }, [isSignedIn])
-
-  return <AuthView mode="signInOrUp" />
+  return (
+    <View style={styles.container}>
+      {isSignedIn ? (
+        <Text>User ID: {user?.id}</Text>
+      ) : (
+        <Button title="Sign in" onPress={() => setIsAuthOpen(true)} />
+      )}
+      <Modal
+        animationType="slide"
+        visible={isAuthOpen}
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsAuthOpen(false)}
+      >
+        <AuthView onDismiss={() => setIsAuthOpen(false)} />
+      </Modal>
+    </View>
+  )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+})
 ```
 
 ### Sign-in only
@@ -49,6 +78,30 @@ export default function SignInScreen() {
 
 ```tsx
 <AuthView mode="signUp" />
+```
+
+### Render as a required full-screen view
+
+You can render `<AuthView />` directly in a full-screen view when users must authenticate before continuing. In this case, pass `isDismissible={false}` so the native dismiss button isn't shown.
+
+```tsx {{ filename: 'src/app/(auth)/sign-in.tsx' }}
+import { AuthView } from '@clerk/expo/native'
+import { useSession } from '@clerk/expo'
+import { useRouter } from 'expo-router'
+import { useEffect } from 'react'
+
+export default function SignInScreen() {
+  const { session } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (session?.status === 'active') {
+      router.replace('/(home)')
+    }
+  }, [session?.status, router])
+
+  return <AuthView isDismissible={false} />
+}
 ```
 
 ## Properties
@@ -65,13 +118,17 @@ export default function SignInScreen() {
 
   ---
 
-  - `isDismissable`
+  - `isDismissible`
   - `boolean`
 
-  Whether the authentication view can be dismissed by the user. When `true`, a dismiss button appears. When `false`, no dismiss button is shown. Defaults to `false`.
+  Whether the authentication view can be dismissed by the user. When `true`, a dismiss button appears in the native navigation bar. When `false`, no dismiss button is shown. Defaults to `true`.
 
-  > [!IMPORTANT]
-  > Do not set `isDismissable={true}` when rendering inside a React Native `<Modal>`. The native dismiss button relies on SwiftUI (iOS) or Jetpack Compose (Android) to close the view, which cannot dismiss a React Native `<Modal>`. Tapping the native dismiss button will not close the modal and may leave the screen unresponsive.
+  ---
+
+  - `onDismiss`
+  - `() => void`
+
+  A callback that runs when the native authentication view requests dismissal. Use this to update your app's presentation state, such as closing a React Native `<Modal>`. Use `useAuth()`, `useUser()`, or `useSession()` to read auth state after authentication changes.
 </Properties>
 
 ## Social connection (OAuth) configuration

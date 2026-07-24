@@ -1,0 +1,226 @@
+<If sdk={["nextjs", "tanstack-react-start"]}>
+  In the following example, the `acceptsToken` parameter allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+  - If the token is invalid or missing, `auth()` will return `false` for `isAuthenticated`. Check `isAuthenticated` before reading the other properties, like `userId`.
+  - If the token is an `api_key`, use `subject` to identify the user or Organization associated with the key.
+  - If the token is valid, `isAuthenticated` is `true`. This example includes pseudo-code that uses `subject` for API keys or `userId` for session and OAuth tokens to get data from a database.
+
+  <If sdk="nextjs">
+    ```tsx {{ filename: 'app/api/example/route.ts' }}
+    import { NextResponse } from 'next/server'
+    import { auth } from '@clerk/nextjs/server'
+
+    export async function POST() {
+      // Accept session_token, oauth_token, and api_key types
+      const authObject = await auth({
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      // If the token is invalid or missing
+      if (!authObject.isAuthenticated) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      // Check if the token is an api key and if it doesn't have the required scope
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('read:data')) {
+        return NextResponse.json({ error: 'API Key missing the "read:data" scope' }, { status: 401 })
+      }
+
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the resource owner ID
+      const ownerId = authObject.tokenType === 'api_key' ? authObject.subject : authObject.userId
+      const data = db.select().from(resources).where(eq(resources.ownerId, ownerId))
+
+      return NextResponse.json({ data })
+    }
+    ```
+
+    To enforce token types across your API routes, check the token type in each Route Handler with [`auth({ acceptsToken })`](/docs/reference/nextjs/app-router/auth#verify-machine-requests).
+  </If>
+
+  <If sdk="tanstack-react-start">
+    ```tsx {{ filename: 'app/routes/api/example.tsx' }}
+    import { json } from '@tanstack/react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth } from '@clerk/tanstack-react-start/server'
+
+    export const ServerRoute = createFileRoute('/api/example')({
+      server: {
+        handlers: {
+          POST: async () => {
+            // Accept session_token, oauth_token, and api_key types
+            const authObject = await auth({
+              acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+            })
+
+            // If the token is invalid or missing
+            if (!authObject.isAuthenticated) {
+              return json({ error: 'Unauthorized' }, { status: 401 })
+            }
+
+            // Check if the token is an api key and if it doesn't have the required scope
+            if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('read:data')) {
+              return json({ error: 'API Key missing the "read:data" scope' }, { status: 401 })
+            }
+
+            // If the token is valid, move forward with the application logic
+            // This example includes pseudo-code for getting data from a database using the resource owner ID
+            const ownerId = authObject.tokenType === 'api_key' ? authObject.subject : authObject.userId
+            const data = db.select().from(resources).where(eq(resources.ownerId, ownerId))
+
+            return json({ data })
+          },
+        },
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk={["fastify", "expressjs", "react-router"]}>
+  In the following example, the `acceptsToken` parameter allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+  - If the token is invalid or missing, `getAuth()` will return `false` for `isAuthenticated`. Check `isAuthenticated` before reading the other properties, like `userId`.
+  - If the token is an `api_key`, use `subject` to identify the user or Organization associated with the key.
+  - If the token is valid, `isAuthenticated` is `true`. This example includes pseudo-code that uses `subject` for API keys or `userId` for session and OAuth tokens to get data from a database.
+
+  <If sdk="expressjs">
+    ```ts {{ filename: 'index.ts' }}
+    import express from 'express'
+    import { clerkMiddleware, getAuth } from '@clerk/express'
+
+    const app = express()
+
+    app.use(clerkMiddleware())
+
+    app.post('/api/example', (req, res) => {
+      // Accept session_token, oauth_token, and api_key types
+      const authObject = getAuth(req, {
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      // If the token is invalid or missing
+      if (!authObject.isAuthenticated) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+
+      // Check if the token is an api key and if it doesn't have the required scope
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('read:data')) {
+        res.status(401).json({ error: 'API Key missing the "read:data" scope' })
+        return
+      }
+
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the resource owner ID
+      const ownerId = authObject.tokenType === 'api_key' ? authObject.subject : authObject.userId
+      const data = db.select().from(resources).where(eq(resources.ownerId, ownerId))
+
+      res.json({ data })
+    })
+    ```
+  </If>
+
+  <If sdk="fastify">
+    ```ts {{ filename: 'src/routes/example.ts' }}
+    import Fastify from 'fastify'
+    import { clerkPlugin, getAuth } from '@clerk/fastify'
+
+    const fastify = Fastify()
+
+    fastify.register(clerkPlugin)
+
+    fastify.post('/api/example', (request, reply) => {
+      // Accept session_token, oauth_token, and api_key types
+      const authObject = getAuth(request, {
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      // If the token is invalid or missing
+      if (!authObject.isAuthenticated) {
+        return reply.code(401).send({ error: 'Unauthorized' })
+      }
+
+      // Check if the token is an api key and if it doesn't have the required scope
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('read:data')) {
+        return reply.code(401).send({ error: 'API Key missing the "read:data" scope' })
+      }
+
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the resource owner ID
+      const ownerId = authObject.tokenType === 'api_key' ? authObject.subject : authObject.userId
+      const data = db.select().from(resources).where(eq(resources.ownerId, ownerId))
+
+      return reply.send({ data })
+    })
+    ```
+  </If>
+
+  <If sdk="react-router">
+    ```ts {{ filename: 'app/routes/api.example.ts' }}
+    import { getAuth } from '@clerk/react-router/server'
+    import type { Route } from './+types/api.example'
+
+    export async function action(args: Route.ActionArgs) {
+      // Accept session_token, oauth_token, and api_key types
+      const authObject = await getAuth(args, {
+        acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+      })
+
+      // If the token is invalid or missing
+      if (!authObject.isAuthenticated) {
+        throw new Response('Unauthorized', { status: 401 })
+      }
+
+      // Check if the token is an api key and if it doesn't have the required scope
+      if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('read:data')) {
+        throw new Response('API Key missing the "read:data" scope', { status: 401 })
+      }
+
+      // If the token is valid, move forward with the application logic
+      // This example includes pseudo-code for getting data from a database using the resource owner ID
+      const ownerId = authObject.tokenType === 'api_key' ? authObject.subject : authObject.userId
+      const data = db.select().from(resources).where(eq(resources.ownerId, ownerId))
+
+      return Response.json({ data })
+    }
+    ```
+  </If>
+</If>
+
+<If sdk="nuxt">
+  In the following example, the `acceptsToken` parameter allows `session_token`s, `oauth_token`s, and `api_key`s.
+
+  - If the token is invalid or missing, `event.context.auth()` will return `false` for `isAuthenticated`. Check `isAuthenticated` before reading the other properties, like `userId`.
+  - If the token is an `api_key`, use `subject` to identify the user or Organization associated with the key.
+  - If the token is valid, `isAuthenticated` is `true`. This example includes pseudo-code that uses `subject` for API keys or `userId` for session and OAuth tokens to get data from a database.
+
+  ```ts {{ filename: 'server/api/example.ts' }}
+  export default defineEventHandler((event) => {
+    // Accept session_token, oauth_token, and api_key types
+    const authObject = event.context.auth({
+      acceptsToken: ['session_token', 'oauth_token', 'api_key'],
+    })
+
+    // If the token is invalid or missing
+    if (!authObject.isAuthenticated) {
+      throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+    }
+
+    // Check if the token is an api key and if it doesn't have the required scope
+    if (authObject.tokenType === 'api_key' && !authObject.scopes.includes('read:data')) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'API Key missing the "read:data" scope',
+      })
+    }
+
+    // If the token is valid, move forward with the application logic
+    // This example includes pseudo-code for getting data from a database using the resource owner ID
+    const ownerId = authObject.tokenType === 'api_key' ? authObject.subject : authObject.userId
+    const data = db.select().from(resources).where(eq(resources.ownerId, ownerId))
+
+    return { data }
+  })
+  ```
+</If>

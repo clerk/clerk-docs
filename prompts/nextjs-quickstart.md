@@ -1,46 +1,104 @@
-# Add Clerk to Next.js App Router
+# Add Clerk Authentication to Next.js
 
-If a Next.js App Router project does not already exist, first create one using:
+Set up Clerk authentication in this Next.js project with the Clerk CLI.
+
+## Quick Setup
+
+Before running any commands, present the user with a preliminary setup checklist:
+
+```
+Here's what I'll do to get you set up with Clerk.
+
+1. Install or update the Clerk CLI
+2. Sign in to Clerk (opens your browser)
+3. Set up Clerk in this project, or scaffold a new Next.js app with Clerk if this directory is empty
+4. Start your app with Clerk installed.
+
+Shall I proceed?
+```
+
+## Step 1: Install or update the Clerk CLI
+
+From the project root, check whether the Clerk CLI is already available:
 
 ```bash
-npx create-next-app@latest my-clerk-app --yes
+command -v clerk && clerk --version || echo "Clerk CLI not installed"
 ```
 
-Install `@clerk/nextjs@latest`. Create `proxy.ts` with `clerkMiddleware()` from `@clerk/nextjs/server` (in `src/` if it exists, otherwise project root). Add `<ClerkProvider>` inside `<body>` in `app/layout.tsx`. Use `<Show>`, `<UserButton>`, `<SignInButton>`, `<SignUpButton>` from `@clerk/nextjs`.
-
-Latest docs: https://clerk.com/docs/nextjs/getting-started/quickstart
-
-## Keyless Mode
-
-No signup required. Without env vars (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`), Clerk auto-generates temporary keys. A "Configure your application" prompt appears to claim later. Do NOT tell users to sign up, create accounts, get API keys, or add env vars before running.
-
-## Install
+If `clerk` is available, make sure it is up to date:
 
 ```bash
-npm install @clerk/nextjs
+clerk update --yes
 ```
 
-## proxy.ts
+If `clerk` is not available, install the latest version using the user's preferred install method. If they do not have a preference, use npm:
 
-```typescript
-import { clerkMiddleware } from '@clerk/nextjs/server'
-
-export default clerkMiddleware()
-
-export const config = {
-  matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
-    '/__clerk/(.*)',
-  ],
-}
+```bash
+npm install -g clerk
 ```
 
-## app/layout.tsx
+If the user prefers pnpm, yarn, bun, Homebrew, or curl, use the equivalent global install command.
 
-```typescript
-import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs";
-import "./globals.css";
+## Step 2: Sign in to Clerk
+
+Immediately after installing or updating the Clerk CLI, from the project root, run:
+
+```bash
+clerk auth login
+```
+
+`clerk auth login` is the first command to run after install or update. Do not list apps, ask which Clerk app to use, or run `clerk init` before authenticating. It is okay for an agent to run this command and pause while the user completes the Clerk login flow, then continue from the CLI output. If the user is already signed in, continue to initialization.
+
+## Step 3: Initialize Clerk
+
+If this is an existing Next.js project, run:
+
+```bash
+clerk init
+```
+
+`clerk init` is the default setup action after `clerk auth login`. It detects the framework and package manager, installs the correct Clerk SDK, and applies Next.js-specific setup such as providers, middleware, auth routes, and environment configuration. Do not pass `--framework` or `--pm` for existing projects unless the user explicitly wants to override detection or the CLI asks for those values. Do not list apps or ask which Clerk app to use before running it.
+
+If the directory is empty, ask the user which package manager they want to use. If they have no preference, use npm. Then scaffold a fresh Next.js app:
+
+```bash
+clerk init --framework next --pm <package-manager>
+```
+
+If the directory has no project yet but contains a leftover lockfile or package manager config, use these signals to choose the package manager instead of asking:
+
+- `pnpm-lock.yaml` → `pnpm`
+- `yarn.lock` → `yarn`
+- `bun.lock` or `bun.lockb` → `bun`
+- `package-lock.json` → `npm`
+
+Do not add `--app` by default. Only pass `--app <application_id>` when the user already provided an app ID or explicitly wants to link this project to a specific existing Clerk application:
+
+```bash
+clerk init --app <application_id>
+```
+
+Do not choose a Clerk application for the user. Only list available apps if the user explicitly wants to link to an existing Clerk application but has not provided an app ID, or if `clerk init` explicitly asks for an existing application ID:
+
+```bash
+clerk apps list --json
+```
+
+Show the user the app names and application IDs, then ask which app to use.
+
+## Step 4: Fall back to manual setup when init is incomplete
+
+If `clerk init` reports an error or does not finish the setup, finish manually: install `@clerk/nextjs`, create a middleware file that calls `clerkMiddleware()` from `@clerk/nextjs/server` (see Critical rules for the filename), and wrap the app with `<ClerkProvider>` as shown in Step 5. Full quickstart (returns this prompt when fetched as markdown): https://clerk.com/docs/nextjs/getting-started/quickstart
+
+## Step 5: Ensure clear auth controls are visible
+
+Make sure the app has clear sign-in, sign-up, and signed-in user controls so the user can create and recognize their first account. Integrate them into the existing layout, navigation, or landing screen so they feel natural and polished.
+
+Use Clerk components from `@clerk/nextjs` such as `SignInButton`, `SignUpButton`, `Show`, and `UserButton`. Show sign-in and sign-up actions when signed out, and a user button when signed in. For example, in `app/layout.tsx`:
+
+```tsx
+import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs'
+import './globals.css'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -60,50 +118,48 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </ClerkProvider>
       </body>
     </html>
-  );
+  )
 }
 ```
 
-## Rules
+If clear auth controls already exist, reuse or adapt them instead of duplicating them.
 
-ALWAYS:
+## Step 6: Verify the setup
 
-- Use `clerkMiddleware()` from `@clerk/nextjs/server` in `proxy.ts`
-- Add `<ClerkProvider>` inside `<body>` in `app/layout.tsx`
-- Import from `@clerk/nextjs` or `@clerk/nextjs/server`
-- Use App Router (app/page.tsx, app/layout.tsx)
-- async/await with auth() from `@clerk/nextjs/server`
-- Use existing package manager
-- Rely on keyless mode, skip account creation and API keys
+After `clerk init` completes, run:
 
-NEVER:
-
-- Reference `_app.tsx` or pages router
-- Use `authMiddleware()` (replaced by `clerkMiddleware()`)
-- Use old env var patterns
-- Import deprecated APIs (withAuth, old currentUser)
-- Use deprecated `<SignedIn>`, `<SignedOut>` (replaced by `<Show>`)
-- Tell users to sign up or get API keys first
-
-## Deprecated (DO NOT use)
-
-```typescript
-import { authMiddleware } from '@clerk/nextjs' // WRONG
-function MyApp({ Component, pageProps }) {} // pages router, WRONG
-pages / signin.js // WRONG
-<SignedIn> // WRONG, use <Show when="signed-in">
-<SignedOut> // WRONG, use <Show when="signed-out">
+```bash
+clerk doctor
 ```
 
-## Verify Before Responding
+Then start the app, confirm the sign-in, sign-up, and signed-in user controls are visible, test the sign-in and sign-up flow, and fix any issues reported by the CLI.
 
-1. Is `clerkMiddleware()` used in `proxy.ts`?
-2. Is `ClerkProvider` inside `<body>` in `app/layout.tsx`?
-3. Are imports only from `@clerk/nextjs` or `@clerk/nextjs/server`?
-4. Is it using App Router, not `_app.tsx` or `pages/`?
-5. Is it using `<Show>` instead of `<SignedIn>`/`<SignedOut>`?
+## Step 7: If using shadcn/ui
 
-If any fails, revise.
+If `components.json` exists in the project root and Clerk components are used, install `@clerk/ui` with the project's package manager:
+
+```bash
+npm install @clerk/ui
+```
+
+Apply the theme in `app/layout.tsx`: import `shadcn` from `@clerk/ui/themes` and set `appearance={{ theme: shadcn }}` on `<ClerkProvider>`.
+
+Add to global CSS:
+
+```css
+@import '@clerk/ui/themes/shadcn.css';
+```
+
+## Critical rules
+
+- Name the middleware file by the `next` version in `package.json`: `proxy.ts` on Next.js 16+, `middleware.ts` on 15 and below. The contents are identical
+- `auth()` from `@clerk/nextjs/server` is async. Always `await auth()`
+- `ClerkProvider` goes inside `<body>`, not wrapping `<html>`
+- Never expose `CLERK_SECRET_KEY` in client code
+- Use `@clerk/nextjs`, not `@clerk/clerk-react`
+- Do not read or print existing environment variable files; ask the user for any missing non-sensitive configuration
+
+Docs: https://clerk.com/docs/cli https://clerk.com/docs/llms.txt
 
 ## After Setup
 

@@ -1,0 +1,54 @@
+---
+title: Agent Tasks
+description: Use Agent Tasks to create authenticated sessions on behalf of users in your tests and AI agent workflows.
+---
+
+<Include src="_partials/agent-tasks-beta-callout" />
+
+Agent Tasks provide a way to create authenticated sessions on behalf of users without going through the standard sign-in flow. When you create an Agent Task, Clerk returns a URL that, when visited, creates a session for the specified user and redirects to the URL of your choice.
+
+This is useful for:
+
+- Automated end-to-end testing where you need a signed-in user
+- AI agent workflows that act on behalf of a user
+
+## Create an Agent Task
+
+Use the [`clerkClient.agentTasks.create()`](/docs/reference/backend/agent-tasks/create) method to create an Agent Task. The returned `url` can then be visited to establish the session.
+
+<Include src="_partials/create-agent-task" />
+
+## Use with Playwright
+
+<If sdk={["nextjs", "astro", "expressjs", "fastify", "nuxt", "react-router", "tanstack-react-start"]}>
+  In Playwright tests, instantiate the client with `createClerkClient()` from `@clerk/backend` rather than importing `clerkClient` from your framework SDK (e.g., `@clerk/nextjs/server`). Framework SDK exports aren't available outside your app's request context.
+</If>
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { createClerkClient } from '@clerk/backend'
+import { test, expect } from '@playwright/test'
+
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+})
+
+test('authenticated user flow', async ({ page }) => {
+  const agentTask = await clerkClient.agentTasks.create({
+    onBehalfOf: {
+      userId: 'user_xxx',
+      // or { identifier: 'test@example.com' }
+    },
+    permissions: '*',
+    agentName: 'test-agent',
+    taskDescription: 'test-login',
+    redirectUrl: 'http://localhost:3000/dashboard',
+  })
+
+  await page.goto(agentTask.url)
+  await expect(page.locator('header')).toContainText('Welcome')
+})
+```
+
+## Revoke an Agent Task
+
+If you need to invalidate an Agent Task before it's used, you can [revoke it](/docs/reference/backend/agent-tasks/revoke).

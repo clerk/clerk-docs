@@ -47,8 +47,16 @@ import type { DocsFile } from './io'
 import { extractComponentPropValueFromNode } from './utils/extractComponentPropValueFromNode'
 import { z } from 'zod'
 
+const stringSchema = z.string()
+const booleanSchema = z.boolean()
+
 export const checkPrompts =
-  (config: BuildConfig, prompts: Prompt[], file: DocsFile, options: { reportWarnings: boolean; update: boolean }) =>
+  (
+    config: BuildConfig,
+    prompts: Prompt[],
+    file: DocsFile,
+    options: { reportWarnings: boolean; update: boolean; embed: boolean },
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
     if (config.prompts === null) return
@@ -64,7 +72,7 @@ export const checkPrompts =
         false,
         'docs',
         file.filePath,
-        z.string(),
+        stringSchema,
       )
 
       if (promptSrc === undefined) return node
@@ -94,10 +102,13 @@ export const checkPrompts =
         false,
         'docs',
         file.filePath,
-        z.boolean(),
+        booleanSchema,
       )
 
-      if (embedPrompt === true) {
+      // Only embed when explicitly asked to. Embedding rewrites the node in place
+      // (Object.assign), so the validation passes that reuse the parsed tree must
+      // run with embed:false to keep it structurally identical to a fresh parse.
+      if (options.embed === true && embedPrompt === true) {
         return Object.assign(node, mdastBuilder('code', { lang: 'md', value: prompt.content }))
       }
 

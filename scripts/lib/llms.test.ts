@@ -67,7 +67,7 @@ Body content`,
     expect(result).toEqual([
       {
         path: 'quickstart.mdx',
-        url: '{{SITE_URL}}/docs/quickstart',
+        url: '{{SITE_URL}}/docs/quickstart.md',
         content: docs.get('quickstart.mdx'),
         title: 'Quickstart',
         description: 'Get up and running with Clerk in minutes.',
@@ -92,7 +92,7 @@ Body`,
     expect(result).toEqual([
       {
         path: 'overview.mdx',
-        url: '{{SITE_URL}}/docs/overview',
+        url: '{{SITE_URL}}/docs/overview.md',
         content: docs.get('overview.mdx'),
         title: 'Overview',
         description: undefined,
@@ -159,7 +159,7 @@ Body`,
       { path: 'guides/index.mdx', url: '/docs/guides' },
     ])
 
-    expect(result.map((entry) => entry.url)).toEqual(['{{SITE_URL}}/docs', '{{SITE_URL}}/docs/guides'])
+    expect(result.map((entry) => entry.url)).toEqual(['{{SITE_URL}}/docs.md', '{{SITE_URL}}/docs/guides.md'])
   })
 
   test('throws when a doc cannot be found in the docs map', () => {

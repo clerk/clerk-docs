@@ -1,0 +1,121 @@
+---
+title: Agent configuration
+description: Represent AI services as Clerk machines and configure them at runtime through M2M token claims.
+sdk: nextjs
+---
+
+A Clerk machine is an identity for an AI service. In a real AI application, that service is often an agent, but the same pattern applies to a standalone tool or a runnable workflow. Use Clerk as the source of truth for identity and the allowed relationships between these services.
+
+## What a machine can represent
+
+- **An agent**, for example an orchestration agent that delegates to subagents.
+- **A standalone tool**, like a code-execution service or a memory layer that other agents interact with.
+- **A runnable workflow**, a long-running job involving multiple agents.
+
+The following sections use agent as the example.
+
+## Set up the agent machine
+
+For this guide, create a single machine for a `research-agent` and add its Secret Key to your environment. The [Setup agent machines](/docs/guides/ai/vercel-ai-sdk/agent-orchestration#setup-agent-machines) section of the orchestration guide shows the Dashboard, CLI, and SDK options. The rest of this page assumes the machine ID is `mch_research`.
+
+```env {{ filename: '.env' }}
+RESEARCH_AGENT_MACHINE_SECRET_KEY=ak_...
+```
+
+## Configure the agent through organization metadata
+
+Store an array of agent configurations on a Clerk organization's `publicMetadata`:
+
+```ts
+// organization.publicMetadata
+{
+  agents: [
+    {
+      machineId: 'mch_research',
+      model: 'openai/gpt-5',
+      instructions: 'You are a research assistant. Cite sources.',
+    },
+    {
+      machineId: 'mch_summarizer',
+      model: 'openai/gpt-4o-mini',
+      instructions: 'Summarize the input in three sentences.',
+    },
+  ],
+}
+```
+
+> [!WARNING]
+> Organization metadata is bounded (~8KB). In a real-world application, persist agent configurations in a more durable storage layer (your application database, a config service, etc.).
+
+Look up the matching entry and mint the token from a server action. The action takes the organization ID and machine ID as arguments, so it can be called from places that don't have a Clerk session (background jobs, workflow runners, internal cron):
+
+<Tabs items={["app/actions.ts", "lib/clerk.ts"]}>
+  <Tab>
+    ```ts {{ filename: 'app/actions.ts' }}
+    'use server'
+
+    import { clerkClient } from '@clerk/nextjs/server'
+    import { researchAgentClerk } from '@/lib/clerk'
+
+    export type AgentConfig = {
+      machineId: string
+      model: string
+      instructions: string
+    }
+
+    export async function generateAgentTokenForOrg(
+      organizationId: string,
+      machineId: string,
+    ) {
+      const client = await clerkClient()
+      const org = await client.organizations.getOrganization({ organizationId })
+      const config = (org.publicMetadata.agents as AgentConfig[]).find(
+        (a) => a.machineId === machineId,
+      )
+
+      const { token } = await researchAgentClerk.m2m.createToken({
+        claims: { model: config.model, instructions: config.instructions },
+        secondsUntilExpiration: 60 * 5,
+      })
+
+      return token
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'lib/clerk.ts' }}
+    import { createClerkClient } from '@clerk/nextjs/server'
+
+    export const researchAgentClerk = createClerkClient({
+      machineSecretKey: process.env.RESEARCH_AGENT_MACHINE_SECRET_KEY!,
+    })
+    ```
+  </Tab>
+</Tabs>
+
+## Read claims at the agent runtime
+
+After verifying the M2M token, configure the agent from the claims:
+
+```ts
+import { ToolLoopAgent } from 'ai'
+import type { AgentConfig } from '@/app/actions'
+
+const verified = await researchAgentClerk.m2m.verify({ token: context.token })
+const { model, instructions } = verified.claims as AgentConfig
+
+const agent = new ToolLoopAgent({
+  model,
+  instructions,
+  tools: { /* ... */ },
+})
+```
+
+Claims are arbitrary `Record<string, unknown>`. Parse defensively (with zod or similar) before passing to the agent runtime.
+
+## Next steps
+
+- [Authorizing tool calls](/docs/guides/ai/vercel-ai-sdk/authorizing-tool-calls): gate which tools the agent can use per call, including v7's `toolApproval`.
+- [Agent orchestration](/docs/guides/ai/vercel-ai-sdk/agent-orchestration): verify-and-delegate between machines in a resumable workflow.
+- [Using M2M tokens](/docs/guides/development/machine-auth/m2m-tokens): full reference for claims and token lifecycle.

@@ -1,0 +1,123 @@
+---
+title: Share sessions across apps
+description: Keep Clerk sessions synchronized across trusted Android apps on the same device.
+sdk: android
+search:
+  keywords:
+    - cross-app sign-in
+    - shared login
+    - session syncing
+    - multi-app authentication
+---
+
+Shared session sync lets multiple Android applications on the same device share Clerk authentication state. When a user signs in or out of one participating app, Clerk updates the other participating apps when they receive the change, return to the foreground, or launch again.
+
+> [!IMPORTANT]
+> Shared session sync requires Clerk Android SDK `1.0.36` or later.
+
+This feature applies only to apps on the same device that use the same Clerk [Publishable Key](!publishable-key) and signing certificate. It doesn't share sessions across devices or Clerk [instances](/docs/guides/development/managing-environments).
+
+> [!WARNING]
+> The signing certificate is the trust boundary on Android. Any app signed with the same certificate is inside that boundary, so enable shared session sync only for apps you trust.
+
+## How shared session sync works
+
+Each app stores its own Clerk snapshot and exposes it through a read-only content provider. Clerk discovers providers from sibling apps, verifies that they have the same signing certificate, and ignores snapshots from a different [Publishable Key](!publishable-key).
+
+Clerk reconciles shared state:
+
+- When the app initializes.
+- When a participating app publishes a change.
+- When the app returns to the foreground.
+
+### What Clerk synchronizes
+
+Clerk synchronizes only the state required to keep authentication consistent:
+
+- The Clerk client and its sessions.
+- The Clerk environment.
+- The Clerk device token.
+
+Shared session sync doesn't share arbitrary application data.
+
+## Enable shared session sync
+
+### Before you start
+
+Ensure that every participating app:
+
+- Uses the same Clerk [Publishable Key](!publishable-key).
+- Uses Clerk Android SDK `1.0.36` or later.
+- Is signed with the same signing certificate.
+- Is an app that you trust to access the shared Clerk state.
+
+<Steps>
+  ### Confirm the signing certificate
+
+  Confirm that every participating app uses the same signing certificate. Clerk uses the certificate as the trust boundary between sibling apps.
+
+  > [!WARNING]
+  > Apps signed with different certificates can't share sessions. For production, every participating app must use the same release signing key. If you use [Play App Signing](https://developer.android.com/studio/publish/app-signing#app-signing-google-play), configure the apps to use the same app signing key; using the same upload key isn't sufficient.
+
+  ### Configure every app
+
+  In each app's `Application` class, pass `SharedSessionSyncConfig.enabled` to `ClerkConfigurationOptions`. The following example enables shared session sync when Clerk initializes:
+
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MyClerkApp.kt' }}
+  package com.example.myclerkapp
+
+  import android.app.Application
+  import com.clerk.api.Clerk
+  import com.clerk.api.ClerkConfigurationOptions
+  import com.clerk.api.SharedSessionSyncConfig
+
+  class MyClerkApp : Application() {
+    override fun onCreate() {
+      super.onCreate()
+
+      Clerk.initialize(
+        context = this,
+        publishableKey = "{{pub_key}}",
+        options = ClerkConfigurationOptions(
+          sharedSessionSync = SharedSessionSyncConfig.enabled,
+        ),
+      )
+    }
+  }
+  ```
+
+  Clerk adds the required content provider to the app's merged manifest and enables it when shared session sync starts. You don't need to declare a custom provider or permission.
+
+  ### Test the shared session
+
+  Install at least two participating apps on the same device. Sign in to one app, then open the other app and verify that it reflects the same session. Repeat the test after signing out.
+</Steps>
+
+## Reload shared state manually
+
+Shared state normally updates automatically. To force reconciliation at another point in your app lifecycle, call `Clerk.reloadFromSharedStorage()` from a coroutine. It returns `true` when the in-memory client, environment, or device-token generation changes.
+
+```kotlin
+val stateChanged = Clerk.reloadFromSharedStorage()
+```
+
+## Sign-out behavior
+
+Shared session sync publishes the client state that results from a sign-out. It doesn't change whether [`signOut()`](/docs/reference/native-mobile/auth#sign-out) removes all sessions or a specific session. If your app supports multiple sessions, pass a session ID when you want to remove only that session. For a complete example, see the [custom sign-out flow guide](/docs/guides/development/custom-flows/authentication/sign-out).
+
+## Security and limitations
+
+- Only apps on the same device can participate.
+- Every app must opt in and use the same Clerk [Publishable Key](!publishable-key).
+- Only callers with the same signing certificate can read a shared snapshot.
+- The provider is read-only and exposes only Clerk's shared-session snapshot.
+- Every app signed with the trusted certificate is inside the shared-session trust boundary.
+
+## Troubleshoot shared session sync
+
+If Clerk state doesn't synchronize between apps, verify that:
+
+- [ ] Every app enables `SharedSessionSyncConfig.enabled`.
+- [ ] Every app uses the same Clerk [Publishable Key](!publishable-key).
+- [ ] Every installed app is signed with the same certificate.
+- [ ] Every app uses Clerk Android SDK `1.0.36` or later.

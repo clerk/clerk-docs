@@ -111,6 +111,13 @@ By adding specific identifiers to the blocklist, you can prevent users with thos
 
 You can also block email addresses from all subdomains by using `*@*.clerk.dev`. This prevents sign-ups from email addresses such as `@subdomain.clerk.dev` or `@subdomain2.clerk.dev`, and deeper subdomains like `@subdomain.subdomain2.clerk.dev`.
 
+> [!IMPORTANT]
+> A wildcard must stand in for an entire local part or an entire subdomain label. It can't match part of one.
+>
+> `*@clerk.dev` and `*@*.clerk.dev` are both supported. A partial pattern such as `john*@clerk.dev` is not — it's a syntactically valid email address, so it's stored as an exact identifier and only ever matches the literal address `john*@clerk.dev`.
+>
+> To block a family of related addresses that share a prefix, see [**Block email subaddresses**](#block-email-subaddresses), which handles the provider-specific separators those addresses use.
+
 To enable this feature:
 
 1. In the Clerk Dashboard, navigate to the [**Restrictions**](https://dashboard.clerk.com/~/protect/restrictions) page.
@@ -119,27 +126,41 @@ To enable this feature:
 > [!WARNING]
 > In the case that you have enabled the allowlist and the blocklist and have added the same identifier in both, the allowlist takes precedence.
 
-For additional security, adding an individual email address to the blocklist will also block any attempts to sign up or sign in with the email address modified to contain a subaddress. Subaddresses are identified by the presence of any of the following characters in the local part of the email address: `+`, `#`, `=`.
+> [!NOTE]
+> The allowlist and blocklist apply to **sign-ups**. Older applications may also apply them to **sign-ins**: these show an **Apply allowlist and blocklist to sign-ins** setting on the [**Restrictions**](https://dashboard.clerk.com/~/protect/restrictions) page, which you can turn off to match the current behavior. If you don't see that setting, your application applies these lists to sign-ups only.
+
+For additional security, adding an individual email address to the blocklist will also block any attempts to sign up with the email address modified to contain a subaddress. Subaddresses are identified by the provider-specific separators listed under [**Block email subaddresses**](#block-email-subaddresses).
 
 For example, if you add `john.doe@clerk.dev` as a blocked email address, it means that anybody with `john.doe@clerk.dev` email address will not be able to sign up for your application, including `john.doe+anything@clerk.dev` and any other subaddress.
 
+> [!NOTE]
+> Only the separators carry over to the blocklist. Gmail dot matching belongs to **Block email subaddresses**, so blocking `janedoe@gmail.com` won't also block `jane.doe@gmail.com`.
+
 ## Block email subaddresses
 
-**Block email subaddresses** allows you to block all email addresses that contain the characters `+`, `=` or `#` from signing up or being added to existing accounts. For example, an email address like `user+sub@clerk.com` will be blocked. It also blocks email addresses that contain dots in the local part of a Gmail address if the equivalent address without dots already has an account. For example, if `jsmith@gmail.com` already has an account, `j.smith@gmail.com` will be blocked.
+**Block email subaddresses** allows you to block email addresses that contain a subaddress from signing up or being added to existing accounts. For example, if `user@clerk.com` already has an account, `user+sub@clerk.com` will be blocked.
+
+Email providers use different formats for subaddresses, so Clerk applies different rules depending on the provider:
+
+| Provider | Domains | Subaddress separators | Additional matching |
+| - | - | - | - |
+| Gmail | `gmail.com`, `googlemail.com` | `+`, `=`, `#` | Dots in the local part are ignored. For example, if `jsmith@gmail.com` already has an account, `j.smith@gmail.com` will be blocked. |
+| Yahoo Mail | Yahoo's own mail domains: `yahoo.com`, `ymail.com`, `rocketmail.com`, `y7mail.com`, and Yahoo's country domains such as `yahoo.co.uk`, `yahoo.fr`, `yahoo.co.jp`, and `yahoo.com.br`. Domains that merely begin with a `yahoo` label, such as `yahoo.dev` or a `yahoo.` subdomain on a hosting provider, are not treated as Yahoo. | `+`, `=`, `#`, `-` | — |
+| All other providers | Any other domain | `+`, `=`, `#` | — |
 
 > [!NOTE]
 > Existing accounts with email subaddresses will not be affected by this restriction, and will still be allowed to sign in.
 >
-> This feature is designed to prevent malicious sign-in attempts. The first email containing a subaddress will be allowed, but any subsequent sign-ins using additional subaddresses will be blocked.
+> This feature is designed to prevent mass-spam account creation from a single email address. Matching is based on the address with its subaddress removed, so the first sign-up for a given base address is allowed even if it contains a subaddress. Any subsequent sign-ups using other subaddresses of that base address are blocked.
 
 To enable this feature:
 
 1. In the Clerk Dashboard, navigate to the [**Restrictions**](https://dashboard.clerk.com/~/protect/restrictions) page.
 1. Toggle on **Block email subaddresses** and select **Save**.
 
-### Block sign-ups that use disposable email addresses
+## Block sign-ups that use disposable email addresses
 
-**Block disposable email addresses** allows you to block all email addresses that are _known to be disposable_ from signing up for your application. This is useful to prevent spam accounts from signing up.
+Disposable email addresses are throwaway inboxes, commonly used to create spam accounts. This restriction blocks all addresses that are _known to be disposable_ from signing up or being added to existing accounts.
 
 To enable this feature:
 

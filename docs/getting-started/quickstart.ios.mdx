@@ -33,7 +33,7 @@ sdk: ios
   ## Install the Clerk iOS SDK
 
   Follow [the Swift Package Manager instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to install Clerk as a dependency.
-  When prompted for the package URL, enter `https://github.com/clerk/clerk-ios`. Be sure to add both `ClerkKit` and `ClerkKitUI` to your target.
+  When prompted for the package URL, enter `https://github.com/clerk/clerk-ios`. Add `ClerkKit` to your target. If you choose native components later in this guide, also add `ClerkKitUI`.
 
   ## Add your Native Application
 
@@ -108,41 +108,140 @@ sdk: ios
   }
   ```
 
-  ## Use Clerk's prebuilt views
+  ## Choose an authentication approach
 
-  Clerk provides prebuilt SwiftUI views that handle authentication flows and user management, eliminating the need to build custom forms and flows.
+  Choose hosted authentication for the fastest setup, native components for a prebuilt SwiftUI experience, or a custom flow for complete control over the UI.
 
-  Update your `ContentView` to use two key Clerk's prebuilt views:
+  <Tabs items={["Hosted authentication", "Native components", "Custom flow"]}>
+    <Tab>
+      [Hosted authentication](/docs/guides/account-portal/hosted-auth) opens Account Portal in a browser authentication session. Account Portal supports the sign-in and sign-up methods enabled for your Clerk application.
 
-  - [`AuthView`](/docs/reference/views/authentication/auth-view): A comprehensive authentication view that handles sign-in and sign-up flows, including email verification, password reset, and multi-factor authentication. It's presented as a sheet when the user taps "Sign in".
+      The following example displays the signed-in user or opens hosted authentication. After authentication, the SDK updates `clerk.user` with the signed-in user.
 
-  - [`UserButton`](/docs/reference/views/user/user-button): A circular button that displays the user's profile image. When tapped, it automatically presents the [`UserProfileView`](/docs/reference/views/user/user-profile-view) where users can manage their account, update their profile, and sign out.
+      ```swift {{ filename: 'ContentView.swift' }}
+      import SwiftUI
+      import ClerkKit
 
-  Replace the existing content with the following code. Import both `ClerkKit` and `ClerkKitUI` when using prebuilt views:
+      struct ContentView: View {
+        @Environment(Clerk.self) private var clerk
 
-  ```swift {{ filename: 'ContentView.swift', mark: [[2, 3], 6, [10, 14], [16, 19]] }}
-  import SwiftUI
-  import ClerkKit
-  import ClerkKitUI
-
-  struct ContentView: View {
-    @State private var authIsPresented = false
-
-    var body: some View {
-      VStack {
-        UserButton(signedOutContent: {
-          Button("Sign in") {
-            authIsPresented = true
+        var body: some View {
+          VStack {
+            if let user = clerk.user {
+              Text("Hello, \(user.id)")
+            } else {
+              Button("Sign up") {
+                Task {
+                  do {
+                    try await clerk.auth.startHostedAuth(mode: .signUp)
+                  } catch {
+                    // Handle the error in your app.
+                  }
+                }
+              }
+            }
           }
-        })
+        }
       }
-      .prefetchClerkImages()
-      .sheet(isPresented: $authIsPresented) {
-        AuthView()
+      ```
+    </Tab>
+
+    <Tab>
+      Clerk provides prebuilt SwiftUI views that handle authentication flows and user management without custom forms.
+
+      - [`AuthView`](/docs/reference/views/authentication/auth-view) handles sign-in and sign-up flows, including email verification, password reset, and multi-factor authentication.
+      - [`UserButton`](/docs/reference/views/user/user-button) displays the user's profile image and opens [`UserProfileView`](/docs/reference/views/user/user-profile-view), where users can manage their account and sign out.
+
+      The following example presents `AuthView` when a signed-out user selects **Sign up**. Import both `ClerkKit` and `ClerkKitUI` when you use prebuilt views:
+
+      ```swift {{ filename: 'ContentView.swift' }}
+      import SwiftUI
+      import ClerkKit
+      import ClerkKitUI
+
+      struct ContentView: View {
+        @State private var authIsPresented = false
+
+        var body: some View {
+          VStack {
+            UserButton(signedOutContent: {
+              Button("Sign up") {
+                authIsPresented = true
+              }
+            })
+          }
+          .prefetchClerkImages()
+          .sheet(isPresented: $authIsPresented) {
+            AuthView()
+          }
+        }
       }
-    }
-  }
-  ```
+      ```
+    </Tab>
+
+    <Tab>
+      Custom flows use `ClerkKit` authentication methods with your own SwiftUI views. Choose this approach when you need complete control over each screen and authentication step.
+
+      The following example creates a basic email and password sign-up form. Clerk emails the user a verification code, so the form shows a code field once the sign-up starts:
+
+      ```swift {{ filename: 'ContentView.swift' }}
+      import SwiftUI
+      import ClerkKit
+
+      struct ContentView: View {
+        @Environment(Clerk.self) private var clerk
+        @State private var emailAddress = ""
+        @State private var password = ""
+        @State private var code = ""
+        @State private var isVerifying = false
+
+        var body: some View {
+          Form {
+            if isVerifying {
+              TextField("Verification code", text: $code)
+                .textContentType(.oneTimeCode)
+
+              Button("Verify") {
+                Task {
+                  do {
+                    try await clerk.auth.currentSignUp?.verifyEmailCode(code)
+                  } catch {
+                    // Handle the error in your app.
+                  }
+                }
+              }
+            } else {
+              TextField("Email address", text: $emailAddress)
+                .textContentType(.emailAddress)
+                .textInputAutocapitalization(.never)
+
+              SecureField("Password", text: $password)
+
+              Button("Sign up") {
+                Task {
+                  do {
+                    let signUp = try await clerk.auth.signUp(
+                      emailAddress: emailAddress,
+                      password: password
+                    )
+                    try await signUp.sendEmailCode()
+                    isVerifying = true
+                  } catch {
+                    // Handle the error in your app.
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      ```
+
+      When `verifyEmailCode()` completes the sign-up, Clerk creates the user, activates the session, and updates `clerk.user`.
+
+      See the [iOS authentication reference](/docs/reference/native-mobile/auth) for the other strategies available through `clerk.auth`.
+    </Tab>
+  </Tabs>
 
   ## Run your project
 
@@ -150,7 +249,7 @@ sdk: ios
 
   ## Create your first user
 
-  Once the app launches successfully, tap "Sign in" and the `AuthView` will appear, allowing you to sign up or sign in to create your first user.
+  Once the app launches successfully, select **Sign up** and complete the authentication flow to create your first user.
 </Steps>
 
 ## Next steps

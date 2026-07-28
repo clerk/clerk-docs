@@ -328,6 +328,51 @@ signUp = signUp.sendPhoneCode()
 signUp = signUp.verifyCode("654321", VerificationType.PHONE)
 ```
 
+## Hosted authentication
+
+Hosted authentication opens Clerk's [Account Portal](/docs/guides/account-portal/overview) in a browser authentication session. Account Portal supports the sign-in and sign-up methods enabled for your Clerk application. When authentication completes, the SDK closes the browser session and activates the new session in your app.
+
+Call `startHostedAuth()` from a coroutine to open the Account Portal sign-in page:
+
+```kotlin
+Clerk.auth.startHostedAuth()
+```
+
+Pass `HostedAuthMode.SIGN_UP` to open the sign-up page first:
+
+```kotlin
+import com.clerk.api.auth.HostedAuthMode
+
+Clerk.auth.startHostedAuth(mode = HostedAuthMode.SIGN_UP)
+```
+
+`startHostedAuth()` accepts the following parameters:
+
+- `mode` - The Account Portal page to open first, as a `com.clerk.api.auth.HostedAuthMode`. Defaults to sign-in.
+- `redirectUrl` - A custom native callback. Defaults to `clerk://<package-name>.callback`, which the SDK registers for you. Custom values require a matching intent filter in your app manifest, and your app must forward the received URI to `Clerk.auth.handle()`.
+
+`startHostedAuth()` returns a `ClerkResult<Session, ClerkErrorResponse>`. On success, the SDK has already activated the returned session. When the user dismisses the browser or another flow supersedes the attempt, the failure's `throwable` is a `HostedAuthCancellationException`, so you can branch on cancellation without matching message strings:
+
+```kotlin
+import com.clerk.api.hostedauth.HostedAuthCancellationException
+import com.clerk.api.network.serialization.ClerkResult
+
+when (val result = Clerk.auth.startHostedAuth()) {
+    is ClerkResult.Success -> {
+        // The session is active.
+    }
+    is ClerkResult.Failure -> {
+        if (result.throwable is HostedAuthCancellationException) {
+            // The user dismissed the browser.
+        } else {
+            // Authentication failed.
+        }
+    }
+}
+```
+
+See the [hosted authentication guide](/docs/guides/account-portal/hosted-auth) for setup instructions and tradeoffs.
+
 ## Current sign-in/sign-up
 
 Access the in-progress sign-in or sign-up stored on the client for multi-step flows.

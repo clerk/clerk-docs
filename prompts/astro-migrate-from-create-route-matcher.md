@@ -7,11 +7,11 @@ Migrate my Astro project away from Clerk's removed `createRouteMatcher` API.
    If a matcher was used inverted (e.g. `if (!isPublicRoute(request))`), the protected
    set is every route it does not match, so every non-public resource needs a check:
    - In `.astro` pages, add this to the frontmatter:
-     const { userId, redirectToSignIn } = Astro.locals.auth();
-     if (!userId) return redirectToSignIn();
+     const { isAuthenticated, redirectToSignIn } = Astro.locals.auth();
+     if (!isAuthenticated) return redirectToSignIn();
    - In API routes and server handlers, add this at the top of the handler:
-     const { userId } = locals.auth();
-     if (!userId) return new Response('Unauthorized', { status: 401 });
+     const { isAuthenticated } = locals.auth();
+     if (!isAuthenticated) return new Response('Unauthorized', { status: 401 });
    - Keep any role or permission checks (`auth().has(...)`) with the resource as well.
 3. Remove the `createRouteMatcher` import and calls from the middleware. Keep
    `clerkMiddleware()` itself. Middleware logic unrelated to auth protection

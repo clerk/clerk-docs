@@ -38,27 +38,7 @@ With [Convex](https://www.convex.dev/), you can build a backend with a provided 
 <Steps>
   <Include src="_partials/convex-initial-setup" />
 
-  ## Configure Convex with Clerk's Frontend API URL
-
-  1. In your `env` file, add your [Frontend API URL](!frontend-api-url) as the `CLERK_FRONTEND_API_URL` environment variable. If this has already been configured, you can proceed to the next step.
-     ```env {{ filename: '.env' }}
-     CLERK_FRONTEND_API_URL={{fapi_url}}
-     ```
-  1. In your app's `convex` folder, create a `auth.config.ts` file with the following configuration:
-     ```ts {{ filename: 'convex/auth.config.ts' }}
-     export default {
-       providers: [
-         {
-           domain: process.env.CLERK_FRONTEND_API_URL,
-           applicationID: 'convex',
-         },
-       ],
-     }
-     ```
-
-  ## Deploy your changes to Convex
-
-  Run `npx convex dev` to automatically sync your configuration to your backend.
+  <Include src="_partials/convex-configure-auth" />
 
   ## Configure the Clerk and Convex providers
 
@@ -66,7 +46,7 @@ With [Convex](https://www.convex.dev/), you can build a backend with a provided 
 
   <Tabs items={["Next.js", "React"]}>
     <Tab>
-      `<ConvexProviderWithClerk>` calls `ConvexReactClient()` to get Convex's client, so it must be used in a Client Component. Your `app/layout.tsx`, where you would use `<ConvexProviderWithClerk>`, is a Server Component, and a Server Component cannot contain Client Component code. To solve this, you must first create a _wrapper_ Client Component around `<ConvexProviderWithClerk>`.
+      `<ConvexProviderWithClerk>` must run on the client: it needs a `ConvexReactClient` instance and Clerk's `useAuth()` hook, neither of which a Server Component can provide. Your `app/layout.tsx`, where you would use `<ConvexProviderWithClerk>`, is a Server Component, so you must first create a _wrapper_ Client Component around `<ConvexProviderWithClerk>`.
 
       ```tsx {{ filename: 'components/ConvexClientProvider.tsx' }}
       'use client'
@@ -152,11 +132,11 @@ With [Convex](https://www.convex.dev/), you can build a backend with a provided 
         throw new Error('Add your Clerk Publishable Key to the .env file')
       }
 
-      if (!process.env.VITE_CONVEX_URL) {
+      if (!import.meta.env.VITE_CONVEX_URL) {
         throw new Error('Missing VITE_CONVEX_URL in your .env file')
       }
 
-      const convex = new ConvexReactClient(process.env.VITE_CONVEX_URL)
+      const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL)
 
       ReactDOM.createRoot(document.getElementById('root')!).render(
         <React.StrictMode>
@@ -246,12 +226,12 @@ With [Convex](https://www.convex.dev/), you can build a backend with a provided 
 
   ## Use auth state in your Convex functions
 
-  If the client is authenticated, you can access the information stored in the JWT via `ctx.auth.getUserIdentity`.
+  If the client is authenticated, you can access its verified token claims by calling `ctx.auth.getUserIdentity()`.
 
-  If the client isn't authenticated, `ctx.auth.getUserIdentity` will return `null`.
+  If the client isn't authenticated, `ctx.auth.getUserIdentity()` returns `null`.
 
-  **Make sure that the component calling this query is a child of `<Authenticated>` from
-  `convex/react`**. Otherwise, it will throw on page load.
+  > [!IMPORTANT]
+  > Make sure that the component calling this query is a child of `<Authenticated>` from `convex/react`. Otherwise, the query throws whenever it runs before authentication finishes or while the user is signed out.
 
   ```ts {{ filename: 'convex/messages.ts' }}
   import { query } from './_generated/server'
@@ -270,6 +250,8 @@ With [Convex](https://www.convex.dev/), you can build a backend with a provided 
     },
   })
   ```
+
+  <Include src="_partials/convex-deploy-production" />
 </Steps>
 
 ## Next steps

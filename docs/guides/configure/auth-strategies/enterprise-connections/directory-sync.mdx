@@ -9,18 +9,13 @@ This is especially useful for organizations that manage large user bases through
 
 ## How Directory Sync works
 
-Directory Sync connects to your directory in one of two ways, depending on the provider:
-
-- **Push (Okta, Microsoft Entra ID, custom)**: your IdP pushes user changes to Clerk using the SCIM 2.0 protocol, with Clerk acting as the SCIM service provider. You configure the IdP with a Clerk endpoint URL and bearer token.
-- **Pull (Google Workspace)**: Clerk connects directly to your directory with a service account and checks for changes every 5 minutes. There is no SCIM configuration in your IdP — setup happens entirely in the Clerk Dashboard.
-
-Both modes handle the same operations:
+Once configured, Clerk keeps your user base in sync with your directory and handles the following operations:
 
 - **Create**: When a user is assigned to the app in your IdP, Clerk automatically creates a corresponding user account. A `user.created` webhook event is fired.
 - **Update**: When user attributes (such as name, email, or custom attributes) are updated in the IdP, Clerk syncs those changes automatically. A `user.updated` webhook event is fired.
 - **Delete / Disable**: When a user is removed or deactivated in the IdP, Clerk deactivates the corresponding Clerk user and immediately revokes all of their active sessions. A `user.updated` webhook event is fired.
 
-Directory Sync works in conjunction with your existing enterprise SSO connection. You must have a SAML or OIDC enterprise connection set up before enabling Directory Sync. Google Workspace Directory Sync requires a [Google SAML connection](/docs/guides/configure/auth-strategies/enterprise-connections/saml/google).
+Directory Sync works in conjunction with your existing enterprise SSO connection. You must have a SAML or OIDC enterprise connection set up before enabling Directory Sync.
 
 ### Directory Sync vs. JIT Provisioning
 
@@ -38,19 +33,19 @@ Directory Sync is configured per enterprise connection. To set it up:
 1. Select the enterprise connection you want to enable Directory Sync for.
 1. Select the **Directory sync** tab.
 1. Select **Set up directory sync**.
-   - For push providers (Okta, Entra, custom), Clerk generates a **SCIM endpoint URL** and a **Bearer token** in the **Connection details** section. Save these values since you'll need to provide them to your IdP.
+   - For Okta, Microsoft Entra ID, and custom providers, Clerk generates a **SCIM endpoint URL** and a **Bearer token** in the **Connection details** section. Save these values since you'll need to provide them to your IdP.
    - For Google Workspace, Clerk asks for a service account key and a delegated admin email instead — see [Google Workspace](#google-workspace) for the full setup.
 
 ## Connect your identity provider
 
-For push providers, configure your IdP to point to Clerk's SCIM endpoint. For Google Workspace, create a service account that Clerk uses to read your directory.
+Complete the setup for your provider by following the matching section below.
 
 Clerk's implementation follows the SCIM 2.0 protocol, so it can integrate with any IdP that supports SCIM 2.0. Step-by-step setup instructions for Okta and Microsoft Entra ID are below. For other IdPs, use the same **Endpoint URL** and **Bearer token** wherever your provider requests a SCIM base URL and API token.
 
 IdPs differ in how they implement the protocol and in the settings they expose. If you run into a compatibility issue, [contact support](https://clerk.com/contact/support){{ target: '_blank' }}.
 
 > [!IMPORTANT]
-> For push providers, Clerk requires an email (contained in the `emails` attribute) to be sent for every user. Even if your `userName` attribute contains an email address, you must also configure your IdP to send the email in the SCIM `emails` attribute — Clerk will not fall back to `userName` for email. Users whose SCIM payloads omit an email will fail to provision. Google Workspace users always sync with their primary email, so no configuration is needed there.
+> For Okta, Microsoft Entra ID, and custom providers, Clerk requires an email (contained in the `emails` attribute) to be sent for every user. Even if your `userName` attribute contains an email address, you must also configure your IdP to send the email in the SCIM `emails` attribute — Clerk will not fall back to `userName` for email. Users whose SCIM payloads omit an email will fail to provision. Google Workspace users always sync with their primary email, so no configuration is needed there.
 
 ### Okta
 
@@ -76,7 +71,7 @@ IdPs differ in how they implement the protocol and in the settings they expose. 
 
 ### Google Workspace
 
-Google Workspace Directory Sync is pull-based: Clerk reads your directory with a service account and checks for changes every 5 minutes, so there's no SCIM endpoint or bearer token to configure. Clerk syncs all users and groups in your Workspace domain.
+Clerk syncs Google Workspace by reading your directory with a service account, checking for changes every 5 minutes — there's no SCIM endpoint or bearer token to configure in Google. Clerk syncs all users and groups in your Workspace domain.
 
 First, create a service account that can read your directory:
 
@@ -157,7 +152,7 @@ When a member's Role is assigned through a group-to-role mapping, that Role assi
 
 ### How it works
 
-When your IdP pushes group data to Clerk via SCIM, Clerk stores the groups and their memberships. You then configure a mapping in the Clerk Dashboard from each IdP group to a Clerk Role. When a user is added to a group in the IdP, Clerk assigns the mapped Role. When a user is removed from a mapped group, Clerk re-resolves their Role from the remaining mapped groups in precedence order. They only fall back to the Organization's default Role if no mapped groups remain.
+When group data syncs from your IdP, Clerk stores the groups and their memberships. You then configure a mapping in the Clerk Dashboard from each IdP group to a Clerk Role. When a user is added to a group in the IdP, Clerk assigns the mapped Role. When a user is removed from a mapped group, Clerk re-resolves their Role from the remaining mapped groups in precedence order. They only fall back to the Organization's default Role if no mapped groups remain.
 
 ### Configure Role mapping
 
@@ -168,7 +163,7 @@ When your IdP pushes group data to Clerk via SCIM, Clerk stores the groups and t
 1. Repeat for each group you want to map.
 
 > [!TIP]
-> IdP groups are only available to map after they've been synced to Clerk at least once. If you don't see a group, ensure **Push Groups** is enabled in your IdP (push providers) and that at least one sync has occurred. Google Workspace groups sync automatically.
+> IdP groups are only available to map after they've been synced to Clerk at least once. If you don't see a group, ensure **Push Groups** is enabled in your IdP and that at least one sync has occurred. Google Workspace groups sync automatically.
 
 ### Multi-group precedence
 

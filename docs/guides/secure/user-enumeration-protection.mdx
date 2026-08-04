@@ -29,7 +29,7 @@ Clerk's existing PII protections still apply. For example, during sign-in, even 
 With **Strict user enumeration protection**, users **won't receive feedback about whether their identifier matches an existing account** until they verify their identity.
 
 > [!NOTE]
-> Sign-in-or-up isn't supported under **strict** for the Account Portal or prebuilt components — a sign-in attempt for a non-existent account can't transfer to sign-up. If you need a sign-in-or-up experience under **strict**, use the [`signUpIfMissing` custom flow](/docs/guides/development/custom-flows/authentication/sign-in-or-up#sign-in-or-up-with-sign-up-if-missing) instead.
+> Under **strict**, the [`<SignIn />`](/docs/reference/components/authentication/sign-in) component supports sign-in-or-up: a sign-in for an identifier that doesn't exist proceeds to verification, then transfers to sign-up once the user verifies their identity. Refer to [Sign-in-or-up under strict protection](#sign-in-or-up-under-strict-protection) for the requirements, including the restriction on password. The [Account Portal](/docs/guides/account-portal/overview) hosts sign-in and sign-up on separate pages, so it can't transfer to sign-up under any setting — render `<SignIn />` in your own app for a sign-in-or-up experience.
 
 Strict enumeration covers:
 
@@ -40,6 +40,16 @@ Strict enumeration covers:
   - **Phone code**: Clerk shows the verification screen as if a message was sent, but doesn't actually send anything.
     - Because SMS can be costly during an enumeration attack, Clerk doesn't send SMS for sign-in attempts to non-existent accounts. We're exploring ways to add SMS notifications as we develop our anti-fraud protections.
 - User profile: If you add an email or phone number to your profile that already exists, Clerk shows the verification screen as if a message was sent, but doesn't actually send anything. Clerk doesn't send notifications in this case, since these attempts are more likely to be attacks than real updates.
+
+#### Sign-in-or-up under strict protection
+
+Because a sign-in for an unknown identifier proceeds to verification instead of failing, [`<SignIn />`](/docs/reference/components/authentication/sign-in) can create the account after the user verifies their identity, as long as your instance allows [public sign-ups](/docs/guides/secure/restricting-access#sign-up-modes). Unlike a standalone strict sign-in — which withholds verification from unknown identifiers, as described above — the sign-in-or-up flow sends a real verification code or email link so a new user can verify and continue to sign-up. No code changes are required. Refer to [sign-in-or-up](/docs/guides/development/custom-sign-in-or-up-page) for how to render the flow, and to the [`signUpIfMissing` custom flow](/docs/guides/development/custom-flows/authentication/sign-in-or-up#sign-in-or-up-with-sign-up-if-missing) to build the same behavior yourself.
+
+Three limits apply under **strict** that don't apply otherwise:
+
+- **Your instance must allow public sign-ups.** In [restricted or waitlist sign-up mode](/docs/guides/secure/restricting-access#sign-up-modes), `<SignIn />` falls back to a standalone strict sign-in. Sign-up can't succeed under either setting, but **strict** also withholds the reason: the "you need an invitation" response shown otherwise appears only when no account exists, so it's an enumeration signal that **strict** has to suppress. An uninvited visitor reaches the verification screen, receives only the notification described above, and isn't told why they can't continue.
+- **Password can't be the starting strategy.** A password step has no safe exit under **strict**: a visitor who doesn't have an account is sent to a password screen they can't get past. A visitor who types in an incorrect password can't be redirected to sign up, because Clerk can't reveal whether the identifier they tried matches an existing account. Either disable **Password**, or [set the instance's preferred sign-in strategy to OTP](/docs/reference/backend-api/tag/instance-settings/PATCH/instance){{ target: '_blank' }}. On development instances, `<SignIn />` logs a console warning (`sign_up_if_missing_password_preferred`) when it detects this combination.
+- **Username identifiers aren't supported.** Clerk can't contact a user for verification with a username alone.
 
 #### Password sign-in for accounts created with a social provider
 

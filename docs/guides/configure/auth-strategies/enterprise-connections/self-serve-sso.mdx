@@ -10,7 +10,7 @@ Self-serve SSO lets you delegate that configuration directly to your customers' 
 The connection is scoped to the Organization it's configured in, and behaves like any other enterprise connection once it's live.
 
 > [!NOTE]
-> Self-serve SSO is currently available only for applications using [Clerk Organizations](/docs/guides/organizations/overview) and supports only [SAML](/docs/guides/configure/auth-strategies/enterprise-connections/overview#saml) identity providers. It can be configured from the **Security** tab of `<OrganizationProfile />`.
+> Self-serve SSO is currently available only for applications using [Clerk Organizations](/docs/guides/organizations/overview). It supports [SAML](/docs/guides/configure/auth-strategies/enterprise-connections/overview#saml) and custom [OIDC](/docs/guides/configure/auth-strategies/enterprise-connections/overview#oidc) identity providers, and is configured from the **Security** tab of `<OrganizationProfile />`.
 
 ## Requirements
 
@@ -19,6 +19,8 @@ For an admin to configure a connection, the following must be true:
 - Your application uses [Clerk Organizations](/docs/guides/organizations/overview).
 - [Self-serve SSO is enabled for the Organization](#enable-self-serve-sso) in the Clerk Dashboard.
 - The signed-in user is a member of the Organization with the `org:sys_entconns:manage` [System Permission](/docs/guides/organizations/control-access/roles-and-permissions#system-permissions). This permission ships with the default [**Admin**](/docs/guides/organizations/control-access/roles-and-permissions#default-roles) Role. If you've defined custom Roles, add the Permission to any Role that should be able to manage enterprise connections. For more information, refer to the [Roles and Permissions guide](/docs/guides/organizations/control-access/roles-and-permissions).
+
+On their side, the admin needs permission to publish a DNS `TXT` record for the domain they're claiming, and administrative access to the identity provider (IdP) they're connecting.
 
 ## Enable self-serve SSO
 
@@ -33,12 +35,66 @@ Once enabled, the **Security** tab becomes available in that Organization's [`<O
 
 ## How the flow works
 
-When an admin opens the **Security** tab in `<OrganizationProfile />`, they're guided through the following steps:
+The **Security** tab walks the admin through the steps below. IdP setup instructions are embedded inline at each step, so you don't need to author or maintain your own walkthroughs.
 
-1. **Domains** — The admin adds one or more domains to claim for the connection and verifies [ownership](/docs/guides/organizations/domain-verification#domain-ownership) of each by publishing a DNS `TXT` record that Clerk checks.
-1. **Connection** — The admin selects an IdP and provides the protocol-specific configuration. IdP setup instructions are embedded inline, so you don't need to author or maintain your own walkthroughs. Self-serve SSO supports Okta, Google Workspace, Microsoft Entra ID, and **custom SAML**.
-1. **Test** — The admin runs a test sign-in to confirm the connection works end-to-end.
-1. **Activate** — Once the test passes, the admin activates the connection.
+<Steps>
+  ## Claim and verify a domain
+
+  The admin adds one or more domains to claim for the connection and verifies [ownership](/docs/guides/organizations/domain-verification#domain-ownership) of each by publishing the DNS `TXT` record that Clerk generates.
+
+  A domain must be verified before the connection can be configured. Once the connection is active, users with an email address on a verified domain sign in through the IdP.
+
+  ## Configure the connection
+
+  The admin picks an identity provider, then completes the provider-specific configuration. The picker offers **Okta Workforce**, **Microsoft Entra (formerly AD)**, **Google Workspace**, and **Custom SAML Provider** under **SAML**, and an **OIDC Provider** under **OpenID Connect (OIDC)**.
+
+  ### SAML providers
+
+  **Okta Workforce**, **Microsoft Entra (formerly AD)**, and **Google Workspace** each get a guided flow written against that provider's console. For **Custom SAML Provider**, the admin:
+
+  1. Creates a SAML 2.0 application in their IdP using the **Assertion Consumer Service (ACS) URL** and **Entity ID** that Clerk displays.
+  1. Configures attribute statements so the SAML response carries the attributes below.
+  1. Assigns users or groups to the application, since unassigned users can't sign in.
+  1. Supplies the IdP's metadata, either by pasting a **Metadata URL** or by selecting **Configure manually** and providing the **SSO URL**, **Entity ID (Issuer)**, and **Signing certificate**.
+
+  | Attribute name | Required | User attribute |
+  | - | - | - |
+  | `mail` | ✅ | Primary email |
+  | `firstName` | ❌ | First name |
+  | `lastName` | ❌ | Last name |
+
+  ### Custom OIDC provider
+
+  Selecting **OIDC Provider** splits the configuration into three screens:
+
+  1. **Authorized redirect URI** — Clerk displays the redirect URI for this connection, along with the ID token claims it reads. The admin creates an OIDC application in their IdP that supports the authorization code grant type, and registers the redirect URI on it.
+  1. **Endpoints** — The admin pastes the IdP's **Discovery Endpoint**, or selects **Configure manually** and provides the **Authorization URL** and **Token URL**, and optionally the **User Info URL**. Use manual configuration when the IdP doesn't publish a discovery document.
+  1. **Credentials** — The admin provides the **Client ID** and **Client Secret** from the IdP application.
+
+  The ID token returned by the IdP should include the following claims:
+
+  | ID token claim | Required | Clerk attribute |
+  | - | - | - |
+  | `sub` | ✅ | External user ID |
+  | `email` | ✅ | Primary email |
+  | `given_name` | ❌ | First name |
+  | `family_name` | ❌ | Last name |
+
+  For the equivalent Dashboard-side setup, refer to [Add a custom OIDC provider](/docs/guides/configure/auth-strategies/enterprise-connections/oidc/custom-provider).
+
+  > [!NOTE]
+  > Switching an existing connection to a different provider removes the current connection and starts the configuration over. The component warns the admin before this happens.
+
+  ## Test the connection
+
+  The admin runs a test sign-in against the IdP to confirm the connection works end-to-end. For a new connection, testing doesn't affect anyone else's sign-in, because the connection isn't live until it's activated.
+
+  ## Activate the connection
+
+  Once the test passes, the admin activates the connection. From that point, anyone signing in with an email address on a verified domain must use the IdP.
+
+  Editing an active connection applies immediately, so a bad value can interrupt sign-in for current members. The component warns the admin when they're editing a connection that's already live.
+</Steps>
 
 ## Next steps
 

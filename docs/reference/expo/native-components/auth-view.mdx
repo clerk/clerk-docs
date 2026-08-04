@@ -104,6 +104,76 @@ export default function SignInScreen() {
 }
 ```
 
+### Render in a navigation stack
+
+To push `<AuthView />` onto your app's navigation stack, hide the route's header and pass `onHostBack`. The component keeps its native header, so its screen titles, back buttons, swipe-back gestures, and transitions remain native.
+
+Passing `onHostBack` shows a back button on the component's first screen, where it has no screen of its own to return to. The callback runs when the button is tapped. Pop your route in response.
+
+The component never leaves the route on its own, so react to the auth state to know when the flow is finished. The following example pops the route once the session becomes active.
+
+```tsx {{ filename: 'src/app/(auth)/sign-in.tsx' }}
+import { AuthView } from '@clerk/expo/native'
+import { useSession } from '@clerk/expo'
+import { Stack, useRouter } from 'expo-router'
+import { useEffect } from 'react'
+
+export default function SignInScreen() {
+  const { session } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (session?.status === 'active') {
+      router.back()
+    }
+  }, [session?.status, router])
+
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <AuthView isDismissible={false} onHostBack={() => router.back()} />
+    </>
+  )
+}
+```
+
+### Custom logo
+
+By default, `<AuthView />` renders the logo configured in your application's [**Settings**](https://dashboard.clerk.com/~/settings). Use `logoMaxHeight` to constrain how tall that logo can be, in density-independent pixels:
+
+```tsx
+<AuthView logoMaxHeight={64} />
+```
+
+To render your own content instead, pass a React Native element to `logo`. The native UI doesn't size or space this content, so your element must define its own layout and accessibility behavior:
+
+```tsx {{ filename: 'src/app/(auth)/sign-in.tsx' }}
+import { AuthView } from '@clerk/expo/native'
+import { Image, StyleSheet } from 'react-native'
+
+export default function SignInScreen() {
+  return (
+    <AuthView
+      logo={
+        <Image
+          source={require('../../../assets/logo.png')}
+          style={styles.logo}
+          accessibilityLabel="Acme"
+        />
+      }
+    />
+  )
+}
+
+const styles = StyleSheet.create({
+  logo: {
+    width: 120,
+    height: 40,
+    resizeMode: 'contain',
+  },
+})
+```
+
 ## Properties
 
 <Properties>
@@ -125,10 +195,31 @@ export default function SignInScreen() {
 
   ---
 
+  - `logo`
+  - `React.ReactElement`
+
+  Replaces the logo configured in your application's [**Settings**](https://dashboard.clerk.com/~/settings) with custom React Native content rendered above the auth form. The native authentication UI doesn't apply sizing, spacing, or accessibility attributes to this content — the element you provide must define its own layout and accessibility behavior. See [Custom logo](#custom-logo) for an example.
+
+  ---
+
+  - `logoMaxHeight`
+  - `number`
+
+  The maximum height of the logo configured in your application's [**Settings**](https://dashboard.clerk.com/~/settings), in density-independent pixels (points on iOS, dp on Android). Defaults to `44`. This doesn't size custom `logo` content, which must define its own layout. See [Custom logo](#custom-logo) for an example.
+
+  ---
+
   - `onDismiss`
   - `() => void`
 
-  A callback that runs when the native authentication view requests dismissal. Use this to update your app's presentation state, such as closing a React Native `<Modal>`. Use `useAuth()`, `useUser()`, or `useSession()` to read auth state after authentication changes.
+  A callback that runs when the native authentication view requests dismissal. Use this to update your app's presentation state, such as closing a React Native `<Modal>`. Use [`useAuth()`](/docs/reference/hooks/use-auth), [`useUser()`](/docs/reference/hooks/use-user), or [`useSession()`](/docs/reference/hooks/use-session) to read auth state after authentication changes.
+
+  ---
+
+  - `onHostBack`
+  - `() => void`
+
+  A callback that runs when the user taps the back button on the authentication view's first screen. Passing the callback adds this button. Use it when the component fills a route whose header is hidden, and pop your route in response. The component keeps its native header, so navigation inside the authentication view stays native.
 </Properties>
 
 ## Social connection (OAuth) configuration

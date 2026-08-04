@@ -45,7 +45,7 @@ Import `Show` from the same package you previously imported `SignedIn`/`Protect`
 | -------------------------------------------------------- | ------------------------------------------------------------- |
 | `@clerk/clerk-react`                                     | `@clerk/react`                                                |
 | `@clerk/clerk-expo`                                      | `@clerk/expo`                                                 |
-| `import type { ... } from '@clerk/types'`                | `import type { ... } from '@clerk/shared/types'`              |
+| `import type { ... } from '@clerk/types'`                | Use the SDK's `/types`, or `@clerk/shared/types` when generic |
 | `import { __experimental_createTheme } from '@clerk/ui'` | `import { createTheme } from '@clerk/ui/themes/experimental'` |
 
 Update both imports and `package.json` dependencies.
@@ -223,7 +223,7 @@ After the CLI has run, verify any remaining issues it could not auto-fix:
 2. **Components:** Are `SignedIn`, `SignedOut`, and `Protect` replaced with `Show`?
 3. **Package names:** Are imports using `@clerk/react` and `@clerk/expo` (not `@clerk/clerk-react` or `@clerk/clerk-expo`)?
 4. **Appearance prop:** Is `layout` replaced with `options`?
-5. **Types:** Are type imports from `@clerk/shared/types` (not `@clerk/types`)?
+5. **Types:** Does framework-specific code import types from the installed Clerk SDK's public `/types` entry point, and framework-agnostic code import from `@clerk/shared/types`, rather than using `@clerk/types`?
 6. **Redirect props:** Are legacy redirect props (`afterSignInUrl`, `afterSignUpUrl`, `redirectUrl`) replaced with `fallbackRedirectUrl` or `forceRedirectUrl`?
 7. **Next.js `ClerkProvider`:** Is `ClerkProvider` positioned inside `<body>` (not wrapping `<html>`)?
 8. **Astro files:** `.astro` template files are not handled by the CLI — check these manually.

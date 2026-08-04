@@ -129,7 +129,7 @@ Before committing, validate your changes locally with two complementary checks.
 
 Because warnings don't fail the build, a green build is not the same as a clean one — read the warnings before opening or merging a PR.
 
-**Lint** with `pnpm run lint`. This checks formatting (Prettier), redirects, quickstarts, and more.
+**Lint** with `pnpm run lint`. This checks formatting (Prettier), redirects, quickstarts, plain-text status tags (statuses render as pills via the `tag` field and heading components, never as literal text like `(Beta)`), and more.
 
 Neither check verifies **factual** claims about the external APIs and SDKs the docs describe (endpoints, versions, method signatures, how the reference renders). Verify those against their source repositories — see [`AGENTS.md`](../AGENTS.md) under "Verifying technical claims."
 
@@ -199,12 +199,20 @@ type LinkItem = {
    */
   href: string
   /**
-   * Muted text to display next to the item text
+   * Lifecycle status pill to display next to the item text
    *
-   * @example 'Community'
-   * @example 'Beta'
+   * @example 'beta'
+   * @example 'deprecated'
+   * @example 'legacy'
    */
   tag?: string
+  /**
+   * Ownership pill to display next to the item text. Absence means
+   * Clerk-maintained.
+   *
+   * @example 'community'
+   */
+  maintainer?: string
   /**
    * Icon to display next to the item text
    *
@@ -243,12 +251,20 @@ type SubNavItem = {
    */
   items: Nav
   /**
-   * Muted text to display next to the item text
+   * Lifecycle status pill to display next to the item text
    *
-   * @example 'Community'
-   * @example 'Beta'
+   * @example 'beta'
+   * @example 'deprecated'
+   * @example 'legacy'
    */
   tag?: string
+  /**
+   * Ownership pill to display next to the item text. Absence means
+   * Clerk-maintained.
+   *
+   * @example 'community'
+   */
+  maintainer?: string
   /**
    * Icon to display next to the item text
    *
@@ -381,8 +397,45 @@ description: Some brief, but effective description of the page's content.
 
 - **`title`** - The title of the page. Used to populate the HTML `<title>` tag and the h1 of the page. Supports markdown, e.g., ``title: '`<SignUp>`'``
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
+- **`tag`** - Optional. The page's lifecycle status, in lifecycle order: `experimental`, `beta`, `new`, `legacy`, `deprecated`, `removed`. Renders a status pill next to the page's h1 and adds a parenthesized suffix in the `.md` output. Prefer this over inline `(beta)` / `(deprecated)` in the title itself. The sidenav pill is separate: it comes from the `tag` field on the page's entry in `manifest.json`, so set both when a page's status should show in the sidebar too.
+- **`maintainer`** - Optional. Who maintains the thing this page documents: only `community` is valid, and absence means Clerk-maintained. Ownership is separate from lifecycle, so a page can be both community-maintained and in beta (`tag: beta` + `maintainer: community`) — both pills render.
 
 A `title` is **required** — the build fails without one. A `description` is strongly recommended on every page and the build **warns** when it's missing, but a missing `description` won't block the build.
+
+#### Choosing a status
+
+The status system is two axes, on purpose:
+
+- **`tag`** answers "where is this in its life?" — `experimental` → `beta` → `new` → `legacy` → `deprecated` → `removed`.
+- **`maintainer`** answers "who maintains this?" — `community`, or absent for Clerk-maintained.
+
+They compose. A community SDK in beta is `tag: beta` + `maintainer: community` — not a new label.
+
+Before proposing a new `tag` value, it must pass all three gates:
+
+1. **It's a point on the lifecycle axis, not a modifier of one.** Compound names are the tell: "private beta", "limited GA", and "early access" are all an existing stage plus an access rule, which means they belong on a different axis. Don't fold a second dimension into the lifecycle enum.
+2. **It's long-lived enough to justify reader education.** Every value is vocabulary readers and authors must learn. Private beta is typically the shortest-lived state a feature passes through — a permanent label for a transient state is a bad trade, and a stale one after GA is worse than none.
+3. **It works as a glance, not a sentence.** A pill signals "how much should I trust this content?" If the reader's next question needs prose to answer ("how do I get access?"), the information belongs in a callout body, not a badge.
+
+When something fails the gates, the escalation path is:
+
+1. **Text first.** Use the closest lifecycle tag and say the rest in the callout body. A private beta is `tag: beta` plus a `> [!BETA]` body stating that it's invite-only and how to request access — the same pattern as pricing-gated features, which state the required add-on in prose:
+
+   ```mdx
+   ---
+   title: Abuse and fraud protection
+   tag: beta
+   ---
+
+   > [!BETA]
+   > This feature is in a private beta with a small group of customers. To request
+   > access, [contact support](/contact/support). It requires `@clerk/clerk-js`
+   > 6.25.3 or later.
+   ```
+
+   Don't extract this into a shared partial or a canonical default body until at least three features need it — the access path is the part that varies per program, and it's the part readers came for.
+
+2. **An `access` field second.** If gated programs become a recurring pattern (several simultaneous private betas, enterprise-gated features), model access as a third orthogonal field that composes with `tag` and `maintainer` — still not a new lifecycle value.
 
 #### Metadata
 
@@ -936,18 +989,30 @@ Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/
 > Key information users need to know to achieve their goal.
 
 > [!WARNING]
-> Urgent info that needs immediate user attention to avoid problems.
-
-> [!CAUTION]
-> Advises about risks or negative outcomes of certain actions.
+> Urgent info that needs immediate user attention to avoid problems, including risks or negative outcomes of certain actions. (`[!CAUTION]` was folded into `WARNING` — it still renders, but don't author new ones.)
 
 > [!QUIZ]
 > An opportunity for users to check their understanding.
+
+> [!EXPERIMENTAL]
+> Marks content as experimental — may change or be removed without notice. If the blockquote has no body, a canonical message is rendered automatically. Provide a body only when the default doesn't fit.
+
+> [!BETA]
+> Marks content as in beta. If the blockquote has no body, a canonical message about instability and a support link is rendered automatically. Provide a body only when the default message doesn't fit.
+
+> [!LEGACY]
+> Marks content as documenting a legacy API — still working, but slated for removal. If the blockquote has no body, a canonical message is rendered automatically. Provide a body to name the replacement (recommended).
+
+> [!DEPRECATED]
+> Marks content as deprecated. The body is REQUIRED and must name or link to the replacement API. The build fails if a `[!DEPRECATED]` callout has no body.
+
+> [!REMOVED]
+> Marks content as documenting a removed API. Like `[!DEPRECATED]`, the body is REQUIRED and must name the replacement or migration path; the build fails if a `[!REMOVED]` callout has no body.
 ```
 
 The image below shows what this example looks like once rendered.
 
-![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION, QUIZ](../.github/media/callouts.png)
+![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, QUIZ](../.github/media/callouts.png)
 
 You can optionally specify an `id` attribute for a callout which allows for direct linking, e.g., `/docs/example#useful-info`:
 
@@ -968,6 +1033,16 @@ You can create a collapsible section within a callout by using a thematic break 
 ```
 
 ![An example of a collapsible section inside a quiz callout](../.github/media/callout-details.png)
+
+#### Inline status tags in headings
+
+For markdown headings that apply to a subset of the page (not the whole page), append an inline tag component instead of using frontmatter `tag`:
+
+```mdx
+#### Map custom attributes <BetaTag />
+```
+
+Available components: `<BetaTag />`, `<DeprecatedTag />`, `<ExperimentalTag />`, `<LegacyTag />`, `<NewTag />`, `<RemovedTag />`, and `<CommunityTag />` (ownership rather than lifecycle). Use page-level frontmatter `tag` / `maintainer` for whole-page status; these components are for section-level status within a page. When a heading's slug must survive adding a marker, pair the component with an explicit id override, e.g. `## \`createRouteMatcher()\` <RemovedTag /> {{ id: 'create-route-matcher' }}`.
 
 ### `<CodeBlockTabs />`
 
@@ -1104,6 +1179,12 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 The `<Cards>` component can be used to display a grid of cards in various styles.
 
 `Cards` uses Markdown list syntax with each card separated by three dashes `---`.
+
+To show a status pill on a card, add a `tag` annotation to the card's link — plain-text suffixes like `(beta)` in the link text are not supported:
+
+```mdx
+- [Prebuilt native components](/docs/reference/expo/native-components/overview){{ tag: 'beta' }}
+```
 
 ```mdx
 <Cards>
@@ -1633,7 +1714,9 @@ The build does not execute code blocks, and Prettier only checks formatting, so 
 
 When you document a new feature or reference, some conventions are easy to miss because the build can't enforce them. Work through this checklist:
 
-- **Is the feature in beta or experimental?** Add a beta callout partial (follow an existing one, e.g., [`agent-tasks-beta-callout.mdx`](../docs/_partials/agent-tasks-beta-callout.mdx)) and include it on the relevant pages, then add a `(Beta)` `tag` to the matching `manifest.json` entries. Valid `tag` values are defined by the `tag` enum in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts).
+- **Is the feature in beta?** Set `tag: beta` in the page frontmatter, add a `> [!BETA]` callout to the page body (an empty one renders the canonical message), and add the same `"tag"` to the matching `manifest.json` entries so the sidenav pill matches the page. Don't hand-write `(beta)` in titles or create per-feature callout partials. Valid values are defined by the `tag` and `maintainer` enums in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts).
+- **Is the feature experimental?** Set `tag: experimental` and add a `> [!EXPERIMENTAL]` callout to the page body (an empty one renders the canonical message). Same shape as beta.
+- **Is it community-maintained?** Set `maintainer: community` (frontmatter and/or manifest) — this is separate from lifecycle, so it composes with `tag: beta` etc.
 - **Are you documenting a new SDK type or interface?** Give it its own page under `/docs/reference/types/<name>` with a matching `manifest.json` entry, rather than documenting it inline within a method reference. These type pages are hand-authored — see [`agent-task.mdx`](../docs/reference/types/agent-task.mdx) for an example. This is distinct from reference content rendered with [`<Typedoc />`](#typedoc-), which is auto-generated from `clerk/javascript`.
 
 ## Help wanted!

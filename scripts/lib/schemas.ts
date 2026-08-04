@@ -85,9 +85,15 @@ export const icon = z.enum([
 
 export type Icon = z.infer<typeof icon>
 
-export const tag = z.enum(['(Beta)', '(Community)'])
+// Ordered as the lifecycle reads: pre-release, release, wind-down.
+export const tag = z.enum(['experimental', 'beta', 'new', 'legacy', 'deprecated', 'removed'])
 
 export type Tag = z.infer<typeof tag>
+
+// Ownership axis, orthogonal to the lifecycle `tag`. Absence = Clerk-maintained.
+export const maintainer = z.enum(['community'])
+
+export type Maintainer = z.infer<typeof maintainer>
 
 export const isValidSdk =
   (config: BuildConfig) =>

@@ -7,7 +7,7 @@ import { fromError } from 'zod-validation-error'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { parseJSON } from './io'
-import { icon, sdk, tag, type Icon, type SDK, type Tag } from './schemas'
+import { icon, maintainer, sdk, tag, type Icon, type Maintainer, type SDK, type Tag } from './schemas'
 import { VFile } from 'vfile'
 
 // read in the manifest, create a vfile to write warnings to
@@ -40,6 +40,7 @@ export type ManifestItem = {
   title: string
   href: string
   tag?: Tag
+  maintainer?: Maintainer
   wrap?: boolean
   icon?: Icon
   target?: '_blank'
@@ -59,6 +60,7 @@ export type ManifestGroup = {
   topNav?: boolean
   flatNav?: boolean
   tag?: Tag
+  maintainer?: Maintainer
   wrap?: boolean
   icon?: Icon
   hideTitle?: boolean
@@ -75,6 +77,7 @@ const createManifestSchema = (config: BuildConfig) => {
       title: z.string(),
       href: z.string(),
       tag: tag.optional(),
+      maintainer: maintainer.optional(),
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),
       target: z.enum(['_blank']).optional(),
@@ -98,6 +101,7 @@ const createManifestSchema = (config: BuildConfig) => {
       topNav: z.boolean().optional(),
       flatNav: z.boolean().optional(),
       tag: tag.optional(),
+      maintainer: maintainer.optional(),
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),
       hideTitle: z.boolean().default(config.manifestOptions.hideTitleDefault),

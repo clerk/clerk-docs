@@ -33,7 +33,9 @@ import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 import { checkTooltips } from './plugins/checkTooltips'
 
-const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
+const calloutRegex = new RegExp(
+  /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ|BETA|DEPRECATED|LEGACY|EXPERIMENTAL|REMOVED)(\s+[0-9a-z-]+)?\]$/,
+)
 
 export const parseInMarkdownFile =
   (config: BuildConfig, store: Store) =>
@@ -227,6 +229,31 @@ export const parseInMarkdownFile =
               }
 
               headingsHashes.add(slug)
+            }
+          },
+        )
+
+        mdastVisit(
+          tree,
+          (node) => node.type === 'blockquote',
+          (node) => {
+            const firstChild: any = (node as any).children?.[0]
+            if (firstChild?.type !== 'paragraph') return
+            const firstText = firstChild.children?.[0]
+            if (firstText?.type !== 'text') return
+
+            const markerMatch = firstText.value.match(/^\[!(BETA|DEPRECATED|REMOVED)(\s+[0-9a-z-]+)?\]/)
+            if (!markerMatch) return
+            // [!DEPRECATED] and [!REMOVED] both require a body naming the replacement/migration path.
+            if (markerMatch[1] !== 'DEPRECATED' && markerMatch[1] !== 'REMOVED') return
+
+            // Trimmed text content after marker removal — empty means no body.
+            const rendered = toString(node)
+            const withoutMarker = rendered.replace(/^\[!(?:DEPRECATED|REMOVED)(\s+[0-9a-z-]+)?\]/, '').trim()
+            if (withoutMarker === '') {
+              const errorKey =
+                markerMatch[1] === 'REMOVED' ? 'removed-callout-missing-body' : 'deprecated-callout-missing-body'
+              safeFail(config, vfile, file.filePath, section, errorKey, [], node.position)
             }
           },
         )

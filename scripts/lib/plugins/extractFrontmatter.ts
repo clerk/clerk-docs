@@ -4,12 +4,14 @@ import type { VFile } from 'vfile'
 import yaml from 'yaml'
 import { type BuildConfig } from '../config'
 import { safeFail, safeMessage, WarningsSection } from '../error-messages'
-import { isValidSdk, isValidSdks, type SDK } from '../schemas'
+import { isValidSdk, isValidSdks, maintainer as maintainerSchema, tag as tagSchema, type SDK } from '../schemas'
 
 export type Frontmatter = {
   title: string
   description?: string
   sdk?: SDK[]
+  tag?: 'experimental' | 'beta' | 'new' | 'legacy' | 'deprecated' | 'removed'
+  maintainer?: 'community'
 }
 
 export const extractFrontmatter =
@@ -33,7 +35,8 @@ export const extractFrontmatter =
         if (!('value' in node)) return
         if (typeof node.value !== 'string') return
 
-        const frontmatterYaml: Record<'title' | 'description' | 'sdk', string | undefined> = yaml.parse(node.value)
+        const frontmatterYaml: Record<'title' | 'description' | 'sdk' | 'tag' | 'maintainer', string | undefined> =
+          yaml.parse(node.value)
 
         if (frontmatterYaml === null) {
           safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
@@ -65,10 +68,48 @@ export const extractFrontmatter =
           return
         }
 
+        let tagValue: Frontmatter['tag']
+        if (frontmatterYaml.tag !== undefined) {
+          const parsed = tagSchema.safeParse(frontmatterYaml.tag)
+          if (!parsed.success) {
+            safeFail(
+              config,
+              vfile,
+              filePath,
+              section,
+              'invalid-tag-in-frontmatter',
+              [frontmatterYaml.tag],
+              node.position,
+            )
+            return
+          }
+          tagValue = parsed.data
+        }
+
+        let maintainerValue: Frontmatter['maintainer']
+        if (frontmatterYaml.maintainer !== undefined) {
+          const parsed = maintainerSchema.safeParse(frontmatterYaml.maintainer)
+          if (!parsed.success) {
+            safeFail(
+              config,
+              vfile,
+              filePath,
+              section,
+              'invalid-maintainer-in-frontmatter',
+              [frontmatterYaml.maintainer],
+              node.position,
+            )
+            return
+          }
+          maintainerValue = parsed.data
+        }
+
         frontmatter = {
           title: frontmatterYaml.title,
           description: frontmatterYaml.description,
           sdk: frontmatterSDKs,
+          tag: tagValue,
+          maintainer: maintainerValue,
         }
       },
     )

@@ -5,7 +5,7 @@ import type { VFile } from 'vfile'
 import type { ValidationError } from 'zod-validation-error'
 import type { BuildConfig } from './config'
 import type { Position } from 'unist'
-import type { SDK } from './schemas'
+import { maintainer as maintainerSchema, tag as tagSchema, type SDK } from './schemas'
 
 export const errorMessages = {
   // Manifest errors
@@ -28,6 +28,10 @@ export const errorMessages = {
   'invalid-sdk-in-if': (sdk: string): string => `sdk "${sdk}" in <If /> is not a valid SDK`,
   'invalid-sdk-in-frontmatter': (invalidSDKs: string[], validSdks: SDK[]): string =>
     `Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(validSdks)}`,
+  'invalid-tag-in-frontmatter': (tag: string): string =>
+    `Invalid tag "${tag}" in frontmatter. Must be one of: ${tagSchema.options.join(', ')}.`,
+  'invalid-maintainer-in-frontmatter': (maintainer: string): string =>
+    `Invalid maintainer "${maintainer}" in frontmatter. Must be one of: ${maintainerSchema.options.join(', ')}.`,
   'if-component-sdk-not-in-frontmatter': (sdk: SDK, docSdk: SDK[]): string =>
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
   'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>
@@ -56,6 +60,9 @@ export const errorMessages = {
     `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
   'content-h1': (href: string): string =>
     `Doc "${href}" contains an h1 heading (# ...) in its content. The page title comes from the frontmatter "title", so use an h2 (##) or lower`,
+  'deprecated-callout-missing-body': (): string => `[!DEPRECATED] callouts require a body explaining the replacement.`,
+  'removed-callout-missing-body': (): string =>
+    `[!REMOVED] callouts require a body explaining the replacement or migration path.`,
 
   // Include component errors
   'include-src-not-partials': (): string =>

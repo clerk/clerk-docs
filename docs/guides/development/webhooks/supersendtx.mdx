@@ -1,0 +1,109 @@
+---
+title: Deliver Clerk emails with SuperSend TX
+description: Disable Delivered by Clerk and send verification, invitation, and other auth emails through SuperSend TX using the email.created webhook.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Create a SuperSend TX account and API key",
+      link: "https://docs.supersendtx.com/quickstart",
+      icon: "cog-6-teeth",
+    },
+  ]}
+/>
+
+[SuperSend TX](https://supersendtx.com) is transactional email infrastructure. When you turn off **Delivered by Clerk** for a template, Clerk still builds the message and emits an `email.created` webhook — your app delivers it.
+
+This guide wires that webhook to SuperSend TX so verification codes, magic links, and invites send from your verified domain.
+
+<Steps>
+  ## Disable Delivered by Clerk for the templates you own
+
+  1. In the Clerk Dashboard, navigate to the [**Emails**](https://dashboard.clerk.com/~/customization/email) page.
+  1. Open each template you want to send yourself (for example verification code or invitation).
+  1. Disable **Delivered by Clerk**.
+
+  > [!NOTE]
+  > There is currently no way to disable Clerk delivery for all templates at once. Repeat for each template you care about.
+
+  ## Create a webhook endpoint
+
+  1. In the Clerk Dashboard, navigate to the [**Webhooks**](https://dashboard.clerk.com/~/webhooks) page.
+  1. Select **Add Endpoint**.
+  1. Set the **Endpoint URL** to your app route (for example `https://yourdomain.com/api/webhooks/clerk-email`).
+  1. Subscribe to the `email.created` event.
+  1. Create the endpoint and copy the **Signing Secret**.
+
+  ## Deliver with SuperSend TX
+
+  Verify the webhook with Clerk, then `POST` the rendered message to SuperSend TX. Set `SUPERSENDTX_API_KEY` and a verified `from` address in your environment.
+
+  ```ts {{ filename: 'app/api/webhooks/clerk-email/route.ts' }}
+  import { verifyWebhook } from '@clerk/nextjs/webhooks'
+  import { NextRequest } from 'next/server'
+
+  export async function POST(req: NextRequest) {
+    try {
+      const evt = await verifyWebhook(req)
+
+      if (evt.type !== 'email.created') {
+        return new Response('ignored', { status: 200 })
+      }
+
+      const email = evt.data
+      // Skip if Clerk still delivers this template
+      if (email.delivered_by_clerk) {
+        return new Response('delivered by clerk', { status: 200 })
+      }
+
+      const apiKey = process.env.SUPERSENDTX_API_KEY
+      const from = process.env.SUPERSENDTX_FROM_EMAIL
+      if (!apiKey || !from) {
+        return new Response('missing SuperSend TX env', { status: 500 })
+      }
+
+      const res = await fetch('https://api.supersendtx.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from,
+          to: email.to_email_address,
+          subject: email.subject,
+          html: email.body,
+          text: email.body_plain ?? undefined,
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.text()
+        console.error('SuperSend TX error', res.status, body)
+        return new Response('send failed', { status: 500 })
+      }
+
+      return new Response('ok', { status: 200 })
+    } catch (err) {
+      console.error('Error verifying webhook:', err)
+      return new Response('Error verifying webhook', { status: 400 })
+    }
+  }
+  ```
+
+  Use Clerk’s rendered `body` / `body_plain`, or build your own HTML from fields on `email.data` (for example OTP codes). See [email deliverability](/docs/guides/development/troubleshooting/email-deliverability#managing-your-own-email-delivery) for payload details.
+
+  ## Test
+
+  1. Trigger the auth flow for a template you disabled (sign-up verification, password reset, etc.).
+  1. Confirm the webhook succeeds in the Clerk Dashboard.
+  1. Confirm delivery in the SuperSend TX dashboard.
+
+  Full SuperSend TX reference: [https://docs.supersendtx.com/guides/auth-provider-email](https://docs.supersendtx.com/guides/auth-provider-email)
+</Steps>

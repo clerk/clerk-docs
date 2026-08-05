@@ -2,6 +2,9 @@
 
 Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](../styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
 
+> [!IMPORTANT]
+> Clerk's documentation is maintained in Clerk's internal monorepo, and the public [`clerk/clerk-docs`](https://github.com/clerk/clerk-docs) repository is its read-only mirror. External contributions still start in clerk-docs — nothing merges into the mirror directly. Write your change and open a pull request as described below. Once your PR is approved, a Clerk team member brings it into the monorepo with your commits and authorship preserved, and your change deploys to [clerk.com/docs](https://clerk.com/docs). Clerk employees directly contribute to the monorepo and can run migrations themselves with `pnpm migrate:clerk` (see the [migration skill](../.agents/skills/migrate-branch-to-clerk/SKILL.md)).
+
 If you're contributing specifically to our hooks and components documentation, please refer to the [dedicated guide](./CONTRIBUTING-COMPONENTS-HOOKS.md).
 
 <details open="open">
@@ -112,7 +115,7 @@ The structure of the PR should be:
 
 ## Preview your changes
 
-When you open a pull request, a member of the Clerk team can add the `deploy-preview` label to your pull request, which will trigger a preview deployment with your changes.
+There are no preview deployments for pull requests on the mirror. Your reviewer previews your change as part of bringing it into the monorepo.
 
 ### Previewing changes locally (for Clerk employees)
 
@@ -140,11 +143,11 @@ Neither check verifies **factual** claims about the external APIs and SDKs the d
 
 Once you open up a pull request with your changes, a member of the Clerk team will review your pull request and approve it, or leave addressable feedback. We do our best to review all contributions in a timely manner, but please be patient if someone does not take a look at it right away.
 
-Once your pull request is approved, a member of the Clerk team will merge it and make sure it gets deployed! 🚀
+Once your pull request is approved, a member of the Clerk team brings it into Clerk's internal monorepo — your commits and authorship are preserved — and makes sure it gets deployed. Your pull request on the mirror is closed once your change ships.
 
 ## Deployment
 
-The content rendered on https://clerk.com/docs is pulled from the `main` branch in this repository. If your PR is merged to the `main` branch, a workflow is triggered that updates the production pages. Changes should be reflected on https://clerk.com/docs within a matter of seconds.
+The content rendered on https://clerk.com/docs deploys from Clerk's internal monorepo. The `main` branch of the [`clerk/clerk-docs`](https://github.com/clerk/clerk-docs) mirror is synced automatically on every change, so `main` there always matches what's live. Once your contribution is merged in the monorepo, it's reflected on https://clerk.com/docs shortly after.
 
 ## Repository structure
 

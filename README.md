@@ -26,20 +26,22 @@
   <img alt="Clerk Hero Image" src="/.github/media/readme-hero.svg">
 </div>
 
+> [!IMPORTANT]
+> Clerk's documentation is maintained in Clerk's internal monorepo. This repository — [`clerk/clerk-docs`](https://github.com/clerk/clerk-docs) — is its public, read-only mirror and the home for community contributions. Pull requests and issues are welcome, but nothing merges here directly. Once your PR is approved, a Clerk team member brings it into the monorepo with your commits and authorship preserved, and your change ships to [clerk.com/docs](https://clerk.com/docs). See the [contribution guide](./contributing/CONTRIBUTING.md) for how it works.
+
 ## Community
 
 Clerk is more than authentication, and we want to convey every feature of Clerk as best as we can to make authentication and user management simpler for everyone. Explaining these concepts can sometimes be tricky, but with the help of a community, we can collaborate, share ideas, find the right words, and achieve greater clarity.
 
 We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./contributing/CONTRIBUTING.md).
 
-> This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](https://clerk.com/contact/support).
+> The public [clerk/clerk-docs](https://github.com/clerk/clerk-docs) mirror contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs. The _source code_ for the docs site is not open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](https://clerk.com/contact/support).
 
 ## Found an issue?
 
 If you have found an issue with our documentation, please create an [issue](https://github.com/clerk/clerk-docs/issues).
 
-If it's a quick fix, such as a misspelled word or a broken link, feel free to skip creating an issue.  
-Go ahead and create a [pull request](https://github.com/clerk/clerk-docs/pulls) with the solution. :rocket:
+If it's a quick fix, such as a misspelled word or a broken link, feel free to skip creating an issue. You can create a [pull request](https://github.com/clerk/clerk-docs/pulls) with the solution, or leave feedback directly on the page at [clerk.com/docs](https://clerk.com/docs) (there's a feedback form at the bottom of every docs page) — both reach us.
 
 ## Want to leave feedback?
 

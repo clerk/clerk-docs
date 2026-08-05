@@ -23,7 +23,7 @@
   </a> 
   <br />
   <br />
-  <img alt="Clerk Hero Image" src="/.github/media/readme-hero.svg">
+  <img alt="Clerk Hero Image" src="./.github/media/readme-hero.svg">
 </div>
 
 > [!IMPORTANT]

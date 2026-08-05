@@ -1,6 +1,6 @@
 ---
-title: Build a custom sign-in flow with client trust
-description: Learn how to build a custom sign-in flow that requires Client Trust.
+title: Build a custom sign-in flow with Device Trust
+description: Learn how to build a custom sign-in flow that requires Device Trust.
 ---
 
 <Include src="_partials/custom-flows-callout" />
@@ -18,9 +18,12 @@ description: Learn how to build a custom sign-in flow that requires Client Trust
   > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/email-password-mfa).
 </If>
 
-If you have [Client Trust](/docs/guides/secure/client-trust) enabled for your application, when a user is signing in **with a password** on a new client (e.g., device), **the sign-in attempt will return a status of `needs_client_trust`**. Your custom sign-in flow needs to support handling an email code, SMS code, or email link, depending on the settings you've enabled in the Clerk Dashboard. This guide demonstrates the email code and SMS code strategies.
+If you have [Device Trust](/docs/guides/secure/device-trust) enabled for your application, when a user is signing in **with a password** on a new device, **the sign-in attempt will return a status of `needs_client_trust`**. Your custom sign-in flow needs to support handling an email code, SMS code, or email link, depending on the settings you've enabled in the Clerk Dashboard. This guide demonstrates the email code and SMS code strategies.
 
-If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-in attempt will return a status of `needs_second_factor`. See the [MFA custom flow guide](/docs/guides/development/custom-flows/authentication/multi-factor-authentication) for more information.
+> [!NOTE]
+> Device Trust was previously called "Client Trust." The feature was renamed, but its API values - including the `needs_client_trust` status used throughout this guide - kept their original names so that existing integrations keep working.
+
+If Device Trust **and** MFA are enabled, MFA will take precedence and the sign-in attempt will return a status of `needs_second_factor`. See the [MFA custom flow guide](/docs/guides/development/custom-flows/authentication/multi-factor-authentication) for more information.
 
 <Tabs items={["Email code", "SMS code"]}>
   <Tab>
@@ -540,8 +543,8 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
               when {
                 !isInitialized -> EmailPasswordSignInUiState.Loading
                 user != null -> EmailPasswordSignInUiState.SignedIn
-        +        _uiState.value == EmailPasswordSignInUiState.NeedsClientTrust ->
-        +          EmailPasswordSignInUiState.NeedsClientTrust
+        +        _uiState.value == EmailPasswordSignInUiState.NeedsDeviceTrust ->
+        +          EmailPasswordSignInUiState.NeedsDeviceTrust
                 else -> EmailPasswordSignInUiState.SignedOut
               }
           }
@@ -569,7 +572,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         +          if (emailFactor != null) {
         +            signIn
         +              .sendMfaEmailCode(emailAddressId = emailFactor.emailAddressId)
-        +              .onSuccess { _uiState.value = EmailPasswordSignInUiState.NeedsClientTrust }
+        +              .onSuccess { _uiState.value = EmailPasswordSignInUiState.NeedsDeviceTrust }
         +              .onFailure {
         +                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         +                // for more info on error handling
@@ -596,7 +599,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         }
         }
 
-        + fun resendClientTrustCode() {
+        + fun resendDeviceTrustCode() {
         + val signIn = Clerk.auth.currentSignIn ?: return
         + viewModelScope.launch {
         +   signIn
@@ -608,7 +611,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         + }
         + }
 
-        + fun verifyClientTrust(code: String) {
+        + fun verifyDeviceTrust(code: String) {
         + val signIn = Clerk.auth.currentSignIn ?: return
         + viewModelScope.launch {
         +   signIn
@@ -635,7 +638,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
 
         data object SignedOut : EmailPasswordSignInUiState
 
-        data object NeedsClientTrust : EmailPasswordSignInUiState
+        data object NeedsDeviceTrust : EmailPasswordSignInUiState
 
         data object SignedIn : EmailPasswordSignInUiState
         }
@@ -680,8 +683,8 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
           EmailPasswordSignInView(
             state = state,
             onSubmit = viewModel::submit,
-        +    onVerifyClientTrust = viewModel::verifyClientTrust,
-        +    onResendClientTrustCode = viewModel::resendClientTrustCode,
+        +    onVerifyDeviceTrust = viewModel::verifyDeviceTrust,
+        +    onResendDeviceTrustCode = viewModel::resendDeviceTrustCode,
           )
         }
         }
@@ -691,12 +694,12 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         fun EmailPasswordSignInView(
         state: EmailPasswordSignInViewModel.EmailPasswordSignInUiState,
         onSubmit: (String, String) -> Unit,
-        + onVerifyClientTrust: (String) -> Unit,
-        + onResendClientTrustCode: () -> Unit,
+        + onVerifyDeviceTrust: (String) -> Unit,
+        + onResendDeviceTrustCode: () -> Unit,
         ) {
         var email by remember { mutableStateOf("") }
         var password by remember { mutableStateOf("") }
-        + var clientTrustCode by remember { mutableStateOf("") }
+        + var deviceTrustCode by remember { mutableStateOf("") }
 
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (state) {
@@ -715,19 +718,19 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
               Button(onClick = { onSubmit(email, password) }) { Text("Sign in") }
             }
           }
-        +  EmailPasswordSignInViewModel.EmailPasswordSignInUiState.NeedsClientTrust -> {
+        +  EmailPasswordSignInViewModel.EmailPasswordSignInUiState.NeedsDeviceTrust -> {
         +    Column(
         +      verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         +      horizontalAlignment = Alignment.CenterHorizontally,
         +    ) {
         +      Text("Verify your account")
         +      TextField(
-        +        value = clientTrustCode,
-        +        onValueChange = { clientTrustCode = it },
+        +        value = deviceTrustCode,
+        +        onValueChange = { deviceTrustCode = it },
         +        label = { Text("Code") },
         +      )
-        +      Button(onClick = { onVerifyClientTrust(clientTrustCode) }) { Text("Verify") }
-        +      Button(onClick = onResendClientTrustCode) { Text("I need a new code") }
+        +      Button(onClick = { onVerifyDeviceTrust(deviceTrustCode) }) { Text("Verify") }
+        +      Button(onClick = onResendDeviceTrustCode) { Text("I need a new code") }
         +    }
         +  }
           EmailPasswordSignInViewModel.EmailPasswordSignInUiState.SignedIn -> {
@@ -749,12 +752,12 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
   <Tab>
     ### Configure application settings
 
-    Client Trust will fallback to SMS verification code **only if email is completely disabled for the application**, or else Client Trust will fallback to either email code or email link, depending on your application's settings.
+    Device Trust will fallback to SMS verification code **only if email is completely disabled for the application**, or else Device Trust will fallback to either email code or email link, depending on your application's settings.
 
     1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
     1. Ensure all email options are disabled.
     1. Select the **Phone** tab. Ensure all the settings are enabled.
-    1. Select the **Password** tab and enable **Sign-up with password**. **Client Trust** is enabled by default (applications created before November 14, 2025 will need to [enable Client Trust](/docs/guides/secure/client-trust#enable-client-trust)).
+    1. Select the **Password** tab and enable **Sign-up with password**. **Device Trust** is enabled by default (applications created before November 14, 2025 will need to [enable Device Trust](/docs/guides/secure/device-trust#enable-device-trust)).
 
     ### Build the custom flow
 
@@ -1272,8 +1275,8 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
               when {
                 !isInitialized -> PhonePasswordSignInUiState.Loading
                 user != null -> PhonePasswordSignInUiState.SignedIn
-        +        _uiState.value == PhonePasswordSignInUiState.NeedsClientTrust ->
-        +          PhonePasswordSignInUiState.NeedsClientTrust
+        +        _uiState.value == PhonePasswordSignInUiState.NeedsDeviceTrust ->
+        +          PhonePasswordSignInUiState.NeedsDeviceTrust
                 else -> PhonePasswordSignInUiState.SignedOut
               }
           }
@@ -1301,7 +1304,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         +          if (phoneFactor != null) {
         +            signIn
         +              .sendMfaPhoneCode(phoneNumberId = phoneFactor.phoneNumberId)
-        +              .onSuccess { _uiState.value = PhonePasswordSignInUiState.NeedsClientTrust }
+        +              .onSuccess { _uiState.value = PhonePasswordSignInUiState.NeedsDeviceTrust }
         +              .onFailure {
         +                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         +                // for more info on error handling
@@ -1328,7 +1331,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         }
         }
 
-        + fun resendClientTrustCode() {
+        + fun resendDeviceTrustCode() {
         + val signIn = Clerk.auth.currentSignIn ?: return
         + viewModelScope.launch {
         +   signIn
@@ -1340,7 +1343,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         + }
         + }
 
-        + fun verifyClientTrust(code: String) {
+        + fun verifyDeviceTrust(code: String) {
         + val signIn = Clerk.auth.currentSignIn ?: return
         + viewModelScope.launch {
         +   signIn
@@ -1367,7 +1370,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
 
         data object SignedOut : PhonePasswordSignInUiState
 
-        data object NeedsClientTrust : PhonePasswordSignInUiState
+        data object NeedsDeviceTrust : PhonePasswordSignInUiState
 
         data object SignedIn : PhonePasswordSignInUiState
         }
@@ -1412,8 +1415,8 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
           PhonePasswordSignInView(
             state = state,
             onSubmit = viewModel::submit,
-        +    onVerifyClientTrust = viewModel::verifyClientTrust,
-        +    onResendClientTrustCode = viewModel::resendClientTrustCode,
+        +    onVerifyDeviceTrust = viewModel::verifyDeviceTrust,
+        +    onResendDeviceTrustCode = viewModel::resendDeviceTrustCode,
           )
         }
         }
@@ -1423,12 +1426,12 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         fun PhonePasswordSignInView(
         state: PhonePasswordSignInViewModel.PhonePasswordSignInUiState,
         onSubmit: (String, String) -> Unit,
-        + onVerifyClientTrust: (String) -> Unit,
-        + onResendClientTrustCode: () -> Unit,
+        + onVerifyDeviceTrust: (String) -> Unit,
+        + onResendDeviceTrustCode: () -> Unit,
         ) {
         var phoneNumber by remember { mutableStateOf("") }
         var password by remember { mutableStateOf("") }
-        var clientTrustCode by remember { mutableStateOf("") }
+        var deviceTrustCode by remember { mutableStateOf("") }
 
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (state) {
@@ -1451,7 +1454,7 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
               Button(onClick = { onSubmit(phoneNumber, password) }) { Text("Continue") }
             }
           }
-        +  PhonePasswordSignInViewModel.PhonePasswordSignInUiState.NeedsClientTrust -> {
+        +  PhonePasswordSignInViewModel.PhonePasswordSignInUiState.NeedsDeviceTrust -> {
         +    Column(
         +      verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         +      horizontalAlignment = Alignment.CenterHorizontally,
@@ -1459,12 +1462,12 @@ If Client Trust **and** MFA are enabled, MFA will take precedence and the sign-i
         +      Text("Verify your account")
         +      Text("A verification code has been sent to your phone.")
         +      TextField(
-        +        value = clientTrustCode,
-        +        onValueChange = { clientTrustCode = it },
+        +        value = deviceTrustCode,
+        +        onValueChange = { deviceTrustCode = it },
         +        label = { Text("Code") },
         +      )
-        +      Button(onClick = { onVerifyClientTrust(clientTrustCode) }) { Text("Verify") }
-        +      Button(onClick = onResendClientTrustCode) { Text("I need a new code") }
+        +      Button(onClick = { onVerifyDeviceTrust(deviceTrustCode) }) { Text("Verify") }
+        +      Button(onClick = onResendDeviceTrustCode) { Text("I need a new code") }
         +    }
         +  }
           PhonePasswordSignInViewModel.PhonePasswordSignInUiState.SignedIn -> {

@@ -139,7 +139,7 @@ const { checkout, errors, fetchStatus } = useCheckout({ planId, planPeriod })
 - `getToken()` throws `ClerkOfflineError` when offline (previously returned `null`). Use try/catch with `ClerkOfflineError.is(error)`. Import from `@clerk/react/errors` (or SDK-specific `/errors` entry point). Still returns `null` when not signed in.
 - `useAuth().getToken` no longer `undefined` during SSR — now a function that throws `clerk_runtime_not_browser`. Use try/catch instead of `if (getToken)`. No change needed if only called in `useEffect` or event handlers.
 - `getToken()` uses proactive background refresh (stale-while-revalidate). Returns cached token immediately when within 15s of expiry, refreshes in background. No code changes required.
-- New `needs_client_trust` sign-in status — handle in sign-in flow if passwords + Client Trust enabled. Check `signIn.status === 'needs_client_trust'` before `'complete'`.
+- New `needs_client_trust` sign-in status — handle in sign-in flow if passwords + Device Trust enabled. Check `signIn.status === 'needs_client_trust'` before `'complete'`.
 
 ---
 

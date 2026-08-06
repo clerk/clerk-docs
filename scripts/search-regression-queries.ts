@@ -215,4 +215,13 @@ export const REGRESSION_CASES: RegressionCase[] = [
     topN: 3,
     source: 'DOCS-11910 follow-up (Jeff, 2026-07-20)',
   },
+
+  // --- CIMD acronym, synonym derived from the client-id-metadata-document tooltip ---
+  {
+    query: 'cimd',
+    boost: 'nextjs',
+    urls: ['/docs/guides/configure/auth-strategies/oauth/client-id-metadata-documents'],
+    topN: 3,
+    source: 'clerk/clerk#2935',
+  },
 ]

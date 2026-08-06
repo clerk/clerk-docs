@@ -1144,6 +1144,15 @@ The ID of the [Active Organization](!active-organization) that the user belongs 
 
 Tooltips should follow the same styleguide as links - only add them on the first mention of a term and only in the highest heading section. So if a term is mentioned in an H2 section and again in its H3 section, it doesn't need to be added in the H3 section.
 
+When the term is an acronym, put the tooltip ref on the acronym itself - `[OTP](!otp)` is the dominant pattern in the docs. If a first mention should also spell the term out, keep the ref on the acronym: `one-time password ([OTP](!otp))`.
+
+Acronym tooltips also feed the docs search: the indexer derives an acronym ⇄ expansion synonym from the first bold text that pairs a recognized acronym (3–8 alphanumeric characters, starting with a capital letter) with its expansion (e.g., `**one-time password (OTP)**`). Two things follow:
+
+- Match the bold expansion's singular/plural form to how docs page titles use the term. Synonyms are literal (no automatic plural matching), so a singular expansion won't match a page titled with the plural, and vice versa.
+- Adding or editing a tooltip that contains such a pair is a search-relevance change and goes through the search regression gate - see `AGENTS.md` → "Search index (Algolia)".
+
+Tooltips are also separate from [clerk.com/glossary](https://clerk.com/glossary), the marketing-site glossary (frontmatter-only entries in `src/app/(website)/glossary/_posts/` in the main clerk.com codebase). A new term can ship its tooltip and glossary entry in the same PR.
+
 ### `<TutorialHero />`
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:

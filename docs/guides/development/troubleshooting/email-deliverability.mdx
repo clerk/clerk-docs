@@ -7,7 +7,7 @@ A lot goes into making sure verification emails make it to your customers as qui
 
 In development instances, all emails are sent from `@accounts.dev` domain. In production instances, they are sent from your own domain (e.g., `@example.com`).
 
-During production instance set up, Clerk will have you set up the required records to configure [SPF](!spf) and [DKIM](!dkim) for security and deliverability. It's also recommended to set up [DMARC](!dmarc) following the [instructions below](#setup-dmarc-email-authentication) for additional security and deliverability.
+During production instance setup, Clerk asks you to configure the required [SPF](!spf) and [DKIM](!dkim) DNS records. When DMARC appears in your Dashboard domain setup, an applicable [DMARC](!dmarc) policy is also required for that domain.
 
 ## Best practices
 
@@ -49,7 +49,9 @@ Because a lot of bad actors send spam to large, programmatically generated lists
 
 ### Setup DMARC email authentication
 
-DMARC, or "Domain-based Message Authentication, Reporting & Conformance", should also be set up on your domain. If an email ever fails one of the above checks, email providers will act based on the settings you choose here. In order to set up a DMARC policy, you will need to add a TXT record to your domain. The following is an example DMARC policy that Clerk uses for its own emails.
+Domain-based Message Authentication, Reporting, and Conformance (DMARC) tells receiving email providers how to handle messages that fail aligned SPF and DKIM checks. If DMARC is listed in your Dashboard domain setup, your sending domain must have one applicable DMARC TXT policy to complete that setup. Even when it is not listed as a required setup record, publishing and monitoring a DMARC policy is a recommended deliverability and anti-spoofing practice.
+
+If your domain already publishes one valid DMARC policy with `p=none`, `p=quarantine`, or `p=reject`, keep it. Under the [current DMARC standard](https://www.rfc-editor.org/rfc/rfc9989.html), a policy on a parent domain can also apply when the sending domain has no more-specific policy. Clerk follows that DNS tree walk, including its `psd=n` and `psd=y` boundary markers, and accepts an applicable valid policy, so don't add a child `p=none` record merely to match Clerk's recommendation. If no policy applies, start with the following non-enforcing policy at `_dmarc.<your-domain>`:
 
 ```txt
 TXT Record
@@ -58,10 +60,13 @@ name:
 _dmarc<.example.com>
 
 content:
-v=DMARC1; p=reject; pct=100; rua=mailto:you@example.com; ruf=mailto:you@example.com;
+v=DMARC1; p=none;
 ```
 
-This policy will reject all emails that weren't sent from you. There are other [policies](https://dmarc.org/overview/) that you can use.
+This policy establishes DMARC without asking receivers to quarantine or reject messages that fail authentication. To receive aggregate reports, add an `rua=mailto:<address-you-monitor>` tag. Review those reports and ensure every legitimate mail stream passes aligned SPF or DKIM checks before you deliberately move to `p=quarantine` or `p=reject`.
+
+> [!NOTE]
+> The current DMARC standard removed the `pct` tag. Don't add `pct` to new policies.
 
 ## Known provider-related issues
 

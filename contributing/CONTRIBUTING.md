@@ -13,6 +13,11 @@ If you're contributing specifically to our hooks and components documentation, p
 - [Contributing to Clerk's documentation](#contributing-to-clerks-documentation)
   - [Written in MDX](#written-in-mdx)
   - [Project setup](#project-setup)
+  - [Related repositories](#related-repositories)
+    - [Working with `clerk/javascript`](#working-with-clerkjavascript)
+    - [Working with `clerk/dashboard`](#working-with-clerkdashboard)
+    - [Working with `clerk/cli`](#working-with-clerkcli)
+    - [Working with `clerk/skills`](#working-with-clerkskills)
   - [Creating an issue](#creating-an-issue)
   - [Creating a pull request](#creating-a-pull-request)
   - [Preview your changes](#preview-your-changes)
@@ -85,6 +90,44 @@ MDX files ([including any code blocks](#prettier-integration)) are formatted usi
 > to use the upstream main branch whenever you run `git pull`. Then you can make
 > all of your pull request branches based on this `main` branch. Whenever you
 > want to update your version of `main`, do a regular `git pull`.
+
+## Related repositories
+
+> [!NOTE]
+> This section is aimed at Clerk team members. Some of the repositories below — `clerk/clerk` and `clerk/dashboard` — are private, and the companion-change steps only apply to internal contributors.
+
+Documentation changes are often coupled to source code, generated content, or onboarding flows maintained in other repositories. Use these categories to identify when a documentation pull request needs a companion change:
+
+- **Documentation application and content:** [`clerk/clerk`](https://github.com/clerk/clerk) _(private)_ contains the application that renders Clerk's documentation and the `clerk-docs/` directory where the documentation content lives. External contributions are made through the public [`clerk/clerk-docs`](https://github.com/clerk/clerk-docs) mirror.
+- **JavaScript SDKs and TypeDoc generation:** [`clerk/javascript`](https://github.com/clerk/javascript) contains Clerk's JavaScript SDKs and is the source of the generated Typedoc API reference content used in the documentation; see [Working with `clerk/javascript`](#working-with-clerkjavascript) for more information.
+- **Dashboard onboarding:** [`clerk/dashboard`](https://github.com/clerk/dashboard) _(private)_ contains the [Clerk Dashboard](https://dashboard.clerk.com) application, including the onboarding guides that accompany some documentation quickstarts. When changing one of those quickstarts, check whether its Dashboard onboarding guide needs the same update; see [Working with `clerk/dashboard`](#working-with-clerkdashboard).
+- **Quickstarts and samples:** Each documentation quickstart includes an **Example repository** section that links to its canonical source repository. When changing a quickstart's code, configuration, or instructions, update the source repository as well and cross-link the companion pull request so reviewers can verify that the two remain aligned.
+- **CLI and tooling:** [`clerk/cli`](https://github.com/clerk/cli) contains the source for Clerk CLI commands, options, and workflows. CLI documentation is maintained manually and must be verified against that source; see [Working with `clerk/cli`](#working-with-clerkcli).
+- **Public agent skills:** [`clerk/skills`](https://github.com/clerk/skills) is the source of truth for Clerk's public agent skills. `clerk/clerk` publishes them through its `/.well-known` routes; see [Working with `clerk/skills`](#working-with-clerkskills).
+
+### Working with `clerk/javascript`
+
+The generated Typedoc API reference content comes from JSDoc comments in [`clerk/javascript`](https://github.com/clerk/javascript). To change that content, update the source comment in `clerk/javascript` rather than editing files under `clerk-typedoc/` by hand. Follow the [Typedoc JSDoc guide](https://app.notion.com/p/clerkdev/Typedoc-JSDoc-1df2b9ab44fe808a8cf2c9cca324ea89) and the [`clerk/javascript` authoring instructions](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information). See [`<Typedoc />`](#typedoc-) for how the generated content is included in a documentation page.
+
+### Working with `clerk/dashboard`
+
+Some documentation quickstarts are also represented in onboarding guides in [`clerk/dashboard`](https://github.com/clerk/dashboard). When changing one of these quickstarts, update the corresponding Clerk Dashboard onboarding guide and open a companion pull request in `clerk/dashboard`. Cross-link the documentation pull request and the `clerk/dashboard` pull request so reviewers can verify that the two flows remain aligned.
+
+### Working with `clerk/cli`
+
+Clerk CLI documentation is maintained manually and must be verified against the command source in [`clerk/cli`](https://github.com/clerk/cli). When documenting a command, option, or workflow, confirm its behavior against the implementation and help output. If the documentation change requires a corresponding CLI change, open a companion pull request in `clerk/cli` and cross-link the two pull requests.
+
+### Working with `clerk/skills`
+
+The public agent skills served from `/.well-known/skills` and `/.well-known/agent-skills` originate in [`clerk/skills`](https://github.com/clerk/skills). Skill names, descriptions, licenses, and files must be changed there first. The registry in `src/app/(website)/.well-known/skills/skills.ts` is generated metadata and should not be edited by hand.
+
+After a change is merged in `clerk/skills`, either wait for the weekday Check skills registry workflow (`.github/workflows/check-skills-registry.yml`) to open or update a refresh pull request, or run the following from the root of `clerk/clerk` to refresh the registry locally:
+
+```sh
+pnpm skills:refresh
+```
+
+Pull requests that affect the registry, its generator, or the workflow run `pnpm skills:check`. If the generated registry does not match `clerk/skills`, the check fails and leaves a comment explaining what changed and how to refresh it.
 
 ## Creating an issue
 
@@ -1498,7 +1541,7 @@ The `<Typedoc />` component is used to inject the contents of an MDX file from t
 - If you want to edit the contents of a file that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment. For information on how to author Typedoc comments, see [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
 - Once your PR in `clerk/javascript` has been merged and a release is published, a PR will be opened in `clerk-docs` to merge in the Typedoc changes.
 
-For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
+For example, in the `/reference/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
 <Typedoc src="react/use-auth" />

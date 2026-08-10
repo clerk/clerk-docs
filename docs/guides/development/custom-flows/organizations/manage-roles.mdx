@@ -79,6 +79,14 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
                   <td>
                     <button
                       onClick={async () => {
+                        const shouldRemoveMember = window.confirm(
+                          'Are you sure you want to remove this member from the organization?',
+                        )
+
+                        if (!shouldRemoveMember) {
+                          return
+                        }
+
                         await mem.destroy()
                         await memberships?.revalidate()
                       }}
@@ -170,7 +178,16 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
     import { useOrganization, useUser } from '@clerk/expo'
     import type { OrganizationCustomRoleKey } from '@clerk/expo/types'
     import * as React from 'react'
-    import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+    import {
+      ActivityIndicator,
+      Alert,
+      Modal,
+      Platform,
+      Pressable,
+      ScrollView,
+      StyleSheet,
+      View,
+    } from 'react-native'
 
     export const OrgMembersParams = {
       memberships: {
@@ -230,9 +247,30 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
                         styles.removeButton,
                         pressed && styles.buttonPressed,
                       ]}
-                      onPress={async () => {
-                        await mem.destroy()
-                        await memberships?.revalidate()
+                      onPress={() => {
+                        const message =
+                          'Are you sure you want to remove this member from the organization?'
+
+                        const removeMember = async () => {
+                          await mem.destroy()
+                          await memberships?.revalidate()
+                        }
+
+                        if (Platform.OS === 'web') {
+                          if (window.confirm(message)) {
+                            void removeMember()
+                          }
+                          return
+                        }
+
+                        Alert.alert('Remove member', message, [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Remove',
+                            style: 'destructive',
+                            onPress: () => void removeMember(),
+                          },
+                        ])
                       }}
                     >
                       <ThemedText style={styles.buttonText}>Remove</ThemedText>
@@ -601,6 +639,14 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
                 removeBtn.addEventListener('click', async function (e) {
                   e.preventDefault()
 
+                  const shouldRemoveMember = window.confirm(
+                    'Are you sure you want to remove this member from the organization?',
+                  )
+
+                  if (!shouldRemoveMember) {
+                    return
+                  }
+
                   await organization
                     .removeMember(userId)
                     .then((res) => console.log(`removeMember response:`, res))
@@ -675,6 +721,8 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 
   struct ManageRolesView: View {
     @State private var memberships: [OrganizationMembership] = []
+    @State private var membershipToRemove: OrganizationMembership?
+    @State private var showRemoveConfirmation = false
     let organization: Organization
 
     var body: some View {
@@ -690,15 +738,26 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
               }
             }
             Button("Remove") {
-              Task {
-                await removeMembership(membership)
-                await fetchOrganizationMemberships()
-              }
+              membershipToRemove = membership
+              showRemoveConfirmation = true
             }
           }
         }
       }
       .task { await fetchOrganizationMemberships() }
+      .confirmationDialog(
+        "Are you sure you want to remove this member from the organization?",
+        isPresented: $showRemoveConfirmation,
+        titleVisibility: .visible,
+        presenting: membershipToRemove
+      ) { membership in
+        Button("Remove", role: .destructive) {
+          Task {
+            await removeMembership(membership)
+            await fetchOrganizationMemberships()
+          }
+        }
+      }
     }
   }
 

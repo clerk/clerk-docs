@@ -231,6 +231,43 @@ Once the `@clerk/localizations` package is installed, you can import the localiz
   ```
 </If>
 
+### Bundle size
+
+Each localization lives in its own module and the `@clerk/localizations` package is tree-shakeable, so bundlers with tree-shaking enabled — the default for modern production builds — include only the localizations you import, not every supported language.
+
+> [!NOTE]
+> Development builds typically skip tree-shaking, so a bundle analyzer or your browser's network tab may show every language while running your app locally.
+
+To guarantee that only a single language is included, regardless of bundler configuration, import the localization directly from its subpath. The subpath is the language tag, as shown in the [Languages](#languages) table.
+
+```ts
+// Imports only the fr-FR localization
+import { frFR } from '@clerk/localizations/fr-FR'
+```
+
+<If sdk="nextjs">
+  > [!NOTE]
+  > In Next.js apps, importing a localization in a Server Component, such as the root layout where `<ClerkProvider>` is typically rendered, keeps the localization strings out of your client-side JavaScript bundles entirely. The strings are sent as part of the server-rendered payload instead.
+</If>
+
+### Lazy-load localizations
+
+If your app offers multiple languages and selects one at runtime, statically importing every language includes all of them in your bundle, even though each user only needs one. Instead, use a [dynamic import](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import) with the localization's subpath so that only the selected language is loaded. In client-side code, bundlers split each language into its own chunk and the browser downloads only the selected one. In a Server Component, the import runs on the server instead, and only the selected localization is sent to the browser as part of the server-rendered payload.
+
+The following example lazy-loads the localization for the user's active locale. Call `loadLocalization()` from an async context, such as a Server Component or your app's setup code, and pass the result to the `localization` prop.
+
+```ts
+const localizations = {
+  'en-US': () => import('@clerk/localizations/en-US').then((mod) => mod.enUS),
+  'fr-FR': () => import('@clerk/localizations/fr-FR').then((mod) => mod.frFR),
+  'de-DE': () => import('@clerk/localizations/de-DE').then((mod) => mod.deDE),
+}
+
+async function loadLocalization(locale: keyof typeof localizations) {
+  return localizations[locale]()
+}
+```
+
 ## Adding or updating a localization
 
 Clerk's localizations are customer-sourced and we encourage customers to add or update localizations. To do so, follow these steps:

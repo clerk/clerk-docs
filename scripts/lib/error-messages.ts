@@ -10,6 +10,12 @@ import { maintainer as maintainerSchema, tag as tagSchema, type SDK } from './sc
 export const errorMessages = {
   // Manifest errors
   'manifest-parse-error': (error: ValidationError | Error): string => `Failed to parse manifest: ${error}`,
+  'manifest-top-nav-too-deep': (title: string, maxDepth: number): string =>
+    `Section "${title}" nests "topNav": true groups more than ${maxDepth} levels deep. The site's top nav renders at most ${maxDepth} levels (a section tab and one row of sub-tabs), so deeper "topNav" groups would never be reachable. This limit only applies to "topNav" nesting — regular folder nesting inside a section is unlimited. Flatten "${title}" or move its nested "topNav" groups up a level.`,
+  'manifest-root-item-not-section': (title: string): string =>
+    `"${title}" sits at the root of a sectioned manifest but is not a "topNav": true group, so it is dropped from the built navigation. Move it inside a "topNav" group, or mark it "topNav": true to make it a section of its own.`,
+  'manifest-section-fields-stripped': (title: string, fields: string[]): string =>
+    `Section "${title}" sets ${fields.map((field) => `"${field}"`).join(', ')}, which ${fields.length === 1 ? 'is' : 'are'} not carried on to a section in the built navigation and will be ignored. Remove ${fields.length === 1 ? 'it' : 'them'}, or move the group inside a section instead of lifting it into one.`,
 
   // Component errors
   'component-no-props': (componentName: string): string => `<${componentName} /> component has no props`,

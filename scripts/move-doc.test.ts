@@ -2,6 +2,8 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import {
   moveDocuments,
   globToDynamicPattern,
@@ -10,6 +12,8 @@ import {
   mapSourceToDestination,
   hasSDKFrontmatter,
 } from './move-doc'
+
+const DELETE_DOC_SCRIPT_PATH = fileURLToPath(new URL('./delete-doc.mjs', import.meta.url))
 
 // Helper function to create temporary files for testing
 async function createTempFiles(files: Array<{ path: string; content: string }>) {
@@ -724,5 +728,198 @@ describe('move-doc redirect functionality', () => {
     const finalFiles = await tempSetup.listFiles()
     expect(finalFiles).toContain('docs/authentication/guide.mdx')
     expect(finalFiles).not.toContain('docs/auth/overview.mdx')
+  })
+})
+
+describe('move-doc manifest file discovery (all-manifest awareness)', () => {
+  let tempSetup: Awaited<ReturnType<typeof createTempFiles>>
+
+  beforeEach(async () => {
+    tempSetup = await createTempFiles([
+      {
+        path: 'docs/old-path.mdx',
+        content: '---\ntitle: "Old Page"\n---\n# Old Page',
+      },
+      {
+        path: 'redirects/static/docs.json',
+        content: JSON.stringify([]),
+      },
+      {
+        path: 'redirects/dynamic/docs.jsonc',
+        content: JSON.stringify([]),
+      },
+      // New-format single-level manifest (post format-flip shape)
+      {
+        path: 'docs/manifest.json',
+        content: JSON.stringify(
+          {
+            navigationType: 'sectioned',
+            navigation: [{ title: 'Old Page', href: '/docs/old-path' }],
+          },
+          null,
+          2,
+        ),
+      },
+      // Per-SDK manifest that must be updated alongside the main manifest
+      {
+        path: 'docs/manifest.ios.json',
+        content: JSON.stringify(
+          {
+            navigationType: 'flat',
+            navigation: [{ title: 'Old Page (iOS)', href: '/docs/old-path' }],
+          },
+          null,
+          2,
+        ),
+      },
+      // Schema document — must never be parsed/rewritten as a manifest
+      {
+        path: 'docs/manifest.schema.json',
+        content: JSON.stringify({ $schema: 'https://json-schema.org/draft/2020-12/schema', title: 'not real' }),
+      },
+    ])
+
+    process.chdir(tempSetup.tempDir)
+  })
+
+  afterEach(async () => {
+    process.chdir('/')
+    await tempSetup.cleanup()
+  })
+
+  test('should update the href in both manifest.json and manifest.ios.json', async () => {
+    const result = await moveDocuments('/docs/old-path', '/docs/new-path', { verbose: false })
+
+    expect(result.success).toBe(true)
+
+    const mainManifest = JSON.parse(await tempSetup.readFile('docs/manifest.json'))
+    expect(mainManifest.navigation[0].href).toBe('/docs/new-path')
+
+    const iosManifest = JSON.parse(await tempSetup.readFile('docs/manifest.ios.json'))
+    expect(iosManifest.navigation[0].href).toBe('/docs/new-path')
+  })
+
+  test('should leave manifest.schema.json byte-identical', async () => {
+    const before = await tempSetup.readFile('docs/manifest.schema.json')
+
+    const result = await moveDocuments('/docs/old-path', '/docs/new-path', { verbose: false })
+    expect(result.success).toBe(true)
+
+    const after = await tempSetup.readFile('docs/manifest.schema.json')
+    expect(after).toBe(before)
+  })
+})
+
+describe('delete-doc.mjs manifest file discovery (all-manifest awareness)', () => {
+  let tempSetup: Awaited<ReturnType<typeof createTempFiles>>
+
+  beforeEach(async () => {
+    tempSetup = await createTempFiles([
+      {
+        path: 'docs/to-delete.mdx',
+        content: '---\ntitle: "To Delete"\n---\n# To delete',
+      },
+      {
+        path: 'redirects/static/docs.json',
+        content: JSON.stringify([]),
+      },
+      {
+        path: 'docs/manifest.json',
+        content: JSON.stringify(
+          {
+            navigationType: 'sectioned',
+            navigation: [{ title: 'To Delete', href: '/docs/to-delete' }],
+          },
+          null,
+          2,
+        ),
+      },
+      {
+        path: 'docs/manifest.ios.json',
+        content: JSON.stringify(
+          {
+            navigationType: 'flat',
+            navigation: [{ title: 'To Delete (iOS)', href: '/docs/to-delete' }],
+          },
+          null,
+          2,
+        ),
+      },
+      {
+        // delete-doc.mjs reads the sdk enum from this file to decide which manifest.<sdk>.json
+        // files are real — the fixture needs the enum, not just a schema-shaped stub
+        path: 'docs/manifest.schema.json',
+        content: JSON.stringify({
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          $defs: { sdk: { enum: ['ios', 'android'] } },
+        }),
+      },
+      {
+        // A backup of the real manifest: matches a loose manifest.*.json pattern AND carries a
+        // navigation array, so only slug-strict matching keeps delete-doc's hands off it
+        path: 'docs/manifest.backup.json',
+        content: JSON.stringify(
+          {
+            navigationType: 'sectioned',
+            navigation: [{ title: 'To Delete', href: '/docs/to-delete' }],
+          },
+          null,
+          2,
+        ),
+      },
+    ])
+  })
+
+  afterEach(async () => {
+    await tempSetup.cleanup()
+  })
+
+  test('should remove the doc from both manifest.json and manifest.ios.json, leaving manifest.schema.json untouched', async () => {
+    const schemaBefore = await tempSetup.readFile('docs/manifest.schema.json')
+
+    const result = spawnSync('node', [DELETE_DOC_SCRIPT_PATH, '/docs/to-delete'], {
+      cwd: tempSetup.tempDir,
+      encoding: 'utf-8',
+    })
+
+    expect(result.status).toBe(0)
+
+    const mainManifest = JSON.parse(await tempSetup.readFile('docs/manifest.json'))
+    expect(mainManifest.navigation).not.toContainEqual(expect.objectContaining({ href: '/docs/to-delete' }))
+
+    const iosManifest = JSON.parse(await tempSetup.readFile('docs/manifest.ios.json'))
+    expect(iosManifest.navigation).not.toContainEqual(expect.objectContaining({ href: '/docs/to-delete' }))
+
+    const schemaAfter = await tempSetup.readFile('docs/manifest.schema.json')
+    expect(schemaAfter).toBe(schemaBefore)
+  })
+
+  test('leaves a manifest.backup.json untouched even though it contains a navigation array', async () => {
+    const backupBefore = await tempSetup.readFile('docs/manifest.backup.json')
+
+    const result = spawnSync('node', [DELETE_DOC_SCRIPT_PATH, '/docs/to-delete'], {
+      cwd: tempSetup.tempDir,
+      encoding: 'utf-8',
+    })
+
+    expect(result.status).toBe(0)
+
+    const backupAfter = await tempSetup.readFile('docs/manifest.backup.json')
+    expect(backupAfter).toBe(backupBefore)
+  })
+
+  test('fails loudly when the schema has no sdk enum instead of guessing at manifest files', async () => {
+    await tempSetup.writeFile(
+      'docs/manifest.schema.json',
+      JSON.stringify({ $schema: 'https://json-schema.org/draft/2020-12/schema', title: 'no enum here' }),
+    )
+
+    const result = spawnSync('node', [DELETE_DOC_SCRIPT_PATH, '/docs/to-delete'], {
+      cwd: tempSetup.tempDir,
+      encoding: 'utf-8',
+    })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('Could not read the sdk enum')
   })
 })

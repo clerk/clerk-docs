@@ -200,31 +200,46 @@ For example, the file at `/docs/getting-started/quickstart/setup-clerk.mdx` can 
 
 ### Sidenav
 
-The side navigation is powered by two things: the SDK selector and the manifest file at [`/docs/manifest.json`](../docs/manifest.json).
+The side navigation is powered by two things: the SDK selector and the manifest files — the main sidenav at [`/docs/manifest.json`](../docs/manifest.json), plus one flat, standalone sidenav per SDK that needs its own (currently [`/docs/manifest.ios.json`](../docs/manifest.ios.json) and [`/docs/manifest.android.json`](../docs/manifest.android.json)) that replaces the sidenav entirely while that SDK is active.
 
-The SDK selector allows a user to choose the SDK of their choice, and depending on the option they select, the sidenav will update to show docs specific to that SDK. For example, if you were to choose "Next.js", you would see the sidenav update to show docs that are scoped to Next.js.
+The SDK selector allows a user to choose the SDK of their choice, and depending on the option they select, the sidenav will update to show docs specific to that SDK. For example, if you were to choose "Next.js", you would see the sidenav update to show docs that are scoped to Next.js. Choosing "iOS" or "Android" swaps to that SDK's standalone `manifest.<sdk>.json` instead of filtering the main manifest.
 
 - The logic for the SDK selector lives in `clerk/clerk`, which is a private repository that is only available to Clerk employees. Therefore, to update the SDK selector, such as adding new items, you must be a Clerk employee. For instructions on how to do so, see [this section](#update-the-sdk-selector). If you aren't a Clerk employee but have suggestions or concerns, please [submit an issue](https://github.com/clerk/clerk-docs/issues).
 
-The `manifest.json` is responsible for the structure of the sidenav, including setting the title and link for each sidenav item. Below is some helpful information on the typing and structure of the file.
+`manifest.json` is responsible for the structure of the sidenav, including setting the title and link for each sidenav item. Below is some helpful information on the typing and structure of the file.
 
 [Manifest JSON schema →](../docs/manifest.schema.json)
 
 <details>
 <summary>Equivalent TypeScript types and descriptions</summary>
 
+Every manifest file — `manifest.json` and each `manifest.<sdk>.json` — is `{ navigationType, navigation }`, where `navigation` is one **flat top-level array** — no array-of-arrays, no `flatNav` separators. Groups still nest their children the normal way, through a `SubNavItem`'s `items`:
+
 ```typescript
-export type Nav = Array<NavGroup>
+export type ManifestFile = {
+  /**
+   * 'sectioned': top-level groups with `topNav: true` become the sidenav's
+   * top-level sections (tabs). This is `manifest.json`'s type.
+   *
+   * 'flat': one ungrouped sidenav, used as-is. This is every `manifest.<sdk>.json`'s
+   * type — `topNav` has no effect there.
+   */
+  navigationType: 'sectioned' | 'flat'
+  navigation: Nav
+}
 
 /**
- * Nav groups are separated by horizontal rules
+ * A single top-level array. What used to be separate array-of-arrays "sections" is now
+ * expressed with `topNav: true` (sectioned manifests) or `type: 'heading'` items
+ * (in-page grouping, both manifest types) — never with nested arrays. A `SubNavItem`'s
+ * `items` still nests groups as deep as the content needs.
  */
-type NavGroup = Array<NavItem>
+type Nav = Array<NavItem>
 
 /**
- * A nav item is either a link, or a sub-list with nested `items`
+ * A nav item is a link, a heading, or a collapsible group with nested `items`
  */
-type NavItem = LinkItem | SubNavItem
+type NavItem = LinkItem | HeadingItem | SubNavItem
 
 /**
  * A link to an internal or external page
@@ -276,7 +291,6 @@ type LinkItem = {
    * Set to "_blank" to open link in a new tab
    */
   target?: '_blank'
-
   /**
    * Limit this page to only show when the user has one of the specified sdks active
    *
@@ -284,6 +298,22 @@ type LinkItem = {
    */
   sdk?: string[]
 }
+
+/**
+ * A plain grouping label rendered inline — not a nested array, has no `items`.
+ * Replaces what the old array-of-arrays format expressed by starting a new inner array.
+ */
+type HeadingItem = {
+  title: string
+  type: 'heading'
+  /**
+   * Limit this heading to only show when the user has one of the specified sdks active
+   *
+   * @example ['nextjs', 'react']
+   */
+  sdk?: string[]
+}
+
 type SubNavItem = {
   /**
    * The visible item text. May contain backticks (`) to render `<code>`
@@ -325,12 +355,18 @@ type SubNavItem = {
    */
   wrap?: boolean
   /**
-   * Whether the nav item is in the top part of the sidebar navigation
+   * Whether the nav item is one of the sidenav's top-level sections (tabs).
+   * Meaningful in a `sectioned` manifest on a top-level item, or on a `topNav`
+   * group's direct child — which becomes a child section. Two section levels
+   * is the limit; deeper `topNav` nesting fails the build.
    *
    * @default false
    */
   topNav?: boolean
-
+  /**
+   * Whether to hide this group's own title, showing only its children
+   */
+  hideTitle?: boolean
   /**
    * Limit this group to only show when the user has one of the specified sdks active
    *
@@ -340,12 +376,34 @@ type SubNavItem = {
 }
 ```
 
+Per-SDK manifests (`manifest.<sdk>.json`) use the exact same `NavItem` union, always as a single top-level flat array (`navigationType: 'flat'`). `clerk-docs/scripts/build-docs.ts` discovers them by checking, for every SDK in `scripts/lib/schemas.ts`'s `VALID_SDKS`, whether `docs/manifest.<sdk>.json` exists — for an SDK already in that enum, adding the file is enough, there's no separate registry to update. (A brand-new SDK key must first be added to `VALID_SDKS` — see "Add a new SDK".) SDK-scoped groups appearing in both the main manifest and a `manifest.<sdk>.json` is legal and expected; de-duplicating that overlap is deferred (tracked as DOCS-11971).
+
 </details>
 
 <details>
-<summary>Visual representation of the manifest TypeScript types</summary>
+<summary>Visual representation of the manifest structure</summary>
 
-![Visual representation of the manifest TypeScript types](../.github/media/manifest.png)
+```mermaid
+flowchart TD
+    A["manifest.json<br/>navigationType: sectioned"] --> B["Section (topNav: true)<br/>e.g. Guides"]
+    A --> C["Section (topNav: true)<br/>e.g. Reference"]
+    B --> D["HeadingItem<br/>type: heading"]
+    B --> E["LinkItem<br/>title + href"]
+    B --> F["SubNavItem (folder)<br/>title + items"]
+    F --> G["LinkItem"]
+    F --> H["SubNavItem (nested folder)"]
+
+    C --> M["Nested section (topNav: true)<br/>e.g. SDK Reference, UI components"]
+    C --> N["LinkItem / SubNavItem<br/>the section's own items"]
+    M --> O["LinkItem"]
+    M --> P["SubNavItem (folder)"]
+
+    I["manifest.ios.json / manifest.android.json<br/>navigationType: flat"] --> J["HeadingItem"]
+    I --> K["LinkItem"]
+    I --> L["SubNavItem (folder)"]
+```
+
+A `topNav: true` group nested inside another one becomes a child section — that is how "SDK Reference" sits under "Reference". Two section levels is the limit: the sidenav can only ever have one section and one child section active, so a third level fails the build.
 
 </details>
 
@@ -368,7 +426,8 @@ To add a new SDK, you'll need the SDK name (e.g., `Next.js`), key (e.g., `nextjs
 
 In this repo (`clerk/clerk-docs`):
 
-1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
+1. In `scripts/lib/schemas.ts`, add the SDK key to `VALID_SDKS` and the icon name to the `icon` enum — these Zod enums are what the build enforces (and what `manifest.<sdk>.json` discovery iterates).
+1. In the `manifest.schema.json`, mirror both: add the reference name in the `icon` enum and the SDK key in the `sdk` enum.
 1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `getting-started/quickstart/overview.mdx`.
 1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
 
@@ -387,7 +446,8 @@ To add a new SDK, you'll need the SDK name (e.g., `Python`), key (e.g., `python`
 
 In this repo (`clerk/clerk-docs`):
 
-1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
+1. In `scripts/lib/schemas.ts`, add the SDK key to `VALID_SDKS` and the icon name to the `icon` enum — these Zod enums are what the build enforces (and what `manifest.<sdk>.json` discovery iterates).
+1. In the `manifest.schema.json`, mirror both: add the reference name in the `icon` enum and the SDK key in the `sdk` enum.
 1. Add the SDK to `index.mdx` and `reference/overview.mdx`.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:

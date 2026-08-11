@@ -28,7 +28,6 @@ import path from 'path'
 import prettier from 'prettier'
 
 const DOCS_FILE = './redirects/static/docs.json'
-const MANIFEST_FILE = './docs/manifest.json'
 const DOCS_DIR = './docs'
 
 const splitPathAndHash = (url) => {
@@ -202,9 +201,47 @@ const updateMdxLinks = async (deletedPath, newPath) => {
   await processDirectory(DOCS_DIR)
 }
 
-// Remove the path from manifest.json
+// Manifest filenames we treat as data: manifest.json plus per-SDK manifest.<sdk>.json —
+// manifest.schema.json is a JSON Schema document describing that shape, never authored
+// navigation data, and must never be parsed/rewritten as one.
+//
+// scripts/move-doc.ts has the stricter version of this helper: it is TypeScript, so it can
+// import VALID_SDKS and match only real SDK slugs. This file runs under plain `node` and
+// cannot import a TS module, so it reads the same list from docs/manifest.schema.json —
+// plain JSON that mirrors VALID_SDKS by construction. A loose pattern is not safe here:
+// something like manifest.backup.json contains a navigation array too, so it would pass the
+// shape guard below and get rewritten as navigation data.
+const MANIFEST_SCHEMA_FILE = './docs/manifest.schema.json'
+
+const readValidSdks = async () => {
+  const schema = JSON.parse(await fs.readFile(MANIFEST_SCHEMA_FILE, 'utf-8'))
+  const sdks = schema?.$defs?.sdk?.enum
+
+  if (!Array.isArray(sdks) || sdks.length === 0) {
+    throw new Error(
+      `Could not read the sdk enum from ${MANIFEST_SCHEMA_FILE} — refusing to guess which manifest.<sdk>.json files are real`,
+    )
+  }
+
+  return sdks
+}
+
+// Find all manifest files (manifest.json + manifest.<sdk>.json for real SDK slugs only)
+const findAllManifestFiles = async () => {
+  const validSdks = new Set(await readValidSdks())
+  const entries = await fs.readdir(DOCS_DIR)
+  return entries
+    .filter((filename) => {
+      if (filename === 'manifest.json') return true
+      const match = /^manifest\.(.+)\.json$/.exec(filename)
+      return match !== null && validSdks.has(match[1])
+    })
+    .map((entry) => path.join(DOCS_DIR, entry))
+}
+
+// Remove the path from all manifest files
 const removeFromManifest = async (targetPath) => {
-  const manifest = await readJsonFile(MANIFEST_FILE)
+  const manifestFiles = await findAllManifestFiles()
   const { path: targetBasePath } = splitPathAndHash(targetPath)
   let removed = false
 
@@ -241,23 +278,29 @@ const removeFromManifest = async (targetPath) => {
     return item
   }
 
-  const updateNavGroup = (group) => {
-    return group.map(updateNavItem).filter((item) => item !== null)
-  }
-
   const updateNavigation = (nav) => {
-    return nav.map(updateNavGroup).filter((group) => group.length > 0)
+    return nav.map(updateNavItem).filter((item) => item !== null)
   }
 
-  const updatedManifest = {
-    ...manifest,
-    navigation: updateNavigation(manifest.navigation),
-  }
+  for (const manifestFile of manifestFiles) {
+    const manifest = await readJsonFile(manifestFile)
 
-  await writeJsonFile(MANIFEST_FILE, updatedManifest)
+    // The filename pattern is loose, so an unrelated manifest.<something>.json would land here.
+    // Skip anything without a navigation array instead of crashing mid-delete on nav.map.
+    if (!Array.isArray(manifest?.navigation)) {
+      console.warn(`Warning: ${manifestFile} has no navigation array, skipping`)
+      continue
+    }
+
+    const updatedManifest = {
+      ...manifest,
+      navigation: updateNavigation(manifest.navigation),
+    }
+    await writeJsonFile(manifestFile, updatedManifest)
+  }
 
   if (!removed) {
-    console.warn(`Warning: Path ${targetBasePath} was not found in manifest.json`)
+    console.warn(`Warning: Path ${targetBasePath} was not found in any manifest file`)
   }
 
   return removed

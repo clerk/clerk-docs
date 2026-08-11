@@ -43,10 +43,10 @@ import path from 'path'
 import prettier from 'prettier'
 import { glob } from 'glob'
 import { parse as parseJSONC } from 'jsonc-parser'
+import { VALID_SDKS } from './lib/schemas'
 
 const DOCS_FILE = './redirects/static/docs.json'
 const DYNAMIC_DOCS_FILE = './redirects/dynamic/docs.jsonc'
-const MANIFEST_FILE = './docs/manifest.json'
 const DOCS_DIR = './docs'
 
 // Type definitions
@@ -192,9 +192,27 @@ const findRedirectChain = (redirects: Redirect[], targetPath: string): Redirect[
   return chain
 }
 
-// Updates manifest.json links
+// Manifest filenames we treat as data: manifest.json plus per-SDK manifest.<sdk>.json for an
+// SDK the build actually knows about. Built from VALID_SDKS rather than a loose `[a-z0-9-]+`
+// so any other manifest.<something>.json dropped in docs/ — a JSON Schema document, a backup,
+// a scratch file — is left alone instead of being parsed and rewritten as navigation data.
+//
+// scripts/delete-doc.mjs has the same helper. It is plain Node and cannot import this TS
+// module, so it reads the equivalent list from docs/manifest.schema.json's sdk enum instead —
+// the schema mirrors VALID_SDKS, so the two stay in sync through it.
+const MANIFEST_FILENAME_PATTERN = new RegExp(`^manifest\\.(${VALID_SDKS.join('|')})\\.json$`)
+const isManifestFilename = (filename: string): boolean =>
+  filename === 'manifest.json' || MANIFEST_FILENAME_PATTERN.test(filename)
+
+// Find all manifest files (manifest.json + manifest.<sdk>.json), excluding manifest.schema.json
+const findAllManifestFiles = async (): Promise<string[]> => {
+  const entries = await fs.readdir(DOCS_DIR)
+  return entries.filter(isManifestFilename).map((entry) => path.join(DOCS_DIR, entry))
+}
+
+// Updates manifest links across all manifest files
 const updateManifestLinks = async (oldPath: string, newPath: string): Promise<void> => {
-  const manifest: { navigation: Manifest } = await readJsonFile(MANIFEST_FILE)
+  const manifestFiles = await findAllManifestFiles()
 
   // Update href's in link items
   const updateLinkItem = (item: ManifestItem): ManifestItem => {
@@ -218,6 +236,10 @@ const updateManifestLinks = async (oldPath: string, newPath: string): Promise<vo
   }
 
   const updateNavItem = (item: any): any => {
+    // If it's a nested array, recurse into it
+    if (Array.isArray(item)) {
+      return updateNavigation(item)
+    }
     // If it's a link item (has href)
     if ('href' in item) {
       return updateLinkItem(item)
@@ -229,20 +251,18 @@ const updateManifestLinks = async (oldPath: string, newPath: string): Promise<vo
     return item
   }
 
-  const updateNavGroup = (group: any[]): any[] => {
-    return group.map(updateNavItem)
-  }
-
   const updateNavigation = (nav: any[]): any[] => {
-    return nav.map(updateNavGroup)
+    return nav.map(updateNavItem)
   }
 
-  const updatedManifest = {
-    ...manifest,
-    navigation: updateNavigation(manifest.navigation),
+  for (const manifestFile of manifestFiles) {
+    const manifest = await readJsonFile(manifestFile)
+    const updatedManifest = {
+      ...manifest,
+      navigation: updateNavigation(manifest.navigation),
+    }
+    await writeJsonFile(manifestFile, updatedManifest)
   }
-
-  await writeJsonFile(MANIFEST_FILE, updatedManifest)
 }
 
 const updateMdxLinks = async (oldPaths: string[], newPath: string): Promise<void> => {

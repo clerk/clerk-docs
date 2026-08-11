@@ -58,7 +58,16 @@ import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
-import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
+import {
+  flattenTree,
+  readManifest,
+  readSDKManifest,
+  traverseTree,
+  traverseTreeItemsFirst,
+  type Manifest,
+  type ManifestGroup,
+  type NavigationType,
+} from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
@@ -325,8 +334,64 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const { manifest: userManifest, vfile: manifestVfile } = await getManifest()
+  const { navigationType: userManifestType, manifest: userManifest, vfile: manifestVfile } = await getManifest()
   console.info('✓ Read Manifest')
+
+  abortSignal?.throwIfAborted()
+
+  // Read the SDK specific manifests (eg manifest.ios.json, manifest.android.json). Each one
+  // replaces the entire navigation while that SDK is active, so they are discovered here and
+  // then run through the exact same processing pipeline as the main manifest below.
+  const getSDKManifest = readSDKManifest(config)
+  const sdkManifests: { sdk: SDK; navigationType: NavigationType; navigation: Manifest; vfile: VFile }[] = []
+
+  for (const sdkName of config.validSdks) {
+    const manifestFileName = `manifest.${sdkName}.json`
+    const manifestPath = path.join(config.docsPath, manifestFileName)
+
+    if (existsSync(manifestPath) === false) continue
+
+    const sdkManifest = await getSDKManifest(manifestPath)
+
+    sdkManifests.push({
+      sdk: sdkName,
+      navigationType: sdkManifest.navigationType,
+      navigation: sdkManifest.navigation,
+      vfile: new VFile({ path: path.join(config.docsRelativePath, manifestFileName) }),
+    })
+  }
+
+  if (sdkManifests.length > 0) {
+    console.info(`✓ Read ${sdkManifests.length} SDK manifest(s): ${sdkManifests.map(({ sdk }) => sdk).join(', ')}`)
+  }
+
+  // Every navigation entry, in a deterministic order: the default (main) manifest first, then
+  // each SDK manifest in config.validSdks order. Ordering matters because the passes below
+  // write in to the shared docsMap/routableDocsMap.
+  const manifestEntries: {
+    key: string
+    navigationType: NavigationType
+    navigation: Manifest
+    vfile: VFile
+    rootSDK: SDK[] | undefined
+  }[] = [
+    {
+      key: 'default',
+      navigationType: userManifestType,
+      navigation: userManifest,
+      vfile: manifestVfile,
+      rootSDK: undefined,
+    },
+    ...sdkManifests.map(({ sdk, navigationType, navigation, vfile }) => ({
+      key: sdk as string,
+      navigationType,
+      navigation,
+      vfile,
+      // A manifest.<sdk>.json only ever renders for that SDK, so its items inherit that scope
+      // the same way the children of an sdk scoped group do.
+      rootSDK: [sdk] as SDK[] | undefined,
+    })),
+  ]
 
   abortSignal?.throwIfAborted()
 
@@ -358,18 +423,20 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const docsMap: DocsMap = new Map()
   const docsInManifest = new Set<string>()
 
-  // Grab all the docs links in the manifest
-  await traverseTree({ items: userManifest }, async (item) => {
-    if (!item.href?.startsWith(config.baseDocsLink)) return item
-    if (item.target !== undefined) return item
+  // Grab all the docs links in the manifests
+  for (const entry of manifestEntries) {
+    await traverseTree({ items: entry.navigation }, async (item) => {
+      if (!item.href?.startsWith(config.baseDocsLink)) return item
+      if (item.target !== undefined) return item
 
-    const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
-    if (ignore === true) return item
+      const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
+      if (ignore === true) return item
 
-    docsInManifest.add(item.href)
+      docsInManifest.add(item.href)
 
-    return item
-  })
+      return item
+    })
+  }
   console.info('✓ Parsed in Manifest')
 
   abortSignal?.throwIfAborted()
@@ -448,115 +515,175 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  // Goes through and grabs the sdk scoping out of the manifest
-  const sdkScopedManifestFirstPass = await traverseTree(
-    { items: userManifest, sdk: undefined as undefined | SDK[] },
-    async (item, tree) => {
-      if (!item.href?.startsWith(config.baseDocsLink)) {
+  // Goes through and grabs the sdk scoping out of a manifest. Runs for every manifest entry
+  // (the main manifest and each manifest.<sdk>.json), with `rootSDK` as the scope the whole
+  // tree sits under — undefined for the main manifest, [sdk] for an SDK manifest.
+  //
+  // This pass only reads from docsMap; the scope it computes is written back to docsMap once,
+  // after every entry has been walked (see combinedItemSDKs below).
+  const applyManifestSDKScoping = (items: Manifest, rootSDK: SDK[] | undefined, vfile: VFile) =>
+    traverseTree(
+      { items, sdk: rootSDK },
+      async (item, tree) => {
+        if (!item.href?.startsWith(config.baseDocsLink)) {
+          return {
+            ...item,
+            // Either use the sdk of the item, or the parent group if the item doesn't have a sdk
+            sdk: item.sdk ?? tree.sdk,
+          }
+        }
+
+        const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
+        if (ignore === true) return item // even thou we are not processing them, we still need to keep them
+
+        const doc = docsMap.get(item.href)
+
+        if (doc === undefined) {
+          safeMessage(config, vfile, item.href, 'docs', 'doc-not-found', [item.title, item.href])
+          return item
+        }
+
+        // This is the sdk of the doc
+        const docSDK = doc.sdk
+
+        // This is the sdk of the parent group
+        const parentSDK = tree.sdk
+
+        // either use the defined sdk of the doc, or the parent group
+        const sdk = docSDK ?? parentSDK
+
         return {
           ...item,
-          // Either use the sdk of the item, or the parent group if the item doesn't have a sdk
-          sdk: item.sdk ?? tree.sdk,
+          sdk,
+          itemSDK: item.sdk,
         }
-      }
+      },
+      async ({ items, ...details }, tree) => {
+        // This is the sdk of the group
+        const groupSDK = details.sdk
 
-      const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
-      if (ignore === true) return item // even thou we are not processing them, we still need to keep them
+        // This is the sdk of the parent group
+        const parentSDK = tree.sdk
 
-      const doc = docsMap.get(item.href)
+        if (groupSDK !== undefined && groupSDK.length > 0) {
+          return {
+            ...details,
+            sdk: groupSDK,
+            items,
+          } as ManifestGroup
+        }
 
-      if (doc === undefined) {
-        safeMessage(config, manifestVfile, item.href, 'docs', 'doc-not-found', [item.title, item.href])
-        return item
-      }
+        const sdk = Array.from(new Set([...(groupSDK ?? []), ...(parentSDK ?? [])])) ?? []
 
-      // This is the sdk of the doc
-      const docSDK = doc.sdk
-
-      // This is the sdk of the parent group
-      const parentSDK = tree.sdk
-
-      // either use the defined sdk of the doc, or the parent group
-      const sdk = docSDK ?? parentSDK
-
-      return {
-        ...item,
-        sdk,
-        itemSDK: item.sdk,
-      }
-    },
-    async ({ items, ...details }, tree) => {
-      // This is the sdk of the group
-      const groupSDK = details.sdk
-
-      // This is the sdk of the parent group
-      const parentSDK = tree.sdk
-
-      if (groupSDK !== undefined && groupSDK.length > 0) {
         return {
           ...details,
-          sdk: groupSDK,
+          sdk: sdk.length > 0 ? sdk : undefined,
           items,
         } as ManifestGroup
-      }
+      },
+      (item, error) => {
+        console.error('↳', item.title)
+        throw error
+      },
+    )
 
-      const sdk = Array.from(new Set([...(groupSDK ?? []), ...(parentSDK ?? [])])) ?? []
+  const sdkScopedManifestsFirstPass: {
+    key: string
+    navigationType: NavigationType
+    rootSDK: SDK[] | undefined
+    vfile: VFile
+    tree: Awaited<ReturnType<typeof applyManifestSDKScoping>>
+  }[] = []
 
-      return {
-        ...details,
-        sdk: sdk.length > 0 ? sdk : undefined,
-        items,
-      } as ManifestGroup
-    },
-    (item, error) => {
-      console.error('↳', item.title)
-      throw error
-    },
-  )
+  for (const entry of manifestEntries) {
+    sdkScopedManifestsFirstPass.push({
+      key: entry.key,
+      navigationType: entry.navigationType,
+      vfile: entry.vfile,
+      rootSDK: entry.rootSDK,
+      tree: await applyManifestSDKScoping(entry.navigation, entry.rootSDK, entry.vfile),
+    })
+  }
 
   abortSignal?.throwIfAborted()
 
-  const sdkScopedManifest = await traverseTreeItemsFirst(
-    { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
-    async (item, tree) => {
-      const doc = docsMap.get(item.href)
+  // Combine the sdk scope that every occurrence of a doc resolved to, across every manifest,
+  // before any of it is written back to the shared docsMap. Writing it out per manifest as we
+  // walked would let whichever manifest mentions a doc first stamp it, hiding that doc from the
+  // rest (eg the ios manifest stamping a doc the android manifest also lists).
+  // A doc listed anywhere without a scope is universal; otherwise the scopes union.
+  const combinedItemSDKs = new Map<string, { universal: boolean; sdks: SDK[] }>()
 
-      // If the doc does not already have an sdk assigned, but the manifest item does, assign the sdk from the manifest to the doc in the docsMap.
-      if (doc && doc.sdk === undefined && item.sdk !== undefined) {
-        docsMap.set(item.href, { ...doc, sdk: item.sdk })
-      }
+  for (const { tree } of sdkScopedManifestsFirstPass) {
+    for (const item of flattenTree(tree)) {
+      if (typeof item.href !== 'string') continue
 
-      const updatedDoc = docsMap.get(item.href)
+      const scope = combinedItemSDKs.get(item.href) ?? { universal: false, sdks: [] }
 
-      if (updatedDoc?.frontmatter?.sdk) {
-        const docSDKs = [...(updatedDoc.frontmatter?.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]
-
-        for (const sdk of docSDKs) {
-          // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
-          // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
-
-          const existingDoc = docsMap.get(
-            updatedDoc.distinctSDKVariants?.includes(sdk) ? `${item.href}.${sdk}` : item.href,
-          )
-
-          if (existingDoc === undefined) {
-            throw new Error(`Existing doc not found for ${item.href}.${sdk}`)
-          }
-
-          routableDocsMap.set(getRoutableHref(item.href, docSDKs, sdk), {
-            ...existingDoc,
-            sdk: [sdk], // override this fake copy of the doc so links to it believe this is the correct sdk
-          })
+      if (item.sdk === undefined) {
+        scope.universal = true
+      } else {
+        for (const sdk of item.sdk) {
+          if (scope.sdks.includes(sdk) === false) scope.sdks.push(sdk)
         }
       }
 
-      return item
-    },
-    async ({ items, ...details }, tree) => {
-      // This takes all the children items, grabs the sdks out of them, and combines that in to a list
-      const groupsItemsCombinedSDKs = (() => {
-        const sdks = items?.flatMap((item) =>
-          item.flatMap((item) => {
+      combinedItemSDKs.set(item.href, scope)
+    }
+  }
+
+  // If the doc does not already have an sdk assigned, but the manifests do, assign the combined
+  // sdk from the manifests to the doc in the docsMap.
+  for (const [href, scope] of combinedItemSDKs) {
+    if (scope.universal === true || scope.sdks.length === 0) continue
+
+    const doc = docsMap.get(href)
+
+    if (doc && doc.sdk === undefined) {
+      docsMap.set(href, { ...doc, sdk: scope.sdks })
+    }
+  }
+
+  abortSignal?.throwIfAborted()
+
+  // Derives the sdk of each folder from its children, and registers the sdk scoped variants of
+  // each doc against routableDocsMap so links to them validate. docsMap is fully settled by the
+  // time this runs, so every entry sees the same scoping regardless of the order they run in.
+  const deriveManifestFolderSDKs = (
+    items: Awaited<ReturnType<typeof applyManifestSDKScoping>>,
+    rootSDK: SDK[] | undefined,
+  ) =>
+    traverseTreeItemsFirst(
+      { items, sdk: rootSDK },
+      async (item, tree) => {
+        const doc = docsMap.get(item.href)
+
+        if (doc?.frontmatter?.sdk) {
+          const docSDKs = [...(doc.frontmatter?.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+
+          for (const sdk of docSDKs) {
+            // For each SDK variant, add an entry to the routableDocsMap with the SDK-specific href,
+            // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
+
+            const existingDoc = docsMap.get(doc.distinctSDKVariants?.includes(sdk) ? `${item.href}.${sdk}` : item.href)
+
+            if (existingDoc === undefined) {
+              throw new Error(`Existing doc not found for ${item.href}.${sdk}`)
+            }
+
+            routableDocsMap.set(getRoutableHref(item.href, docSDKs, sdk), {
+              ...existingDoc,
+              sdk: [sdk], // override this fake copy of the doc so links to it believe this is the correct sdk
+            })
+          }
+        }
+
+        return item
+      },
+      async ({ items, ...details }, tree) => {
+        // This takes all the children items, grabs the sdks out of them, and combines that in to a list
+        const groupsItemsCombinedSDKs = (() => {
+          const sdks = items?.flatMap((item) => {
             // For manifest items with hrefs, include frontmatter SDK and distinctSDKVariants from the document
             if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
               const doc = docsMap.get(item.href)
@@ -566,57 +693,74 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               }
             }
             return item.sdk
-          }),
-        )
+          })
 
-        // If the child sdks is undefined then its core so it supports all sdks
-        const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => (sdk !== undefined ? sdk : config.validSdks))))
+          // If the child sdks is undefined then its core so it supports all sdks
+          const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => (sdk !== undefined ? sdk : config.validSdks))))
 
-        return uniqueSDKs
-      })()
+          return uniqueSDKs
+        })()
 
-      // This is the sdk of the group (explicitly set in the manifest)
-      const groupSDK = details.sdk
+        // This is the sdk of the group (explicitly set in the manifest)
+        const groupSDK = details.sdk
 
-      // This is the sdk of the parent group
-      const parentSDK = tree.sdk
+        // This is the sdk of the parent group
+        const parentSDK = tree.sdk
 
-      // If there are no children items, then we either use the group we are looking at sdks if its defined, or its parent group
-      if (groupsItemsCombinedSDKs.length === 0) {
-        return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
-      }
+        // If there are no children items, then we either use the group we are looking at sdks if its defined, or its parent group
+        if (groupsItemsCombinedSDKs.length === 0) {
+          return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
+        }
 
-      // If the group has an explicit SDK restriction, preserve it even if children support more SDKs
-      // This handles cases like "Mobile Navigation" where the folder itself should only appear for ios/android
-      // even though children like "Quickstart" may support other SDKs
-      if (groupSDK !== undefined) {
-        return { ...details, sdk: groupSDK, items } as ManifestGroup
-      }
+        // If the group has an explicit SDK restriction, preserve it even if children support more SDKs
+        // This handles cases like "Mobile Navigation" where the folder itself should only appear for ios/android
+        // even though children like "Quickstart" may support other SDKs
+        if (groupSDK !== undefined) {
+          return { ...details, sdk: groupSDK, items } as ManifestGroup
+        }
 
-      // If all the children items support all SDKs, then we don't need to set the sdk on the group
-      if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
-        return { ...details, sdk: undefined, items } as ManifestGroup
-      }
+        // If all the children items support all SDKs, then we don't need to set the sdk on the group
+        if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
+          return { ...details, sdk: undefined, items } as ManifestGroup
+        }
 
-      // Use the computed children SDKs - this takes precedence over any inherited SDK from parent
-      // This ensures folders like "App Router" get SDK scoping based on their children's frontmatter
-      return {
-        ...details,
-        sdk: groupsItemsCombinedSDKs,
-        items,
-      } as ManifestGroup
-    },
-    (item, error) => {
-      console.error('[DEBUG] Error processing item:', item.title)
-      console.error(error)
-      throw error
-    },
-  )
+        // Use the computed children SDKs - this takes precedence over any inherited SDK from parent
+        // This ensures folders like "App Router" get SDK scoping based on their children's frontmatter
+        return {
+          ...details,
+          sdk: groupsItemsCombinedSDKs,
+          items,
+        } as ManifestGroup
+      },
+      (item, error) => {
+        console.error('[DEBUG] Error processing item:', item.title)
+        console.error(error)
+        throw error
+      },
+    )
+
+  const sdkScopedManifests: {
+    key: string
+    navigationType: NavigationType
+    vfile: VFile
+    tree: Awaited<ReturnType<typeof deriveManifestFolderSDKs>>
+  }[] = []
+
+  for (const entry of sdkScopedManifestsFirstPass) {
+    sdkScopedManifests.push({
+      key: entry.key,
+      navigationType: entry.navigationType,
+      vfile: entry.vfile,
+      tree: await deriveManifestFolderSDKs(entry.tree, entry.rootSDK),
+    })
+  }
   console.info('✓ Applied manifest sdk scoping')
 
   abortSignal?.throwIfAborted()
 
-  const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
+  // <If /> validation checks a doc against every manifest item that points at it, so it needs
+  // the union of every entry's items, not just the main manifest's.
+  const flatSDKScopedManifest = sdkScopedManifests.flatMap(({ tree }) => flattenTree(tree))
 
   abortSignal?.throwIfAborted()
 
@@ -769,66 +913,139 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  await writeFile(
-    'manifest.json',
-    JSON.stringify({
-      flags: siteFlags,
-      navigation: await traverseTree(
-        { items: sdkScopedManifest },
-        async (item) => {
-          const doc = docsMap.get(item.href)
+  // Serializes a processed manifest tree in to the shape the site consumes: injects the :sdk:
+  // token in to hrefs of sdk scoped docs and strips values that match the manifest defaults.
+  const serializeManifest = (items: Awaited<ReturnType<typeof deriveManifestFolderSDKs>>) =>
+    traverseTree(
+      { items },
+      async (item) => {
+        const doc = docsMap.get(item.href)
 
-          const sdks = [...(doc?.frontmatter?.sdk ?? []), ...(doc?.distinctSDKVariants ?? [])]
+        const sdks = [...(doc?.frontmatter?.sdk ?? []), ...(doc?.distinctSDKVariants ?? [])]
 
-          const injectSDK =
-            sdks.length >= 1 &&
-            !item.href.endsWith(`/${sdks[0]}`) &&
-            !item.href.includes(`/${sdks[0]}/`) &&
-            // Don't inject SDK scoping for documents that only support one SDK
-            sdks.length > 1
+        const injectSDK =
+          sdks.length >= 1 &&
+          !item.href.endsWith(`/${sdks[0]}`) &&
+          !item.href.includes(`/${sdks[0]}/`) &&
+          // Don't inject SDK scoping for documents that only support one SDK
+          sdks.length > 1
 
-          if (injectSDK) {
-            return {
-              title: item.title,
-              href: scopeHref(item.href, ':sdk:'),
-              tag: item.tag,
-              maintainer: item.maintainer,
-              wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-              icon: item.icon,
-              target: item.target,
-              // @ts-expect-error - It exists, up on line 481
-              sdk: item.itemSDK ?? sdks,
-              shortcut: item.shortcut,
-            }
-          }
-
+        if (injectSDK) {
           return {
             title: item.title,
-            // href: item.href,
-            href: injectSDK ? scopeHref(item.href, ':sdk:') : item.href,
+            href: scopeHref(item.href, ':sdk:'),
             tag: item.tag,
             maintainer: item.maintainer,
             wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
             icon: item.icon,
             target: item.target,
-            sdk: item.sdk,
-            shortcut: item.shortcut,
+            // @ts-expect-error - It exists, itemSDK is set by applyManifestSDKScoping
+            sdk: item.itemSDK ?? sdks,
           }
-        },
-        // @ts-expect-error - This traverseTree function might just be the death of me
-        async (group) => ({
-          title: group.title,
-          topNav: group.topNav,
-          flatNav: group.flatNav,
-          tag: group.tag,
-          maintainer: group.maintainer,
-          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
-          icon: group.icon,
-          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
-          sdk: group.sdk,
-          items: group.items,
-        }),
-      ),
+        }
+
+        return {
+          title: item.title,
+          href: item.href,
+          tag: item.tag,
+          maintainer: item.maintainer,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+          icon: item.icon,
+          target: item.target,
+          sdk: item.sdk,
+        }
+      },
+      // @ts-expect-error - This traverseTree function might just be the death of me
+      async (group) => ({
+        title: group.title,
+        topNav: group.topNav,
+        tag: group.tag,
+        maintainer: group.maintainer,
+        wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
+        icon: group.icon,
+        hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
+        sdk: group.sdk,
+        items: group.items,
+      }),
+    )
+
+  // The site renders at most two levels of section: `ActiveSection` in the docs app is
+  // `[string] | [string, string]`, so a third level of `topNav` nesting would emit sections
+  // nothing can ever select, and every item under them would be unreachable.
+  const MAX_TOP_NAV_DEPTH = 2
+
+  // Fields a `topNav` group carries that a section does not — `buildSections` copies only
+  // title/icon/sdk on to a section, so any of these authored on a lifted group is silently lost.
+  const SECTION_STRIPPED_FIELDS = ['tag', 'maintainer', 'wrap', 'hideTitle'] as const
+
+  const isTopNavGroup = (item: unknown): boolean =>
+    typeof item === 'object' && item !== null && 'items' in item && 'topNav' in item && item.topNav === true
+
+  // Lifts the `topNav: true` groups of a sectioned navigation in to explicit sections, recursing
+  // when a section's own children are topNav groups. `topNav` itself is never emitted.
+  //
+  // Everything this drops or strips is reported rather than silently discarded: the generator is
+  // the only place that can see the difference between what was authored and what ships.
+  const buildSections = (
+    items: Awaited<ReturnType<typeof serializeManifest>>,
+    vfile: VFile,
+    depth: number = 1,
+  ): { title: string; icon: unknown; sdk: unknown; sections: any; items: any }[] => {
+    // Only the root of a sectioned manifest drops its non-section children — deeper down they
+    // are the section's own items.
+    if (depth === 1) {
+      for (const item of items) {
+        if (isTopNavGroup(item)) continue
+        safeMessage(config, vfile, String(vfile.path), 'docs', 'manifest-root-item-not-section', [item.title])
+      }
+    }
+
+    return items
+      .filter((item): item is Extract<typeof item, { items: any }> => isTopNavGroup(item))
+      .map((item) => {
+        const hasNestedTopNav = item.items.some((child: any) => isTopNavGroup(child))
+
+        if (hasNestedTopNav && depth >= MAX_TOP_NAV_DEPTH) {
+          throw new Error(errorMessages['manifest-top-nav-too-deep'](item.title, MAX_TOP_NAV_DEPTH))
+        }
+
+        const strippedFields = SECTION_STRIPPED_FIELDS.filter((field) => (item as any)[field] !== undefined)
+
+        if (strippedFields.length > 0) {
+          safeMessage(config, vfile, String(vfile.path), 'docs', 'manifest-section-fields-stripped', [
+            item.title,
+            [...strippedFields],
+          ])
+        }
+
+        return {
+          title: item.title,
+          icon: item.icon,
+          sdk: item.sdk,
+          sections: hasNestedTopNav ? buildSections(item.items, vfile, depth + 1) : undefined,
+          items: item.items.filter((child: any) => !('topNav' in child && child.topNav === true)),
+        }
+      })
+  }
+
+  // The navigation is keyed: `default` is the main manifest, and each manifest.<sdk>.json
+  // becomes its own entry that replaces the navigation entirely while that SDK is active.
+  const navigation: Record<string, unknown> = {}
+
+  for (const entry of sdkScopedManifests) {
+    const processed = await serializeManifest(entry.tree)
+
+    navigation[entry.key] =
+      entry.navigationType === 'sectioned'
+        ? { type: 'sectioned', sections: buildSections(processed, entry.vfile) }
+        : { type: 'flat', items: processed }
+  }
+
+  await writeFile(
+    'manifest.json',
+    JSON.stringify({
+      flags: siteFlags,
+      navigation,
     }),
   )
 
@@ -1264,6 +1481,7 @@ ${yaml.stringify({
     ...(config.flags.silenceTypedocErrors ? [] : typedocVFiles),
     ...flatSdkSpecificVFiles,
     manifestVfile,
+    ...sdkManifests.map(({ vfile }) => vfile),
     ...headingValidationVFiles,
   ]
 

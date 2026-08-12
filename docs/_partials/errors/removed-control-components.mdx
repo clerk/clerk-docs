@@ -1,0 +1,90 @@
+<LLMPrompt
+  displayText="Use this prebuilt prompt to fix this error faster."
+  src="prompts/core-3-removed-control-components.md"
+/>
+
+## Why this occurred
+
+`<SignedIn>`, `<SignedOut>`, and `<Protect>` were removed from `@clerk/nextjs` in [Clerk Core 3](/changelog/2026-03-03-core-3), a major release published on March 3, 2026. All three were replaced by a single [`<Show>`](/docs/reference/components/control/show) component that handles both authentication and authorization checks through its `when` prop.
+
+The removed components are still exported so that upgrading doesn't fail with an opaque `undefined is not a component` error. Rendering one throws this error instead, with a link to the migration steps.
+
+If you're using an agent, its Clerk knowledge is likely out of date. Before changing this code or implementing any other `@clerk/nextjs` features, read the [Core 3 changelog](/changelog/2026-03-03-core-3), the [Core 3 upgrade guide](/docs/guides/development/upgrading/upgrade-guides/core-3), and the [`<Show>` component docs](/docs/reference/components/control/show).
+
+## Ways to fix this
+
+### Migrate with an agent (recommended)
+
+Copy the prompt above and give it to your agent. It walks through installing the [Clerk CLI](/docs/cli) and [Clerk Skills](/docs/guides/ai/skills). These give your agent current, version-accurate Clerk guidance instead of pre-Core 3 training data. The prompt then applies the replacements below across your codebase.
+
+### Replace `<SignedIn>` and `<SignedOut>`
+
+Remove `SignedIn` and `SignedOut` from the `@clerk/nextjs` import, import `Show` instead, and pass `when="signed-in"` or `when="signed-out"`.
+
+```tsx {{ prettier: false, filename: 'app/page.tsx', del: [1, 7, 9], ins: [2, 8, 10] }}
+import { SignedIn, SignedOut } from '@clerk/nextjs'
+import { Show } from '@clerk/nextjs'
+
+export default function Page() {
+  return (
+    <>
+      <SignedIn>Signed in content</SignedIn>
+      <Show when="signed-in">Signed in content</Show>
+      <SignedOut>Signed out content</SignedOut>
+      <Show when="signed-out">Signed out content</Show>
+    </>
+  )
+}
+```
+
+`<Show>` also accepts a `fallback` prop that renders when the `when` condition fails — for example, `<Show when="signed-in" fallback={...}>` renders the fallback to signed-out users.
+
+### Replace `<Protect>`
+
+Each `<Protect>` prop becomes a value passed to `<Show>`'s `when` prop:
+
+| Before | After |
+| - | - |
+| `<Protect>` (no props) | `<Show when="signed-in">` |
+| `<Protect role="admin">` | `<Show when={{ role: 'admin' }}>` |
+| `<Protect permission="org:billing:manage">` | `<Show when={{ permission: 'org:billing:manage' }}>` |
+| `<Protect feature="widgets">` | `<Show when={{ feature: 'widgets' }}>` |
+| `<Protect plan="pro">` | `<Show when={{ plan: 'pro' }}>` |
+| `<Protect condition={(has) => expr}>` | `<Show when={(has) => expr}>` |
+
+```tsx {{ prettier: false, filename: 'app/admin/page.tsx', del: [1, 6], ins: [2, 7] }}
+import { Protect } from '@clerk/nextjs'
+import { Show } from '@clerk/nextjs'
+
+export default function Page() {
+  return (
+    <Protect condition={(has) => has({ role: 'org:admin' })}>Admin content</Protect>
+    <Show when={(has) => has({ role: 'org:admin' })}>Admin content</Show>
+  )
+}
+```
+
+> [!WARNING]
+> Like `<Protect>`, `<Show>` only **visually hides** its children — they're still present in the browser's source. Perform [authorization checks](/docs/guides/secure/authorization-checks) on the server before sending sensitive data to the client.
+
+## Verify the fix
+
+1. Search your codebase for remaining usages:
+
+   ```bash
+   grep -rn --exclude-dir=node_modules "SignedIn\|SignedOut\|Protect" .
+   ```
+
+   Check aliased imports (`import { SignedIn as Auth }`) and re-exports too — a plain name search misses them.
+
+1. Confirm no `@clerk/nextjs` import still pulls in `SignedIn`, `SignedOut`, or `Protect`.
+
+1. Run your app and load a page that previously rendered one of these components. The error no longer appears, and content renders for the correct auth state.
+
+## Additional resources
+
+- [`<Show>` component reference](/docs/reference/components/control/show)
+- [Core 3 upgrade guide](/docs/guides/development/upgrading/upgrade-guides/core-3)
+- [Core 3 changelog](/changelog/2026-03-03-core-3)
+- [Clerk CLI](/docs/cli)
+- [Clerk Skills](/docs/guides/ai/skills)

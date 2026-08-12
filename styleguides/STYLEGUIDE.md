@@ -269,6 +269,53 @@ When list items aren't full sentences, don't use a period.
 > - Email
 > - Password
 
+## Error pages
+
+Error pages document a single error that a Clerk SDK or CLI prints, reached from a URL in the thrown message rather than the sidenav. Assume the reader arrived from their terminal, mid-problem, and has already lost time. The pattern is modeled on [Next.js's `errors/` directory](https://github.com/vercel/next.js/tree/canary/errors).
+
+### Where error pages live and how they're reached
+
+Error pages live at `docs/reference/<sdk>/errors/<slug>.mdx`. Clerk prints a stable `https://clerk.com/err/<slug>` URL in the error, and a redirect in `redirects/general.jsonc` (`permanent: false`) sends that URL to the page, so the docs path can change without breaking the printed link.
+
+Leave error pages out of `manifest.json` — the reader reaches them from the error, not the sidenav. This is the one exception to the rule that every doc gets a manifest entry. Add the file to `ignoreWarnings.docs` in `scripts/build-docs.ts` so the `doc-not-in-manifest` warning stays quiet.
+
+### Frontmatter
+
+- `title` — the error's identifying text, matching what the reader pastes into a search bar. Drop the trailing `Learn more at <url>` sentence and anything templated, like a component name or file path. Don't rewrite it into SEO prose. The exact-string match is the point.
+- `description` — required. It's the search snippet.
+
+### Lead with the verbatim error
+
+Open the page body with the error exactly as Clerk emits it, in a fenced code block:
+
+````mdx
+---
+title: 'Clerk: `<SignedIn>` is not available in @clerk/nextjs Core 3'
+description: Learn why SignedIn was removed in Core 3 and how to replace it with Show.
+---
+
+```text
+Clerk: <SignedIn> is not available in @clerk/nextjs Core 3. Learn more at https://clerk.com/err/signedin-is-not-available-in-clerk-nextjs.
+```
+````
+
+The title is the searchable summary; this block is the literal text, link and all. When one thrown message covers several distinct strings — one per component, say — give each its own page so each carries its own verbatim block, rather than making the title or body dynamic.
+
+### Sections, in order
+
+1. `## Why this occurred` — the state that produced the error. The heading omits "error" on purpose, so the same one serves errors, warnings, and messages.
+2. `## Ways to fix this` — give each fix its own `### <fix name>` only when an error has more than one _alternative_ fix, meaning approaches the reader chooses between. Open each with who it's for ("Choose this when…") so they can pick without reading all of them. A single fix, or sequential steps, needs no `###` and no "Choose this when". Add `Trade-off` or `Gotchas` under a fix only when they exist.
+3. `## Verify the fix` — optional. Include when the fix is silent or easy to get half-right.
+4. `## Additional resources` — optional.
+
+### Scale to the error
+
+Most error pages are short — a reason and one fix. Reach for the full structure only when an error genuinely has several distinct fixes. Don't pad.
+
+### Agent-oriented remediation (optional)
+
+When an error is one AI agents commonly cause — outdated training data, a removed API — the agent that wrote the code won't read the page. Point the fix at the tools instead: an `<LLMPrompt>` block linking a prompt in `prompts/`, and an agent-first "Migrate with an agent (recommended)" fix that installs the [Clerk CLI](/docs/cli) and [Clerk Skills](/docs/guides/ai/skills). Use these only when the error is agent-caused. If the pattern proves out across more pages, promote it from optional to expected.
+
 ## Accessibility
 
 ### Do not assume proficiency

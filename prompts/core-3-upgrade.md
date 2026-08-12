@@ -31,6 +31,7 @@ The reference below covers changes the CLI may not fully automate.
 | ------------------------------------------- | ---------------------------------------------------- |
 | `<SignedIn>`                                | `<Show when="signed-in">`                            |
 | `<SignedOut>`                               | `<Show when="signed-out">`                           |
+| `<Protect>` (no props)                      | `<Show when="signed-in">`                            |
 | `<Protect role="admin">`                    | `<Show when={{ role: 'admin' }}>`                    |
 | `<Protect permission="org:billing:manage">` | `<Show when={{ permission: 'org:billing:manage' }}>` |
 | `<Protect condition={(has) => expr}>`       | `<Show when={(has) => expr}>`                        |

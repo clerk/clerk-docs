@@ -30,6 +30,16 @@ function stripCodeBlocks(contents) {
 }
 
 /**
+ * Strip inline code spans (e.g. `<Show when={{ ... }}>`), replacing them with
+ * whitespace of equal length to preserve character offsets. A `{{ ... }}` shown
+ * inside inline code is literal display text, not an MDX annotation, so it must
+ * not be flagged. Run this after fenced blocks are already stripped.
+ */
+function stripInlineCode(contents) {
+  return contents.replace(/(`+)[^\n]*?\1/g, (match) => ' '.repeat(match.length))
+}
+
+/**
  * Convert a character offset to a line and column number.
  */
 function offsetToPosition(contents, offset) {
@@ -58,7 +68,7 @@ async function main() {
 
   for await (const entry of files) {
     const contents = await fs.promises.readFile(entry.fullPath, 'utf8')
-    const stripped = stripCodeBlocks(contents)
+    const stripped = stripInlineCode(stripCodeBlocks(contents))
     const vfile = new VFile({ path: entry.path, value: contents })
 
     let match

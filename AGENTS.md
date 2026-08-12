@@ -60,7 +60,7 @@ The docs search runs on Algolia, populated by `scripts/update-algolia-records.ts
 
 ## Conventions (see CONTRIBUTING.md for depth)
 
-- A doc missing from `manifest.json` only warns, but still add the entry so the page is reachable in the sidenav.
+- A doc missing from `manifest.json` only warns, but still add the entry so the page is reachable in the sidenav. The exception is error pages (`docs/reference/<sdk>/errors/**`), which are intentionally left out and reached from the `/err/<slug>` URL Clerk prints — see the styleguide's "Error pages" section.
 - Stale-PR hazard: rebase long-lived PRs on `main` (or merge it in) and rebuild before merging — another PR can invalidate frontmatter or links that were valid when yours opened.
 - SDK code examples must match the canonical partials `docs/_partials/create-user.mdx` and `docs/_partials/delete-user.mdx` per SDK (import path, auth accessor, `clerkClient` usage). The build never executes code blocks, so copy the pattern from there, not from memory.
 - Reference content is mixed: `<Typedoc />` pages pull auto-generated content from `clerk-typedoc/`, while other type pages (e.g. `docs/reference/types/agent-task.mdx`) are hand-authored. Know which kind a page is before editing.

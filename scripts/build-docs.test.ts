@@ -8699,19 +8699,19 @@ description: Express middleware reference
 
 ### Vue
 
-- [clerkPlugin]({{SITE_URL}}/docs/reference/vue/clerk-plugin.md): Vue clerkPlugin reference
+- [clerkPlugin]({{SITE_URL}}/docs/vue/reference/clerk-plugin.md): Vue clerkPlugin reference
 
 ### Astro
 
-- [clerkMiddleware (Astro)]({{SITE_URL}}/docs/reference/astro/clerk-middleware.md): Astro middleware reference
+- [clerkMiddleware (Astro)]({{SITE_URL}}/docs/astro/reference/clerk-middleware.md): Astro middleware reference
 
 ### JavaScript
 
-- [JavaScript Overview]({{SITE_URL}}/docs/reference/javascript/overview.md): JS frontend SDK overview
+- [JavaScript Overview]({{SITE_URL}}/docs/js-frontend/reference/overview.md): JS frontend SDK overview
 
 ### Express
 
-- [clerkMiddleware (Express)]({{SITE_URL}}/docs/reference/express/clerk-middleware.md): Express middleware reference`)
+- [clerkMiddleware (Express)]({{SITE_URL}}/docs/expressjs/reference/clerk-middleware.md): Express middleware reference`)
   })
 
   test('Should output llms-full.txt full pages', async () => {

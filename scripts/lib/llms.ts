@@ -50,6 +50,88 @@ const PATH_SEGMENT_SDK_ALIASES: Record<string, SDK> = {
   express: 'expressjs',
 }
 
+// Which path segment an SDK's reference pages live under. `src/app/docs/SDK.tsx` derives this from
+// each SDK's `referenceRoute` — that is the authority. This file can't import across the clerk-docs
+// boundary, so PATH_SEGMENT_SDK_ALIASES mirrors it by hand.
+//
+// `backend` -> `js-backend` is deliberately absent: js-backend is deprecated for the current core, so
+// its URLs must stay reference-first to match convertMdxToMarkdown.ts. Do not "complete" this map.
+const getReferencePathSegment = (sdk: SDK): string =>
+  Object.entries(PATH_SEGMENT_SDK_ALIASES).find(([, aliasedSdk]) => aliasedSdk === sdk)?.[0] ?? sdk
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+// Clerk-owned registrable domains: production `clerk.com` and Vercel preview
+// deployments on `clerkstage.dev` (e.g. `clerk-docs-git-<branch>.clerkstage.dev`).
+// The `(?:[a-z0-9-]+\.)*` allows any subdomain, and anchoring the host between
+// `https://` and the path means look-alikes like `clerk.com.evil.dev` or
+// `notclerkstage.dev` can't match.
+const CLERK_HOST = '(?:[a-z0-9-]+\\.)*(?:clerk\\.com|clerkstage\\.dev)'
+
+// A root-relative `/docs/...` link only counts when the character before `/docs`
+// isn't part of a larger token — a host, a deeper path segment, or a query value.
+// Excluding `/?&=%-` keeps third-party URLs like
+// `https://example.test/?next=/docs/reference/...` or `.../x//docs/reference/...`
+// from being treated as Clerk links. The normalizer and the guard share this
+// boundary so they agree on what a root-relative link is; their host matching
+// stays separate (see generatedClerkDocsPath).
+const ROOT_RELATIVE_BOUNDARY = '(?<![\\w./?&=%-])'
+
+// Matches a Clerk-owned docs path beginning with `pathPrefix` — an absolute Clerk
+// URL (see CLERK_HOST) or a root-relative `/docs/...` link — while ignoring
+// third-party URLs that merely contain the same path (e.g. a Supabase reference
+// link that includes `/docs/reference/javascript/`). The leading alternation is
+// captured so callers can preserve the host prefix when rewriting.
+const clerkOwnedDocsPath = (pathPrefix: string, flags = ''): RegExp =>
+  new RegExp(`(https://${CLERK_HOST}|${ROOT_RELATIVE_BOUNDARY})${escapeRegExp(pathPrefix)}`, flags)
+
+// Intentionally separate from clerkOwnedDocsPath: the output guard must not share
+// the normalizer's matcher or a matcher regression could make both silently agree.
+const generatedClerkDocsPath = (pathPrefix: string): RegExp =>
+  new RegExp(`(?:https://${CLERK_HOST}|${ROOT_RELATIVE_BOUNDARY})${escapeRegExp(pathPrefix)}`)
+
+export const emitSdkFirstReferenceUrls = (content: string, validSdks: readonly SDK[]): string => {
+  const rewrites = validSdks.map((sdk) => ({
+    from: clerkOwnedDocsPath(`/docs/reference/${getReferencePathSegment(sdk)}/`, 'g'),
+    to: `$1/docs/${sdk}/reference/`,
+  }))
+
+  // `canonical:` frontmatter keeps the page's real, reference-first canonical URL — rewriting it
+  // makes llms-full.txt disagree with the live page's <link rel="canonical">.
+  return content
+    .split('\n')
+    .map((line) => {
+      if (line.startsWith('canonical:')) return line
+      return rewrites.reduce((acc, { from, to }) => acc.replace(from, to), line)
+    })
+    .join('\n')
+}
+
+/**
+ * Guard the generated index against teaching agents both reference URL shapes
+ * for the same SDK. Canonical metadata in individual pages remains
+ * reference-first; links emitted from an SDK section are always SDK-first.
+ *
+ * Only Clerk-owned links count: a third-party URL that merely contains
+ * `/docs/reference/<segment>/` (e.g. a Supabase link) is not a mixed shape.
+ */
+export const assertConsistentReferenceUrlShapes = (content: string, validSdks: readonly SDK[]) => {
+  // canonical: frontmatter is intentionally reference-first (see emitSdkFirstReferenceUrls) and
+  // isn't part of the emitted link shape, so it's excluded from this check.
+  const body = content
+    .split('\n')
+    .filter((line) => !line.startsWith('canonical:'))
+    .join('\n')
+
+  for (const sdk of validSdks) {
+    const hasReferenceFirst = generatedClerkDocsPath(`/docs/reference/${getReferencePathSegment(sdk)}/`).test(body)
+
+    if (hasReferenceFirst) {
+      throw new Error(`Generated LLM file contains a non-canonical reference-first URL for ${sdk}`)
+    }
+  }
+}
+
 const getSdkFromPath = (path: string, validSdks: readonly SDK[]): SDK | null => {
   // Skip the trailing file segment (e.g. "expo.mdx") - we only want directory
   // segments, so a generic doc whose filename contains an SDK name is not
@@ -69,8 +151,13 @@ const getSdkFromPath = (path: string, validSdks: readonly SDK[]): SDK | null => 
 
 const getSdkDisplayName = (sdk: SDK): string => SDK_DISPLAY_NAMES[sdk] ?? sdk
 
-export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles) => {
-  return LLMS_FULL_HEADER + outputtedDocsFiles.map((file) => file.content).join('\n')
+export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles, validSdks: readonly SDK[]) => {
+  const content = emitSdkFirstReferenceUrls(
+    LLMS_FULL_HEADER + outputtedDocsFiles.map((file) => file.content).join('\n'),
+    validSdks,
+  )
+  assertConsistentReferenceUrlShapes(content, validSdks)
+  return content
 }
 
 export const formatLLMsDocLine = (page: OutputtedDocsFiles[number]) =>
@@ -101,7 +188,12 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdk
     sections.push(pages.map(formatLLMsDocLine).join('\n'))
   }
 
-  return `# Clerk\n\n${sections.filter((section) => section.length > 0).join('\n\n')}`
+  const content = emitSdkFirstReferenceUrls(
+    `# Clerk\n\n${sections.filter((section) => section.length > 0).join('\n\n')}`,
+    validSdks,
+  )
+  assertConsistentReferenceUrlShapes(content, validSdks)
+  return content
 }
 
 export const normalizeFrontmatterDescription = (raw: unknown): string | undefined => {

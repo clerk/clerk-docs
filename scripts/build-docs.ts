@@ -1492,7 +1492,7 @@ ${yaml.stringify({
     const outputtedDocsFiles = listOutputDocsFiles(store.writtenFiles, mdxFilePaths)
 
     if (config.llms?.fullPath) {
-      const llmsFull = await generateLLMsFull(outputtedDocsFiles)
+      const llmsFull = await generateLLMsFull(outputtedDocsFiles, config.validSdks)
       await writeFile(config.llms.fullPath, llmsFull)
     }
 

@@ -42,6 +42,19 @@ pnpm migrate:clerk --clerk-path ../clerk --local-only
 
 Other flags: `--target-branch` (clerk-side branch name; default `<docs-branch>-docs-migration`), `--clerk-base` (default `main`), `--no-merge-main` (skip the pre-migration merge of docs origin/main), `--no-close-source-pr`, `--allow-dirty-docs`, `--debug`. Run `--help` for the full list.
 
+## Migrating a fork PR (external contribution)
+
+The script never trusts a branch-name match alone for association — `gh pr list --head` matches bare branch names across forks, so a name hit can be someone else's PR. Instead it validates by **head commit**: the PR's head SHA must be the current local branch tip (or an ancestor of it, e.g. after you added a conflict-resolution commit on top; the extra commits are flagged and migrated too — interactive runs ask for confirmation first, since an ancestor is also what a mistyped `--pr` pointing at a stacked/parent PR looks like). For a fork PR, pass `--pr <number>` explicitly — the default lookup misses it whenever your local branch doesn't reuse the fork's bare branch name, and when it does match, the same head-commit validation applies. Fetch the PR head into a local branch, push it, and migrate:
+
+```sh
+git fetch origin pull/<number>/head
+git checkout -B <forkOwner>/<descriptive-name> FETCH_HEAD
+git push -u origin <forkOwner>/<descriptive-name>
+pnpm migrate:clerk --clerk-path ../clerk --pr <number>
+```
+
+Everything downstream works as for a same-repo PR: the contributor's authorship is preserved by the cherry-picks, and the clerk PR mirrors the fork PR's title/body before the source PR is backlinked and closed. If the fork PR gets new commits after you fetched it, the head-commit check fails — re-fetch and re-push, then re-run.
+
 ## Create vs update — re-running is safe and expected
 
 The script is idempotent per branch. On each run it looks for the migration branch in clerk:

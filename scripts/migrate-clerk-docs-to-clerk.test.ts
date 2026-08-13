@@ -18,6 +18,12 @@ import {
   syncConflictsBackToDocsRepo,
   buildClosePrCommandArgs,
   buildDeltaRevListArgs,
+  buildPrViewByNumberArgs,
+  buildSourcePrListArgs,
+  evaluateExplicitPrForMigration,
+  evaluateSourcePrCloseSafety,
+  filterSourcePrCandidatesByContainment,
+  formatPrHeadLabel,
   buildFetchBranchRefspecArgs,
   buildGitCherryArgs,
   buildUpstreamConfigArgs,
@@ -861,6 +867,232 @@ describe('buildClosePrCommandArgs', () => {
     const args = buildClosePrCommandArgs(7, 'acme/docs')
     expect(args[2]).toBe('7')
     expect(typeof args[2]).toBe('string')
+  })
+})
+
+describe('buildPrViewByNumberArgs', () => {
+  test('fetches the PR by number in a specific repo with the fields the head-commit validation needs', () => {
+    expect(buildPrViewByNumberArgs(3528, 'clerk/clerk-docs')).toEqual([
+      'pr',
+      'view',
+      '3528',
+      '--repo',
+      'clerk/clerk-docs',
+      '--json',
+      'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,headRepositoryOwner,isCrossRepository',
+    ])
+  })
+
+  test('requests headRefOid (the head-commit check), headRepositoryOwner (the fork label), and isCrossRepository (the error hints)', () => {
+    const fields = buildPrViewByNumberArgs(1, 'acme/docs').at(-1)?.split(',')
+    expect(fields).toContain('headRefOid')
+    expect(fields).toContain('headRepositoryOwner')
+    expect(fields).toContain('isCrossRepository')
+  })
+})
+
+describe('buildSourcePrListArgs', () => {
+  test('lists open PRs by head branch with the fields the cross-repo containment check needs', () => {
+    expect(buildSourcePrListArgs('fix-sdk-examples', 'clerk/clerk-docs')).toEqual([
+      'pr',
+      'list',
+      '--repo',
+      'clerk/clerk-docs',
+      '--head',
+      'fix-sdk-examples',
+      '--state',
+      'open',
+      '--json',
+      'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,isCrossRepository',
+      '--limit',
+      '50',
+    ])
+  })
+
+  test('requests headRefOid and isCrossRepository — `--head` matches bare branch names across forks, so list entries must be validatable by commit', () => {
+    const args = buildSourcePrListArgs('any', 'acme/docs')
+    const fields = args[args.indexOf('--json') + 1]?.split(',')
+    expect(fields).toContain('headRefOid')
+    expect(fields).toContain('isCrossRepository')
+  })
+})
+
+describe('formatPrHeadLabel', () => {
+  test('renders a fork PR head as <forkOwner>:<branch>, like GitHub does', () => {
+    expect(
+      formatPrHeadLabel({ headRefName: 'main', headRepositoryOwner: { login: 'kritikmodi' }, isCrossRepository: true }),
+    ).toBe('kritikmodi:main')
+  })
+
+  test('same-repo PRs stay bare even though GitHub populates headRepositoryOwner for them too', () => {
+    expect(
+      formatPrHeadLabel({ headRefName: 'fix/typo', headRepositoryOwner: { login: 'clerk' }, isCrossRepository: false }),
+    ).toBe('fix/typo')
+  })
+
+  test('falls back to the bare branch name when the owner is unknown', () => {
+    expect(formatPrHeadLabel({ headRefName: 'fix/typo', headRepositoryOwner: null, isCrossRepository: true })).toBe(
+      'fix/typo',
+    )
+    expect(
+      formatPrHeadLabel({
+        headRefName: 'fix/typo',
+        headRepositoryOwner: { login: undefined },
+        isCrossRepository: true,
+      }),
+    ).toBe('fix/typo')
+  })
+})
+
+describe('evaluateExplicitPrForMigration', () => {
+  const sha = (char: string) => char.repeat(40)
+
+  test('fork PR (clerk-docs#3528 shape): open PR whose head commit is the local branch tip is accepted', () => {
+    // The fetched-fork-head workflow: the maintainer fetched pull/3528/head into a local branch,
+    // so the tips are identical — containment by commit, independent of any branch-name match.
+    expect(
+      evaluateExplicitPrForMigration({
+        prState: 'OPEN',
+        prHeadOid: sha('a'),
+        localTipSha: sha('a'),
+        prHeadIsAncestorOfLocalTip: true,
+      }),
+    ).toEqual({ ok: true, localTipIsPrHead: true })
+  })
+
+  test('open PR whose head is an ancestor of the local tip is accepted but flagged (extra local commits)', () => {
+    expect(
+      evaluateExplicitPrForMigration({
+        prState: 'OPEN',
+        prHeadOid: sha('a'),
+        localTipSha: sha('b'),
+        prHeadIsAncestorOfLocalTip: true,
+      }),
+    ).toEqual({ ok: true, localTipIsPrHead: false })
+  })
+
+  test('open PR whose head commit is not contained in the local branch is rejected', () => {
+    expect(
+      evaluateExplicitPrForMigration({
+        prState: 'OPEN',
+        prHeadOid: sha('a'),
+        localTipSha: sha('b'),
+        prHeadIsAncestorOfLocalTip: false,
+      }),
+    ).toEqual({ ok: false, reason: 'head-mismatch' })
+  })
+
+  test.each(['CLOSED', 'MERGED'])('a %s PR is rejected even when the head commit matches the tip', (state) => {
+    expect(
+      evaluateExplicitPrForMigration({
+        prState: state,
+        prHeadOid: sha('a'),
+        localTipSha: sha('a'),
+        prHeadIsAncestorOfLocalTip: true,
+      }),
+    ).toEqual({ ok: false, reason: 'not-open' })
+  })
+})
+
+describe('evaluateSourcePrCloseSafety', () => {
+  const sha = (char: string) => char.repeat(40)
+
+  test('closes when the PR is still open and its head is the OID the association was validated against', () => {
+    expect(
+      evaluateSourcePrCloseSafety({ validatedHeadOid: sha('a'), currentHeadOid: sha('a'), currentState: 'OPEN' }),
+    ).toEqual({ close: true })
+  })
+
+  test('leaves the PR open when its head moved during the migration — closing would drop the new commits', () => {
+    expect(
+      evaluateSourcePrCloseSafety({ validatedHeadOid: sha('a'), currentHeadOid: sha('b'), currentState: 'OPEN' }),
+    ).toEqual({ close: false, reason: 'head-drifted' })
+  })
+
+  test.each(['CLOSED', 'MERGED'])('skips the close when the PR is already %s', (state) => {
+    expect(
+      evaluateSourcePrCloseSafety({ validatedHeadOid: sha('a'), currentHeadOid: sha('a'), currentState: state }),
+    ).toEqual({ close: false, reason: 'not-open' })
+  })
+})
+
+describe('explicit-pr head containment check (real git repos)', () => {
+  let repo = ''
+
+  const git = (...args: string[]) => runCommand('git', args, repo)
+  const isAncestor = (oid: string) =>
+    runCommand('git', ['merge-base', '--is-ancestor', oid, 'HEAD'], repo, { allowFailure: true })
+
+  async function commitFile(name: string): Promise<string> {
+    await fs.writeFile(path.join(repo, name), `${name}\n`, 'utf8')
+    await git('add', '-A')
+    await git('commit', '-m', `add ${name}`)
+    return (await git('rev-parse', 'HEAD')).stdout.trim()
+  }
+
+  beforeEach(async () => {
+    repo = await fs.mkdtemp(path.join(os.tmpdir(), 'migrate-clerk-docs-pr-head-test-'))
+    await git('init', '-b', 'main')
+    await git('config', 'user.email', 'docs-author@example.com')
+    await git('config', 'user.name', 'Docs Author')
+    await git('config', 'commit.gpgsign', 'false')
+  })
+
+  afterEach(async () => {
+    if (repo) {
+      await fs.rm(repo, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * Locks in the `git merge-base --is-ancestor` exit-code contract resolveExplicitPrByHeadCommit
+   * maps onto prHeadIsAncestorOfLocalTip: 0 for equal-or-ancestor, nonzero both for a known
+   * non-ancestor commit and for a PR head that was never fetched locally (fatal, exit 128) — with
+   * allowFailure, neither throws.
+   */
+  test('exit code 0 for the tip itself and for an ancestor; nonzero for unrelated or unknown commits', async () => {
+    const first = await commitFile('first.md')
+    const tip = await commitFile('second.md')
+    await git('checkout', '-b', 'unrelated', first)
+    const unrelated = await commitFile('unrelated.md')
+    await git('checkout', 'main')
+
+    expect((await isAncestor(tip)).code).toBe(0)
+    expect((await isAncestor(first)).code).toBe(0)
+    expect((await isAncestor(unrelated)).code).not.toBe(0)
+    const neverFetched = await isAncestor('0123456789abcdef0123456789abcdef01234567')
+    expect(neverFetched.code).not.toBe(0)
+  })
+
+  /**
+   * `gh pr list --head <name>` matches bare branch names across forks, so a fork PR sharing the
+   * local branch's name enters the lookup results. The filter must keep same-repo entries and
+   * containment-passing fork entries (the fetched-fork-head workflow), and drop fork entries whose
+   * head commit this branch does not contain — the wrong-PR-backlink case.
+   */
+  test('filterSourcePrCandidatesByContainment keeps same-repo and contained fork PRs, drops unrelated fork PRs', async () => {
+    const first = await commitFile('first.md')
+    const tip = await commitFile('second.md')
+    const listItem = (number: number, headRefOid: string, isCrossRepository: boolean) => ({
+      number,
+      title: `PR ${number}`,
+      body: '',
+      baseRefName: 'main',
+      headRefName: 'main',
+      url: `https://github.com/acme/docs/pull/${number}`,
+      isDraft: false,
+      state: 'OPEN',
+      headRefOid,
+      isCrossRepository,
+    })
+
+    const sameRepo = listItem(1, '0123456789abcdef0123456789abcdef01234567', false)
+    const forkAtTip = listItem(2, tip, true)
+    const forkAtAncestor = listItem(3, first, true)
+    const forkUnrelated = listItem(4, '0123456789abcdef0123456789abcdef01234567', true)
+
+    const kept = await filterSourcePrCandidatesByContainment(repo, [sameRepo, forkAtTip, forkAtAncestor, forkUnrelated])
+    expect(kept.map((pr) => pr.number)).toEqual([1, 2, 3])
   })
 })
 

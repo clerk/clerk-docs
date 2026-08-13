@@ -102,7 +102,13 @@ interface CliConfig {
   debug: boolean
   clerkRepo: RepoSlug
   clerkDocsRepo: RepoSlug
-  /** When several open PRs share the same head, use this PR number (required if stdin is not a TTY) */
+  /**
+   * The clerk-docs PR to associate with this run, always validated by head commit — the PR's head
+   * SHA must be the current branch tip or an ancestor of it (see
+   * {@link resolveExplicitPrByHeadCommit}). Disambiguates when several open PRs share the same
+   * head (required if stdin is not a TTY), and is the reliable way to associate a fork PR, which
+   * the branch-name lookup misses whenever the local branch was renamed.
+   */
   prNumber?: number
   /**
    * In create mode, close the source clerk-docs PR after posting the backlink comment. Default true.
@@ -134,6 +140,36 @@ interface PullRequestView {
   /** GitHub PR state: 'OPEN' | 'CLOSED' | 'MERGED' (uppercase from `gh pr list --json state`). */
   state: string
 }
+
+/**
+ * `gh pr view --json` subset for resolving an explicit `--pr` by head commit instead of by branch
+ * name — the path every `--pr` takes, because branch-name matching cannot be trusted (`gh pr list
+ * --head` matches bare branch names across forks). `headRefOid` is compared against the local
+ * branch tip; `headRepositoryOwner` only feeds log/error labels; `isCrossRepository` picks the
+ * fork-vs-same-repo error hints.
+ */
+interface GhPrViewByNumber extends PullRequestView {
+  headRefOid: string
+  headRepositoryOwner?: { login?: string } | null
+  isCrossRepository: boolean
+}
+
+/**
+ * `gh pr list --json` subset for the no-`--pr` source-PR lookup. `headRefOid`/`isCrossRepository`
+ * feed the containment validation of cross-repository entries — `--head` matches bare branch names
+ * across forks, so a name hit alone does not prove an entry is this branch's PR.
+ */
+interface SourcePrListItem extends PullRequestView {
+  headRefOid: string
+  isCrossRepository: boolean
+}
+
+/**
+ * A source PR as returned by {@link resolveSourcePr}. Both resolution paths carry the head OID the
+ * association was validated against, so the close step can re-check it and detect a head that
+ * moved while the migration ran (see {@link sourcePrSafeToCloseNow}).
+ */
+type ResolvedSourcePr = PullRequestView & { headRefOid: string }
 
 /** `gh pr view --json` subset for copying people + review context to the clerk PR */
 interface GhPrViewForMigration {
@@ -442,6 +478,52 @@ const migrationErrorDefinitions = {
       'If you really want a different base, retarget the clerk PR on GitHub first.',
     ],
   },
+  'explicit-pr-not-found': {
+    message: (params: { prNumber: number; repo: string; detail: string }): string =>
+      `--pr ${params.prNumber} could not be fetched from ${params.repo}: ${params.detail}`,
+    hints: (params: { prNumber: number; repo: string; detail: string }): readonly string[] => [
+      `Check the PR number: gh pr view ${params.prNumber} --repo ${params.repo}`,
+      'If the PR lives in a different repo, pass it with --docs-repo <owner/repo>.',
+    ],
+  },
+  'explicit-pr-not-open': {
+    message: (params: { prNumber: number; state: string; url: string }): string =>
+      `--pr ${params.prNumber} (${params.url}) is ${params.state}; only an open clerk-docs PR can be migrated.`,
+    hints: (_params: { prNumber: number; state: string; url: string }): readonly string[] => [
+      'Re-run with the number of an open PR, or without --pr to migrate the branch with no source PR.',
+    ],
+  },
+  'explicit-pr-head-mismatch': {
+    message: (params: {
+      prNumber: number
+      prHeadLabel: string
+      prHeadOid: string
+      headBranch: string
+      localTipSha: string
+      isCrossRepository: boolean
+    }): string =>
+      `--pr ${params.prNumber} has head "${params.prHeadLabel}" at ${params.prHeadOid}, but the current clerk-docs branch ` +
+      `"${params.headBranch}" is at ${params.localTipSha} and does not contain that commit. Refusing to associate them: ` +
+      `the migration would credit, backlink, and close a PR whose commits it does not carry.`,
+    hints: (params: {
+      prNumber: number
+      prHeadLabel: string
+      prHeadOid: string
+      headBranch: string
+      localTipSha: string
+      isCrossRepository: boolean
+    }): readonly string[] => [
+      ...(params.isCrossRepository
+        ? [
+            `For a fork PR, fetch its head into a local branch first: git fetch origin pull/${params.prNumber}/head, then git checkout -B <local-branch> FETCH_HEAD and git push -u origin <local-branch>, then re-run from that branch.`,
+            'If the PR got new commits after you fetched it, re-fetch so your local branch tip contains the PR head.',
+          ]
+        : [
+            `Check out the PR's own branch (gh pr checkout ${params.prNumber}) or pull its latest commits so the local tip contains the PR head, then re-run.`,
+          ]),
+      'If you meant a different PR, re-run with the right --pr number.',
+    ],
+  },
 } as const
 
 type MigrationErrorCode = keyof typeof migrationErrorDefinitions
@@ -565,7 +647,7 @@ Optional:
 
   --local-only                Create or update the migrated branch in the clerk workspace only (skip push, PR creation, and source-PR comment). Requires --clerk-path; without it the branch would only exist in a temp clone that is deleted at the end of the run.
   --dry-run                   Print planned actions without git/GitHub writes (still performs read-only gh calls for auth, permissions, and PR lookups)
-  --pr <number>               Open clerk-docs PR to use for this branch; always validated against the open PRs for the branch. Required when several PRs match and stdin is not a TTY.
+  --pr <number>               Open clerk-docs PR to use for this branch, always validated by head commit: the PR's head SHA must be the current branch tip or an ancestor of it. For a fork PR, fetch pull/<number>/head into a local branch and push it first. Required when several PRs match and stdin is not a TTY.
   --no-close-source-pr        Skip closing the source clerk-docs PR after the backlink comment is posted (default: close it; the close is skipped automatically if the comment fails)
   --no-merge-main             Skip merging origin/main into the current clerk-docs branch before migration (default: merge it). Use when the branch is already up to date or you want to migrate it as-is.
   --debug, --verbose          Verbose logs (includes JSON metadata)
@@ -935,7 +1017,7 @@ async function checkpoint(details: { title: string; completed: string[]; next: s
   infoLog('Next planned action', { next: details.next })
 }
 
-async function promptPickSourcePr(list: PullRequestView[]): Promise<PullRequestView> {
+async function promptPickSourcePr<T extends PullRequestView>(list: T[]): Promise<T> {
   output.write('\nMultiple open PRs use this branch. Pick one for title/body and the backlink comment:\n')
   for (const pr of list) {
     const draftTag = pr.isDraft ? ' [draft]' : ''
@@ -1717,59 +1799,252 @@ async function assertBranchNameAvailable(repoPath: string, desired: string): Pro
   }
 }
 
+/** `gh pr view` args used by {@link resolveExplicitPrByHeadCommit} (extracted for unit testing). */
+function buildPrViewByNumberArgs(prNumber: number, repo: string): string[] {
+  return [
+    'pr',
+    'view',
+    String(prNumber),
+    '--repo',
+    repo,
+    '--json',
+    'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,headRepositoryOwner,isCrossRepository',
+  ]
+}
+
+/** `gh pr list` args used by {@link resolveSourcePr} (extracted for unit testing). */
+function buildSourcePrListArgs(headBranch: string, repo: string): string[] {
+  return [
+    'pr',
+    'list',
+    '--repo',
+    repo,
+    '--head',
+    headBranch,
+    '--state',
+    'open',
+    '--json',
+    'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,isCrossRepository',
+    '--limit',
+    '50',
+  ]
+}
+
+/**
+ * Whether the local clerk-docs branch tip contains `prHeadOid`. `merge-base --is-ancestor` exits
+ * 0 for an ancestor (or the tip itself), 1 for a known non-ancestor, and 128 when the commit was
+ * never fetched locally — every nonzero code means "cannot prove containment".
+ */
+async function checkPrHeadContainment(
+  docsPath: string,
+  prHeadOid: string,
+): Promise<{ localTipSha: string; prHeadIsAncestorOfLocalTip: boolean }> {
+  const localTipSha = (await runCommand('git', ['rev-parse', 'HEAD'], docsPath)).stdout.trim()
+  const ancestorResult = await runCommand('git', ['merge-base', '--is-ancestor', prHeadOid, 'HEAD'], docsPath, {
+    allowFailure: true,
+  })
+  return { localTipSha, prHeadIsAncestorOfLocalTip: ancestorResult.code === 0 }
+}
+
+/**
+ * Drop lookup results that merely *look like* this branch's PRs. `gh pr list --head <name>`
+ * matches by bare branch name across forks (the `owner:branch` form is unsupported), so a fork PR
+ * whose branch happens to share the local branch's name enters the list indistinguishable from a
+ * same-repo PR. Same-repo entries really are this branch's PRs — their head *is* this branch, and
+ * the later origin-sync assert pins the tip — but a cross-repository entry is trusted only when
+ * the local branch actually contains its head commit (the fetched-fork-head workflow). Anything
+ * else is dropped with a warning; `--pr` remains the explicit override.
+ */
+async function filterSourcePrCandidatesByContainment(
+  docsPath: string,
+  list: SourcePrListItem[],
+): Promise<SourcePrListItem[]> {
+  const kept: SourcePrListItem[] = []
+  for (const pr of list) {
+    if (!pr.isCrossRepository) {
+      kept.push(pr)
+      continue
+    }
+    const containment = await checkPrHeadContainment(docsPath, pr.headRefOid)
+    const verdict = evaluateExplicitPrForMigration({
+      prState: pr.state,
+      prHeadOid: pr.headRefOid,
+      ...containment,
+    })
+    if (verdict.ok) {
+      kept.push(pr)
+      continue
+    }
+    warnLog('Ignoring a fork PR that shares this branch name but whose head commit this branch does not contain', {
+      number: pr.number,
+      url: pr.url,
+      prHeadOid: pr.headRefOid,
+      localTipSha: containment.localTipSha,
+    })
+  }
+  return kept
+}
+
+/**
+ * Human-readable head label for an explicitly fetched PR: `<forkOwner>:<branch>` for fork PRs,
+ * plain `<branch>` otherwise — mirroring how GitHub displays them. Gated on `isCrossRepository`
+ * because GitHub populates `headRepositoryOwner` for same-repo PRs too.
+ */
+function formatPrHeadLabel(
+  pr: Pick<GhPrViewByNumber, 'headRefName' | 'headRepositoryOwner' | 'isCrossRepository'>,
+): string {
+  const owner = pr.headRepositoryOwner?.login
+  return pr.isCrossRepository && owner ? `${owner}:${pr.headRefName}` : pr.headRefName
+}
+
+type ExplicitPrEvaluation =
+  | { ok: true; localTipIsPrHead: boolean }
+  | { ok: false; reason: 'not-open' | 'head-mismatch' }
+
+/**
+ * Decide whether a source PR (an explicit `--pr`, or a cross-repository lookup candidate) may be
+ * associated with the current local branch.
+ * The PR must be OPEN and its head commit must be *contained in* the local branch: equal to the tip
+ * (the normal fork workflow — fetch `pull/<n>/head`, push, migrate) or an ancestor of it (the
+ * maintainer added commits on top, e.g. a conflict resolution; allowed with a warning so the extra
+ * commits are a conscious choice, not an accident). Containment is what makes the association safe:
+ * the migration will backlink and close this PR, so the branch must actually carry its commits.
+ */
+function evaluateExplicitPrForMigration(params: {
+  prState: string
+  prHeadOid: string
+  localTipSha: string
+  prHeadIsAncestorOfLocalTip: boolean
+}): ExplicitPrEvaluation {
+  if (params.prState !== 'OPEN') return { ok: false, reason: 'not-open' }
+  if (params.prHeadOid === params.localTipSha) return { ok: true, localTipIsPrHead: true }
+  if (params.prHeadIsAncestorOfLocalTip) return { ok: true, localTipIsPrHead: false }
+  return { ok: false, reason: 'head-mismatch' }
+}
+
+/**
+ * Resolve an explicit `--pr` by head *commit*, never by branch name: fetch the PR directly and
+ * require its head SHA to be the local branch tip or an ancestor of it. Branch-name matching is
+ * not a substitute — `gh pr list --head` matches bare branch names across forks, so a name hit
+ * can be someone else's PR (and a fork PR under a renamed local branch produces no name hit at
+ * all). Read-only (`gh pr view` + local `git rev-parse`/`merge-base`), so it is dry-run safe.
+ */
+async function resolveExplicitPrByHeadCommit(config: CliConfig, headBranch: string): Promise<GhPrViewByNumber> {
+  const prNumber = config.prNumber!
+  const repoSlug = formatRepoSlug(config.clerkDocsRepo)
+  const viewResult = await runCommand('gh', buildPrViewByNumberArgs(prNumber, repoSlug), process.cwd(), {
+    allowFailure: true,
+  })
+  if (viewResult.code !== 0) {
+    throwMigrationError('explicit-pr-not-found', {
+      prNumber,
+      repo: repoSlug,
+      detail: (viewResult.stderr + viewResult.stdout).trim() || `gh exited with code ${viewResult.code}`,
+    })
+  }
+  let pr: GhPrViewByNumber
+  try {
+    pr = JSON.parse(viewResult.stdout) as GhPrViewByNumber
+  } catch {
+    throwMigrationError('json-parse-failed', 'gh', buildPrViewByNumberArgs(prNumber, repoSlug).join(' '))
+  }
+
+  const { localTipSha, prHeadIsAncestorOfLocalTip } = await checkPrHeadContainment(config.clerkDocsPath, pr.headRefOid)
+  const verdict = evaluateExplicitPrForMigration({
+    prState: pr.state,
+    prHeadOid: pr.headRefOid,
+    localTipSha,
+    prHeadIsAncestorOfLocalTip,
+  })
+  const prHeadLabel = formatPrHeadLabel(pr)
+  if (!verdict.ok) {
+    if (verdict.reason === 'not-open') {
+      throwMigrationError('explicit-pr-not-open', { prNumber, state: pr.state, url: pr.url })
+    }
+    throwMigrationError('explicit-pr-head-mismatch', {
+      prNumber,
+      prHeadLabel,
+      prHeadOid: pr.headRefOid,
+      headBranch,
+      localTipSha,
+      isCrossRepository: pr.isCrossRepository,
+    })
+  }
+  if (!verdict.localTipIsPrHead) {
+    warnLog('Local branch tip is ahead of the PR head; the extra commits will be migrated and attributed to this PR.', {
+      prNumber,
+      prHeadLabel,
+      prHeadOid: pr.headRefOid,
+      localTipSha,
+    })
+    // An ancestor match is legitimate (merge-main and tier-2 conflict fixes move the tip past the
+    // PR head on every re-run), but it is also the one shape a mistyped --pr can satisfy — a
+    // stacked/parent PR's head sits in this branch's history. Attended runs confirm; unattended
+    // runs keep warn-and-proceed so converge-by-re-run still works.
+    if (stdinSupportsInteractivePrompts()) {
+      const rl = readline.createInterface({ input, output })
+      try {
+        const answer = (
+          await rl.question(
+            `--pr ${prNumber} ("${pr.title}", head ${prHeadLabel}) is behind this branch's tip. Associate, backlink, and close it anyway? (y/N): `,
+          )
+        )
+          .trim()
+          .toLowerCase()
+        if (answer !== 'y' && answer !== 'yes') {
+          throw new Error(
+            `Stopped by user: --pr ${prNumber} head is an ancestor of the branch tip, not the tip itself. Re-run with the intended --pr number.`,
+          )
+        }
+      } finally {
+        rl.close()
+      }
+    }
+  }
+  infoLog('Using clerk-docs PR from --pr (validated by head commit)', {
+    number: pr.number,
+    head: prHeadLabel,
+    isDraft: pr.isDraft,
+  })
+  return pr
+}
+
 /**
  * Open clerk-docs PR for this head, if any. Used for clerk PR title/body, backlink comment, and whether we may open a clerk PR.
  * The clerk PR base always comes from --clerk-base (default main).
  */
-async function resolveSourcePr(config: CliConfig, headBranch: string): Promise<PullRequestView | null> {
-  const list = await commandJson<PullRequestView[]>(
+async function resolveSourcePr(config: CliConfig, headBranch: string): Promise<ResolvedSourcePr | null> {
+  // An explicit --pr is never trusted on a branch-name match: `gh pr list --head` matches bare
+  // branch names across forks, so a name hit can be someone else's PR with unrelated commits.
+  // Every --pr goes through the direct fetch validated by head commit instead.
+  if (config.prNumber !== undefined) {
+    return await resolveExplicitPrByHeadCommit(config, headBranch)
+  }
+
+  const list = await commandJson<SourcePrListItem[]>(
     'gh',
-    [
-      'pr',
-      'list',
-      '--repo',
-      formatRepoSlug(config.clerkDocsRepo),
-      '--head',
-      headBranch,
-      '--state',
-      'open',
-      '--json',
-      'number,title,body,baseRefName,headRefName,url,isDraft,state',
-      '--limit',
-      '50',
-    ],
+    buildSourcePrListArgs(headBranch, formatRepoSlug(config.clerkDocsRepo)),
     process.cwd(),
   )
+  // The same bare-branch-name fork bleed applies to the automatic lookup: keep a cross-repository
+  // entry only when this branch actually contains its head commit.
+  const candidates = await filterSourcePrCandidatesByContainment(config.clerkDocsPath, list)
 
-  // An explicit --pr is always validated against the open PRs for this head, even when zero or one
-  // match. Silently ignoring it could comment on and close a PR the user did not pick.
-  if (config.prNumber !== undefined) {
-    const picked = list.find((pr) => pr.number === config.prNumber)
-    if (!picked) {
-      const available = list.length > 0 ? list.map((p) => `#${p.number}`).join(', ') : '(none)'
-      throw new Error(
-        `--pr ${config.prNumber} does not match any open PR for head "${headBranch}". Open PRs for this branch: ${available}.`,
-      )
-    }
-    infoLog('Using clerk-docs PR from --pr', { number: picked.number, isDraft: picked.isDraft })
-    return picked
-  }
-
-  if (list.length === 1) {
+  if (candidates.length === 1) {
     infoLog('Found open clerk-docs PR (for title/body and comment)', {
-      number: list[0].number,
-      isDraft: list[0].isDraft,
+      number: candidates[0].number,
+      isDraft: candidates[0].isDraft,
     })
-    return list[0]
+    return candidates[0]
   }
 
-  if (list.length > 1) {
+  if (candidates.length > 1) {
     if (!stdinSupportsInteractivePrompts()) {
       throw new Error(
-        `Multiple open PRs for head "${headBranch}": ${list.map((p) => `#${p.number}`).join(', ')}. Re-run with --pr <number> (stdin is not a TTY).`,
+        `Multiple open PRs for head "${headBranch}": ${candidates.map((p) => `#${p.number}`).join(', ')}. Re-run with --pr <number> (stdin is not a TTY).`,
       )
     }
-    return await promptPickSourcePr(list)
+    return await promptPickSourcePr(candidates)
   }
 
   warnLog(
@@ -2540,6 +2815,75 @@ function buildUpstreamConfigArgs(branch: string): string[][] {
   ]
 }
 
+type SourcePrCloseSafety = { close: true } | { close: false; reason: 'head-drifted' | 'not-open' }
+
+/**
+ * Decide whether the source PR may still be closed after the migration ran. Containment was
+ * validated at resolution time, but a migration takes minutes (temp clone, filter-repo, pushes) —
+ * long enough for the contributor to push new commits. Closing then would silently drop those
+ * commits: the migrated snapshot no longer represents the PR. Only an OPEN PR whose head still
+ * equals the validated OID is safe to close; anything else stays open for a re-run.
+ */
+function evaluateSourcePrCloseSafety(params: {
+  validatedHeadOid: string
+  currentHeadOid: string
+  currentState: string
+}): SourcePrCloseSafety {
+  if (params.currentState !== 'OPEN') return { close: false, reason: 'not-open' }
+  if (params.currentHeadOid !== params.validatedHeadOid) return { close: false, reason: 'head-drifted' }
+  return { close: true }
+}
+
+/**
+ * Re-fetch the source PR immediately before closing it and apply
+ * {@link evaluateSourcePrCloseSafety}. Conservative on every failure path: the close is the one
+ * destructive step of the sync, so it requires positive confirmation — an unreachable or
+ * unparsable PR skips the close with a warning rather than proceeding. Read-only, dry-run safe.
+ */
+async function sourcePrSafeToCloseNow(sourcePr: ResolvedSourcePr, repo: string): Promise<boolean> {
+  const result = await runCommand(
+    'gh',
+    ['pr', 'view', String(sourcePr.number), '--repo', repo, '--json', 'headRefOid,state'],
+    process.cwd(),
+    { allowFailure: true },
+  )
+  let current: { headRefOid: string; state: string }
+  try {
+    if (result.code !== 0) throw new Error(result.stderr)
+    current = JSON.parse(result.stdout) as { headRefOid: string; state: string }
+  } catch {
+    warnLog(
+      'Could not re-check the source PR before closing; leaving it open. Close it manually after confirming its head still matches what was migrated.',
+      { repo, prNumber: sourcePr.number, validatedHeadOid: sourcePr.headRefOid },
+    )
+    return false
+  }
+  const safety = evaluateSourcePrCloseSafety({
+    validatedHeadOid: sourcePr.headRefOid,
+    currentHeadOid: current.headRefOid,
+    currentState: current.state,
+  })
+  if (safety.close) return true
+  if (safety.reason === 'not-open') {
+    infoLog('Source PR is no longer open; nothing to close.', {
+      repo,
+      prNumber: sourcePr.number,
+      state: current.state,
+    })
+  } else {
+    warnLog(
+      'Leaving source PR open: new commits were pushed to it while the migration ran, so the migrated snapshot no longer matches its head. Re-run the migration to pick them up; the re-run will backlink and close.',
+      {
+        repo,
+        prNumber: sourcePr.number,
+        validatedHeadOid: sourcePr.headRefOid,
+        currentHeadOid: current.headRefOid,
+      },
+    )
+  }
+  return false
+}
+
 /**
  * Close the source clerk-docs PR after the backlink comment has been posted.
  * Idempotent in spirit: if the PR is already closed, `gh pr close` exits non-zero and the caller logs a warning.
@@ -2662,7 +3006,7 @@ function resolveEffectiveClerkBase(params: {
  */
 async function ensureClerkPrAndSyncSourcePr(
   config: CliConfig,
-  params: { baseRef: string; branch: string; headRef: string; sourcePr: PullRequestView | null },
+  params: { baseRef: string; branch: string; headRef: string; sourcePr: ResolvedSourcePr | null },
 ): Promise<string> {
   const { baseRef, branch, headRef, sourcePr } = params
 
@@ -2707,40 +3051,57 @@ async function ensureClerkPrAndSyncSourcePr(
   }
 
   if (sourcePr) {
-    const sourceRepoSlug = formatRepoSlug(config.clerkDocsRepo)
-    let commentSucceeded = false
-    try {
-      await upsertMigrationNoticeComment(config, sourcePr.number, sourceRepoSlug, { branch, prUrl: clerkPrUrl })
-      commentSucceeded = true
-    } catch (err) {
-      warnLog('Could not comment on source PR (migration itself succeeded)', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-    if (!config.closeSourcePr) {
-      infoLog('Leaving source clerk-docs PR open (--no-close-source-pr)', {
-        repo: sourceRepoSlug,
-        prNumber: sourcePr.number,
-      })
-    } else if (!commentSucceeded) {
-      warnLog(
-        'Skipping close of source PR: the backlink comment failed, and closing without it would leave no pointer to the clerk PR. Comment and close it manually.',
-        { repo: sourceRepoSlug, prNumber: sourcePr.number, clerkPrUrl },
-      )
-    } else {
-      try {
-        await closeSourcePrAfterMigration(config, sourcePr.number, sourceRepoSlug)
-      } catch (err) {
-        warnLog('Could not close source PR (migration itself succeeded; close it manually)', {
-          repo: sourceRepoSlug,
-          prNumber: sourcePr.number,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
+    await syncSourcePrAfterMigration(config, sourcePr, clerkPrUrl, branch)
   }
 
   return clerkPrUrl
+}
+
+/**
+ * Post/refresh the backlink comment on the source PR and close it when allowed and safe. Shared
+ * by create mode and update mode: an earlier run may have deferred the close on purpose (head
+ * drift, failed comment), so re-runs must retry it — otherwise the drift warning's "the re-run
+ * will backlink and close" promise never comes true and the source PR stays open forever.
+ */
+async function syncSourcePrAfterMigration(
+  config: CliConfig,
+  sourcePr: ResolvedSourcePr,
+  clerkPrUrl: string,
+  branch: string,
+): Promise<void> {
+  const sourceRepoSlug = formatRepoSlug(config.clerkDocsRepo)
+  let commentSucceeded = false
+  try {
+    await upsertMigrationNoticeComment(config, sourcePr.number, sourceRepoSlug, { branch, prUrl: clerkPrUrl })
+    commentSucceeded = true
+  } catch (err) {
+    warnLog('Could not comment on source PR (migration itself succeeded)', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  if (!config.closeSourcePr) {
+    infoLog('Leaving source clerk-docs PR open (--no-close-source-pr)', {
+      repo: sourceRepoSlug,
+      prNumber: sourcePr.number,
+    })
+  } else if (!commentSucceeded) {
+    warnLog(
+      'Skipping close of source PR: the backlink comment failed, and closing without it would leave no pointer to the clerk PR. Comment and close it manually.',
+      { repo: sourceRepoSlug, prNumber: sourcePr.number, clerkPrUrl },
+    )
+  } else {
+    try {
+      if (await sourcePrSafeToCloseNow(sourcePr, sourceRepoSlug)) {
+        await closeSourcePrAfterMigration(config, sourcePr.number, sourceRepoSlug)
+      }
+    } catch (err) {
+      warnLog('Could not close source PR (migration itself succeeded; close it manually)', {
+        repo: sourceRepoSlug,
+        prNumber: sourcePr.number,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 }
 
 async function migrateCurrentBranch(
@@ -2749,7 +3110,7 @@ async function migrateCurrentBranch(
   clerkWorkspace: ClerkWorkspace,
   headRef: string,
   baseRef: string,
-  sourcePr: PullRequestView | null,
+  sourcePr: ResolvedSourcePr | null,
   existing: { branch: string; pr: PullRequestView | null } | null,
 ): Promise<MigrationOutcome> {
   const classification = classifyExistingMigration(existing)
@@ -2782,7 +3143,7 @@ async function createNewMigration(
   clerkWorkspace: ClerkWorkspace,
   headRef: string,
   baseRef: string,
-  sourcePr: PullRequestView | null,
+  sourcePr: ResolvedSourcePr | null,
 ): Promise<{ newBranch: string; clerkPrUrl: string }> {
   const clerkWorkPath = clerkWorkspace.path
 
@@ -2987,7 +3348,7 @@ async function updateExistingMigration(
   clerkWorkspace: ClerkWorkspace,
   headRef: string,
   baseRef: string,
-  sourcePr: PullRequestView | null,
+  sourcePr: ResolvedSourcePr | null,
   existing: { branch: string; pr: PullRequestView | null },
 ): Promise<{ newBranch: string; clerkPrUrl: string }> {
   const migrationBranch = existing.branch
@@ -3224,20 +3585,12 @@ async function updateExistingMigration(
     let clerkPrUrl = existing.pr?.url ?? '(branch updated; no clerk PR yet)'
     if (existing.pr) {
       infoLog('Pushed update to existing migration branch', { branch: migrationBranch, clerkPrUrl })
-      // Self-heal the source PR's migration notice: if this branch/PR isn't listed there yet
-      // (e.g. the branch was created before the list format existed, or the source PR was
-      // previously migrated to a different branch), append it. Idempotent when already listed.
+      // Full source-PR sync, not only the notice-comment self-heal: an earlier run may have
+      // deferred the close (head drift, failed comment), so update-mode re-runs retry the same
+      // guarded close — this is what makes the drift warning's "re-run will backlink and close"
+      // promise actually converge.
       if (sourcePr) {
-        try {
-          await upsertMigrationNoticeComment(config, sourcePr.number, formatRepoSlug(config.clerkDocsRepo), {
-            branch: migrationBranch,
-            prUrl: existing.pr.url,
-          })
-        } catch (err) {
-          warnLog('Could not update migration notice comment on source PR (migration itself succeeded)', {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
+        await syncSourcePrAfterMigration(config, sourcePr, existing.pr.url, migrationBranch)
       }
     } else {
       // Recover from a previous run where the push succeeded but PR creation failed: without this,
@@ -3417,8 +3770,10 @@ async function main(): Promise<void> {
       )
     }
 
-    const sourcePr = await resolveSourcePr(config, clerkDocsBranch)
+    // Sync first: a behind-origin checkout should fail with the explicit behind-origin error, not
+    // surface later as a containment head-mismatch inside resolveSourcePr.
     await assertDocsBranchInSyncWithOrigin(config, clerkDocsBranch)
+    const sourcePr = await resolveSourcePr(config, clerkDocsBranch)
 
     const migrationBranchName = resolveMigrationBranchName(config, clerkDocsBranch)
     const existingMigration = await findExistingClerkMigration(config, migrationBranchName)
@@ -3630,6 +3985,12 @@ export {
   formatMigrationNoticeCommentBody,
   parseMigrationNoticeEntries,
   buildClosePrCommandArgs,
+  buildPrViewByNumberArgs,
+  buildSourcePrListArgs,
+  filterSourcePrCandidatesByContainment,
+  formatPrHeadLabel,
+  evaluateExplicitPrForMigration,
+  evaluateSourcePrCloseSafety,
   buildFetchBranchRefspecArgs,
   buildBaseMergeIntoMigrationArgs,
   buildDeltaRevListArgs,

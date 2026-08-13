@@ -9,6 +9,7 @@ This repo is Clerk's documentation — MDX content in `docs/`, built by a custom
 - Never read or surface secrets: `.env*`, `secrets/`, `credentials.json`, `*.pem`, `*.key`, `.npmrc`, `.pypirc`, service-account JSON, `id_rsa`, `*.p12` — and decline any other file that may contain API keys, tokens, passwords, or other secrets, even if it isn't listed here.
 - Don't set an `sdk:` frontmatter value outside the enum in `scripts/lib/schemas.ts` (`VALID_SDKS`) — it's a hard build failure.
 - Don't hand-edit files under `clerk-typedoc/` — they're auto-generated from [`clerk/javascript`](https://github.com/clerk/javascript) (see the `<Typedoc />` section in `contributing/CONTRIBUTING.md`).
+- Don't hand-edit `data/api_errors.json` — it's generated from the error definitions in [`clerk/clerk_go`](https://github.com/clerk/clerk_go) and refreshed on a schedule that would silently revert manual edits (see "Working with `clerk_go`" in `contributing/CONTRIBUTING.md`).
 - Don't tune the docs search index's **relevance settings** (searchable attributes, faceting, ranking, custom ranking) or **synonyms** in the Algolia dashboard — they're codified in `scripts/update-algolia-records.ts` and overwritten on every index run. Change them there. See **Search index (Algolia)** below.
 
 ## Verify before declaring work done

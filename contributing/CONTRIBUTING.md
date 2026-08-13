@@ -18,6 +18,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [Working with `clerk/dashboard`](#working-with-clerkdashboard)
     - [Working with `clerk/cli`](#working-with-clerkcli)
     - [Working with `clerk/skills`](#working-with-clerkskills)
+    - [Working with `clerk_go`](#working-with-clerk_go)
   - [Creating an issue](#creating-an-issue)
   - [Creating a pull request](#creating-a-pull-request)
   - [Preview your changes](#preview-your-changes)
@@ -104,6 +105,7 @@ Documentation changes are often coupled to source code, generated content, or on
 - **Quickstarts and samples:** Each documentation quickstart includes an **Example repository** section that links to its canonical source repository. When changing a quickstart's code, configuration, or instructions, update the source repository as well and cross-link the companion pull request so reviewers can verify that the two remain aligned.
 - **CLI and tooling:** [`clerk/cli`](https://github.com/clerk/cli) contains the source for Clerk CLI commands, options, and workflows. CLI documentation is maintained manually and must be verified against that source; see [Working with `clerk/cli`](#working-with-clerkcli).
 - **Public agent skills:** [`clerk/skills`](https://github.com/clerk/skills) is the source of truth for Clerk's public agent skills. `clerk/clerk` publishes them through its `/.well-known` routes; see [Working with `clerk/skills`](#working-with-clerkskills).
+- **API errors:** [`clerk/clerk_go`](https://github.com/clerk/clerk_go) _(private)_ contains Clerk's API source, including the error definitions that generate the API error reference pages; see [Working with `clerk_go`](#working-with-clerk_go).
 
 ### Working with `clerk/javascript`
 
@@ -128,6 +130,13 @@ pnpm skills:refresh
 ```
 
 Pull requests that affect the registry, its generator, or the workflow run `pnpm skills:check`. If the generated registry does not match `clerk/skills`, the check fails and leaves a comment explaining what changed and how to refresh it.
+
+### Working with `clerk_go`
+
+The API error reference pages (`/docs/guides/development/errors/*`) are built from `data/api_errors.json`, which is extracted from the error definitions in [`clerk/clerk_go`](https://github.com/clerk/clerk_go) _(private)_ — Clerk's API source. The data file is generated and should not be edited by hand: the scheduled **Refresh API error docs** workflow in `clerk/clerk` (`.github/workflows/refresh-api-errors.yml`) regenerates it from the latest production deploy of `clerk_go` and opens a refresh pull request when it changes, which would silently revert any manual edit.
+
+- To change an error's message or description, update its definition in `clerk_go` (`api/apierror/`) — the text comes from the Go code and its comments.
+- To pull in newly added errors immediately rather than waiting for the schedule, run the workflow manually (Actions → Refresh API error docs → Run workflow) instead of regenerating by hand.
 
 ## Creating an issue
 

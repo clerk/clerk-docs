@@ -1229,6 +1229,289 @@ This is a normal document.`,
       sections: [{ title: 'Section', items: [{ title: 'Section Page', href: '/docs/section-page' }] }],
     })
   })
+
+  test('errors when a manifest item tag disagrees with the doc frontmatter tag', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [{ title: 'Graduated Page', href: '/docs/graduated-page', tag: 'beta' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/graduated-page.mdx',
+        content: `---\ntitle: Graduated Page\ndescription: Frontmatter moved on, manifest did not\ntag: legacy\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs'],
+      }),
+    )
+
+    expect(output).toMatch(/error\s+Manifest item "Graduated Page"/)
+    expect(output).toContain(
+      `Manifest item "Graduated Page" sets "tag": "beta" but /docs/graduated-page.mdx sets "tag": "legacy" in its frontmatter`,
+    )
+  })
+
+  test('errors when a manifest item sets a tag but the doc frontmatter has none', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [{ title: 'Stale Pill', href: '/docs/stale-pill', tag: 'beta' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/stale-pill.mdx',
+        content: `---\ntitle: Stale Pill\ndescription: Graduated from beta, manifest pill left behind\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs'],
+      }),
+    )
+
+    expect(output).toMatch(/error\s+Manifest item "Stale Pill"/)
+    expect(output).toContain(
+      `Manifest item "Stale Pill" sets "tag": "beta" but /docs/stale-pill.mdx has no "tag" in its frontmatter`,
+    )
+  })
+
+  test('errors when a manifest item maintainer disagrees with the doc frontmatter', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [{ title: 'Adopted Page', href: '/docs/adopted-page', maintainer: 'community' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/adopted-page.mdx',
+        content: `---\ntitle: Adopted Page\ndescription: Clerk adopted it, manifest still says community\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs'],
+      }),
+    )
+
+    expect(output).toMatch(/error\s+Manifest item "Adopted Page"/)
+    expect(output).toContain(
+      `Manifest item "Adopted Page" sets "maintainer": "community" but /docs/adopted-page.mdx has no "maintainer" in its frontmatter`,
+    )
+  })
+
+  test('does not warn when manifest tag and maintainer match the frontmatter', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [{ title: 'In Sync', href: '/docs/in-sync', tag: 'beta', maintainer: 'community' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/in-sync.mdx',
+        content: `---\ntitle: In Sync\ndescription: Manifest and frontmatter agree\ntag: beta\nmaintainer: community\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('does not warn when frontmatter sets a tag the manifest omits (sidenav opt-in)', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [{ title: 'Quiet Page', href: '/docs/quiet-page' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/quiet-page.mdx',
+        content: `---\ntitle: Quiet Page\ndescription: Page pill without a sidenav pill, on purpose\ntag: experimental\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('errors when a shared-manifest tag matches the base doc but an SDK variant disagrees', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [{ title: 'Quickstart', href: '/docs/quickstart', tag: 'beta' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---\ntitle: Quickstart\ndescription: The base variant, in beta\nsdk: nextjs\ntag: beta\n---\n\nContent.`,
+      },
+      {
+        path: './docs/quickstart.react.mdx',
+        content: `---\ntitle: Quickstart\ndescription: The React variant, already graduated\nsdk: react\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    // The shared manifest's pill shows in every SDK view, so every variant the entry can render
+    // has to agree with it — a React reader would see a beta sidenav pill on a graduated page.
+    expect(output).toContain(
+      `Manifest item "Quickstart" sets "tag": "beta" but /docs/quickstart.react.mdx has no "tag" in its frontmatter`,
+    )
+  })
+
+  test('a status mismatch can be suppressed with the standard .mdx ignoreWarnings key', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [{ title: 'Stale Pill', href: '/docs/stale-pill', tag: 'beta' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/stale-pill.mdx',
+        content: `---\ntitle: Stale Pill\ndescription: Suppressed while the graduation PR is in flight\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs'],
+        ignoreWarnings: {
+          ...baseConfig.ignoreWarnings,
+          docs: { 'stale-pill.mdx': ['manifest-tag-frontmatter-mismatch'] },
+        },
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('does not check folder-level tags against their children', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'sectioned',
+          navigation: [
+            {
+              title: 'Section',
+              topNav: true,
+              items: [
+                {
+                  title: 'Legacy APIs',
+                  tag: 'legacy',
+                  items: [{ title: 'Untagged Child', href: '/docs/untagged-child' }],
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/untagged-child.mdx',
+        content: `---\ntitle: Untagged Child\ndescription: A folder tag is an editorial statement, not an aggregate\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
 })
 
 describe('SDK Processing', () => {
@@ -9858,6 +10141,78 @@ Content that only makes sense on iOS, shared into the Android nav by mistake.`,
     // ... but attributed to the SDK manifest file, not docs/manifest.json (vfile-reporter only
     // prints a file's header when it — quiet: true — has messages, so this proves attribution).
     expect(output).toContain('manifest.ios.json')
+  })
+
+  test('an SDK manifest tag matching that SDK variant frontmatter does not error when the base doc differs', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({ navigationType: 'flat', navigation: [] }),
+      },
+      {
+        path: './docs/manifest.ios.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'User', href: '/docs/user', tag: 'beta' }],
+        }),
+      },
+      {
+        path: './docs/user.mdx',
+        content: `---\ntitle: User\ndescription: The Android variant, untagged\nsdk: android\n---\n\nContent.`,
+      },
+      {
+        path: './docs/user.ios.mdx',
+        content: `---\ntitle: User\ndescription: The iOS variant, in beta\nsdk: ios\ntag: beta\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['ios', 'android'],
+      }),
+    )
+
+    // The ios manifest renders the .ios variant, so its frontmatter is the side to agree with —
+    // the base doc (the android variant here) has no say.
+    expect(output).not.toContain('sidenav pill disagrees')
+  })
+
+  test('an SDK manifest tag disagreeing with that SDK variant frontmatter errors citing the variant file', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({ navigationType: 'flat', navigation: [] }),
+      },
+      {
+        path: './docs/manifest.ios.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'User', href: '/docs/user', tag: 'legacy' }],
+        }),
+      },
+      {
+        path: './docs/user.mdx',
+        content: `---\ntitle: User\ndescription: The Android variant, untagged\nsdk: android\n---\n\nContent.`,
+      },
+      {
+        path: './docs/user.ios.mdx',
+        content: `---\ntitle: User\ndescription: The iOS variant, in beta\nsdk: ios\ntag: beta\n---\n\nContent.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['ios', 'android'],
+      }),
+    )
+
+    expect(output).toContain(
+      `Manifest item "User" sets "tag": "legacy" but /docs/user.ios.mdx sets "tag": "beta" in its frontmatter`,
+    )
   })
 
   test('a folder in manifest.ios.json runs through the same folder-sdk pass as the main manifest (items keep their own frontmatter-derived sdk; the folder inherits the manifest root scope)', async () => {

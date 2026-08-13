@@ -55,7 +55,7 @@ import type { Root } from 'mdast'
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
-import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
+import { errorMessages, safeError, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
 import {
@@ -544,6 +544,54 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         if (doc === undefined) {
           safeMessage(config, vfile, item.href, 'docs', 'doc-not-found', [item.title, item.href])
           return item
+        }
+
+        // Lifecycle status is stated in two places on purpose: frontmatter renders the page's h1
+        // pill, the manifest renders the sidenav pill — set only when the status should show in the
+        // sidebar too. The opt-in means the manifest may omit what the frontmatter states, but never
+        // contradict it. Folder-level tags have no doc to compare against (a folder's tag is an
+        // editorial statement about the collection) and are handled by the group callback below.
+        //
+        // The side to agree with is every doc this occurrence can render across its SDK scope:
+        // each SDK in scope renders that SDK's distinct variant when one exists (e.g. user.ios.mdx
+        // over user.mdx) and the base doc otherwise, so a shared-manifest pill has to agree with
+        // the base and every in-scope variant, while manifest.<sdk>.json only answers to its own
+        // SDK's rendering.
+        if (item.tag !== undefined || item.maintainer !== undefined) {
+          const occurrenceSDKs = item.sdk ?? tree.sdk ?? config.validSdks
+          const renderedDocs = new Map([[doc.file.filePath, doc]])
+
+          if (doc.distinctSDKVariants?.length) {
+            renderedDocs.clear()
+
+            for (const sdk of occurrenceSDKs) {
+              const rendered =
+                (doc.distinctSDKVariants.includes(sdk) ? docsMap.get(`${item.href}.${sdk}`) : undefined) ?? doc
+              renderedDocs.set(rendered.file.filePath, rendered)
+            }
+
+            if (renderedDocs.size === 0) renderedDocs.set(doc.file.filePath, doc)
+          }
+
+          for (const [filePath, rendered] of renderedDocs) {
+            if (item.tag !== undefined && item.tag !== rendered.frontmatter.tag) {
+              safeError(config, vfile, filePath, 'docs', 'manifest-tag-frontmatter-mismatch', [
+                item.title,
+                filePath,
+                item.tag,
+                rendered.frontmatter.tag,
+              ])
+            }
+
+            if (item.maintainer !== undefined && item.maintainer !== rendered.frontmatter.maintainer) {
+              safeError(config, vfile, filePath, 'docs', 'manifest-maintainer-frontmatter-mismatch', [
+                item.title,
+                filePath,
+                item.maintainer,
+                rendered.frontmatter.maintainer,
+              ])
+            }
+          }
         }
 
         // This is the sdk of the doc

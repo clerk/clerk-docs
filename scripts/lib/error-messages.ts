@@ -16,6 +16,20 @@ export const errorMessages = {
     `"${title}" sits at the root of a sectioned manifest but is not a "topNav": true group, so it is dropped from the built navigation. Move it inside a "topNav" group, or mark it "topNav": true to make it a section of its own.`,
   'manifest-section-fields-stripped': (title: string, fields: string[]): string =>
     `Section "${title}" sets ${fields.map((field) => `"${field}"`).join(', ')}, which ${fields.length === 1 ? 'is' : 'are'} not carried on to a section in the built navigation and will be ignored. Remove ${fields.length === 1 ? 'it' : 'them'}, or move the group inside a section instead of lifting it into one.`,
+  'manifest-tag-frontmatter-mismatch': (
+    title: string,
+    filePath: string,
+    manifestTag: string,
+    docTag?: string,
+  ): string =>
+    `Manifest item "${title}" sets "tag": "${manifestTag}" but ${filePath} ${docTag ? `sets "tag": "${docTag}"` : 'has no "tag"'} in its frontmatter, so the sidenav pill disagrees with the page's h1 pill. Update the manifest "tag" to match the frontmatter, or remove it if the status should no longer show in the sidenav.`,
+  'manifest-maintainer-frontmatter-mismatch': (
+    title: string,
+    filePath: string,
+    manifestMaintainer: string,
+    docMaintainer?: string,
+  ): string =>
+    `Manifest item "${title}" sets "maintainer": "${manifestMaintainer}" but ${filePath} ${docMaintainer ? `sets "maintainer": "${docMaintainer}"` : 'has no "maintainer"'} in its frontmatter, so the sidenav pill disagrees with the page's h1 pill. Update the manifest "maintainer" to match the frontmatter, or remove it if the status should no longer show in the sidenav.`,
 
   // Component errors
   'component-no-props': (componentName: string): string => `<${componentName} /> component has no props`,

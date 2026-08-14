@@ -9,6 +9,7 @@ import {
   globToDynamicPattern,
   globToSDKScopedPattern,
   isGlobPattern,
+  isExcludedFromGlob,
   mapSourceToDestination,
   hasSDKFrontmatter,
 } from './move-doc'
@@ -88,6 +89,17 @@ describe('move-doc utility functions', () => {
     expect(isGlobPattern('/docs/guides/[id]')).toBe(true)
     expect(isGlobPattern('/docs/guides/{a,b}')).toBe(true)
     expect(isGlobPattern('/docs/single-file')).toBe(false)
+  })
+
+  test('isExcludedFromGlob should exclude node_modules and .git path segments', () => {
+    // Node passes directories while walking; Bun passes matched file paths
+    expect(isExcludedFromGlob('node_modules')).toBe(true)
+    expect(isExcludedFromGlob('docs/node_modules/example.mdx')).toBe(true)
+    expect(isExcludedFromGlob('.git')).toBe(true)
+    expect(isExcludedFromGlob('docs\\node_modules\\example.mdx')).toBe(true)
+    expect(isExcludedFromGlob('docs/guides/example.mdx')).toBe(false)
+    // segments must match exactly — .github is not .git
+    expect(isExcludedFromGlob('docs/.github/example.mdx')).toBe(false)
   })
 
   test('globToDynamicPattern should convert glob patterns correctly', () => {

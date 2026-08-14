@@ -1,4 +1,3 @@
-import { glob } from 'glob'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -122,12 +121,7 @@ async function createTempFiles(
 
     // Get a list of all files in the temp directory
     listFiles: async (folderPath?: string) => {
-      return (
-        await glob('**/*', {
-          cwd: folderPath ? path.join(tempDir, folderPath) : tempDir,
-          nodir: true,
-        })
-      ).sort() // ensure a consistent order for tests
+      return (await treeDir(folderPath ? path.join(tempDir, folderPath) : tempDir)).sort() // ensure a consistent order for tests
     },
 
     // Read file contents
@@ -165,11 +159,11 @@ function normalizeString(str: string): string {
   return str.replace(/\r\n/g, '\n').trim()
 }
 
-function treeDir(baseDir: string) {
-  return glob('**/*', {
-    cwd: baseDir,
-    nodir: true, // Only return files, not directories
-  })
+async function treeDir(baseDir: string) {
+  const dirents = await fs.readdir(baseDir, { recursive: true, withFileTypes: true })
+  return dirents
+    .filter((dirent) => dirent.isFile()) // Only return files, not directories
+    .map((dirent) => path.relative(baseDir, path.join(dirent.parentPath, dirent.name)))
 }
 
 const baseConfig = {

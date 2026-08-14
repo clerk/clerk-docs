@@ -41,7 +41,6 @@
 import fs from 'fs/promises'
 import path from 'path'
 import prettier from 'prettier'
-import { glob } from 'glob'
 import { parse as parseJSONC } from 'jsonc-parser'
 import { VALID_SDKS } from './lib/schemas'
 
@@ -91,14 +90,6 @@ interface ManifestItem {
   href: string
   [key: string]: any
 }
-
-interface ManifestGroup {
-  title?: string
-  items: (ManifestItem | ManifestItem[])[]
-  [key: string]: any
-}
-
-type Manifest = ManifestGroup[]
 
 const splitPathAndHash = (url: string): PathWithHash => {
   const [path, hash] = url.split('#')
@@ -286,7 +277,7 @@ const updateMdxLinks = async (oldPaths: string[], newPath: string): Promise<void
       // 2. Update JSX/TSX component link props
       // This regex looks for link="..." or link='...' patterns, being careful about quotes
       const jsxLinkRegex = new RegExp(`(link=["'])(${oldBasePath}(?:#[^"']*)?)(["'])`, 'g')
-      updatedContent = updatedContent.replace(jsxLinkRegex, (match, prefix, linkPath, suffix) => {
+      updatedContent = updatedContent.replace(jsxLinkRegex, (_match, prefix, linkPath, suffix) => {
         const { hash: linkHash } = splitPathAndHash(linkPath)
         const finalHash = newHash || linkHash || ''
         return `${prefix}${newBasePath}${finalHash}${suffix}`
@@ -294,7 +285,7 @@ const updateMdxLinks = async (oldPaths: string[], newPath: string): Promise<void
 
       // 3. Update link prop in arrays
       const arrayLinkRegex = new RegExp(`(link:\\s*["'])(${oldBasePath}(?:#[^"']*)?)(["'])`, 'g')
-      updatedContent = updatedContent.replace(arrayLinkRegex, (match, prefix, linkPath, suffix) => {
+      updatedContent = updatedContent.replace(arrayLinkRegex, (_match, prefix, linkPath, suffix) => {
         const { hash: linkHash } = splitPathAndHash(linkPath)
         const finalHash = newHash || linkHash || ''
         return `${prefix}${newBasePath}${finalHash}${suffix}`
@@ -346,12 +337,6 @@ const updateRedirects = async (oldPath: string, newPath: string): Promise<string
   const redirects: StaticRedirect[] = await readJsonFile(DOCS_FILE)
   const { path: newPathBase, hash: newHash } = splitPathAndHash(newPath)
   const { path: oldPathBase } = splitPathAndHash(oldPath)
-
-  // Find redirects that need updating - those with destinations matching oldPathBase
-  const redirectsToUpdate = redirects.filter((redirect) => {
-    const { path: destPath } = splitPathAndHash(redirect.destination)
-    return destPath === oldPathBase
-  })
 
   // Find existing redirect for the source path
   const existingRedirect = redirects.find((r) => {
@@ -681,6 +666,12 @@ const mapSourceToDestination = (sourceFile: string, sourcePattern: string, destP
 }
 
 // Find all files matching a glob pattern
+// Exclusion predicate for fs.glob. Node calls `exclude` on directories while walking
+// (pruning subtrees); Bun calls it on matched file paths — checking every path segment
+// covers both runtimes
+const isExcludedFromGlob = (entryPath: string): boolean =>
+  entryPath.split(/[\\/]/).some((segment) => segment === 'node_modules' || segment === '.git')
+
 const expandGlobPattern = async (pattern: string): Promise<string[]> => {
   // Remove leading slash and add .mdx extension if not present
   const searchPattern = pattern.replace(/^\//, '')
@@ -690,10 +681,14 @@ const expandGlobPattern = async (pattern: string): Promise<string[]> => {
       ? searchPattern
       : `${searchPattern}.mdx`
 
-  const files = await glob(globPattern, {
+  const files: string[] = []
+  for await (const file of fs.glob(globPattern, {
     cwd: process.cwd(),
-    ignore: ['**/node_modules/**', '**/.git/**'],
-  })
+    exclude: isExcludedFromGlob,
+  })) {
+    // fs.glob yields platform-native separators; mapping patterns are '/'-delimited
+    files.push(file.split(path.sep).join('/'))
+  }
 
   // Return paths with leading slash and .mdx extension removed to match pattern format
   return files.map((file) => {
@@ -765,6 +760,7 @@ export {
   expandGlobPattern,
   mapSourceToDestination,
   isGlobPattern,
+  isExcludedFromGlob,
 }
 
 // Main function that can be called from tests or CLI

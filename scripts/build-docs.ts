@@ -128,6 +128,16 @@ const trailingSlashRegex = /\/$/
 // Matches the empty start of a string that does not already begin with '/', used to prefix one.
 const missingLeadingSlashRegex = /^(?!\/)/
 
+export const getSDKVariantInfo = (filePathInDocsFolder: string, href: string) => {
+  const sdk = VALID_SDKS.find((candidate) => filePathInDocsFolder.endsWith(`.${candidate}.mdx`))
+  if (sdk === undefined) return undefined
+
+  const suffix = `.${sdk}`
+  if (!href.endsWith(suffix)) return undefined
+
+  return { sdk, baseHref: href.slice(0, -suffix.length) }
+}
+
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
   main()
@@ -200,7 +210,6 @@ async function main() {
         'reference/nextjs/errors/signedin-is-not-available-in-clerk-nextjs.mdx': ['doc-not-in-manifest'],
         'reference/nextjs/errors/signedout-is-not-available-in-clerk-nextjs.mdx': ['doc-not-in-manifest'],
         'reference/nextjs/errors/protect-is-not-available-in-clerk-nextjs.mdx': ['doc-not-in-manifest'],
-        'guides/dashboard/overview.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/nextjs.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/backend.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/node.mdx': ['doc-not-in-manifest'],
@@ -211,8 +220,6 @@ async function main() {
         'guides/development/upgrading/upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
         'guides/development/ai-prompts.mdx': ['doc-not-in-manifest'],
-        'guides/development/migrating/cognito.mdx': ['doc-not-in-manifest'],
-        'guides/development/migrating/firebase.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/all-providers.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
@@ -442,6 +449,25 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   }
   console.info('✓ Parsed in Manifest')
 
+  // Pages intentionally omitted from the manifest (their `doc-not-in-manifest` warning is ignored)
+  // are recorded so the site can tell a deliberate omission from an unknown path. Derived after
+  // `docsInManifest` is populated and gated on an actual manifest miss: a stale ignore entry for a
+  // page that IS in the manifest must not land here, or a genuine future regression on that page
+  // would be silently suppressed. The membership check mirrors the per-file `inManifest` logic below.
+  const docsNotInManifest = [
+    ...new Set(
+      docsFiles.flatMap((file) => {
+        if (!shouldIgnoreWarning(config, file.filePath, 'docs', 'doc-not-in-manifest')) return []
+
+        const sdkVariant = getSDKVariantInfo(file.filePathInDocsFolder, file.href)
+        const href = sdkVariant?.baseHref ?? file.href
+        if (docsInManifest.has(href)) return []
+
+        return [href.replace(trailingIndexRegex, '')]
+      }),
+    ),
+  ].sort()
+
   abortSignal?.throwIfAborted()
 
   const cachedDocsSize = store.markdown.size
@@ -449,27 +475,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const docsArray = (
     await Promise.all([
       ...docsFiles.map(async (file) => {
-        // Check if this is an SDK variant file (e.g., api-doc.react.mdx)
-        const sdkMatch = VALID_SDKS.find((sdk) => file.filePathInDocsFolder.endsWith(`.${sdk}.mdx`))
+        const sdkVariant = getSDKVariantInfo(file.filePathInDocsFolder, file.href)
 
         // For SDK variant files, check if the base href is in manifest instead of the variant href
-        let inManifest: boolean
-        if (sdkMatch) {
-          const baseHref = file.href.replace(`.${sdkMatch}`, '')
-          inManifest = docsInManifest.has(baseHref)
-        } else {
-          inManifest = docsInManifest.has(file.href)
-        }
+        const inManifest = docsInManifest.has(sdkVariant?.baseHref ?? file.href)
 
         const markdownFile = await markdownCache(file.filePath, () =>
           parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
         )
 
-        if (sdkMatch) {
+        if (sdkVariant) {
           // This is an SDK variant file - store it with the special key format for distinct SDK variants lookup
           // e.g., /docs/api-doc.react.mdx becomes /docs/api-doc.react
-          const baseHref = file.href.replace(`.${sdkMatch}`, '')
-          const variantKey = `${baseHref}.${sdkMatch}`
+          const variantKey = `${sdkVariant.baseHref}.${sdkVariant.sdk}`
           docsMap.set(variantKey, markdownFile)
         }
         docsMap.set(file.href, markdownFile)
@@ -1096,6 +1114,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     'manifest.json',
     JSON.stringify({
       flags: siteFlags,
+      ...(docsNotInManifest.length > 0 ? { docsNotInManifest } : {}),
       navigation,
     }),
   )

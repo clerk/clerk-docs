@@ -5,7 +5,7 @@ import path from 'node:path'
 import simpleGit from 'simple-git'
 
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { build } from './build-docs'
+import { build, getSDKVariantInfo } from './build-docs'
 import { createConfig } from './lib/config'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { createBlankStore, invalidateFile } from './lib/store'
@@ -25,6 +25,23 @@ const tempConfig = {
   // Whether to setup a git repository in each test
   setupGit: false,
 }
+
+describe('getSDKVariantInfo', () => {
+  test('removes only the trailing SDK variant suffix', () => {
+    expect(getSDKVariantInfo('guides.react/example.react.mdx', '/docs/guides.react/example.react')).toEqual({
+      sdk: 'react',
+      baseHref: '/docs/guides.react/example',
+    })
+  })
+
+  test('returns undefined for a regular docs file', () => {
+    expect(getSDKVariantInfo('guides/example.mdx', '/docs/guides/example')).toBeUndefined()
+  })
+
+  test('does not strip a matching SDK substring unless it is the trailing suffix', () => {
+    expect(getSDKVariantInfo('guides/example.react.mdx', '/docs/react/guides/example')).toBeUndefined()
+  })
+})
 
 async function createTempFiles(
   files: { path: string; content: string }[],
@@ -7421,7 +7438,7 @@ description: x
 describe('Configuration Options', () => {
   describe('ignoreWarnings', () => {
     test('Should ignore certain warnings for a file when set', async () => {
-      const { tempDir } = await createTempFiles([
+      const { tempDir, pathJoin } = await createTempFiles([
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
@@ -7448,6 +7465,7 @@ description: This page has a description
           ignoreWarnings: {
             docs: {
               'index.mdx': ['doc-not-in-manifest'],
+              'missing.mdx': ['doc-not-in-manifest'],
             },
             partials: {},
             typedoc: {},
@@ -7460,6 +7478,55 @@ description: This page has a description
         'This doc is not in the manifest.json, but will still be publicly accessible and other docs can link to it',
       )
       expect(output).toBe('')
+      expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+        flags: {},
+        docsNotInManifest: ['/docs'],
+        navigation: { default: { type: 'flat', items: [] } },
+      })
+    })
+
+    test('Should not record a stale ignore entry for a page that is in the manifest', async () => {
+      const { tempDir, pathJoin } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigationType: 'flat',
+            navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+          }),
+        },
+        {
+          path: './docs/simple-test.mdx',
+          content: `---
+title: Simple Test
+description: This page has a description
+---
+
+## Page is in the manifest`,
+        },
+      ])
+
+      const output = await build(
+        await createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            docs: {
+              // Stale entry: simple-test.mdx is now in the manifest, so this should be a no-op and
+              // must not surface as an intentional omission (otherwise a real future regression on
+              // the page would be silently suppressed at runtime).
+              'simple-test.mdx': ['doc-not-in-manifest'],
+            },
+            partials: {},
+            typedoc: {},
+            tooltips: {},
+          },
+        }),
+      )
+
+      expect(output).toBe('')
+      const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
+      expect(manifest.docsNotInManifest).toBeUndefined()
     })
 
     test('Should ignore multiple warnings for a single file', async () => {

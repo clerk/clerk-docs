@@ -9,68 +9,75 @@ import { z } from 'zod'
 
 const stringSchema = z.string()
 
+// Whether a node survives <If sdk="..."> / <If notSdk="..."> filtering when the doc
+// is rendered for targetSdk. Shared by the SDK output pass, the per-SDK heading hash
+// extraction and the variant-aware link validation so they all agree on visibility.
+export const nodeIsVisibleForSdk =
+  (config: BuildConfig, filePath: string, targetSdk: SDK) =>
+  (node: Node): boolean => {
+    // We aren't passing the vfile here as the as the warning
+    // should have already been reported above when we initially
+    // parsed the file
+
+    // Check for `notSdk` prop first - if targetSdk is in `notSdk`, filter it out
+    const notSdk = extractComponentPropValueFromNode(
+      config,
+      node,
+      undefined,
+      'If',
+      'notSdk',
+      false,
+      'docs',
+      filePath,
+      stringSchema,
+    )
+
+    if (notSdk !== undefined) {
+      const notSdksFilter = extractSDKsFromIfProp(config)(node, undefined, notSdk, 'docs', filePath)
+
+      // If targetSdk is in the notSdk list, filter out this node and its children
+      if (notSdksFilter !== undefined && notSdksFilter.includes(targetSdk)) {
+        return false
+      }
+
+      // If targetSdk is NOT in the notSdk list, keep this node and its children
+      return true
+    }
+
+    // Then check for `sdk` prop
+    const sdk = extractComponentPropValueFromNode(
+      config,
+      node,
+      undefined,
+      'If',
+      'sdk',
+      false,
+      'docs',
+      filePath,
+      stringSchema,
+    )
+
+    // If no `sdk` prop and no `notSdk` prop, keep the node
+    if (sdk === undefined) return true
+
+    const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, 'docs', filePath)
+
+    // If we can't parse the sdk prop, keep the node (safer to show than hide)
+    if (sdksFilter === undefined) return true
+
+    // If targetSdk is in the sdk list, keep this node and its children
+    if (sdksFilter.includes(targetSdk)) {
+      return true
+    }
+
+    // If targetSdk is NOT in the sdk list, filter out this node and its children
+    return false
+  }
+
 // Filter out content that is only available to other sdk's
 // Only runs for sdk-specific documents
 
 export const filterOtherSDKsContentOut =
   (config: BuildConfig, filePath: string, targetSdk: SDK) => () => (tree: Node, vfile: VFile) => {
-    return mdastFilter(tree, (node) => {
-      // We aren't passing the vfile here as the as the warning
-      // should have already been reported above when we initially
-      // parsed the file
-
-      // Check for `notSdk` prop first - if targetSdk is in `notSdk`, filter it out
-      const notSdk = extractComponentPropValueFromNode(
-        config,
-        node,
-        undefined,
-        'If',
-        'notSdk',
-        false,
-        'docs',
-        filePath,
-        stringSchema,
-      )
-
-      if (notSdk !== undefined) {
-        const notSdksFilter = extractSDKsFromIfProp(config)(node, undefined, notSdk, 'docs', filePath)
-
-        // If targetSdk is in the notSdk list, filter out this node and its children
-        if (notSdksFilter !== undefined && notSdksFilter.includes(targetSdk)) {
-          return false
-        }
-
-        // If targetSdk is NOT in the notSdk list, keep this node and its children
-        return true
-      }
-
-      // Then check for `sdk` prop
-      const sdk = extractComponentPropValueFromNode(
-        config,
-        node,
-        undefined,
-        'If',
-        'sdk',
-        false,
-        'docs',
-        filePath,
-        stringSchema,
-      )
-
-      // If no `sdk` prop and no `notSdk` prop, keep the node
-      if (sdk === undefined) return true
-
-      const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, 'docs', filePath)
-
-      // If we can't parse the sdk prop, keep the node (safer to show than hide)
-      if (sdksFilter === undefined) return true
-
-      // If targetSdk is in the sdk list, keep this node and its children
-      if (sdksFilter.includes(targetSdk)) {
-        return true
-      }
-
-      // If targetSdk is NOT in the sdk list, filter out this node and its children
-      return false
-    })
+    return mdastFilter(tree, nodeIsVisibleForSdk(config, filePath, targetSdk))
   }

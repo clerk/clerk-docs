@@ -4817,7 +4817,12 @@ description: x
       }),
     )
 
-    expect(output).toBe('')
+    // The distinct react variant supplies the anchor, so the union check stays
+    // quiet — but the unscoped page also renders for nextjs readers, who land on
+    // the nextjs variant, where the anchor doesn't exist.
+    expect(output).not.toContain('warning Hash "react" not found in /docs/api-doc')
+    expect(output).not.toContain('warning Hash "react" not found in the react variant of /docs/api-doc')
+    expect(output).toContain('warning Hash "react" not found in the nextjs variant of /docs/api-doc')
   })
 
   test('should validate hashes in sdk specific links to distinct variant sdk scoped guides', async () => {
@@ -10605,5 +10610,691 @@ sdk: ios
     // files — a "sectioned" SDK manifest must fail to parse with the same error shape a malformed
     // main manifest gets, not silently succeed or throw something unrelated.
     await expect(promise).rejects.toThrow('Failed to parse manifest:')
+  })
+})
+
+describe('SDK variant-aware link hash validation', () => {
+  test('warns when a linked heading only exists in an <If> branch for a different SDK than the one being rendered', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Hooks', href: '/docs/hooks' },
+            { title: 'Clerk Object', href: '/docs/clerk-object' },
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/use-clerk.mdx',
+        content: `[Sign in](/docs/clerk-object#sign-in)`,
+      },
+      {
+        path: './docs/hooks.mdx',
+        content: `---
+title: Hooks
+description: Hooks docs
+sdk: react
+---
+
+<Include src="_partials/use-clerk" />`,
+      },
+      {
+        path: './docs/clerk-object.mdx',
+        content: `---
+title: Clerk Object
+description: Clerk object reference
+sdk: react, js-frontend
+---
+
+## Methods
+
+<If sdk="js-frontend">
+  ### Sign in
+
+  Only for js-frontend.
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    // The heading only renders for js-frontend, so the react variant of the linking
+    // page points at an anchor that does not exist there.
+    expect(output).toContain('warning Hash "sign-in" not found in the react variant of /docs/clerk-object')
+
+    // The union check still passes (the heading does exist in some variant).
+    expect(output).not.toContain('warning Hash "sign-in" not found in /docs/clerk-object')
+  })
+
+  test('warns only for the SDK variants where the linked heading is missing', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react, js-frontend
+---
+
+[Sign in](/docs/reference#sign-in)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    expect(output).toContain('warning Hash "sign-in" not found in the react variant of /docs/reference')
+    expect(output).not.toContain('warning Hash "sign-in" not found in the js-frontend variant of /docs/reference')
+  })
+
+  test('does not warn when the link itself only renders for the SDK that has the heading', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  [Sign in](/docs/reference#sign-in)
+</If>`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    // The link is scoped to js-frontend, where the heading exists, so the react
+    // variant never renders this link and there is nothing to warn about.
+    expect(output).toBe('')
+  })
+
+  test('does not warn for cross-SDK links (linked doc does not support the linking SDK)', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react
+---
+
+[Sign in](/docs/reference#sign-in)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    // The react page renders this link as an <SDKLink /> into the js-frontend
+    // variant, where the heading exists.
+    expect(output).toBe('')
+  })
+
+  test('warns when the linked heading is hidden from the rendering SDK via notSdk', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react
+---
+
+[Sign in](/docs/reference#sign-in)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If notSdk="react">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    expect(output).toContain('warning Hash "sign-in" not found in the react variant of /docs/reference')
+  })
+
+  test('validates against a distinct SDK variant file (doc.<sdk>.mdx) instead of the generic doc', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'React Guide', href: '/docs/react-guide' },
+            { title: 'Nextjs Guide', href: '/docs/nextjs-guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/react-guide.mdx',
+        content: `---
+title: React Guide
+description: React guide docs
+sdk: react
+---
+
+[Generic](/docs/reference#generic-heading)
+[React](/docs/reference#react-heading)`,
+      },
+      {
+        path: './docs/nextjs-guide.mdx',
+        content: `---
+title: Nextjs Guide
+description: Nextjs guide docs
+sdk: nextjs
+---
+
+[Generic](/docs/reference#generic-heading)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: nextjs
+---
+
+## Generic Heading`,
+      },
+      {
+        path: './docs/reference.react.mdx',
+        content: `---
+title: Reference for React
+description: React reference docs
+sdk: react
+---
+
+## React Heading`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    // The react variant file replaces the generic content entirely, so the generic
+    // heading does not exist for react readers, and vice versa holds for nextjs.
+    expect(output).toContain('warning Hash "generic-heading" not found in the react variant of /docs/reference')
+    expect(output).not.toContain('warning Hash "react-heading" not found in the react variant of /docs/reference')
+    expect(output).not.toContain('warning Hash "generic-heading" not found in the nextjs variant of /docs/reference')
+  })
+
+  test('resolves duplicate heading text across <If> branches with per-variant slug counters', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react, js-frontend
+---
+
+[Setup](/docs/reference#setup)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="react">
+  ## Setup
+</If>
+
+<If sdk="js-frontend">
+  ## Setup
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    // Each rendered variant has exactly one "Setup" heading, so its anchor is
+    // "setup" in both variants even though the union pass sees "setup" and
+    // "setup-1". Neither variant should warn.
+    expect(output).toBe('')
+  })
+
+  test('warns when linking into an unscoped doc whose heading is <If>-gated to another SDK', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react
+---
+
+[Sign in](/docs/reference#sign-in)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+---
+
+## Overview
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    // The linked doc renders for every SDK, but a react reader has the heading
+    // filtered out client-side.
+    expect(output).toContain('warning Hash "sign-in" not found in the react variant of /docs/reference')
+  })
+
+  test('warns when an unscoped page links to an anchor missing from some SDK variants of the target', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+---
+
+[Sign in](/docs/reference#sign-in)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    // The unscoped page renders for every SDK, so a react reader follows this
+    // link into the react variant, where the heading is filtered out.
+    expect(output).toContain('warning Hash "sign-in" not found in the react variant of /docs/reference')
+    expect(output).not.toContain('warning Hash "sign-in" not found in the js-frontend variant of /docs/reference')
+  })
+
+  test('does not warn when an unscoped page gates the link to the SDK that has the heading', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+---
+
+<If sdk="js-frontend">
+  [Sign in](/docs/reference#sign-in)
+</If>`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('warns when a code-block URL points to an anchor missing from the rendering SDK variant', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react, js-frontend
+---
+
+\`\`\`js
+// See https://clerk.com/docs/reference#sign-in for details
+const clerk = useClerk()
+\`\`\``,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    expect(output).toContain('warning Hash "sign-in" not found in the react variant of /docs/reference')
+    expect(output).not.toContain('warning Hash "sign-in" not found in the js-frontend variant of /docs/reference')
+  })
+
+  test('does not warn for a code-block URL inside an <If> gated to the SDK that has the anchor', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  \`\`\`js
+  // See https://clerk.com/docs/reference#sign-in for details
+  const clerk = window.Clerk
+  \`\`\`
+</If>`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('link-hash-not-found-for-sdk can be suppressed via ignoreWarnings', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Reference', href: '/docs/reference' },
+          ],
+        }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+description: Guide docs
+sdk: react
+---
+
+[Sign in](/docs/reference#sign-in)`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: Reference
+description: Reference docs
+sdk: react, js-frontend
+---
+
+<If sdk="js-frontend">
+  ## Sign in
+</If>`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'js-frontend'],
+        ignoreWarnings: {
+          ...baseConfig.ignoreWarnings,
+          docs: {
+            'guide.mdx': ['link-hash-not-found-for-sdk'],
+          },
+        },
+      }),
+    )
+
+    expect(output).not.toContain('link-hash-not-found-for-sdk')
+    expect(output).not.toContain('warning Hash "sign-in" not found in the react variant of /docs/reference')
   })
 })

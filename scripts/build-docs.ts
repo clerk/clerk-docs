@@ -1151,6 +1151,21 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             }),
           )
           .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true, embed: true }))
+          // Variant-aware hash validation for unscoped docs, which render for every
+          // SDK. Runs after the embed plugins so links inside partials/typedocs/
+          // tooltips are seen. Scoped docs pass an empty list — the SDK output pass
+          // below validates those against their one target SDK.
+          .use(
+            validateLinks(
+              config,
+              routableDocsMap,
+              doc.file.filePath,
+              'docs',
+              undefined,
+              doc.file.href,
+              doc.sdk === undefined ? config.validSdks : [],
+            ),
+          )
           .use(
             embedLinks(
               config,
@@ -1324,6 +1339,15 @@ ${yaml.stringify({
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true, embed: true }))
+              // Variant-aware hash validation. Runs after the embed plugins so links
+              // inside partials/typedocs/tooltips are seen, and checks each link's
+              // anchor against the linked doc's `targetSdk` variant instead of the
+              // union of all variants (which the validateLinks call above uses).
+              .use(
+                validateLinks(config, routableDocsMap, doc.file.filePath, 'docs', undefined, doc.file.href, [
+                  targetSdk,
+                ]),
+              )
               .use(embedLinks(config, routableDocsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))

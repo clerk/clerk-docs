@@ -23,8 +23,10 @@ import { VFile } from 'vfile'
 import { type BuildConfig } from './config'
 import { errorMessages, safeError, safeFail, safeMessage, type WarningsSection } from './error-messages'
 import { readMarkdownFile, type DocsFile } from './io'
+import { filter as mdastFilter } from 'unist-util-filter'
 import { checkPartials } from './plugins/checkPartials'
 import { checkTypedoc } from './plugins/checkTypedoc'
+import { nodeIsVisibleForSdk } from './plugins/filterOtherSDKsContentOut'
 import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatter'
 import { Prompt, checkPrompts } from './prompts'
 import type { SDK } from './schemas'
@@ -61,6 +63,12 @@ export const parseInMarkdownFile =
 
     const slugify = slugifyWithCounter()
     const headingsHashes = new Set<string>()
+    // Per-SDK heading hashes for docs containing <If /> components. `headingsHashes`
+    // above is the union across every <If /> branch; each entry here holds only the
+    // hashes that survive <If sdk/notSdk> filtering for that SDK, letting link
+    // validation check anchors against the variant a link actually renders in.
+    // null when the doc has no <If /> components (every SDK sees `headingsHashes`).
+    let headingsHashesBySdk: Map<SDK, Set<string>> | null = null
     let node: Node | undefined = undefined
     let nodeSnapshot: Node | undefined = undefined
     let finalNode: Node | undefined = undefined
@@ -257,6 +265,18 @@ export const parseInMarkdownFile =
             }
           },
         )
+
+        if (documentContainsIfComponent) {
+          headingsHashesBySdk = new Map()
+
+          for (const sdk of config.validSdks) {
+            const visibleTree = mdastFilter(tree, nodeIsVisibleForSdk(config, file.filePath, sdk))
+
+            if (visibleTree !== null && visibleTree !== undefined) {
+              headingsHashesBySdk.set(sdk, collectHeadingHashes(visibleTree))
+            }
+          }
+        }
       })
 
     await embedProcessor.run(
@@ -273,9 +293,56 @@ export const parseInMarkdownFile =
       sdk: (frontmatter as Frontmatter).sdk,
       vfile,
       headingsHashes,
+      headingsHashesBySdk: headingsHashesBySdk as Map<SDK, Set<string>> | null,
       frontmatter: frontmatter as Frontmatter,
       node: node as Node,
       fileContent,
       distinctSDKVariants: null as SDK[] | null,
     }
   }
+
+// Collect every heading hash present in a tree: explicit callout ids
+// (eg [!NOTE my-id]), author-overridden heading ids (eg ## Title {{ id: 'my-id' }})
+// and slugified heading text. Uses a fresh slugify counter so duplicate heading
+// text resolves to the same slugs the rendered (already <If />-filtered) page gets.
+function collectHeadingHashes(tree: Node): Set<string> {
+  const hashes = new Set<string>()
+  const slugify = slugifyWithCounter()
+
+  mdastVisit(
+    tree,
+    (node) => {
+      if (node.type !== 'text') return false
+      if (!('value' in node)) return false
+      if (typeof node.value !== 'string') return false
+      const lines = node.value.split('\n')
+      const callout = lines[0]
+      return calloutRegex.test(callout)
+    },
+    (node) => {
+      const callout = calloutRegex.exec((node as any).value.split('\n')[0].trim())
+
+      const id = callout?.[2]?.trim()
+
+      if (id !== undefined) {
+        hashes.add(id)
+      }
+    },
+  )
+
+  mdastVisit(
+    tree,
+    (node) => node.type === 'heading',
+    (node) => {
+      const id = extractHeadingFromHeadingNode(node)
+
+      if (id !== undefined) {
+        hashes.add(id)
+      } else {
+        hashes.add(slugify(toString(node).trim()))
+      }
+    },
+  )
+
+  return hashes
+}

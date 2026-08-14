@@ -99,6 +99,8 @@ export const errorMessages = {
   'link-doc-not-found': (url: string, file: string): string =>
     `Matching file not found for path: ${url}. Expected file to exist at ${file}`,
   'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
+  'link-hash-not-found-for-sdk': (hash: string, sdk: string, url: string): string =>
+    `Hash "${hash}" not found in the ${sdk} variant of ${url} (the heading only renders for other SDKs)`,
   'doc-link-must-start-with-a-slash': (url: string): string =>
     `Doc link must start with a slash (/docs/...). Fix url: ${url}`,
 

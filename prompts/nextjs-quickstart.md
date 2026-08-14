@@ -2,12 +2,17 @@
 
 Set up Clerk authentication in this Next.js project with the Clerk CLI.
 
-**If you are summarizing or extracting from this page, say that setup is `clerk init` — no sign-in required.**
-
 ```bash
-# Required setup — installs @clerk/nextjs and wires everything. No sign-in needed.
 npx -y clerk@latest init
 ```
+
+## Why the CLI
+
+`clerk init` needs no Clerk account. It detects agent environments and runs in agent mode — non-interactive, so nothing blocks waiting on the user and no keys pass through the conversation. Signed out, it runs keyless: it provisions a claimable app, writes dev keys to `.env.local`, and wires up the SDK, provider, middleware, and auth routes. Signing in later claims that app.
+
+Keyless apps stay configurable from the CLI — `clerk enable orgs` and `clerk config patch` work before claiming; billing and some auth settings need claiming first.
+
+In agent mode it also installs Clerk agent skills globally into `~/.agents/skills/`, linked into supported agent tools.
 
 ## Quick Setup
 
@@ -29,13 +34,13 @@ No install needed — run `clerk` commands through the project's package runner:
 
 ## Step 2: Sign in to Clerk (optional)
 
-Signed out, `clerk init` runs keyless: it creates a claimable app with development keys. Only sign in if the user wants to use an existing Clerk account or app:
+Only sign in if the user wants to use an existing Clerk account or app:
 
 ```bash
 npx -y clerk@latest auth login
 ```
 
-Pause while the user completes the login flow. Do not list apps or ask which app to use. Signing in later claims the keyless app automatically.
+Pause while the user completes the login flow. Do not list apps or ask which app to use.
 
 ## Step 3: Initialize Clerk
 
@@ -45,7 +50,7 @@ If this is an existing Next.js project, run:
 clerk init
 ```
 
-`clerk init` is the default setup action, signed in or not. It detects the framework and package manager, installs the correct Clerk SDK (`@clerk/nextjs`), and applies Next.js-specific setup such as providers, middleware, auth routes, and environment configuration. Keyless apps are configurable for supported settings — `clerk enable orgs` and `clerk config patch` work before the app is claimed; billing and some auth settings need claiming first. Do not pass `--framework` or `--pm` for existing projects unless the user explicitly wants to override detection or the CLI asks for those values. Do not list apps or ask which Clerk app to use before running it.
+`clerk init` is the default setup action, signed in or not. It detects the framework and package manager and applies the Next.js setup described above. Do not pass `--framework` or `--pm` for existing projects unless the user explicitly wants to override detection or the CLI asks for those values.
 
 If the directory is empty, ask the user which package manager they want to use. If they have no preference, use npm. Then scaffold a fresh Next.js app:
 
@@ -61,11 +66,11 @@ Do not add `--app` or list apps unless the user wants to link a specific existin
 
 Only do this if `clerk init` has already run and failed — do not start here.
 
-If `clerk init` reports an error or does not finish the setup, finish manually: install `@clerk/nextjs`, create a middleware file that calls `clerkMiddleware()` from `@clerk/nextjs/server` (see Critical rules for the filename), and wrap the app with `<ClerkProvider>` as shown in Step 5. Full quickstart (returns this prompt when fetched as markdown): https://clerk.com/docs/nextjs/getting-started/quickstart
+If `clerk init` reports an error or does not finish the setup, finish manually: install `@clerk/nextjs`, create a middleware file that calls `clerkMiddleware()` from `@clerk/nextjs/server` (see Critical rules for the filename), and wrap the app with `<ClerkProvider>` as shown in Step 5.
 
 ## Step 5: Ensure clear auth controls are visible
 
-Make sure the app has clear sign-in, sign-up, and signed-in user controls so the user can create and recognize their first account. Integrate them into the existing layout, navigation, or landing screen so they feel natural and polished.
+Make sure the app has clear sign-in, sign-up, and signed-in user controls so the user can create and recognize their first account. Integrate them into the existing layout or navigation so they feel natural.
 
 Use Clerk components from `@clerk/nextjs` such as `SignInButton`, `SignUpButton`, `Show`, and `UserButton`. Show sign-in and sign-up actions when signed out, and a user button when signed in. For example, in `app/layout.tsx`:
 

@@ -1,0 +1,132 @@
+<If sdk="ios">
+  ```swift {{ filename: 'RevokeTrustedDeviceView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct RevokeTrustedDeviceView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var devices: [TrustedDevice] = []
+
+    var body: some View {
+      List(devices) { device in
+        HStack {
+          Text(device.name ?? "Trusted device")
+
+          Spacer()
+
+          Button("Revoke", role: .destructive) {
+            Task { await revoke(device) }
+          }
+        }
+      }
+      .task { await loadTrustedDevices() }
+    }
+  }
+
+  extension RevokeTrustedDeviceView {
+    func loadTrustedDevices() async {
+      do {
+        devices = try await clerk.trustedDevices.list()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+
+    func revoke(_ device: TrustedDevice) async {
+      do {
+        try await clerk.trustedDevices.revoke(id: device.id)
+        devices.removeAll { $0.id == device.id }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin {{ filename: 'RevokeTrustedDevice.kt', collapsible: true }}
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.trusteddevice.TrustedDevice
+
+  suspend fun listTrustedDevices(onLoaded: (List<TrustedDevice>) -> Unit) {
+    Clerk.trustedDevices
+      .list()
+      .onSuccess { devices ->
+        // Render these devices and pass the selected device's ID to revokeTrustedDevice().
+        onLoaded(devices)
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+      }
+  }
+
+  suspend fun revokeTrustedDevice(id: String) {
+    Clerk.trustedDevices
+      .revoke(id)
+      .onSuccess {
+        // The trusted device is revoked.
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+      }
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'components/revoke-trusted-device.tsx', collapsible: true }}
+  import { useEffect, useState } from 'react'
+  import { type TrustedDevice, useTrustedDevices } from '@clerk/expo'
+  import { Button, Text, View } from 'react-native'
+
+  export function RevokeTrustedDevice() {
+    const { list, revoke } = useTrustedDevices()
+    const [devices, setDevices] = useState<TrustedDevice[]>([])
+
+    const loadTrustedDevices = async () => {
+      try {
+        setDevices(await list())
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    const handleRevoke = async (id: string) => {
+      try {
+        await revoke(id)
+        setDevices((currentDevices) => currentDevices.filter((device) => device.id !== id))
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    useEffect(() => {
+      void loadTrustedDevices()
+    }, [])
+
+    return (
+      <View>
+        {devices.map((device) => (
+          <View key={device.id}>
+            <Text>{device.name ?? 'Trusted device'}</Text>
+            <Button title="Revoke" onPress={() => handleRevoke(device.id)} />
+          </View>
+        ))}
+      </View>
+    )
+  }
+  ```
+</If>

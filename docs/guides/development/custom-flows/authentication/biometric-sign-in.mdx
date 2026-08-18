@@ -1,0 +1,107 @@
+---
+title: Build a custom authentication flow using biometric sign-in
+description: Learn how to enroll a trusted device and let returning users sign in to a native app with biometrics.
+sdk: expo, android, ios
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+Biometric sign-in lets returning users sign in with their device's biometrics. After a normal sign-in or sign-up, your app can enroll the current installation as a trusted device. When the session expires, the user can sign in again with biometrics instead of their original sign-in method.
+
+This is different from using biometrics only to unlock local app content. Biometric trusted-device sign-in authenticates with Clerk and creates a Clerk session. It is also different from a [passkey](/docs/guides/development/custom-flows/authentication/passkeys): trusted-device credentials are scoped to the native app installation and don't use [WebAuthn](https://www.w3.org/TR/webauthn-2/).
+
+During enrollment, the SDK generates a device-bound key pair and registers the public key with Clerk. The private key never leaves the device. To sign in, the device signs a one-time Clerk challenge after the user approves the system authentication prompt. Clerk verifies the signature before creating a session.
+
+<If sdk="expo">
+  > [!IMPORTANT]
+  > For a custom Expo flow, use the [`useTrustedDevices()`](/docs/reference/expo/native-hooks/use-trusted-devices) hook to enroll trusted devices and sign in returning users. The hook uses native code, so it requires a [development build](https://docs.expo.dev/develop/development-builds/introduction/) and doesn't work in Expo Go. Don't use [`expo-local-authentication`](https://docs.expo.dev/versions/latest/sdk/local-authentication/) in its place; that package only verifies biometrics locally and cannot create a Clerk session.
+</If>
+
+## Enable biometric sign-in
+
+1. In the Clerk Dashboard, navigate to the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page and enable the Native API. This is required to integrate Clerk in your native application or browser extension.
+   > [!WARNING]
+   > Enabling the Native API opens a public request pathway that bypasses browser-based CAPTCHA challenges. Learn more about [how the Native API affects bot protection](/docs/guides/secure/bot-protection#native-api-and-captcha).
+1. Navigate to the [**User & Authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page and select the **Biometric** tab.
+1. Enable **Sign-in with mobile biometrics**.
+
+If you use Clerk's prebuilt authentication views, you can also enable **Prompt after sign-in** or **Prompt after sign-up**. The prebuilt views will then offer enrollment after authentication and display biometric sign-in when a signed-out user has an enrolled credential. For a custom flow, use the APIs demonstrated in this guide.
+
+<If sdk="ios">
+  > [!IMPORTANT]
+  > If [`AuthView(isDismissible: false)`](/docs/reference/views/authentication/auth-view) is your app's root authentication view, use `clerk.isAuthFlowComplete` before replacing it with authenticated content so biometric enrollment can finish.
+</If>
+
+<If sdk="android">
+  > [!IMPORTANT]
+  > If [`AuthView(isDismissible = false)`](/docs/reference/views/authentication/auth-view) is your app's root authentication view, use `Clerk.isAuthFlowCompleteFlow` before replacing it with authenticated content so biometric enrollment can finish.
+</If>
+
+<If sdk="expo">
+  > [!IMPORTANT]
+  > If the native [`<AuthView />`](/docs/reference/expo/native-components/auth-view) is your app's non-dismissible root authentication view, use [`useAuthViewState()`](/docs/reference/expo/native-hooks/use-auth-view-state) before replacing it with authenticated content so biometric enrollment can finish.
+</If>
+
+## Configure your platform
+
+<If sdk="ios">
+  To support Face ID, add `NSFaceIDUsageDescription` to your app's `Info.plist`. The value must explain why your app uses Face ID. Touch ID doesn't require additional `Info.plist` configuration.
+
+  ```xml {{ filename: 'Info.plist' }}
+  <key>NSFaceIDUsageDescription</key>
+  <string>Use Face ID to sign in to this app.</string>
+  ```
+</If>
+
+<If sdk="android">
+  Biometric trusted-device sign-in is supported on Android 9 (API level 28) and later. The device must have a Class 3 biometric enrolled. Clerk automatically adds the `USE_BIOMETRIC` permission to your app's merged manifest.
+</If>
+
+<If sdk="expo">
+  <Tabs items={["iOS", "Android"]}>
+    <Tab>
+      To support Face ID, add `NSFaceIDUsageDescription` to the `infoPlist` configuration in your Expo app config. The value must explain why your app uses Face ID.
+
+      ```json {{ filename: 'app.json' }}
+      {
+        "expo": {
+          "ios": {
+            "infoPlist": {
+              "NSFaceIDUsageDescription": "Use Face ID to sign in to this app."
+            }
+          }
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      Biometric trusted-device sign-in is supported on Android 9 (API level 28) and later. The device must have a Class 3 biometric enrolled. Clerk automatically adds the `USE_BIOMETRIC` permission to your app's merged manifest.
+    </Tab>
+  </Tabs>
+</If>
+
+<Include src="_partials/authentication/trusted-devices/policy" />
+
+## Enroll a trusted device
+
+Enroll the current app installation only after the user completes a normal sign-in or sign-up and Clerk has a session with a status of `active` or `pending`.
+
+<Include src="_partials/authentication/trusted-devices/enroll" />
+
+## Sign a returning user in
+
+When the user no longer has an active session, check whether a local trusted-device credential is available before displaying biometric sign-in. While signed out, this availability check only inspects local state and can't confirm that the credential still exists in Clerk. If the subsequent sign-in reports that the credential no longer exists, the SDK removes the stale local state.
+
+<Include src="_partials/authentication/trusted-devices/sign-in" />
+
+## Revoke a trusted device
+
+While the user is signed in, list their active trusted devices and let them choose which credential to revoke. Revoking a credential prevents Clerk from accepting it again. When the matching credential belongs to the current app installation, the SDK also deletes its local private key and credential metadata.
+
+> [!WARNING]
+> Don't delete only the local key as a replacement for revocation. Local deletion doesn't invalidate the credential stored by Clerk.
+
+The following example lists trusted devices and revokes the selected credential.
+
+<Include src="_partials/authentication/trusted-devices/revoke" />

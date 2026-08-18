@@ -1,0 +1,129 @@
+<If sdk="ios">
+  The following example checks availability and signs the user in with the enrolled credential.
+
+  ```swift {{ filename: 'SignInWithBiometricsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct SignInWithBiometricsView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var isAvailable = false
+
+    var body: some View {
+      Group {
+        if isAvailable {
+          Button("Sign in with biometrics") {
+            Task { await signInWithBiometrics() }
+          }
+        }
+      }
+      .task { await refreshAvailability() }
+    }
+  }
+
+  extension SignInWithBiometricsView {
+    func refreshAvailability() async {
+      do {
+        let availability = try await clerk.trustedDevices.availability()
+        isAvailable = availability.isAvailable
+      } catch {
+        isAvailable = false
+      }
+    }
+
+    func signInWithBiometrics() async {
+      do {
+        let signIn = try await clerk.auth.signInWithTrustedDevice()
+
+        if signIn.status != .complete {
+          dump(signIn.status)
+        }
+      } catch {
+        // Keep another sign-in method available when biometric sign-in fails.
+        dump(error)
+        await refreshAvailability()
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  The following example checks availability, signs the user in, and sets the created session as active.
+
+  ```kotlin {{ filename: 'SignInWithBiometrics.kt', collapsible: true }}
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signin.SignIn
+
+  suspend fun signInWithBiometrics() {
+    val availability = Clerk.trustedDevices.availability()
+    if (!availability.isAvailable) return
+
+    Clerk.auth
+      .signInWithTrustedDevice()
+      .onSuccess { signIn ->
+        if (signIn.status == SignIn.Status.COMPLETE && signIn.createdSessionId != null) {
+          Clerk.auth
+            .setActive(sessionId = signIn.createdSessionId)
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling.
+            }
+        }
+      }
+      .onFailure {
+        // Keep another sign-in method available when biometric sign-in fails.
+      }
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  The following example checks availability, signs the user in, and sets the created session as active.
+
+  ```tsx {{ filename: 'components/sign-in-with-biometrics.tsx', collapsible: true }}
+  import { useEffect, useState } from 'react'
+  import { useSignIn, useTrustedDevices } from '@clerk/expo'
+  import { Button } from 'react-native'
+
+  export function SignInWithBiometrics() {
+    const { isLoaded, setActive } = useSignIn()
+    const { getAvailability, signIn } = useTrustedDevices()
+    const [isAvailable, setIsAvailable] = useState(false)
+
+    const refreshAvailability = async () => {
+      try {
+        const availability = await getAvailability()
+        setIsAvailable(availability.isAvailable)
+      } catch {
+        setIsAvailable(false)
+      }
+    }
+
+    useEffect(() => {
+      void refreshAvailability()
+    }, [])
+
+    const handleSignIn = async () => {
+      if (!isLoaded) return
+
+      try {
+        const result = await signIn()
+        if (result.status === 'complete' && result.createdSessionId) {
+          await setActive({ session: result.createdSessionId })
+        }
+      } catch (err) {
+        // Keep another sign-in method available when biometric sign-in fails.
+        console.error(JSON.stringify(err, null, 2))
+        await refreshAvailability()
+      }
+    }
+
+    if (!isLoaded || !isAvailable) return null
+
+    return <Button title="Sign in with biometrics" onPress={handleSignIn} />
+  }
+  ```
+</If>

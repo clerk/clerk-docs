@@ -34,6 +34,7 @@ If you're contributing specifically to our hooks and components documentation, p
       - [Update the 'key' of an SDK](#update-the-key-of-an-sdk)
   - [Editing content](#editing-content)
     - [File metadata](#file-metadata)
+      - [Agent prompt](#agent-prompt)
       - [Metadata](#metadata)
       - [Search](#search)
       - [SDK](#sdk)
@@ -514,8 +515,37 @@ description: Some brief, but effective description of the page's content.
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 - **`tag`** - Optional. The page's lifecycle status, in lifecycle order: `experimental`, `beta`, `new`, `legacy`, `deprecated`, `removed`. Renders a status pill next to the page's h1 and adds a parenthesized suffix in the `.md` output. Prefer this over inline `(beta)` / `(deprecated)` in the title itself. The sidenav pill is separate: it comes from the `tag` field on the page's entry in `manifest.json`, so set both when a page's status should show in the sidebar too. The build fails when a manifest entry's `tag` or `maintainer` disagrees with the page's frontmatter — the manifest may omit a status the frontmatter states, but never contradict it. Folder-level tags are exempt (a folder's tag is an editorial statement about the collection, with no single doc to compare against).
 - **`maintainer`** - Optional. Who maintains the thing this page documents: only `community` is valid, and absence means Clerk-maintained. Ownership is separate from lifecycle, so a page can be both community-maintained and in beta (`tag: beta` + `maintainer: community`) — both pills render.
+- **`llm`** - Optional. Associates the page with an agent prompt. Adding `llm.title` also enables the page-wide [quickstart install-prompt treatment](#agent-prompt).
 
-A `title` is **required** — the build fails without one. A `description` is strongly recommended on every page and the build **warns** when it's missing, but a missing `description` won't block the build.
+A page-level frontmatter `title` is **required** — the build fails without one. A `description` is strongly recommended on every page and the build **warns** when it's missing, but a missing `description` won't block the build.
+
+#### Agent prompt
+
+The optional `llm` frontmatter field associates a page with an agent prompt stored in [`prompts/`](../prompts/):
+
+```mdx
+---
+title: Next.js Quickstart (App Router)
+llm:
+  displayText: Use this prebuilt prompt to get started faster.
+  src: prompts/nextjs-quickstart.md
+  title: Add Clerk to Next.js
+---
+```
+
+- **`displayText`** - Required. The call-to-action text used by the standard prompt component.
+- **`src`** - Required. The prompt file, which must use a `prompts/` path.
+- **`title`** - Optional. Adding a non-empty title opts the entire page into the quickstart install-prompt treatment. The title appears in the prompt card and identifies the prompt in analytics.
+
+When `llm.title` is present, the prompt card renders at the top of the page, `<TutorialHero />` and all note callouts are hidden, and every `<Steps>` block is collapsed behind a **Step-by-step setup instructions** disclosure. While the disclosure is collapsed, the table of contents shows one entry for the manual instructions; opening it restores the individual step headings.
+
+These overrides apply to the whole page. Before adding `llm.title`, verify that the page has:
+
+- Exactly one `<Steps>` block.
+- No note callouts containing information readers need to complete the quickstart.
+- No introductory prose that becomes confusing between the prompt and the collapsed manual instructions.
+
+Prompt files belong in the top-level [`prompts/`](../prompts/) directory so the rendered page and its agent-facing output share one source. When a page has `llm.src`, its `.md` route returns the prompt instead of the manual page content, falling back to the converted manual content when the prompt file is missing or unreadable. If an install-prompt page's prompt is missing or blank, the HTML page falls back to its standard hero, note, and manual steps without rendering a prompt card.
 
 #### Choosing a status
 

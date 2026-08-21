@@ -1,6 +1,6 @@
 # Add Clerk Authentication
 
-Set up Clerk authentication with the Clerk CLI. When the framework supports keyless, `npx clerk@latest init` defaults to keyless mode — auto-generated temporary development keys that a later `clerk auth login` claims automatically.
+Set up Clerk authentication with the Clerk CLI. When the framework supports it, `npx clerk@latest init` defaults to auto-generated temporary development keys that a later `clerk auth login` claims automatically.
 
 ## Before you start
 
@@ -37,7 +37,7 @@ If a lockfile is present, let it pick the package manager: `pnpm-lock.yaml` -> `
 
 ## Step 1c: Development keys
 
-Next.js, Astro, Nuxt, TanStack Start, and React Router support keyless. There `init` writes temporary development keys to the project's env file, so the user needs no Clerk account. The CLI prints a confirmation naming the env file it wrote, followed by:
+If the framework supports temporary development keys, `init` writes them to the project's env file, so the user needs no Clerk account. The CLI prints a confirmation naming the env file it wrote, followed by:
 
 ```
 When you're ready, run clerk auth login and your app will be claimed automatically.
@@ -45,7 +45,7 @@ When you're ready, run clerk auth login and your app will be claimed automatical
 
 Relay that, using the filename the CLI printed: the app stays unclaimed until the user runs `npx clerk@latest auth login`. Do not run it for them unless they ask to claim now.
 
-Every other framework needs real API keys. There `init` applies what setup it can and prints the remaining steps.
+Frameworks without development-key support need real API keys. There `init` applies what setup it can and prints the remaining steps.
 
 To link an existing Clerk application, add `--app <application_id>` — but only when the user supplies the ID. If they want to link and have no ID, run `npx clerk@latest apps list --json`, show the names and IDs, and ask. Never choose an application for them.
 

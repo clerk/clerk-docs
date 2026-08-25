@@ -1,0 +1,134 @@
+<If sdk="ios">
+  ```swift {{ filename: 'RevokeBiometricCredentialView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct RevokeBiometricCredentialView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var credentials: [BiometricCredential] = []
+
+    var body: some View {
+      List(credentials) { credential in
+        HStack {
+          Text(credential.name ?? "Biometric credential")
+
+          Spacer()
+
+          Button("Revoke", role: .destructive) {
+            Task { await revoke(credential) }
+          }
+        }
+      }
+      .task { await loadBiometricCredentials() }
+    }
+  }
+
+  extension RevokeBiometricCredentialView {
+    func loadBiometricCredentials() async {
+      do {
+        credentials = try await clerk.biometricCredentials.list()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+
+    func revoke(_ credential: BiometricCredential) async {
+      do {
+        try await clerk.biometricCredentials.revoke(id: credential.id)
+        credentials.removeAll { $0.id == credential.id }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin {{ filename: 'RevokeBiometricCredential.kt', collapsible: true }}
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.biometriccredential.BiometricCredential
+
+  suspend fun listBiometricCredentials(onLoaded: (List<BiometricCredential>) -> Unit) {
+    Clerk.biometricCredentials
+      .list()
+      .onSuccess { credentials ->
+        // Render these credentials and pass the selected credential's ID to revokeBiometricCredential().
+        onLoaded(credentials)
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+      }
+  }
+
+  suspend fun revokeBiometricCredential(id: String) {
+    Clerk.biometricCredentials
+      .revoke(id)
+      .onSuccess {
+        // The biometric credential is revoked.
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+      }
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'components/revoke-biometric-credential.tsx', collapsible: true }}
+  import { useEffect, useState } from 'react'
+  import { type BiometricCredential, useBiometricCredentials } from '@clerk/expo'
+  import { Button, Text, View } from 'react-native'
+
+  export function RevokeBiometricCredential() {
+    const { list, revoke } = useBiometricCredentials()
+    const [credentials, setCredentials] = useState<BiometricCredential[]>([])
+
+    const loadBiometricCredentials = async () => {
+      try {
+        setCredentials(await list())
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    const handleRevoke = async (id: string) => {
+      try {
+        await revoke(id)
+        setCredentials((currentCredentials) =>
+          currentCredentials.filter((credential) => credential.id !== id),
+        )
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    useEffect(() => {
+      void loadBiometricCredentials()
+    }, [])
+
+    return (
+      <View>
+        {credentials.map((credential) => (
+          <View key={credential.id}>
+            <Text>{credential.name ?? 'Biometric credential'}</Text>
+            <Button title="Revoke" onPress={() => handleRevoke(credential.id)} />
+          </View>
+        ))}
+      </View>
+    )
+  }
+  ```
+</If>

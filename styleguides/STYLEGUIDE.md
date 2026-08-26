@@ -356,6 +356,14 @@ Use as little [jargon](https://dictionary.cambridge.org/dictionary/english/jargo
 
 > ✅ Select **New client secret**.
 
+### Use descriptive anchor text
+
+Always anchor hyperlinks with relevant, keyword-rich anchor text. Do not use "here" or "this page" as anchor text for links. Vague anchor text gives no context out of the surrounding sentence, which is a problem for people scanning the page or navigating by screen reader.
+
+> ❌ Read the complete documentation [here](/docs/guides/development/testing/test-organization-domains).
+
+> ✅ Read the complete [Test organization domains](/docs/guides/development/testing/test-organization-domains) documentation.
+
 ## Code
 
 ### Use monospace fonts for code, commands, file names, and URLs

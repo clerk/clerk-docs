@@ -970,6 +970,87 @@ test`,
     )
   })
 
+  test('warns on vague, non-descriptive link anchor text', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Page 1', href: '/docs/page-1' },
+            { title: 'Page 2', href: '/docs/page-2' },
+          ],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Page 1
+---
+
+Read the [migration guide](/docs/page-2) for details.
+
+See [here](/docs/page-2), [this page](/docs/page-2), [this guide](/docs/page-2), and [learn more](https://clerk.com).
+
+Wrapped emphasis and punctuation still match: [**Here.**](/docs/page-2)
+
+A call to action swallowing keywords is also flagged: [Learn more about the widget](/docs/page-2).
+
+CTA lead-ins are caught past non-space boundaries too: [Learn more: widgets](/docs/page-2), [Read more—widgets](/docs/page-2).
+
+But a word that merely starts the same is fine: [learn moreover about widgets](/docs/page-2).
+
+Reference-style links are checked as well: [this article][ref] and [this document][ref].
+
+But moving it outside the link is fine: Learn more about [the widget](/docs/page-2).
+
+[ref]: /docs/page-2`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+---
+
+test`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Vague anchors are flagged, case- and punctuation-insensitively.
+    expect(output).toContain(`Link anchor text "here" is not descriptive`)
+    expect(output).toContain(`Link anchor text "this page" is not descriptive`)
+    expect(output).toContain(`Link anchor text "this guide" is not descriptive`)
+    expect(output).toContain(`Link anchor text "learn more" is not descriptive`)
+    expect(output).toContain(`Link anchor text "Here." is not descriptive`)
+    // A call-to-action lead-in is flagged even when it swallows keywords.
+    expect(output).toContain(`Link anchor text "Learn more about the widget" is not descriptive`)
+    // ...including past colon/em-dash boundaries, not just a space.
+    expect(output).toContain(`Link anchor text "Learn more: widgets" is not descriptive`)
+    expect(output).toContain(`Link anchor text "Read more—widgets" is not descriptive`)
+    // Reference-style links ([text][ref]) are checked, not just inline links. These
+    // anchors appear only as reference links, so the assertions prove that support.
+    expect(output).toContain(`Link anchor text "this article" is not descriptive`)
+    expect(output).toContain(`Link anchor text "this document" is not descriptive`)
+    // The reference link's destination is resolved from its definition — no malformed
+    // empty "(link to )" is ever emitted.
+    expect(output).not.toContain(`(link to )`)
+    // Descriptive anchors are left alone, including the same link with the CTA moved out.
+    expect(output).not.toContain(`Link anchor text "migration guide" is not descriptive`)
+    expect(output).not.toContain(`Link anchor text "the widget" is not descriptive`)
+    // A word that merely starts with a CTA lead-in ("learn moreover") is not flagged.
+    expect(output).not.toContain(`Link anchor text "learn moreover about widgets" is not descriptive`)
+    // These are hard errors, not warnings.
+    expect(output).not.toContain(`warning Link anchor text`)
+  })
+
   test('should process target="_blank" links in manifest correctly', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

@@ -103,6 +103,8 @@ export const errorMessages = {
     `Hash "${hash}" not found in the ${sdk} variant of ${url} (the heading only renders for other SDKs)`,
   'doc-link-must-start-with-a-slash': (url: string): string =>
     `Doc link must start with a slash (/docs/...). Fix url: ${url}`,
+  'link-vague-anchor-text': (text: string, url: string): string =>
+    `Link anchor text "${text}" is not descriptive. Always anchor hyperlinks with relevant, keyword-rich text that describes the destination — avoid vague phrases like "here" or "this page", and keep call-to-action verbs like "Learn more" outside the link rather than in the anchor (link to ${url}). See the "Use descriptive anchor text" rule in the styleguide's Accessibility section.`,
 
   // File reading errors
   'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,

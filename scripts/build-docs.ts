@@ -95,6 +95,7 @@ import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentO
 import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
 import { embedLinks } from './lib/plugins/embedLinks'
 import { validateLinks } from './lib/plugins/validateLinks'
+import { validateAnchorText } from './lib/plugins/validateAnchorText'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
@@ -849,6 +850,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               links.add(linkInPartial)
             }),
           )
+          .use(validateAnchorText(config, partial.path, 'partials'))
         const tree = processor.parse(inputFile)
         node = await processor.run(tree, inputFile)
 
@@ -892,6 +894,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               links.add(linkInTooltip)
             }),
           )
+          .use(validateAnchorText(config, tooltipPath, 'tooltips'))
         const tree = processor.parse(tooltip.vfile)
         node = await processor.run(tree, tooltip.vfile)
 
@@ -1148,6 +1151,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               doc.file.href,
             ),
           )
+          .use(validateAnchorText(config, doc.file.filePath, 'docs'))
           .use(
             checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
               foundPartials.add(partial)

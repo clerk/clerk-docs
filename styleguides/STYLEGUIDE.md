@@ -364,6 +364,14 @@ Always anchor hyperlinks with relevant, keyword-rich anchor text. Do not use "he
 
 > ✅ Read the complete [Test organization domains](/docs/guides/development/testing/test-organization-domains) documentation.
 
+Keep call-to-action verbs like "Learn more" or "Read more" outside the link, and anchor only the descriptive keywords. The anchor text is what a screen reader announces in a list of links and what search engines read as a signal about the destination, so a leading "Learn more" adds noise and buries the keywords.
+
+> ❌ [Learn more about multi-session applications](/docs/guides/secure/session-options#multi-session-applications).
+
+> ✅ Learn more about [multi-session applications](/docs/guides/secure/session-options#multi-session-applications).
+
+This is enforced by the docs build, which fails on vague anchor text ("here", "this page", "this guide", "this section", "this article", "this document", "this doc") and on anchors that lead with a call to action ("Learn more", "Read more", "See more", "Find out more", "Click here").
+
 ## Code
 
 ### Use monospace fonts for code, commands, file names, and URLs

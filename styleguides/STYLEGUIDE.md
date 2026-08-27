@@ -362,7 +362,7 @@ Always anchor hyperlinks with relevant, keyword-rich anchor text. Do not use "he
 
 > ❌ Read the complete documentation [here](/docs/guides/development/testing/test-organization-domains).
 
-> ✅ Read the complete [Test organization domains](/docs/guides/development/testing/test-organization-domains) documentation.
+> ✅ Read the complete [Test Organization domains](/docs/guides/development/testing/test-organization-domains) documentation.
 
 Keep call-to-action verbs like "Learn more" or "Read more" outside the link, and anchor only the descriptive keywords. The anchor text is what a screen reader announces in a list of links and what search engines read as a signal about the destination, so a leading "Learn more" adds noise and buries the keywords.
 

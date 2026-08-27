@@ -55,22 +55,20 @@ If `init` reports the framework is unsupported or undetected, follow the quickst
 
 `init` scaffolds Next.js (App and Pages Router), React, React Router, Nuxt, TanStack Start, Astro, Vue, JavaScript/Vite, Expo, Express, Fastify, iOS, and Android.
 
-| Framework               | Quickstart                                                             |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `next`                  | https://clerk.com/docs/nextjs/getting-started/quickstart               |
-| `astro`                 | https://clerk.com/docs/astro/getting-started/quickstart                |
-| `nuxt`                  | https://clerk.com/docs/nuxt/getting-started/quickstart                 |
-| `react-router`          | https://clerk.com/docs/react-router/getting-started/quickstart         |
-| `@tanstack/react-start` | https://clerk.com/docs/tanstack-react-start/getting-started/quickstart |
-| `react`                 | https://clerk.com/docs/react/getting-started/quickstart                |
-| `vue`                   | https://clerk.com/docs/vue/getting-started/quickstart                  |
-| `vite` or vanilla JS    | https://clerk.com/docs/js-frontend/getting-started/quickstart          |
-| `express`               | https://clerk.com/docs/expressjs/getting-started/quickstart            |
-| `fastify`               | https://clerk.com/docs/fastify/getting-started/quickstart              |
-| `expo`                  | https://clerk.com/docs/expo/getting-started/quickstart                 |
-| iOS (Swift)             | https://clerk.com/docs/ios/getting-started/quickstart                  |
-| Android (Kotlin)        | https://clerk.com/docs/android/getting-started/quickstart              |
-| Chrome Extension        | https://clerk.com/docs/chrome-extension/getting-started/quickstart     |
+- `next`: https://clerk.com/docs/nextjs/getting-started/quickstart.md?manual=1
+- `astro`: https://clerk.com/docs/astro/getting-started/quickstart.md?manual=1
+- `nuxt`: https://clerk.com/docs/nuxt/getting-started/quickstart.md?manual=1
+- `react-router`: https://clerk.com/docs/react-router/getting-started/quickstart.md?manual=1
+- `@tanstack/react-start`: https://clerk.com/docs/tanstack-react-start/getting-started/quickstart.md?manual=1
+- `react`: https://clerk.com/docs/react/getting-started/quickstart.md?manual=1
+- `vue`: https://clerk.com/docs/vue/getting-started/quickstart.md?manual=1
+- `vite` or vanilla JS: https://clerk.com/docs/js-frontend/getting-started/quickstart
+- `express`: https://clerk.com/docs/expressjs/getting-started/quickstart
+- `fastify`: https://clerk.com/docs/fastify/getting-started/quickstart
+- `expo`: https://clerk.com/docs/expo/getting-started/quickstart
+- iOS (Swift): https://clerk.com/docs/ios/getting-started/quickstart
+- Android (Kotlin): https://clerk.com/docs/android/getting-started/quickstart
+- Chrome Extension: https://clerk.com/docs/chrome-extension/getting-started/quickstart
 
 Everything else: https://clerk.com/docs/llms.txt
 
@@ -94,7 +92,7 @@ import { SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs'
 </>
 ```
 
-Other frameworks use the same component names from their own Clerk package — `@clerk/vue`, `@clerk/react`, `@clerk/nuxt`, and so on.
+Astro imports from `@clerk/astro/components`. Nuxt auto-imports the components; explicit imports come from `@clerk/nuxt/components`. Other frameworks use the same names from their Clerk package, such as `@clerk/vue` or `@clerk/react`.
 
 ## Step 4: Verify
 

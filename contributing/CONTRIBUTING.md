@@ -545,7 +545,7 @@ These overrides apply to the whole page. Before adding `llm.title`, verify that 
 - No note callouts containing information readers need to complete the quickstart.
 - No introductory prose that becomes confusing between the prompt and the collapsed manual instructions.
 
-Prompt files belong in the top-level [`prompts/`](../prompts/) directory so the rendered page and its agent-facing output share one source. When a page has `llm.src`, its `.md` route returns the prompt instead of the manual page content, falling back to the converted manual content when the prompt file is missing or unreadable. If an install-prompt page's prompt is missing or blank, the HTML page falls back to its standard hero, note, and manual steps without rendering a prompt card.
+Prompt files belong in the top-level [`prompts/`](../prompts/) directory so the rendered page and its agent-facing output share one source. When a page has `llm.src`, its `.md` route returns the prompt instead of the manual page content; add `?manual=1` to bypass the prompt and return the converted manual page. The route also falls back to the converted manual content when the prompt file is missing or unreadable. If an install-prompt page's prompt is missing or blank, the HTML page falls back to its standard hero, note, and manual steps without rendering a prompt card.
 
 #### Choosing a status
 

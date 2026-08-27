@@ -15,7 +15,7 @@ This repo is Clerk's documentation — MDX content in `docs/`, built by a custom
 
 ## Verify before declaring work done
 
-- `pnpm run build:tsx` — hard-fails on invalid frontmatter `sdk`, a missing `title`, or parse errors; warns on a missing `description`, docs not in `manifest.json`, and broken internal links or heading anchors. A clean build can still emit warnings worth reading — "no errors" is not "no warnings."
+- `pnpm run build:tsx` — hard-fails on invalid frontmatter `sdk`, a missing `title`, parse errors, vague link anchor text ("here", "Learn more"), or lowercase Clerk feature proper nouns in prose/headings/frontmatter/manifest nav titles (see the styleguide's "Capitalize Clerk feature proper nouns" rule — only its unambiguous collocations are enforced); warns on a missing `description`, docs not in `manifest.json`, and broken internal links or heading anchors. A clean build can still emit warnings worth reading — "no errors" is not "no warnings."
 - `pnpm run lint` — formatting and other checks.
 
 See `contributing/CONTRIBUTING.md` → "Validating your changes" for what each severity means and why.

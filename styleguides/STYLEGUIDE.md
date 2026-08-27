@@ -70,6 +70,8 @@ Keep lowercase:
 - **`invitation(s)`, `membership(s)`, and `webhook(s)`**, which aren't treated as feature proper nouns, even in phrases like "Organization invitation", "Organization membership", and "webhook event". Note that "Membership Request" _is_ a proper noun, per the list above.
 - **Compound adjectives** built on industry terms, like "role-based access control".
 
+The docs build enforces the unambiguous collocations of these terms (e.g., "organization domains", "membership requests", "role sets", "agent tasks") as a hard failure — in prose, headings, link anchors, frontmatter titles and descriptions, and manifest nav titles, while honoring the exceptions above. Standalone words like "organization" or "billing" are deliberately not flagged, because generic usage is common — those remain judgment calls for authors and reviewers.
+
 ### Use "sign in" instead of "log in"
 
 Use "sign in" and "sign out" rather than "log in" or "log out".

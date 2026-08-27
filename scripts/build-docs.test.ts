@@ -1151,6 +1151,146 @@ test`,
     expect(output).not.toContain(`warning Link anchor text`)
   })
 
+  test('errors on lowercase Clerk feature proper nouns', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Page 1', href: '/docs/page-1' },
+            { title: 'Manage membership requests', href: '/docs/page-2' },
+            { title: '**Create role set** docs', href: '/docs/page-2' },
+            { title: '``role set`` internals', href: '/docs/page-2' },
+            { title: '```organization memberships`` guide', href: '/docs/page-2' },
+            { title: '\\`clerk organization\\` basics', href: '/docs/page-2' },
+            { title: '\\*\\*organization id\\*\\* notes', href: '/docs/page-2' },
+          ],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Test organization domains
+description: Verify Organization domain ownership in tests.
+---
+
+## Test organization domains
+
+Create an agent task to test your authentication flows.
+
+Users can send [organization invitations](/docs/page-2) to teammates.
+
+Generic usage is left alone: your organization's directory service handles billing information.
+
+Bold Dashboard UI labels are left alone: select **Create role set**.
+
+Code is left alone: \`role set\` and
+
+\`\`\`ts
+const roleSets = 'role sets'
+\`\`\`
+
+A half-capitalized term is still flagged: approve the pending Membership request.
+
+A soft-wrapped phrase is still flagged: schedule your agent
+tasks to run nightly.
+
+An all-caps plural is still plural: MEMBERSHIP REQUESTS need review.
+
+Component-adjacent collocations are enforced too: open the organization switcher to change teams.
+
+<Steps>
+  1. Prose inside structural JSX wrappers is still validated: enable clerk billing for this application.
+</Steps>
+
+Correct casing is left alone: Agent Tasks, the active Organization, Organization domains, and Organization Membership Requests.`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2 \`role set\` usage
+---
+
+test`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Lowercase feature proper nouns are flagged in headings and body prose,
+    // with the expectation matching the found phrase's plural form...
+    expect(output).toContain(
+      `Clerk feature name "organization domains" should be capitalized as "Organization domains"`,
+    )
+    expect(output).toContain(`Clerk feature name "agent task" should be capitalized as "Agent Task"`)
+    // ...including link anchor text...
+    expect(output).toContain(
+      `Clerk feature name "organization invitations" should be capitalized as "Organization invitations"`,
+    )
+    // ...the frontmatter title (and description)...
+    expect(output).toContain(
+      `Clerk feature name "organization domains" in the frontmatter title should be capitalized as "Organization domains"`,
+    )
+    // ...and manifest nav titles.
+    expect(output).toContain(
+      `Clerk feature name "membership requests" in the manifest title "Manage membership requests" should be capitalized as "Membership Requests"`,
+    )
+    // A phrase soft-wrapped across a line break is still caught, reported with
+    // its whitespace collapsed.
+    expect(output).toContain(`Clerk feature name "agent tasks" should be capitalized as "Agent Tasks"`)
+    // Plural detection is case-insensitive.
+    expect(output).toContain(`Clerk feature name "MEMBERSHIP REQUESTS" should be capitalized as "Membership Requests"`)
+    // Component-adjacent collocations (profile/switcher/slug) are enforced.
+    expect(output).toContain(
+      `Clerk feature name "organization switcher" should be capitalized as "Organization switcher"`,
+    )
+    // Prose inside structural JSX wrappers (<Steps>, <If>, <Tabs>, ...) is
+    // validated — most docs prose lives inside them. Rendered-UI component
+    // labels only occur in code fences, which are skipped by node type.
+    expect(output).toContain(`Clerk feature name "clerk billing" should be capitalized as "Clerk Billing"`)
+    // Mismatched backtick runs don't form a code span, so the phrase stays
+    // visible text and is still flagged.
+    expect(output).toContain(
+      `Clerk feature name "organization memberships" in the manifest title "\`\`\`organization memberships\`\` guide" should be capitalized as "Organization memberships"`,
+    )
+    // Backslash-escaped backticks and asterisks render as literal characters,
+    // so the phrase between them is visible text and is still flagged.
+    expect(output).toContain(
+      `Clerk feature name "clerk organization" in the manifest title "\\\`clerk organization\\\` basics" should be capitalized as "Clerk Organization"`,
+    )
+    expect(output).toContain(
+      `Clerk feature name "organization id" in the manifest title "\\*\\*organization id\\*\\* notes" should be capitalized as "Organization ID"`,
+    )
+    // The styleguide's exceptions are honored: bold Dashboard UI labels, inline
+    // code, and code blocks all contain "role set(s)" and none are flagged —
+    // including the backticked frontmatter title and the bold manifest title,
+    // where the exemptions apply textually rather than by node type.
+    expect(output).not.toContain(`Clerk feature name "role set`)
+    expect(output).not.toContain(`Clerk feature name "Create role set`)
+    // Generic usage that doesn't form a feature collocation is left alone.
+    expect(output).not.toContain(`Clerk feature name "billing information`)
+    expect(output).not.toContain(`Clerk feature name "your organization`)
+    // A half-capitalized term is still wrong casing.
+    expect(output).toContain(`Clerk feature name "Membership request" should be capitalized as "Membership Request"`)
+    // Correct casing is left alone.
+    expect(output).not.toContain(`Clerk feature name "Agent Tasks"`)
+    expect(output).not.toContain(`Clerk feature name "active Organization"`)
+    expect(output).not.toContain(`Clerk feature name "Organization domains"`)
+    // "Organization Membership Requests" satisfies both overlapping rules
+    // (organization membership + membership request) — neither flags it.
+    expect(output).not.toContain(`Clerk feature name "Organization Membership`)
+    expect(output).not.toContain(`Clerk feature name "Membership Requests"`)
+    // These are hard errors, not warnings.
+    expect(output).not.toContain(`warning Clerk feature name`)
+  })
+
   test('should process target="_blank" links in manifest correctly', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

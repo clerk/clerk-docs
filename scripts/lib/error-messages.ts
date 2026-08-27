@@ -112,6 +112,10 @@ export const errorMessages = {
   'link-external-explicit-target': (text: string, url: string): string =>
     `External link "${text}" (${url}) has a redundant {{ target: '_blank' }}. External http(s) links automatically open in a new tab, so remove the annotation. See the "Use consistent link targets" rule in the styleguide's Accessibility section.`,
 
+  // Prose style errors
+  'feature-proper-noun-not-capitalized': (found: string, expected: string, context?: string): string =>
+    `Clerk feature name "${found}"${context ? ` in ${context}` : ''} should be capitalized as "${expected}" — Clerk product and feature names are proper nouns. See the "Capitalize Clerk feature proper nouns" rule in the styleguide. If this occurrence is generic usage rather than the Clerk feature, reword it so it doesn't read as the feature name.`,
+
   // File reading errors
   'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,
   'partial-read-error': (path: string): string => `Failed to read in ${path} from partials file`,

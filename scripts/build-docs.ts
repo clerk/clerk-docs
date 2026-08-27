@@ -96,6 +96,7 @@ import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
 import { embedLinks } from './lib/plugins/embedLinks'
 import { validateLinks } from './lib/plugins/validateLinks'
 import { validateAnchorText } from './lib/plugins/validateAnchorText'
+import { validateManifestProperNouns, validateProperNouns } from './lib/plugins/validateProperNouns'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateLinkTargets } from './lib/plugins/validateLinkTargets'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
@@ -344,6 +345,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Generated API Error MDX files')
   }
 
+  // The generated API error pages quote clerk_go's error copy verbatim, and
+  // hand-edits to them are forbidden (the scheduled refresh would revert them),
+  // so the proper-noun check skips these files — casing fixes go to clerk_go.
+  const apiErrorFilePaths = new Set((apiErrorsFiles ?? []).map((file) => file.filePath))
+
   abortSignal?.throwIfAborted()
 
   const { navigationType: userManifestType, manifest: userManifest, vfile: manifestVfile } = await getManifest()
@@ -404,6 +410,12 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       rootSDK: [sdk] as SDK[] | undefined,
     })),
   ]
+
+  // Nav titles render in the sidenav but never pass through the remark
+  // pipeline, so check them for lowercase Clerk feature proper nouns here.
+  for (const entry of manifestEntries) {
+    validateManifestProperNouns(config, entry.navigation, entry.vfile)
+  }
 
   abortSignal?.throwIfAborted()
 
@@ -853,6 +865,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           )
           .use(validateAnchorText(config, partial.path, 'partials'))
           .use(validateLinkTargets(config, partial.path, 'partials'))
+          .use(validateProperNouns(config, partial.path, 'partials'))
         const tree = processor.parse(inputFile)
         node = await processor.run(tree, inputFile)
 
@@ -898,6 +911,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           )
           .use(validateAnchorText(config, tooltipPath, 'tooltips'))
           .use(validateLinkTargets(config, tooltipPath, 'tooltips'))
+          .use(validateProperNouns(config, tooltipPath, 'tooltips'))
         const tree = processor.parse(tooltip.vfile)
         node = await processor.run(tree, tooltip.vfile)
 
@@ -1161,6 +1175,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           )
           .use(validateAnchorText(config, doc.file.filePath, 'docs'))
           .use(validateLinkTargets(config, doc.file.filePath, 'docs'))
+          .use(
+            validateProperNouns(config, doc.file.filePath, 'docs', {
+              skip: apiErrorFilePaths.has(doc.file.filePath),
+            }),
+          )
           .use(
             checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
               foundPartials.add(partial)

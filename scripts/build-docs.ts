@@ -1647,9 +1647,10 @@ ${yaml.stringify({
   } else {
     // During a standard build
     // Clear whatever is at dist: a real folder from a previous build, or a symlink left by
-    // dev mode (`--watch` symlinks dist to a temp dir, which the OS purges later, leaving a
-    // dangling link). `force` makes this a no-op when nothing is there, and rm never follows
-    // the link, so a live dev symlink's target is left alone.
+    // dev mode (`--watch` symlinks dist to a temp dir under `.dev-dist`; sessions preserve
+    // each other's live target, but manual cleanup can still leave the link dangling).
+    // `force` makes this a no-op when nothing is there, and rm never follows the link, so a
+    // live dev symlink's target is left alone.
     // Don't gate this on existsSync() — it follows symlinks and reports false for a dangling
     // one, which skipped the removal and made the fs.cp below fail with ERR_FS_CP_DIR_TO_NON_DIR,
     // wedging every subsequent build in that checkout.

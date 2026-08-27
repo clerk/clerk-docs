@@ -70,6 +70,11 @@ type BuildConfigOptions = {
 
 export type BuildConfig = Awaited<ReturnType<typeof createConfig>>
 
+// How recently a `.dev-dist` entry must have been modified for the startup sweep to treat it
+// as another watcher's in-flight build and leave it alone. Watch builds finish in a couple of
+// minutes, so 30 minutes is comfortably past any live build without keeping junk around long.
+const DEV_DIST_SWEEP_GRACE_MS = 30 * 60 * 1000
+
 // Takes the basePath and resolves the relative paths to be absolute paths
 export async function createConfig(config: BuildConfigOptions) {
   const resolve = (relativePath: string) => {
@@ -90,8 +95,69 @@ export async function createConfig(config: BuildConfigOptions) {
     throw new Error('No path found')
   }
 
+  // Watch mode swaps dist to a freshly built temp folder on every rebuild by re-pointing a
+  // symlink at it, so the temp folder must outlive the build — and it must live inside the
+  // repo, next to dist: `next build` (Turbopack) rejects a dist symlink that resolves outside
+  // the project root, and macOS purges os.tmpdir() out from under long-running dev sessions,
+  // either of which breaks the next `next build` after running dev. Non-watch builds copy the
+  // temp folder to dist and delete it, so the OS temp directory is fine there.
+  const devDistParent = path.join(path.dirname(resolve(config.distPath)), '.dev-dist')
+
+  let devDistParentReady: Promise<string> | null = null
+  const getTempDistParent = () => {
+    if (!config.flags?.watch) return Promise.resolve(os.tmpdir())
+
+    devDistParentReady ??= (async () => {
+      // Sweep temp dists left behind by previous sessions (each session leaves its last live
+      // one behind) — except the one dist still points to: the sweep runs before this session's
+      // first build has published a replacement, and Next.js dev may be serving docs from it
+      // through the dist symlink right up until then. A later session sweeps it once dist points
+      // elsewhere. Runs once per process; rebuilds within a session must not sweep either, as
+      // the previous rebuild's temp dist is live behind the dist symlink.
+      // Only the expected codes mean "no live target": ENOENT (no dist yet) and EINVAL (dist
+      // is a real folder, not a symlink). Anything else (EACCES, I/O errors) must abort the
+      // sweep rather than read as "nothing to protect" and delete the live target.
+      const distFinalPath = resolve(config.distPath)
+      const liveTarget = await fs.readlink(distFinalPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT' || error.code === 'EINVAL') return null
+        throw error
+      })
+      const liveTargetPath = liveTarget === null ? null : path.resolve(path.dirname(distFinalPath), liveTarget)
+
+      const entries = await fs.readdir(devDistParent).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [] as string[]
+        throw error
+      })
+      const now = Date.now()
+      await Promise.all(
+        entries.map(async (entry) => {
+          const entryPath = path.join(devDistParent, entry)
+          if (entryPath === liveTargetPath) return
+
+          // A recently modified entry may be another watcher's in-flight build — a second dev
+          // session running in the same checkout. There's no cross-process "in use" signal to
+          // check, so age is the guard: in-flight builds are minutes old (their mtime updates
+          // as top-level files land), while abandoned ones age past the window and get swept
+          // by a later session. ENOENT means a concurrent cleanup got there first — fine.
+          const stats = await fs.stat(entryPath).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return null
+            throw error
+          })
+          if (stats === null || now - stats.mtimeMs < DEV_DIST_SWEEP_GRACE_MS) return
+
+          await fs.rm(entryPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+        }),
+      )
+
+      await fs.mkdir(devDistParent, { recursive: true })
+      return devDistParent
+    })()
+
+    return devDistParentReady
+  }
+
   const changeTempDist = async () => {
-    const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
+    const tempDist = await fs.mkdtemp(path.join(await getTempDistParent(), 'clerk-docs-dist-'))
 
     return {
       basePath: config.basePath,

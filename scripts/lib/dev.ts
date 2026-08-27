@@ -72,9 +72,9 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
       lastTempDistPath = newConfig.distTempPath
       isLive = true
 
-      // `force` because this folder may already be gone — the OS clears /var/folders out from
-      // under long-running dev sessions. Without it a successful rebuild reports as a failure
-      // and skips the completion signal below.
+      // `force` because this folder may already be gone — e.g. a process restart swept
+      // `.dev-dist`. Without it a successful rebuild reports as a failure and skips the
+      // completion signal below.
       await fs.rm(previousTempDistPath, { recursive: true, force: true }) // clean up the old temp dist folder
 
       abortController = null
@@ -95,7 +95,7 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
 
       // A rebuild that never went live still owns the temp folder it created. Aborts are routine
       // here — every save that lands while a build is in flight cancels it — so without this each
-      // one leaks a folder under /var/folders for the life of the session.
+      // one leaks a folder under `.dev-dist` for the life of the session.
       if (newConfig !== undefined && !isLive) {
         const abandonedPath = newConfig.distTempPath
 

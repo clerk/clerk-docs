@@ -249,8 +249,8 @@ export function isStaleRecord(record: { indexed_at?: number }, runStart: number)
 // (DOCS-11871). Hardcoded on purpose: the set changes roughly once per Core version, and a reviewed
 // PR is the right (auditable) way to change what the sweep may delete — an env var typo must never
 // be able to widen it. Each entry names its consumer:
-//   prod_docs `main`            — clerk.com/docs; the client filters facetFilters ['branch:main']
-//                                 (clerk/clerk src/app/docs/Search.tsx via DOCS_PRODUCTION_BRANCH).
+//   prod_docs `main`            — clerk.com/docs; the client hard-filters facetFilters ['branch:main']
+//                                 (clerk/clerk src/app/docs/Search.tsx).
 //   prod_docs `core-1`/`core-2` — the archived Core docs (clerk-frozen-core-{1,2}.clerkstage.dev,
 //                                 branch domains on the clerk Vercel project) query prod_docs with
 //                                 branch:core-1 / branch:core-2. Frozen legacy sets; no writer

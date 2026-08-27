@@ -372,6 +372,26 @@ Keep call-to-action verbs like "Learn more" or "Read more" outside the link, and
 
 This is enforced by the docs build, which fails on vague anchor text ("here", "this page", "this guide", "this section", "this article", "this document", "this doc") and on anchors that lead with a call to action ("Learn more", "Read more", "See more", "Find out more", "Click here").
 
+### Use consistent link targets
+
+A link's destination decides whether it opens in a new tab, not the author. The site's link component opens external `http(s)` links in a new tab (with the external-link icon) and internal links in the same tab, so an explicit `{{ target: '_blank' }}` annotation is almost never needed. Unexpected new tabs disorient readers — especially those using screen readers — and a redundant annotation is noise.
+
+The one exception is API reference links (`/docs/reference/frontend-api...`, `/docs/reference/backend-api...`, and `/docs/reference/platform-api...`): they're internal, so they never open in a new tab automatically, but they should — readers use them as a lookup while following a guide and shouldn't lose their place. Annotate them explicitly.
+
+The build fails on violations of any of these three rules, in authored content and generated Typedoc reference content alike. Typedoc files are generated, so fix their links upstream in [clerk/javascript](https://github.com/clerk/javascript) rather than hand-editing them. Classify those links by their rendered destination, not their source URL: JSDoc uses absolute `https://clerk.com/docs/...` URLs, which Typedoc rewrites to internal `/docs/...` links — so an API reference link in JSDoc still needs the annotation even though its source URL starts with `https://`.
+
+> ❌ Internal link forced into a new tab: See the [`Session`](/docs/reference/objects/session){{ target: '_blank' }} object.
+
+> ✅ Internal links open in the same tab: See the [`Session`](/docs/reference/objects/session) object.
+
+> ❌ API reference link left to open in the same tab: Use the [Backend API](/docs/reference/backend-api).
+
+> ✅ API reference links are explicitly annotated: Use the [Backend API](/docs/reference/backend-api){{ target: '_blank' }}.
+
+> ❌ Redundant annotation on an external link: Open the [Clerk Dashboard](https://dashboard.clerk.com){{ target: '_blank' }}.
+
+> ✅ External links open in a new tab automatically: Open the [Clerk Dashboard](https://dashboard.clerk.com).
+
 ## Code
 
 ### Use monospace fonts for code, commands, file names, and URLs

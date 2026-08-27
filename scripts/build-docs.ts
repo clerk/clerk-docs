@@ -97,6 +97,7 @@ import { embedLinks } from './lib/plugins/embedLinks'
 import { validateLinks } from './lib/plugins/validateLinks'
 import { validateAnchorText } from './lib/plugins/validateAnchorText'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
+import { validateLinkTargets } from './lib/plugins/validateLinkTargets'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
 import {
@@ -851,6 +852,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             }),
           )
           .use(validateAnchorText(config, partial.path, 'partials'))
+          .use(validateLinkTargets(config, partial.path, 'partials'))
         const tree = processor.parse(inputFile)
         node = await processor.run(tree, inputFile)
 
@@ -895,6 +897,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             }),
           )
           .use(validateAnchorText(config, tooltipPath, 'tooltips'))
+          .use(validateLinkTargets(config, tooltipPath, 'tooltips'))
         const tree = processor.parse(tooltip.vfile)
         node = await processor.run(tree, tooltip.vfile)
 
@@ -935,6 +938,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 links.add(linkInTypedoc)
               }),
             )
+            // Only on this MDX path, not the plain-remark fallback below — without
+            // remark-mdx a trailing {{ target: '_blank' }} stays literal text, so the
+            // plugin couldn't see annotations and would wrongly flag API reference
+            // links as missing theirs.
+            .use(validateLinkTargets(config, filePath, 'typedoc'))
           const tree = processor.parse(typedoc.vfile)
           node = await processor.run(tree, typedoc.vfile)
 
@@ -1152,6 +1160,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(validateAnchorText(config, doc.file.filePath, 'docs'))
+          .use(validateLinkTargets(config, doc.file.filePath, 'docs'))
           .use(
             checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
               foundPartials.add(partial)

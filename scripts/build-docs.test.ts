@@ -970,6 +970,106 @@ test`,
     )
   })
 
+  test("validates {{ target: '_blank' }} link annotations", async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Page 1', href: '/docs/page-1' },
+            { title: 'Page 2', href: '/docs/page-2' },
+          ],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Page 1
+---
+
+An internal docs link must not force a new tab: [Page 2](/docs/page-2){{ target: '_blank' }}.
+
+Root-relative links outside /docs are internal too: [Core 2 announcement](/changelog/2024-04-19){{ target: '_blank' }}.
+
+Same for an in-page link: [the heading](#some-heading){{ target: '_blank' }}.
+
+An API reference link must open in a new tab: [Backend API](/docs/reference/backend-api).
+
+Reference-style API links are resolved through their definition: [Users endpoint][bapi-users].
+
+An external link's annotation is redundant: [Clerk](https://clerk.com){{ target: '_blank' }}.
+
+These are all fine: [Page 2](/docs/page-2), [Frontend API](/docs/reference/frontend-api){{ target: '_blank' }},
+[Get user](/docs/reference/backend-api/tag/users/GET/users){{ target: '_blank' }}, and [Clerk](https://clerk.com).
+
+An annotation with no target is fine: [Page 2](/docs/page-2){{ id: 'custom' }}.
+
+Target-like text inside another property is not a target: [Page 2](/docs/page-2){{ id: "target: '_blank'" }}.
+
+Nor does it satisfy the requirement: [Platform API](/docs/reference/platform-api){{ id: "target: '_blank'" }}.
+
+A space-separated trailing annotation binds to the paragraph, not the link: [Page 2](/docs/page-2) {{ target: '_blank' }}
+
+## Some heading
+
+test
+
+[bapi-users]: /docs/reference/backend-api/tag/users/GET/users`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+---
+
+test`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Internal links (docs, other root-relative paths, and in-page hashes) must not
+    // carry an explicit target.
+    expect(output).toContain(`Internal link "Page 2" (/docs/page-2) has an explicit {{ target: '_blank' }}`)
+    expect(output).toContain(
+      `Internal link "Core 2 announcement" (/changelog/2024-04-19) has an explicit {{ target: '_blank' }}`,
+    )
+    expect(output).toContain(`Internal link "the heading" (#some-heading) has an explicit {{ target: '_blank' }}`)
+    // API reference links must carry one — inline and reference-style alike.
+    expect(output).toContain(
+      `API reference link "Backend API" (/docs/reference/backend-api) is missing {{ target: '_blank' }}`,
+    )
+    expect(output).toContain(
+      `API reference link "Users endpoint" (/docs/reference/backend-api/tag/users/GET/users) is missing {{ target: '_blank' }}`,
+    )
+    // External links must not carry one — MDXLink already opens them in a new tab.
+    expect(output).toContain(`External link "Clerk" (https://clerk.com) has a redundant {{ target: '_blank' }}`)
+    // Correct usage is left alone.
+    expect(output).not.toContain(`Internal link "Page 2" (/docs/page-2) has an explicit {{ id: 'custom' }}`)
+    expect(output).not.toContain(`"Frontend API"`)
+    expect(output).not.toContain(`"Get user"`)
+    // The annotation's actual target property decides, not target-like text inside
+    // another property's string value: the decoy neither flags the internal link
+    // (checked via the count below) nor satisfies the API reference requirement.
+    expect(output).toContain(
+      `API reference link "Platform API" (/docs/reference/platform-api) is missing {{ target: '_blank' }}`,
+    )
+    // The space-separated form attaches to the paragraph, not the link, so it is not flagged.
+    const internalPageTwoFlags = output.match(/Internal link "Page 2"/g) ?? []
+    expect(internalPageTwoFlags.length).toBe(1)
+    // These are hard errors, not warnings.
+    expect(output).not.toContain(`warning Internal link`)
+    expect(output).not.toContain(`warning API reference link`)
+    expect(output).not.toContain(`warning External link`)
+  })
+
   test('warns on vague, non-descriptive link anchor text', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -8058,6 +8158,59 @@ interface Client {
 
     // Should succeed without warnings
     expect(output).toBe('')
+  })
+
+  test("validates {{ target: '_blank' }} link annotations in typedoc content", async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+## API Documentation
+
+<Typedoc src="api/client" />
+`,
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `## Client API
+
+An internal link must not force a new tab: [API Doc](/docs/api-doc){{ target: '_blank' }}.
+
+An API reference link must open in a new tab: [Backend API](/docs/reference/backend-api).
+
+This one is correct: [Frontend API](/docs/reference/frontend-api){{ target: '_blank' }}.
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Generated typedoc content is held to the same three rules as authored content.
+    expect(output).toContain(`Internal link "API Doc" (/docs/api-doc) has an explicit {{ target: '_blank' }}`)
+    expect(output).toContain(
+      `API reference link "Backend API" (/docs/reference/backend-api) is missing {{ target: '_blank' }}`,
+    )
+    expect(output).not.toContain(`"Frontend API"`)
+    // These are hard errors, not warnings.
+    expect(output).not.toContain(`warning Internal link`)
+    expect(output).not.toContain(`warning API reference link`)
   })
 
   test('should warn when typedoc src does not exist', async () => {

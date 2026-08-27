@@ -180,7 +180,7 @@ Before committing, validate your changes locally with two complementary checks.
 
 **Build the docs** with `pnpm run build:tsx`. The build validates content and reports two severities:
 
-- **Failures** stop the build. These include invalid frontmatter (for example, an `sdk` value outside the set defined in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts)), a missing `title`, [non-descriptive link text](../styleguides/STYLEGUIDE.md#use-descriptive-anchor-text) such as `here` or `Learn more`, or frontmatter that fails to parse. (For a real example, [#3176](https://github.com/clerk/clerk-docs/pull/3176) shipped an invalid `sdk` key that broke the production build.)
+- **Failures** stop the build. These include invalid frontmatter (for example, an `sdk` value outside the set defined in [`scripts/lib/schemas.ts`](../scripts/lib/schemas.ts)), a missing `title`, [non-descriptive link text](../styleguides/STYLEGUIDE.md#use-descriptive-anchor-text) such as `here` or `Learn more`, [incorrect link-target annotations](../styleguides/STYLEGUIDE.md#use-consistent-link-targets), or frontmatter that fails to parse. (For a real example, [#3176](https://github.com/clerk/clerk-docs/pull/3176) shipped an invalid `sdk` key that broke the production build.)
 - **Warnings** don't stop the build, but should still be resolved. These include a missing `description`, a doc that isn't in `manifest.json`, or a broken internal link or heading anchor.
 
 Because warnings don't fail the build, a green build is not the same as a clean one — read the warnings before opening or merging a PR.

@@ -105,6 +105,12 @@ export const errorMessages = {
     `Doc link must start with a slash (/docs/...). Fix url: ${url}`,
   'link-vague-anchor-text': (text: string, url: string): string =>
     `Link anchor text "${text}" is not descriptive. Always anchor hyperlinks with relevant, keyword-rich text that describes the destination — avoid vague phrases like "here" or "this page", and keep call-to-action verbs like "Learn more" outside the link rather than in the anchor (link to ${url}). See the "Use descriptive anchor text" rule in the styleguide's Accessibility section.`,
+  'link-internal-explicit-target': (text: string, url: string): string =>
+    `Internal link "${text}" (${url}) has an explicit {{ target: '_blank' }}. Internal links must open in the same tab, so remove the annotation — the only exception is API reference links (/docs/reference/{frontend,backend,platform}-api...), which do require it. See the "Use consistent link targets" rule in the styleguide's Accessibility section.`,
+  'link-api-reference-missing-target': (text: string, url: string): string =>
+    `API reference link "${text}" (${url}) is missing {{ target: '_blank' }}. API reference links are internal, so they never open in a new tab automatically — append {{ target: '_blank' }} so readers keep their place in the docs. See the "Use consistent link targets" rule in the styleguide's Accessibility section.`,
+  'link-external-explicit-target': (text: string, url: string): string =>
+    `External link "${text}" (${url}) has a redundant {{ target: '_blank' }}. External http(s) links automatically open in a new tab, so remove the annotation. See the "Use consistent link targets" rule in the styleguide's Accessibility section.`,
 
   // File reading errors
   'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,

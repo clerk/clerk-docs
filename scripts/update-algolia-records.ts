@@ -93,6 +93,10 @@ type SearchAttribute = RecordPath<SearchRecord>
 // path, so the settings can only ever reference fields that exist.
 const plain = <T extends SearchAttribute>(attribute: T) => attribute
 const unordered = <T extends SearchAttribute>(attribute: T) => `unordered(${attribute})` as const
+// Comma-joined attributes share one priority tier. Algolia REJECTS modifiers inside a
+// comma-joined tier by silently stripping `unordered(...)` — leaving mangled attribute names that
+// stop being searchable at all — so entries here must be plain names (DOCS-11955, verified).
+const sameTier = (...attributes: SearchAttribute[]) => attributes.join(',')
 const filterOnly = <T extends SearchAttribute>(attribute: T) => `filterOnly(${attribute})` as const
 const desc = <T extends SearchAttribute>(attribute: T) => `desc(${attribute})` as const
 const asc = <T extends SearchAttribute>(attribute: T) => `asc(${attribute})` as const
@@ -108,16 +112,23 @@ const asc = <T extends SearchAttribute>(attribute: T) => `asc(${attribute})` as 
 // heading match (`hierarchy.lvlN`) outranks one only in `content` — the foundation the ranking
 // reorder relies on. Mirrors the DocSearch crawler layout; `unordered(...)` ignores word position
 // within an attribute. If a new searchable field is ever added to records, add it here too.
+//
+// `keywords` shares the lvl1 (page title) tier — title-strength, opt-in per page via frontmatter
+// `search.keywords` (DOCS-11955). The `attribute` criterion scores a record by the highest tier
+// where ANY query word matched, so a page whose title contains one word of a query ("api" in
+// "Frontend API errors") structurally beats a lower-level heading matching all of them ("Enable
+// Native API"); a curated keyword is the only way to give the intended page equal footing. The
+// flip side: a keyword is a title-strength lever, so a badly chosen one hijacks its query — new
+// `search.keywords` go through the regression suite like any relevance change (see AGENTS.md).
 export const SEARCHABLE_ATTRIBUTES = [
   unordered('hierarchy.lvl0'),
-  unordered('hierarchy.lvl1'),
+  sameTier('hierarchy.lvl1', 'keywords'),
   unordered('hierarchy.lvl2'),
   unordered('hierarchy.lvl3'),
   unordered('hierarchy.lvl4'),
   unordered('hierarchy.lvl5'),
   unordered('hierarchy.lvl6'),
   plain('content'),
-  unordered('keywords'),
 ]
 //
 // Faceting — `filterOnly` (filter, no facet counts) since these are only ever used to filter,

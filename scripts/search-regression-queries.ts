@@ -216,6 +216,75 @@ export const REGRESSION_CASES: RegressionCase[] = [
     source: 'DOCS-11910 follow-up (Jeff, 2026-07-20)',
   },
 
+  // --- Title-tier keywords: curated `search.keywords` rank with page titles (DOCS-11955) ---
+  // "native api" must not lose to the "Frontend API errors" page's lvl1 "api" hijack. topN 1 on
+  // all four: the keyword + SDK boost makes first place the advertised contract.
+  {
+    query: 'native api',
+    boost: 'ios',
+    urls: ['/docs/ios/getting-started/quickstart'],
+    topN: 1,
+    source: 'DOCS-11955',
+  },
+  {
+    query: 'native api',
+    boost: 'expo',
+    urls: ['/docs/expo/getting-started/quickstart'],
+    topN: 1,
+    source: 'DOCS-11955',
+  },
+  {
+    query: 'native api',
+    boost: 'android',
+    urls: ['/docs/android/getting-started/quickstart'],
+    topN: 1,
+    source: 'DOCS-11955',
+  },
+  {
+    query: 'native api',
+    boost: 'chrome-extension',
+    urls: ['/docs/chrome-extension/getting-started/quickstart'],
+    topN: 1,
+    source: 'DOCS-11955',
+  },
+  // Flip-side guard: the multi-word keyword's lone "api" word must not hijack plain "api" —
+  // the reference pages stay on top (the quickstart may appear below them; that boost is fine).
+  {
+    query: 'api',
+    boost: 'ios',
+    urls: ['/docs/reference/api/overview', '/docs/reference/backend/types/backend-api-key'],
+    topN: 3,
+    source: 'DOCS-11955 (keyword individual-word guard)',
+  },
+  // Guard against title-tier keyword hijacks: broad keywords removed in DOCS-11955 must not
+  // resurface and steal these queries from the pages readers actually want. Any password-reset
+  // doc counts (legacy variants included) — the promise is that the session-tasks page's old
+  // `reset-password` task-ID keyword stays gone, not which reset doc wins.
+  {
+    query: 'reset password',
+    boost: 'nextjs',
+    urls: [
+      '/docs/nextjs/guides/development/custom-flows/authentication/forgot-password',
+      '/docs/guides/development/custom-flows/authentication/forgot-password',
+      '/docs/guides/development/custom-flows/authentication/legacy/forgot-password',
+      '/docs/nextjs/guides/development/custom-flows/account-updates/update-password',
+      '/docs/guides/development/custom-flows/account-updates/update-password',
+      '/docs/guides/secure/password-protection-and-rules',
+    ],
+    topN: 3,
+    source: 'DOCS-11955 (Sarah, keyword sweep)',
+  },
+  // The curated `waitlist` keyword + `search.rank: 1` finally beat the `Waitlist` type reference.
+  // topN 1 on purpose: outranking the type reference is the promise, and top-3 could pass with
+  // the reference still above the guide.
+  {
+    query: 'waitlist',
+    boost: 'nextjs',
+    urls: ['/docs/guides/secure/restricting-access'],
+    topN: 1,
+    source: 'DOCS-11955',
+  },
+
   // --- CIMD acronym, synonym derived from the client-id-metadata-document tooltip ---
   {
     query: 'cimd',

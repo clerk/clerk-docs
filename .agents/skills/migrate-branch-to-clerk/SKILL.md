@@ -1,6 +1,6 @@
 ---
 name: migrate-branch-to-clerk
-description: Run and troubleshoot scripts/migrate-clerk-docs-to-clerk.ts, which migrates a clerk-docs feature branch (and its PR) into the clerk/clerk monorepo under clerk-docs/. Use when the user asks to migrate a branch or PR to clerk, re-run a migration, or hit a migration conflict, merge conflict, or "conflict-synced-to-docs" error from the script.
+description: Run and troubleshoot scripts/migrate-clerk-docs-to-clerk.ts, which migrates a clerk-docs feature branch (and its PR) into the clerk/clerk monorepo under clerk-docs/. Use when the user asks to migrate a branch or PR to clerk, to accept / pull in / bring in an external clerk-docs PR (including deciding to decline one), to re-run a migration, or hit a migration conflict, merge conflict, or "conflict-synced-to-docs" error from the script.
 ---
 
 # Migrating a clerk-docs branch into clerk/clerk
@@ -42,6 +42,22 @@ pnpm migrate:clerk --clerk-path ../clerk --local-only
 
 Other flags: `--target-branch` (clerk-side branch name; default `<docs-branch>-docs-migration`), `--clerk-base` (default `main`), `--no-merge-main` (skip the pre-migration merge of docs origin/main), `--no-close-source-pr`, `--allow-dirty-docs`, `--debug`. Run `--help` for the full list.
 
+## Triaging an external (fork) PR — accept, refine, or decline
+
+External contributions arrive as fork PRs on the clerk-docs mirror (a bot comment plus the `external-contribution` label marks them). Acceptance is a maintainer call; pick one of three outcomes:
+
+**Accept as-is.** Run the fork-PR migration below, unchanged. The script handles the whole close-out: the migrated commits keep the contributor's authorship, the source-PR notice comment automatically thanks them by @-mention, explains that the close is the merge path (linking the contributing guide), and — because Vercel refuses to deploy a head commit authored by a non-team-member — an empty runner-authored bump commit is appended automatically so the clerk PR's deployment goes green.
+
+**Accept with refinements.** Same flow, but commit your polish on top of the fetched PR head before running the script — the head-commit validation accepts a PR head that is an _ancestor_ of the branch tip, flags the extra commits, and migrates them along with the contributor's (their commits keep their authorship; yours keep yours). Refinements you only think of after migrating can simply be pushed to the migration branch in clerk. Don't squash or amend the contributor's commits — preserving their authorship is the point.
+
+**Decline.** Don't run the migration. Be kind, thank them, and state the reason factually in as few words as possible — then close the PR. Template:
+
+> @<author> thanks for <the specific thing they did>. <One or two factual sentences: why this isn't moving forward — e.g. it's already documented at <link>, it duplicates <existing page> and the two would drift, it's an SDK bug rather than a docs gap (filed as <issue>), or it's a content type we don't accept.>
+>
+> Going to close this one, but <short, genuine appreciation>.
+
+Good real examples: [clerk-docs#3531](https://github.com/clerk/clerk-docs/pull/3531#issuecomment-5375729629) (already covered elsewhere), [clerk-docs#3525](https://github.com/clerk/clerk-docs/pull/3525#issuecomment-5259482079) (underlying SDK bug, filed upstream), [clerk-docs#3524](https://github.com/clerk/clerk-docs/pull/3524#issuecomment-5193126889) (content type not accepted). No hedging, no "at this time we have decided" boilerplate — verdict plus reason, and close.
+
 ## Migrating a fork PR (external contribution)
 
 The script never trusts a branch-name match alone for association — `gh pr list --head` matches bare branch names across forks, so a name hit can be someone else's PR. Instead it validates by **head commit**: the PR's head SHA must be the current local branch tip (or an ancestor of it, e.g. after you added a conflict-resolution commit on top; the extra commits are flagged and migrated too — interactive runs ask for confirmation first, since an ancestor is also what a mistyped `--pr` pointing at a stacked/parent PR looks like). For a fork PR, pass `--pr <number>` explicitly — the default lookup misses it whenever your local branch doesn't reuse the fork's bare branch name, and when it does match, the same head-commit validation applies. Fetch the PR head into a local branch, push it, and migrate:
@@ -53,7 +69,7 @@ git push -u origin <forkOwner>/<descriptive-name>
 pnpm migrate:clerk --clerk-path ../clerk --pr <number>
 ```
 
-Everything downstream works as for a same-repo PR: the contributor's authorship is preserved by the cherry-picks, and the clerk PR mirrors the fork PR's title/body before the source PR is backlinked and closed. If the fork PR gets new commits after you fetched it, the head-commit check fails — re-fetch and re-push, then re-run.
+Everything downstream works as for a same-repo PR: the contributor's authorship is preserved by the cherry-picks, and the clerk PR mirrors the fork PR's title/body before the source PR is backlinked and closed. Two fork-only behaviors kick in automatically: the source-PR notice comment uses the contributor-facing wording (thanks, authorship preserved, close-is-the-merge-path), and an empty runner-authored commit is appended before push so Vercel deploys the branch (it refuses commits authored by non-team-members). If the fork PR gets new commits after you fetched it, the head-commit check fails — re-fetch and re-push, then re-run.
 
 ## Create vs update — re-running is safe and expected
 

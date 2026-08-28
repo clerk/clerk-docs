@@ -36,6 +36,8 @@ import {
   commandJson,
   formatClosedPrAbortMessage,
   formatMigrationNoticeCommentBody,
+  shouldAppendVercelBumpCommit,
+  VERCEL_BUMP_COMMIT_MESSAGE,
   formatSourcePrMigrationAppendix,
   formatUpdateMergeConflictHints,
   gitRootIsAboveDocsProject,
@@ -835,6 +837,38 @@ describe('formatMigrationNoticeCommentBody', () => {
     expect(body).toContain('- https://github.com/clerk/clerk/pull/9')
     expect(body).not.toContain('`')
   })
+
+  test('external contributions get the contributor-facing wording with @mention and contributing link', () => {
+    const body = formatMigrationNoticeCommentBody(
+      'clerk/clerk',
+      [{ branch: 'forkuser/fix-typo-docs-migration', prUrl: 'https://github.com/clerk/clerk/pull/3250' }],
+      { authorLogin: 'forkuser', isExternalContribution: true },
+    )
+    expect(body.startsWith('<!-- clerk-docs-migration-notice -->')).toBe(true)
+    expect(body).toContain('@forkuser thanks for contributing!')
+    expect(body).toContain('authorship preserved')
+    expect(body).toContain('not a rejection')
+    expect(body).toContain('contributing/CONTRIBUTING.md#contributing-to-clerks-documentation')
+    expect(body).toContain('- `forkuser/fix-typo-docs-migration` → https://github.com/clerk/clerk/pull/3250')
+  })
+
+  test('external wording degrades gracefully when the author login is unknown', () => {
+    const body = formatMigrationNoticeCommentBody('clerk/clerk', [{ prUrl: 'https://example.invalid/pr/1' }], {
+      authorLogin: null,
+      isExternalContribution: true,
+    })
+    expect(body).toContain('Thanks for contributing!')
+    expect(body).not.toContain('@')
+  })
+
+  test('internal PRs keep the terse maintainer-facing wording', () => {
+    const body = formatMigrationNoticeCommentBody('clerk/clerk', [{ prUrl: 'https://example.invalid/pr/1' }], {
+      authorLogin: 'clerkperson',
+      isExternalContribution: false,
+    })
+    expect(body).toContain('This branch and PR were migrated to clerk/clerk.')
+    expect(body).not.toContain('thanks for contributing')
+  })
 })
 
 describe('parseMigrationNoticeEntries', () => {
@@ -855,6 +889,94 @@ describe('parseMigrationNoticeEntries', () => {
 
   test('returns no entries for unrelated comment bodies', () => {
     expect(parseMigrationNoticeEntries('just a regular PR comment')).toEqual([])
+  })
+
+  test('round-trips entries through the external-contribution wording too', () => {
+    const entries = [{ branch: 'forkuser/fix-docs-migration', prUrl: 'https://github.com/clerk/clerk/pull/3250' }]
+    const body = formatMigrationNoticeCommentBody('clerk/clerk', entries, {
+      authorLogin: 'forkuser',
+      isExternalContribution: true,
+    })
+    expect(parseMigrationNoticeEntries(body)).toEqual(entries)
+  })
+})
+
+describe('shouldAppendVercelBumpCommit', () => {
+  test('bumps when a fork PR head is authored by the external contributor', () => {
+    expect(
+      shouldAppendVercelBumpCommit({
+        sourceIsCrossRepository: true,
+        headSubject: 'docs: fix a typo',
+        headIsEmpty: false,
+        headAuthorEmail: 'external@users.noreply.github.com',
+        runnerEmail: 'maintainer@clerk.dev',
+      }),
+    ).toBe(true)
+  })
+
+  test('skips when the head is already runner-authored (a previous bump, or commits added on top)', () => {
+    expect(
+      shouldAppendVercelBumpCommit({
+        sourceIsCrossRepository: true,
+        headSubject: 'chore(migration): polish wording',
+        headIsEmpty: false,
+        headAuthorEmail: 'Maintainer@Clerk.dev ',
+        runnerEmail: 'maintainer@clerk.dev',
+      }),
+    ).toBe(false)
+  })
+
+  test("skips when the head is another maintainer's bump — re-runs never stack bumps across runners", () => {
+    expect(
+      shouldAppendVercelBumpCommit({
+        sourceIsCrossRepository: true,
+        headSubject: VERCEL_BUMP_COMMIT_MESSAGE,
+        headIsEmpty: true,
+        headAuthorEmail: 'alice@clerk.dev',
+        runnerEmail: 'bob@clerk.dev',
+      }),
+    ).toBe(false)
+  })
+
+  test("bumps when a contributor's non-empty commit merely reuses the marker subject", () => {
+    expect(
+      shouldAppendVercelBumpCommit({
+        sourceIsCrossRepository: true,
+        headSubject: VERCEL_BUMP_COMMIT_MESSAGE,
+        headIsEmpty: false,
+        headAuthorEmail: 'external@users.noreply.github.com',
+        runnerEmail: 'maintainer@clerk.dev',
+      }),
+    ).toBe(true)
+  })
+
+  test('never bumps same-repo (internal) PRs', () => {
+    expect(
+      shouldAppendVercelBumpCommit({
+        sourceIsCrossRepository: false,
+        headSubject: 'docs: fix a typo',
+        headIsEmpty: false,
+        headAuthorEmail: 'external@users.noreply.github.com',
+        runnerEmail: 'maintainer@clerk.dev',
+      }),
+    ).toBe(false)
+  })
+
+  test('skips without a runner identity to author the bump with', () => {
+    expect(
+      shouldAppendVercelBumpCommit({
+        sourceIsCrossRepository: true,
+        headSubject: 'docs: fix a typo',
+        headIsEmpty: false,
+        headAuthorEmail: 'external@users.noreply.github.com',
+        runnerEmail: '',
+      }),
+    ).toBe(false)
+  })
+
+  test('the bump commit message says why the commit exists', () => {
+    expect(VERCEL_BUMP_COMMIT_MESSAGE).toContain('Vercel')
+    expect(VERCEL_BUMP_COMMIT_MESSAGE).toContain('fork')
   })
 })
 
@@ -879,7 +1001,7 @@ describe('buildPrViewByNumberArgs', () => {
       '--repo',
       'clerk/clerk-docs',
       '--json',
-      'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,headRepositoryOwner,isCrossRepository',
+      'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,headRepositoryOwner,isCrossRepository,author',
     ])
   })
 
@@ -903,7 +1025,7 @@ describe('buildSourcePrListArgs', () => {
       '--state',
       'open',
       '--json',
-      'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,isCrossRepository',
+      'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,isCrossRepository,author',
       '--limit',
       '50',
     ])

@@ -1,13 +1,21 @@
 name: Remind PR migration
 
+# pull_request_target (not pull_request) so this also fires for fork PRs from first-time
+# contributors — the exact audience the reminder exists for. Plain pull_request runs on fork PRs
+# sit behind manual first-time-contributor workflow approval that nobody grants, so external
+# contributors were getting zero automated response (DOCS-11999).
+#
+# pull_request_target safety: these jobs run workflow code from main with an elevated token, so
+# they must NEVER check out, build, or execute anything from the PR head. They only post/update a
+# marker comment and apply a label. Keep it that way.
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
     types: [opened, reopened, synchronize, ready_for_review]
 
+# Job-scoped, not workflow-scoped: only the comment job needs the write token.
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   remind_migration:
@@ -16,9 +24,14 @@ jobs:
     # relevant on the canonical repo.
     if: github.repository == 'clerk/clerk-docs'
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
     env:
       REMINDER_MARKER: '<!-- migrate-to-clerk-reminder -->'
-      REMINDER_BODY: |
+      # Internal (same-repo branch) PRs: the author has push access and can run the migration
+      # themselves, so the reminder is actionable.
+      REMINDER_BODY_INTERNAL: |
         <!-- migrate-to-clerk-reminder -->
         ⚠️ **This PR cannot be merged here.** The Clerk docs now live in [`clerk/clerk`](https://github.com/clerk/clerk) under `clerk-docs/`. Please migrate this PR by running:
 
@@ -29,22 +42,46 @@ jobs:
         Run it locally from the root of this branch and it'll migrate the branch and PR over to `clerk/clerk` and close this PR automatically. If new commits land on this PR after migration, re-running the same command is safe: it updates the existing `clerk/clerk` branch and PR instead of creating a new one.
 
         The required `Block merges (migration to clerk/clerk required)` check on this PR will keep failing on purpose until the PR is migrated and closed.
+      # Fork PRs: external contributors can't run the migration (it needs push access to Clerk's
+      # internal monorepo), so this is a heads-up, not an instruction. Deliberately: no naming or
+      # linking of the private monorepo (a 404 for them), and no promise of migration — acceptance
+      # is a maintainer call.
+      REMINDER_BODY_FORK: |
+        <!-- migrate-to-clerk-reminder -->
+        Thanks for contributing! A quick heads-up on how external contributions work: Clerk's docs are maintained in Clerk's internal monorepo, and this public repo is its read-only mirror — nothing merges here directly, and there are no preview deployments on this repo. **Nothing is needed from you.** A Clerk maintainer will review this PR, and if it's accepted, they'll bring your change into the monorepo with your commits and authorship preserved — it then goes live on [clerk.com/docs](https://clerk.com/docs) shortly after. See [Contributing to Clerk's documentation](https://github.com/clerk/clerk-docs/blob/main/contributing/CONTRIBUTING.md#contributing-to-clerks-documentation) for the full picture.
+
+        The failing **Block merges** check on this PR is expected — merging is disabled in this repo on purpose.
     steps:
       - name: Find existing reminder comment
         id: find_comment
-        uses: peter-evans/find-comment@v3
+        # SHA-pinned: this workflow runs with an elevated token (pull_request_target), so
+        # third-party action code must be immutable, not a movable tag.
+        uses: peter-evans/find-comment@3eae4d37986fb5a8592848f6a574fdf654e61f9e # v3
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: 'github-actions[bot]'
           body-includes: ${{ env.REMINDER_MARKER }}
 
       - name: Create or update reminder comment
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-id: ${{ steps.find_comment.outputs.comment-id }}
-          body: ${{ env.REMINDER_BODY }}
+          body: ${{ github.event.pull_request.head.repo.full_name != github.repository && env.REMINDER_BODY_FORK || env.REMINDER_BODY_INTERNAL }}
           edit-mode: replace
+
+      - name: Label fork PRs for maintainer triage
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh label create external-contribution \
+            --repo "$GITHUB_REPOSITORY" \
+            --description "Fork PR awaiting maintainer triage (accept → migrate, or decline)" \
+            --color FBCA04 \
+            --force
+          gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label external-contribution
 
   block_merges:
     name: Block merges (migration to clerk/clerk required)
@@ -55,5 +92,5 @@ jobs:
     steps:
       - name: Fail to block merge
         run: |
-          echo "::error title=Migrate this PR to clerk/clerk::Merging is disabled in clerk-docs. Run 'pnpm migrate:clerk' locally on this branch to migrate the PR (and close this one) over to clerk/clerk."
+          echo "::error title=Merging is disabled in clerk-docs::Internal contributors: run 'pnpm migrate:clerk' locally on this branch to migrate the PR to clerk/clerk (it closes this one automatically). External contributors: nothing needed from you — a maintainer handles this."
           exit 1

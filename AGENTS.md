@@ -72,7 +72,7 @@ The docs search runs on Algolia, populated by `scripts/update-algolia-records.ts
 
 Skill files live in `.agents/skills/<skill-name>/SKILL.md`. Read the relevant one before working in its area.
 
-- `.agents/skills/migrate-branch-to-clerk/SKILL.md` — running `scripts/migrate-clerk-docs-to-clerk.ts` to migrate a branch/PR into the `clerk/clerk` monorepo, re-run semantics, and what to do at each conflict tier.
+- `.agents/skills/migrate-branch-to-clerk/SKILL.md` — running `scripts/migrate-clerk-docs-to-clerk.ts` to migrate a branch/PR into the `clerk/clerk` monorepo, re-run semantics, what to do at each conflict tier, and triaging external (fork) PRs — accept as-is, accept with refinements, or decline with the reply template.
 
 ## References
 

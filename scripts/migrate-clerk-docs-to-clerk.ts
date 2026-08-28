@@ -139,6 +139,8 @@ interface PullRequestView {
   isDraft: boolean
   /** GitHub PR state: 'OPEN' | 'CLOSED' | 'MERGED' (uppercase from `gh pr list --json state`). */
   state: string
+  /** PR author; only populated by lookups that request the `author` JSON field. */
+  author?: { login?: string } | null
 }
 
 /**
@@ -167,9 +169,11 @@ interface SourcePrListItem extends PullRequestView {
 /**
  * A source PR as returned by {@link resolveSourcePr}. Both resolution paths carry the head OID the
  * association was validated against, so the close step can re-check it and detect a head that
- * moved while the migration ran (see {@link sourcePrSafeToCloseNow}).
+ * moved while the migration ran (see {@link sourcePrSafeToCloseNow}). `isCrossRepository` marks a
+ * fork PR — an external contribution: it selects the contributor-facing migration-notice wording
+ * and triggers the Vercel bump commit (see {@link maybeAppendVercelBumpCommit}).
  */
-type ResolvedSourcePr = PullRequestView & { headRefOid: string }
+type ResolvedSourcePr = PullRequestView & { headRefOid: string; isCrossRepository: boolean }
 
 /** `gh pr view --json` subset for copying people + review context to the clerk PR */
 interface GhPrViewForMigration {
@@ -1808,7 +1812,7 @@ function buildPrViewByNumberArgs(prNumber: number, repo: string): string[] {
     '--repo',
     repo,
     '--json',
-    'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,headRepositoryOwner,isCrossRepository',
+    'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,headRepositoryOwner,isCrossRepository,author',
   ]
 }
 
@@ -1824,7 +1828,7 @@ function buildSourcePrListArgs(headBranch: string, repo: string): string[] {
     '--state',
     'open',
     '--json',
-    'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,isCrossRepository',
+    'number,title,body,baseRefName,headRefName,url,isDraft,state,headRefOid,isCrossRepository,author',
     '--limit',
     '50',
   ]
@@ -2183,9 +2187,39 @@ function parseMigrationNoticeEntries(body: string): MigrationNoticeEntry[] {
   return entries
 }
 
+/** How the external-contribution flow works, for contributors reading the migration notice. */
+const CONTRIBUTING_NOTE_URL =
+  'https://github.com/clerk/clerk-docs/blob/main/contributing/CONTRIBUTING.md#contributing-to-clerks-documentation'
+
+/**
+ * Who the migration-notice comment is talking to. External contributions (fork PRs) get the
+ * contributor-facing wording — thanks, authorship preserved, close-is-the-merge-path, and a link
+ * to the contributing note — because for them the close is the whole story and the clerk PR link
+ * is a 404. Internal PRs keep the terse maintainer-facing wording.
+ */
+type MigrationNoticeContext = { authorLogin: string | null; isExternalContribution: boolean }
+
 /** Body for the backlink comment maintained by {@link upsertMigrationNoticeComment} on the source clerk-docs PR. */
-function formatMigrationNoticeCommentBody(clerkRepoSlug: string, entries: readonly MigrationNoticeEntry[]): string {
+function formatMigrationNoticeCommentBody(
+  clerkRepoSlug: string,
+  entries: readonly MigrationNoticeEntry[],
+  context?: MigrationNoticeContext,
+): string {
   const lines = entries.map((entry) => (entry.branch ? `- \`${entry.branch}\` → ${entry.prUrl}` : `- ${entry.prUrl}`))
+  if (context?.isExternalContribution) {
+    const thanks = context.authorLogin ? `@${context.authorLogin} thanks` : 'Thanks'
+    return [
+      MIGRATION_NOTICE_MARKER,
+      `${thanks} for contributing! This PR has been migrated into Clerk's internal monorepo with your commits and ` +
+        'authorship preserved. Closing it here is the merge path for external contributions, not a rejection — see ' +
+        `[Contributing to Clerk's documentation](${CONTRIBUTING_NOTE_URL}) for how this works. Once the migrated ` +
+        'PR is reviewed and lands, your change goes live on https://clerk.com/docs.',
+      '',
+      'Migration branches/PRs created from this PR (Clerk-internal links; most recent last):',
+      '',
+      ...lines,
+    ].join('\n')
+  }
   return [
     MIGRATION_NOTICE_MARKER,
     `This branch and PR were migrated to ${clerkRepoSlug}. Migration branches/PRs created from this PR (most recent last):`,
@@ -2205,6 +2239,7 @@ async function upsertMigrationNoticeComment(
   prNumber: number,
   repo: string,
   entry: { branch: string; prUrl: string },
+  context?: MigrationNoticeContext,
 ): Promise<void> {
   // REST (not `gh pr view --json comments`) because updating a comment needs its numeric id.
   const comments = await commandJson<Array<{ id: number; body: string }>>(
@@ -2215,7 +2250,7 @@ async function upsertMigrationNoticeComment(
   const existing = comments.find((comment) => comment.body.includes(MIGRATION_NOTICE_MARKER))
   const clerkRepoSlug = formatRepoSlug(config.clerkRepo)
   if (!existing) {
-    const body = formatMigrationNoticeCommentBody(clerkRepoSlug, [entry])
+    const body = formatMigrationNoticeCommentBody(clerkRepoSlug, [entry], context)
     if (config.dryRun) {
       infoLog('Dry-run: would post migration notice comment', { repo, prNumber, clerkPrUrl: entry.prUrl })
       return
@@ -2228,7 +2263,7 @@ async function upsertMigrationNoticeComment(
     infoLog('Migration notice comment already lists this clerk PR', { repo, prNumber, clerkPrUrl: entry.prUrl })
     return
   }
-  const body = formatMigrationNoticeCommentBody(clerkRepoSlug, [...entries, entry])
+  const body = formatMigrationNoticeCommentBody(clerkRepoSlug, [...entries, entry], context)
   if (config.dryRun) {
     infoLog('Dry-run: would append new clerk PR to migration notice comment', {
       repo,
@@ -3072,7 +3107,13 @@ async function syncSourcePrAfterMigration(
   const sourceRepoSlug = formatRepoSlug(config.clerkDocsRepo)
   let commentSucceeded = false
   try {
-    await upsertMigrationNoticeComment(config, sourcePr.number, sourceRepoSlug, { branch, prUrl: clerkPrUrl })
+    await upsertMigrationNoticeComment(
+      config,
+      sourcePr.number,
+      sourceRepoSlug,
+      { branch, prUrl: clerkPrUrl },
+      { authorLogin: sourcePr.author?.login ?? null, isExternalContribution: sourcePr.isCrossRepository },
+    )
     commentSucceeded = true
   } catch (err) {
     warnLog('Could not comment on source PR (migration itself succeeded)', {
@@ -3102,6 +3143,73 @@ async function syncSourcePrAfterMigration(
       })
     }
   }
+}
+
+/** Commit message for the empty commit appended by {@link maybeAppendVercelBumpCommit}. */
+const VERCEL_BUMP_COMMIT_MESSAGE = 'chore(migration): empty commit so Vercel deploys a fork-authored head'
+
+/**
+ * Whether the migration branch needs an empty commit before push so Vercel deploys it. Vercel
+ * refuses to deploy a commit whose git author isn't a member of the Vercel project ("Git author
+ * must have access to the project on Vercel"), which is every head commit cherry-picked from an
+ * external contributor's fork PR. An empty commit authored by the runner (a team member) becomes
+ * the head Vercel evaluates, turning the red deployment status green without touching the
+ * contributor's commits or authorship. Skipped when the head already is a bump — matched by the
+ * marker message *and* emptiness, not by author, so a re-run by a *different* maintainer doesn't
+ * stack a second bump on the first one, while a contributor's own non-empty commit titled with
+ * the marker message doesn't pass for one — and when the head is any other runner-authored
+ * commit (e.g. a polish commit added on top).
+ */
+function shouldAppendVercelBumpCommit(params: {
+  sourceIsCrossRepository: boolean
+  headSubject: string
+  headIsEmpty: boolean
+  headAuthorEmail: string
+  runnerEmail: string
+}): boolean {
+  if (!params.sourceIsCrossRepository) return false
+  if (!params.runnerEmail) return false
+  if (params.headIsEmpty && params.headSubject.trim() === VERCEL_BUMP_COMMIT_MESSAGE) return false
+  return params.headAuthorEmail.trim().toLowerCase() !== params.runnerEmail.trim().toLowerCase()
+}
+
+/** Append the Vercel bump commit to the checked-out migration branch when {@link shouldAppendVercelBumpCommit} says so. */
+async function maybeAppendVercelBumpCommit(
+  config: CliConfig,
+  clerkWorkPath: string,
+  sourcePr: ResolvedSourcePr | null,
+): Promise<void> {
+  if (!sourcePr?.isCrossRepository) return
+  const headLine = (await runCommand('git', ['log', '-1', '--format=%ae%x00%s'], clerkWorkPath)).stdout.trim()
+  const [headAuthorEmail = '', headSubject = ''] = headLine.split('\0')
+  const headDiff = await runCommand('git', ['diff', '--quiet', 'HEAD^', 'HEAD'], clerkWorkPath, {
+    allowFailure: true,
+  })
+  const headIsEmpty = headDiff.code === 0
+  const runnerEmail = (
+    await runCommand('git', ['config', 'user.email'], clerkWorkPath, { allowFailure: true })
+  ).stdout.trim()
+  if (!runnerEmail) {
+    warnLog('Skipping Vercel bump commit: no git user.email configured in the clerk workspace.', { clerkWorkPath })
+    return
+  }
+  if (
+    !shouldAppendVercelBumpCommit({
+      sourceIsCrossRepository: true,
+      headSubject,
+      headIsEmpty,
+      headAuthorEmail,
+      runnerEmail,
+    })
+  ) {
+    return
+  }
+  if (config.dryRun) {
+    infoLog('Dry-run: would append empty Vercel bump commit (fork-authored head)', { headAuthorEmail })
+    return
+  }
+  await runCommand('git', ['commit', '--allow-empty', '-m', VERCEL_BUMP_COMMIT_MESSAGE], clerkWorkPath)
+  infoLog('Appended empty commit so Vercel deploys the fork-authored head', { headAuthorEmail, runnerEmail })
 }
 
 async function migrateCurrentBranch(
@@ -3307,6 +3415,7 @@ async function createNewMigration(
       return { newBranch, clerkPrUrl: '(local-only: not pushed, no PR created)' }
     }
 
+    await maybeAppendVercelBumpCommit(config, clerkWorkPath, sourcePr)
     await runCommand('git', ['push', '-u', 'origin', newBranch], clerkWorkPath)
 
     const clerkPrUrl = await ensureClerkPrAndSyncSourcePr(config, {
@@ -3580,6 +3689,7 @@ async function updateExistingMigration(
       return { newBranch: migrationBranch, clerkPrUrl: existing.pr?.url ?? '(local-only: not pushed)' }
     }
 
+    await maybeAppendVercelBumpCommit(config, clerkWorkPath, sourcePr)
     await runCommand('git', ['push', 'origin', migrationBranch], clerkWorkPath)
 
     let clerkPrUrl = existing.pr?.url ?? '(branch updated; no clerk PR yet)'
@@ -3883,10 +3993,18 @@ async function main(): Promise<void> {
         infoLog('Dry-run: would run pnpm install in clerk-docs inside clerk workspace', { path: clerkDocsInClerk })
       } else if (existsSync(clerkDocsInClerk)) {
         stepLog('Installing clerk-docs dependencies in clerk workspace')
-        const pnpmResult = await runCommand('pnpm', ['install'], clerkDocsInClerk, {
-          inheritStdio: true,
-          allowFailure: true,
-        })
+        // --config.confirm-modules-purge=false: recreating a node_modules built under different
+        // settings otherwise prompts for confirmation and hard-fails without a TTY
+        // (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY) — e.g. when an agent runs the migration.
+        const pnpmResult = await runCommand(
+          'pnpm',
+          ['install', '--config.confirm-modules-purge=false'],
+          clerkDocsInClerk,
+          {
+            inheritStdio: true,
+            allowFailure: true,
+          },
+        )
         if (pnpmResult.code !== 0) {
           warnLog('pnpm install failed (non-fatal; migration itself succeeded). You may need to run it manually.', {
             exitCode: pnpmResult.code,
@@ -3984,6 +4102,8 @@ export {
   formatClosedPrAbortMessage,
   formatMigrationNoticeCommentBody,
   parseMigrationNoticeEntries,
+  shouldAppendVercelBumpCommit,
+  VERCEL_BUMP_COMMIT_MESSAGE,
   buildClosePrCommandArgs,
   buildPrViewByNumberArgs,
   buildSourcePrListArgs,

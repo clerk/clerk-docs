@@ -285,6 +285,23 @@ export const REGRESSION_CASES: RegressionCase[] = [
     source: 'DOCS-11955',
   },
 
+  // --- Error pages stay out of the index (DOCS-12093) ---
+  // Before the exclusion, "signedin" put the error page for the *removed* `<SignedIn>` component
+  // at #1, above the docs readers actually want. topN 1 on purpose: the promise is that the
+  // error page no longer holds first place, and top-3 could pass with it back on top. Loose only
+  // across which real page wins — any of these is a correct #1.
+  {
+    query: 'signedin',
+    boost: 'nextjs',
+    urls: [
+      '/docs/nextjs/reference/types/signed-in-session-resource',
+      '/docs/reference/types/signed-in-session-resource',
+      '/docs/nextjs/reference/components/control/show',
+    ],
+    topN: 1,
+    source: 'DOCS-12093',
+  },
+
   // --- CIMD acronym, synonym derived from the client-id-metadata-document tooltip ---
   {
     query: 'cimd',

@@ -281,6 +281,8 @@ Error pages live at `docs/reference/<sdk>/errors/<slug>.mdx`. Clerk prints a sta
 
 Leave error pages out of `manifest.json` — the reader reaches them from the error, not the sidenav. This is the one exception to the rule that every doc gets a manifest entry. Add the file to `ignoreWarnings.docs` in `scripts/build-docs.ts` so the `doc-not-in-manifest` warning stays quiet.
 
+Error pages are also excluded from docs search, automatically by directory (`isErrorPage` in `scripts/update-algolia-records.ts` — nothing to add per page). Their titles name the failing component at title strength, so an indexed error page sweeps generic queries — "signedin" put the error page for the removed `<SignedIn>` component above the docs readers actually want (DOCS-12093). Next.js excludes its `/docs/messages/*` pages the same way. Search engines still index error pages, so pasting the error into Google keeps working; inside the docs, the reader arrives from the printed `/err/<slug>` URL.
+
 ### Frontmatter
 
 - `title` — the error's identifying text, matching what the reader pastes into a search bar. Drop the trailing `Learn more at <url>` sentence and anything templated, like a component name or file path. Don't rewrite it into SEO prose. The exact-string match is the point.

@@ -560,6 +560,22 @@ function filePathToUrl(filePath: string, distPath: string): string {
 }
 
 /**
+ * Error pages (`docs/reference/<sdk>/errors/**`) never enter the search index (DOCS-12093).
+ * They're already deliberately unreachable from the sidenav — readers land on them from the
+ * `/err/<slug>` URL printed in the error message itself — and search gets the same treatment:
+ * their titles carry the failing component's name at title strength, so on generic queries
+ * ("signedin") the error page for a removed component outranked the docs readers actually want.
+ * Next.js does the same with its `/docs/messages/*` error pages. Matching the directory here
+ * covers future error pages automatically, with no per-page `search.exclude` frontmatter to
+ * forget. `errors` must be a directory under `reference/<segment>/` — `reference/types/errors`
+ * (a page named "errors") and `guides/development/errors/**` (the FAPI/BAPI error guides) stay
+ * indexed.
+ */
+export function isErrorPage(relativePath: string): boolean {
+  return /(^|\/)reference\/[^/]+\/errors\//.test(relativePath.replace(/\\/g, '/'))
+}
+
+/**
  * The `sdk` value written to a doc's records — what the client's active-SDK `optionalFilters`
  * boost can match. Per-SDK variants carry the single SDK the variant was built for (`activeSdk`
  * frontmatter). Universal (non-SDK-scoped) pages carry every current SDK key instead of nothing:
@@ -1095,6 +1111,14 @@ async function main() {
 
   for (const file of mdxFiles) {
     const filePath = file.fullPath
+
+    // Skip error pages — excluded by directory, see isErrorPage (DOCS-12093)
+    if (isErrorPage(path.relative(DIST_PATH, filePath))) {
+      console.warn(`Skipping ${file.path}: Error page`)
+      skipped++
+      continue
+    }
+
     const content = await fs.readFile(filePath, 'utf-8')
 
     // Extract frontmatter

@@ -10,6 +10,7 @@ import {
   extractTooltipSynonym,
   INDEX_LIVE_BRANCHES,
   isAcronym,
+  isErrorPage,
   isStaleRecord,
   ONE_WAY_SYNONYMS,
   parseOrphanSweepMax,
@@ -426,6 +427,31 @@ describe('buildSweepFilters', () => {
 
   test('derives from the allowlist — a duplicate run branch is not repeated (Set dedupes)', () => {
     expect(buildSweepFilters(new Set(['main']))).toEqual(['branch:-main'])
+  })
+})
+
+describe('isErrorPage', () => {
+  test('matches error pages under reference/<sdk>/errors/', () => {
+    expect(isErrorPage('reference/nextjs/errors/signedin-is-not-available-in-clerk-nextjs.mdx')).toBe(true)
+    expect(isErrorPage('reference/nextjs/errors/auth-was-called.mdx')).toBe(true)
+  })
+
+  test('matches per-SDK variants of error pages', () => {
+    expect(isErrorPage('nextjs/reference/nextjs/errors/auth-was-called.mdx')).toBe(true)
+  })
+
+  test('normalizes Windows path separators', () => {
+    expect(isErrorPage('reference\\nextjs\\errors\\auth-was-called.mdx')).toBe(true)
+  })
+
+  test('does not match a page named "errors" outside an errors directory', () => {
+    expect(isErrorPage('reference/types/errors.mdx')).toBe(false)
+    expect(isErrorPage('nextjs/reference/types/errors.mdx')).toBe(false)
+  })
+
+  test('does not match the FAPI/BAPI error guides', () => {
+    expect(isErrorPage('guides/development/errors/backend-api.mdx')).toBe(false)
+    expect(isErrorPage('guides/development/errors/overview.mdx')).toBe(false)
   })
 })
 

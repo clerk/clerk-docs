@@ -8,17 +8,13 @@ cd clerk-astro
 npm install
 ```
 
-Install `@clerk/astro@latest`. Update `astro.config.mjs` with the Clerk integration, an SSR adapter, and `output: "server"`. Add `clerkMiddleware()` from `@clerk/astro/server` in `src/middleware.ts` if `src/` exists, otherwise `middleware.ts` at the project root. Use `<Show>`, `<UserButton>`, `<SignInButton>`, and `<SignUpButton>` from `@clerk/astro/components`.
+Update `astro.config.mjs` with the Clerk integration, an SSR adapter, and `output: "server"`. Add `clerkMiddleware()` from `@clerk/astro/server` in `src/middleware.ts` if `src/` exists, otherwise `middleware.ts` at the project root. Use `<Show>`, `<UserButton>`, `<SignInButton>`, and `<SignUpButton>` from `@clerk/astro/components`.
 
 Latest docs: https://clerk.com/docs/astro/getting-started/quickstart
 
-## Keyless Mode
-
-No signup required. Without env vars (`PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`), Clerk auto-generates temporary keys. A "Configure your application" prompt appears to claim later. Do NOT tell users to sign up, create accounts, get API keys, or add env vars before running.
-
 ## Install
 
-`@clerk/astro` supports Astro 4.15+, 5, and 6; [Astro 7 support is in progress](https://github.com/clerk/javascript/pull/8974). `npm create astro@latest` scaffolds Astro 7, so for a new project, pin:
+For a new project, pin Astro 6 and its matching Node adapter before running `clerk init`:
 
 ```bash
 npm install astro@6 @astrojs/node@10 @clerk/astro@latest
@@ -26,7 +22,18 @@ npm install astro@6 @astrojs/node@10 @clerk/astro@latest
 
 Use the project's existing package manager.
 
-For an existing Astro 4.15+/5/6 project, run `npm install @clerk/astro@latest` — keep its Astro version and adapter; if it has none, add `@astrojs/node@10` (Astro 6) or `@astrojs/node@9` (Astro 5), NOT `npx astro add node`. Already on Astro 7? Stop and tell the user support is not yet released. Do NOT force with `--legacy-peer-deps` or `--force`.
+For an existing Astro 4.15+/5/6 project, install `@clerk/astro@latest` and keep its Astro version and adapter. If it has no adapter, add `@astrojs/node@10` (Astro 6) or `@astrojs/node@9` (Astro 5), NOT `npx astro add node`. Already on Astro 7? Stop and tell the user support is not yet released. Do NOT force with `--legacy-peer-deps` or `--force`.
+
+## Set up Clerk
+
+```bash
+npx -y clerk@latest init
+```
+
+In agent environments, `clerk init` adapts to the current authentication state. Signed out, it provisions a
+claimable accountless app and writes its keys to `.env`; signing in later claims it. Signed in, it uses the
+authenticated flow. In both cases, it configures Astro. Do NOT ask users to sign up, obtain keys, or add env vars
+first.
 
 ## astro.config.mjs
 
@@ -164,7 +171,7 @@ export default defineConfig({
 }) // WRONG: missing SSR adapter and output: "server"
 ```
 
-## Verify Before Responding
+## Verify before responding
 
 1. Are the env vars `PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`?
 2. Does `astro.config.mjs` include `clerk()`, an SSR adapter, and `output: "server"`?
@@ -176,7 +183,7 @@ export default defineConfig({
 
 If any fails, revise.
 
-## After Setup
+## After setup
 
 Have the user run the app and sign up as their first test user from the header. After signup succeeds and the user menu appears, congratulate them. Then recommend exploring:
 

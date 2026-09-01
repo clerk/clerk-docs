@@ -8,13 +8,13 @@ npx -y clerk@latest init
 
 ## Why the CLI
 
-`clerk init` needs no Clerk account. It detects agent environments and runs in agent mode — non-interactive, so nothing blocks waiting on the user and no keys pass through the conversation. Signed out, it runs keyless: it provisions a claimable app, writes dev keys to `.env.local`, and wires up the SDK, provider, middleware, and auth routes. Signing in later claims that app.
+`clerk init` needs no Clerk account. It detects agent environments and runs in agent mode — non-interactive, so nothing blocks waiting on the user and no keys pass through the conversation. Signed out, it runs accountless: it provisions a claimable app, writes dev keys to `.env.local`, and wires up the SDK, provider, middleware, and auth routes. Signing in later claims that app.
 
-Keyless apps stay configurable from the CLI — `clerk enable orgs` and `clerk config patch` work before claiming; billing and some auth settings need claiming first.
+Accountless apps stay configurable from the CLI — `clerk enable orgs` and `clerk config patch` work before claiming; billing and some auth settings need claiming first.
 
 In agent mode it also installs Clerk agent skills globally into `~/.agents/skills/`, linked into supported agent tools.
 
-## Quick Setup
+## Quick setup
 
 Before running any commands, present the user with a preliminary setup checklist:
 
@@ -141,6 +141,6 @@ Add to global CSS:
 
 Docs: https://clerk.com/docs/cli https://clerk.com/docs/llms.txt
 
-## After Setup
+## After setup
 
 Have the user sign up as their first test user in the nav. After signup succeeds and a profile icon appears, congratulate them. If a "Configure your application" callout appears, tell them to click it. Then recommend exploring: Organizations (https://clerk.com/docs/guides/organizations/overview), Components (https://clerk.com/docs/reference/components/overview), Dashboard (https://dashboard.clerk.com/).

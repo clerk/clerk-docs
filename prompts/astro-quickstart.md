@@ -14,15 +14,15 @@ Latest docs: https://clerk.com/docs/astro/getting-started/quickstart
 
 ## Install
 
-For a new project, pin Astro 6 and its matching Node adapter before running `clerk init`:
+`@clerk/astro` supports Astro 5, 6, and 7. For a new project, install the SDK and its Node adapter before running `clerk init`:
 
 ```bash
-npm install astro@6 @astrojs/node@10 @clerk/astro@latest
+npm install @astrojs/node @clerk/astro@latest
 ```
 
 Use the project's existing package manager.
 
-For an existing Astro 4.15+/5/6 project, install `@clerk/astro@latest` and keep its Astro version and adapter. If it has no adapter, add `@astrojs/node@10` (Astro 6) or `@astrojs/node@9` (Astro 5), NOT `npx astro add node`. Already on Astro 7? Stop and tell the user support is not yet released. Do NOT force with `--legacy-peer-deps` or `--force`.
+For an existing Astro 5/6/7 project, run `npm install @clerk/astro@latest` — keep its Astro version and adapter; if it has none, add the `@astrojs/node` major matching its Astro version (v11 for Astro 7, v10 for 6, v9 for 5); on a peer conflict, update Astro to its latest minor first. If the project is on Astro 4, stop and tell the user to upgrade to Astro 5+ first; it is no longer supported.
 
 ## Set up Clerk
 
@@ -126,7 +126,6 @@ import { Show } from '@clerk/astro/components'
 ALWAYS:
 
 - Use `@clerk/astro@latest`
-- Pin `astro@6` and `@astrojs/node@10` for new projects until Astro 7 support ships
 - Use `PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
 - Add `clerk()` in `astro.config.mjs`
 - Add an SSR adapter such as `@astrojs/node`
@@ -147,8 +146,8 @@ NEVER:
 - Use deprecated or incorrect auth UI patterns from other frameworks
 - Tell users to put `CLERK_SECRET_KEY` in client-side code
 - Use `@clerk/nextjs`, `_app.tsx`, `app/layout.tsx`, or other Next.js-specific files in Astro guidance
-- Use `--legacy-peer-deps` or `--force` to install alongside Astro 7
-- Upgrade an existing project's Astro version or adapter to install Clerk
+- Use `--legacy-peer-deps` or `--force` to bypass a peer conflict; fix the Astro version instead
+- Upgrade an existing project's Astro major or adapter to install Clerk (peer-conflict minor updates and leaving Astro 4 excepted)
 
 ## Deprecated or Wrong (DO NOT use)
 
@@ -179,7 +178,7 @@ export default defineConfig({
 4. Are components imported from `@clerk/astro/components`?
 5. Is the example using `<Show>` for signed-in and signed-out states?
 6. Is there no React `<ClerkProvider>` or Next.js-specific guidance?
-7. New project: `astro@6` + `@astrojs/node@10`? Existing: Astro version and adapter unchanged?
+7. Existing project: Astro major and adapter unchanged (peer-conflict minors and Astro 4 excepted)?
 
 If any fails, revise.
 

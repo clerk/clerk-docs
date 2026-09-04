@@ -130,7 +130,7 @@ After a change is merged in `clerk/skills`, either wait for the weekday Check sk
 pnpm skills:refresh
 ```
 
-Pull requests that affect the registry, its generator, or the workflow run `pnpm skills:check`. If the generated registry does not match `clerk/skills`, the check fails and leaves a comment explaining what changed and how to refresh it.
+Pull requests that affect the registry, its generator, or the workflow run `pnpm skills:check`. The check regenerates the registry at the `clerk/skills` revision already recorded in `skills.ts` and fails if the committed registry does not match, leaving a pull request comment with what differs and the exact `skills:refresh` command to run. New upstream changes are handled separately by the weekday refresh workflow.
 
 ### Working with `clerk_go`
 

@@ -378,11 +378,23 @@ This is enforced by the docs build, which fails on vague anchor text ("here", "t
 
 ### Use consistent link targets
 
-A link's destination decides whether it opens in a new tab, not the author. The site's link component opens external `http(s)` links in a new tab (with the external-link icon) and internal links in the same tab, so an explicit `{{ target: '_blank' }}` annotation is almost never needed. Unexpected new tabs disorient readers — especially those using screen readers — and a redundant annotation is noise.
+A link's destination decides whether it opens in a new tab, not the author. The site's link component opens external `http(s)` links in a new tab (with the external-link icon) and internal links in the same tab.
 
-The one exception is API reference links (`/docs/reference/frontend-api...`, `/docs/reference/backend-api...`, and `/docs/reference/platform-api...`): they're internal, so they never open in a new tab automatically, but they should — readers use them as a lookup while following a guide and shouldn't lose their place. Annotate them explicitly.
+Use root-relative URLs for links to pages on `https://clerk.com`, and keep links to other origins absolute. A relative URL resolves against the current origin, so it keeps readers in the same environment — local, preview, or production — instead of bouncing them to production. It also navigates client-side, with transitions and prefetching, rather than triggering a full external page load.
 
-The build fails on violations of any of these three rules, in authored content and generated Typedoc reference content alike. Typedoc files are generated, so fix their links upstream in [clerk/javascript](https://github.com/clerk/javascript) rather than hand-editing them. Classify those links by their rendered destination, not their source URL: JSDoc uses absolute `https://clerk.com/docs/...` URLs, which Typedoc rewrites to internal `/docs/...` links — so an API reference link in JSDoc still needs the annotation even though its source URL starts with `https://`.
+> ❌ Read the [Next.js Quickstart](https://clerk.com/docs/nextjs/getting-started/quickstart).
+
+> ✅ Read the [Next.js Quickstart](/docs/nextjs/getting-started/quickstart).
+
+Keep [`https://clerk.com/discord`](https://clerk.com/discord) absolute because it redirects to an external Discord invite. This is the only intentional exception for a `https://clerk.com` link.
+
+`pnpm run lint` enforces this convention for Markdown links, reference definitions, and bare autolinks in authored docs. This relative-link check does not scan generated Typedoc, which is maintained upstream in `clerk/javascript`. URLs inside code blocks are exempt because they are often intentional, copyable examples.
+
+Because the link component determines the tab behavior, an explicit `{{ target: '_blank' }}` annotation is almost never needed. Unexpected new tabs disorient readers — especially those using screen readers — and a redundant annotation is noise.
+
+The one exception to this annotation rule is API reference links (`/docs/reference/frontend-api...`, `/docs/reference/backend-api...`, and `/docs/reference/platform-api...`): they're internal, so they never open in a new tab automatically, but they should — readers use them as a lookup while following a guide and shouldn't lose their place. Annotate them explicitly.
+
+Separately, the docs build enforces the `{{ target: '_blank' }}` annotation rules in authored content and generated Typedoc reference content alike. Typedoc files are generated, so fix their annotations upstream in [clerk/javascript](https://github.com/clerk/javascript) rather than hand-editing them. Classify those links by their rendered destination, not their source URL: JSDoc uses absolute `https://clerk.com/docs/...` URLs, which Typedoc rewrites to internal `/docs/...` links — so an API reference link in JSDoc still needs the annotation even though its source URL starts with `https://`.
 
 > ❌ Internal link forced into a new tab: See the [`Session`](/docs/reference/objects/session){{ target: '_blank' }} object.
 

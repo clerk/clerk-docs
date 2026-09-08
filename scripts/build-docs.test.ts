@@ -4898,6 +4898,48 @@ title: Other Page
 })
 
 describe('Link Validation and Processing', () => {
+  test('warns for rendered absolute same-origin links but not code blocks or redirect shortcuts', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+[Support](https://clerk.com/contact/support)
+[Discord](https://clerk.com/discord)
+
+\`\`\`text
+https://clerk.com/contact/support
+\`\`\``,
+      },
+      {
+        path: './typedoc/generated.mdx',
+        content: '[Generated link](https://clerk.com/contact/support)',
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(
+      'warning Same-origin Clerk link must be relative. Replace https://clerk.com/contact/support with /contact/support',
+    )
+    expect(output.match(/Same-origin Clerk link must be relative/g)).toHaveLength(1)
+  })
+
   test('Fail if link is to non-existent page', async () => {
     const { tempDir } = await createTempFiles([
       {

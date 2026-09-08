@@ -13,10 +13,79 @@ import { nodeIsVisibleForSdk } from './filterOtherSDKsContentOut'
 
 // Match clerk.com/docs URLs but require a path after /docs (not just /docs or /docs/)
 const CLERK_DOCS_URL_PATTERN = /https?:\/\/clerk\.com(\/docs\/[^\s\)\]"'`}]+)/g
+// `/discord` is a vanity redirect to an off-site destination (the Discord invite),
+// so it reads as an external link and is left absolute on purpose. Every other
+// same-origin path is Clerk-owned and should be relative.
+export const ABSOLUTE_CLERK_LINK_EXCEPTIONS = ['/discord'] as const
 // Trailing punctuation accidentally captured at the end of a URL (e.g. sentence punctuation).
 const trailingPunctuationRegex = /[,;:\.]+$/
 // Trailing closing parens accidentally captured at the end of a URL.
 const trailingParensRegex = /\)+$/
+
+export type AbsoluteClerkLink = {
+  absoluteUrl: string
+  relativeUrl: string
+  position: Node['position']
+  // 'link' (inline `[text](url)` or a bare autolink) or 'definition' (`[id]: url`).
+  // The autofix anchors the URL differently for each.
+  nodeType: 'link' | 'definition'
+}
+
+/**
+ * Returns the relative form of a same-origin Clerk link, unless its path is an
+ * intentional redirect shortcut that must remain absolute.
+ */
+export function getRelativeClerkUrl(url: string): string | undefined {
+  let parsedUrl: URL
+
+  try {
+    parsedUrl = new URL(url)
+  } catch {
+    return undefined
+  }
+
+  if (parsedUrl.origin !== 'https://clerk.com') return undefined
+
+  const isException = ABSOLUTE_CLERK_LINK_EXCEPTIONS.some((path) => parsedUrl.pathname === path)
+
+  if (isException) return undefined
+
+  // A pathname starting with "//" is a network-path reference: browsers resolve
+  // it as same-protocol, different-host. Returning it verbatim would let the
+  // autofix rewrite a same-origin link into one pointing at another host.
+  if (parsedUrl.pathname.startsWith('//')) return undefined
+
+  return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`
+}
+
+/**
+ * Finds only rendered Markdown links. Code blocks are separate AST nodes.
+ * Covers both inline links (`[text](url)`) and reference-style links
+ * (`[text][id]`), whose URL lives on the separate `definition` node.
+ */
+export function findAbsoluteClerkLinks(tree: Node): AbsoluteClerkLink[] {
+  const links: AbsoluteClerkLink[] = []
+
+  mdastVisit(
+    tree,
+    (node) => node.type === 'link' || node.type === 'definition',
+    (node) => {
+      if (!('url' in node) || typeof node.url !== 'string') return
+
+      const relativeUrl = getRelativeClerkUrl(node.url)
+      if (relativeUrl === undefined) return
+
+      links.push({
+        absoluteUrl: node.url,
+        relativeUrl,
+        position: node.position,
+        nodeType: node.type === 'definition' ? 'definition' : 'link',
+      })
+    },
+  )
+
+  return links
+}
 
 /**
  * Remark plugin to validate Markdown links in documentation.
@@ -69,6 +138,21 @@ export const validateLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
+
+      // TypeDoc is generated in clerk/javascript and synchronized into this repo,
+      // so its source links cannot be fixed here. This rule is for authored docs prose.
+      const relativeUrl = section === 'typedoc' ? undefined : getRelativeClerkUrl(node.url)
+      if (relativeUrl !== undefined) {
+        safeMessage(
+          config,
+          vfile,
+          filePath,
+          section,
+          'link-same-origin-must-be-relative',
+          [node.url, relativeUrl],
+          node.position,
+        )
+      }
 
       // we are overwriting the url with the mdx suffix removed
       node.url = removeMdxSuffix(node.url)

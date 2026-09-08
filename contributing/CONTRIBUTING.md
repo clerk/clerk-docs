@@ -185,7 +185,7 @@ Before committing, validate your changes locally with two complementary checks.
 
 Because warnings don't fail the build, a green build is not the same as a clean one — read the warnings before opening or merging a PR.
 
-**Lint** with `pnpm run lint`. This checks formatting (Prettier), redirects, quickstarts, plain-text status tags (statuses render as pills via the `tag` field and heading components, never as literal text like `(Beta)`), and more.
+**Lint** with `pnpm run lint`. This checks formatting (Prettier), redirects, quickstarts, plain-text status tags (statuses render as pills via the `tag` field and heading components, never as literal text like `(Beta)`), [relative links to Clerk-owned pages](../styleguides/STYLEGUIDE.md#use-consistent-link-targets), and more. Run `pnpm run lint:fix` to apply safe automatic fixes, including rewriting absolute `https://clerk.com/...` links in authored docs prose as relative links.
 
 Neither check verifies **factual** claims about the external APIs and SDKs the docs describe (endpoints, versions, method signatures, how the reference renders). Verify those against their source repositories — see [`AGENTS.md`](../AGENTS.md) under "Verifying technical claims."
 

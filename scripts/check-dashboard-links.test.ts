@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  collectDashboardLinks,
   discoverDashboardRoutes,
   extractDashboardLinks,
   extractOrgLevelShortcuts,
@@ -28,14 +29,17 @@ describe('normalizeDashboardLink', () => {
       route: '/api-keys',
     })
     expect(normalizeDashboardLink('https://dashboard.clerk.com/~/')).toEqual({ namespace: 'instance', route: '/' })
+    expect(normalizeDashboardLink('${process.env.NEXT_PUBLIC_DASHBOARD_URL}/~/plan-billing')).toEqual({
+      namespace: 'instance',
+      route: '/plan-billing',
+    })
   })
 
-  it('treats direct URLs as global and no longer resolves the legacy last-active format', () => {
+  it('treats direct URLs as global', () => {
     expect(normalizeDashboardLink('https://dashboard.clerk.com/setup/supabase')).toEqual({
       namespace: 'global',
       route: '/setup/supabase',
     })
-    // /last-active?path=… maps to the real global `/last-active` page; the path target isn't re-checked (see DOCS-12082).
     expect(normalizeDashboardLink('https://dashboard.clerk.com/last-active?path=billing/plans/')).toEqual({
       namespace: 'global',
       route: '/last-active',
@@ -81,8 +85,28 @@ describe('extractDashboardLinks', () => {
     ])
   })
 
+  it('extracts Dashboard URLs built from the public Dashboard environment variable', () => {
+    expect(
+      extractDashboardLinks(
+        'const url = `${process.env.NEXT_PUBLIC_DASHBOARD_URL}/last-active?path=/plan-billing`',
+        'example.ts',
+      ),
+    ).toMatchObject([{ namespace: 'global', route: '/last-active' }])
+  })
+
   it('does not extract look-alike hosts', () => {
     expect(extractDashboardLinks('[x](https://dashboard.clerk.com.evil/anything)', 'example.mdx')).toEqual([])
+  })
+
+  it('collects links from configured roots without treating test fixtures as content', () => {
+    const contentRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dashboard-content-'))
+    temporaryDirectories.push(contentRoot)
+    fs.writeFileSync(path.join(contentRoot, 'page.ts'), 'https://dashboard.clerk.com/~/api-keys')
+    fs.writeFileSync(path.join(contentRoot, 'page.test.ts'), 'https://dashboard.clerk.com/last-active?path=api-keys')
+
+    expect(collectDashboardLinks([{ base: contentRoot, excludeTests: true, root: contentRoot }])).toMatchObject([
+      { file: 'page.ts', route: '/api-keys' },
+    ])
   })
 })
 
@@ -171,7 +195,7 @@ describe('extractOrgLevelShortcuts', () => {
 })
 
 describe('discoverDashboardRoutes', () => {
-  it('combines pages, shortcuts, redirects, and explicit proxy entry points by namespace', () => {
+  it('combines routes by namespace and excludes the legacy last-active page', () => {
     const dashboardRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dashboard-routes-'))
     temporaryDirectories.push(dashboardRoot)
     const appRoot = path.join(dashboardRoot, 'apps', 'dashboard', 'app')
@@ -184,6 +208,8 @@ describe('discoverDashboardRoutes', () => {
     )
     fs.mkdirSync(path.join(appRoot, '(routes)', 'apps', 'setup', 'convex'), { recursive: true })
     fs.writeFileSync(path.join(appRoot, '(routes)', 'apps', 'setup', 'convex', 'page.tsx'), '')
+    fs.mkdirSync(path.join(appRoot, '(routes)', 'last-active'), { recursive: true })
+    fs.writeFileSync(path.join(appRoot, '(routes)', 'last-active', 'page.tsx'), '')
     fs.writeFileSync(
       path.join(dashboardRoot, 'apps', 'dashboard', 'next.config.ts'),
       `

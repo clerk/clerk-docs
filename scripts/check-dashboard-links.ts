@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const DASHBOARD_ORIGIN = 'https://dashboard.clerk.com'
+const DASHBOARD_ENV_ORIGIN = '${process.env.NEXT_PUBLIC_DASHBOARD_URL}'
 const DASHBOARD_APP_ROOT = path.join('apps', 'dashboard', 'app')
 const INSTANCE_ROUTE_PREFIX = '/apps/:/instances/:'
 const CONTENT_DIRECTORIES = ['clerk-typedoc', 'data', 'docs', 'prompts']
@@ -14,8 +15,10 @@ const IGNORED_DIRECTORIES = new Set(['.git', '.next', 'dist', 'node_modules'])
 // host) is what lets a look-alike like `dashboard.clerk.com.evil` or a non-default port parse
 // to a different origin and get rejected, while a trailing sentence period trims away and a
 // default `:443` normalizes to the real origin. Case-insensitive so uppercase hosts still match.
-const DASHBOARD_URL_PATTERN = /https:\/\/dashboard\.clerk\.com[^\s<>"'`)\]}*]*/gi
+const DASHBOARD_URL_PATTERN =
+  /(?:https:\/\/dashboard\.clerk\.com|\$\{process\.env\.NEXT_PUBLIC_DASHBOARD_URL\})[^\s<>"'`)\]}*]*/gi
 const DASHBOARD_REPOSITORY = 'clerk/dashboard'
+const EXCLUDED_GLOBAL_ROUTES = new Set(['/last-active'])
 
 // Dashboard links come in two namespaces that must not cross-validate:
 //   - instance: `/~/…` shortcuts that resolve inside the active instance
@@ -46,6 +49,12 @@ interface RouteManifest {
   }
 }
 
+interface ContentRoot {
+  base: string
+  excludeTests: boolean
+  root: string
+}
+
 function walkFiles(root: string): string[] {
   const files: string[] = []
 
@@ -67,7 +76,10 @@ function trimUrl(url: string): string {
 export function normalizeDashboardLink(rawUrl: string): { namespace: RouteNamespace; route: string } | null {
   let url: URL
   try {
-    url = new URL(trimUrl(rawUrl))
+    const resolvedUrl = rawUrl.startsWith(DASHBOARD_ENV_ORIGIN)
+      ? `${DASHBOARD_ORIGIN}${rawUrl.slice(DASHBOARD_ENV_ORIGIN.length)}`
+      : rawUrl
+    url = new URL(trimUrl(resolvedUrl))
   } catch {
     // A malformed candidate (e.g. a stray percent-sign) isn't a Dashboard link — skip it
     // rather than crashing the whole lint.
@@ -81,10 +93,8 @@ export function normalizeDashboardLink(rawUrl: string): { namespace: RouteNamesp
     return { namespace: 'instance', route: `/${url.pathname.slice(3).replace(/\/+$/, '')}` }
   }
 
-  // Everything else is a direct, global URL. `/last-active?path=…` normalizes to the real
-  // `/last-active` Dashboard page, so it validates as that page — the `path` target itself isn't
-  // re-checked. Migrating the remaining `/last-active` links to `/~/` and then rejecting
-  // `/last-active` outright is tracked in DOCS-12082.
+  // Everything else is a direct, global URL. Legacy `/last-active?path=…` links normalize to
+  // `/last-active`, which is deliberately excluded from the global route set so they fail validation.
   return { namespace: 'global', route: url.pathname.replace(/\/+$/, '') || '/' }
 }
 
@@ -109,6 +119,15 @@ export function extractDashboardLinks(content: string, file: string): DashboardL
   }
 
   return links
+}
+
+export function collectDashboardLinks(contentRoots: ContentRoot[]): DashboardLink[] {
+  return contentRoots.flatMap(({ base, excludeTests, root }) => {
+    if (!fs.existsSync(root)) return []
+    return walkFiles(root)
+      .filter((file) => !excludeTests || !/\.test\.[cm]?[jt]sx?$/.test(file))
+      .flatMap((file) => extractDashboardLinks(fs.readFileSync(file, 'utf8'), path.relative(base, file)))
+  })
 }
 
 function normalizeRouteSegment(segment: string): string | null {
@@ -226,7 +245,9 @@ export function discoverDashboardRoutes(dashboardRoot: string): DashboardRoutes 
   const orgLevelShortcuts = extractOrgLevelShortcuts(fs.readFileSync(shortcutPath, 'utf8'))
 
   return {
-    global: dedupeSorted([...globalPageRoutes, ...redirects.global, ...proxyRoutes]),
+    global: dedupeSorted([...globalPageRoutes, ...redirects.global, ...proxyRoutes]).filter(
+      (route) => !EXCLUDED_GLOBAL_ROUTES.has(route),
+    ),
     instance: dedupeSorted([...instancePageRoutes, ...redirects.instance, ...orgLevelShortcuts]),
   }
 }
@@ -301,6 +322,7 @@ function run(): void {
 
   const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
   const docsRoot = path.resolve(scriptDirectory, '..')
+  const repositoryRoot = path.resolve(docsRoot, '..')
   const manifestPath = path.join(scriptDirectory, 'dashboard-routes.json')
   const dashboardRootArg = parseArg('--dashboard-root')
   const sourceRevisionArg = parseArg('--source-revision')
@@ -335,13 +357,15 @@ function run(): void {
 
   if (snapshotOnly) return
 
-  const links = CONTENT_DIRECTORIES.flatMap((directory) => {
-    const contentRoot = path.join(docsRoot, directory)
-    if (!fs.existsSync(contentRoot)) return []
-    return walkFiles(contentRoot).flatMap((file) =>
-      extractDashboardLinks(fs.readFileSync(file, 'utf8'), path.relative(docsRoot, file)),
-    )
-  })
+  const contentRoots = [
+    ...CONTENT_DIRECTORIES.map((directory) => ({
+      base: docsRoot,
+      excludeTests: false,
+      root: path.join(docsRoot, directory),
+    })),
+    { base: repositoryRoot, excludeTests: true, root: path.join(repositoryRoot, 'src') },
+  ]
+  const links = collectDashboardLinks(contentRoots)
   const invalidLinks = findInvalidDashboardLinks(links, routes)
 
   if (invalidLinks.length > 0) {

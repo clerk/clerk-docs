@@ -1,4 +1,4 @@
-# Add Clerk Authentication
+# Set up Clerk
 
 Use the Clerk CLI to add authentication. In agent environments, supported frameworks default to accountless setup: `npx -y clerk@latest init` provisions a claimable application and writes temporary development keys without requiring a Clerk account.
 
@@ -124,6 +124,8 @@ Docs: https://clerk.com/docs/cli https://clerk.com/docs/llms.txt
 ## After setup
 
 Have the user sign up as their first test user. Congratulate them once the profile icon appears in the nav.
+
+Then ask how they want users to sign up and sign in — identifiers (email, phone, username) and social providers. Changing these needs a claimed application: have the user run `npx -y clerk@latest auth login` first, then review with `npx -y clerk@latest config pull` and change with `npx -y clerk@latest config patch` (supports `--dry-run`), or use the Clerk Dashboard. Details: https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options.md
 
 Before production, have the user claim the app with `npx -y clerk@latest auth login`, then configure production with `npx -y clerk@latest deploy`. Unclaimed apps and temporary keys aren't production-ready.
 

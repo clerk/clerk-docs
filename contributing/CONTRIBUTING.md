@@ -515,38 +515,9 @@ description: Some brief, but effective description of the page's content.
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 - **`tag`** - Optional. The page's lifecycle status, in lifecycle order: `experimental`, `beta`, `new`, `legacy`, `deprecated`, `removed`. Renders a status pill next to the page's h1 and adds a parenthesized suffix in the `.md` output. Prefer this over inline `(beta)` / `(deprecated)` in the title itself. The sidenav pill is separate: it comes from the `tag` field on the page's entry in `manifest.json`, so set both when a page's status should show in the sidebar too. The build fails when a manifest entry's `tag` or `maintainer` disagrees with the page's frontmatter — the manifest may omit a status the frontmatter states, but never contradict it. Folder-level tags are exempt (a folder's tag is an editorial statement about the collection, with no single doc to compare against).
 - **`maintainer`** - Optional. Who maintains the thing this page documents: only `community` is valid, and absence means Clerk-maintained. Ownership is separate from lifecycle, so a page can be both community-maintained and in beta (`tag: beta` + `maintainer: community`) — both pills render.
-- **`llm`** - Optional. Associates the page with an agent prompt. Adding `llm.title` also enables the page-wide [quickstart install-prompt treatment](#agent-prompt).
-- **`llmActions`** - Optional. Defaults to `true`. Set to `false` to hide the LLM actions ("Copy as markdown" / "Open in ChatGPT", etc.) that render under the page title. Pages with an `llm` prompt hide them already.
+- **`llmActions`** - Optional. Defaults to `true`. Set to `false` to hide the LLM actions ("Copy as markdown" / "Open in ChatGPT", etc.) that render under the page title. Pages with an `output="replace"` prompt hide them already (see the [`<Prompt />`](#prompt) section).
 
 A page-level frontmatter `title` is **required** — the build fails without one. A `description` is strongly recommended on every page and the build **warns** when it's missing, but a missing `description` won't block the build.
-
-#### Agent prompt
-
-The optional `llm` frontmatter field associates a page with an agent prompt stored in [`prompts/`](../prompts/):
-
-```mdx
----
-title: Next.js Quickstart (App Router)
-llm:
-  displayText: Use this prebuilt prompt to get started faster.
-  src: prompts/nextjs-quickstart.md
-  title: Add Clerk to Next.js
----
-```
-
-- **`displayText`** - Required. The call-to-action text used by the standard prompt component.
-- **`src`** - Required. The prompt file, which must use a `prompts/` path.
-- **`title`** - Optional. Adding a non-empty title opts the entire page into the quickstart install-prompt treatment. The title appears in the prompt card and identifies the prompt in analytics.
-
-When `llm.title` is present, the prompt card renders at the top of the page, `<TutorialHero />` and all note callouts are hidden, and every `<Steps>` block is collapsed behind a **Step-by-step setup instructions** disclosure. While the disclosure is collapsed, the table of contents shows one entry for the manual instructions; opening it restores the individual step headings.
-
-These overrides apply to the whole page. Before adding `llm.title`, verify that the page has:
-
-- Exactly one `<Steps>` block.
-- No note callouts containing information readers need to complete the quickstart.
-- No introductory prose that becomes confusing between the prompt and the collapsed manual instructions.
-
-Prompt files belong in the top-level [`prompts/`](../prompts/) directory so the rendered page and its agent-facing output share one source. When a page has `llm.src`, its `.md` route returns the prompt instead of the manual page content; add `?manual=1` to bypass the prompt and return the converted manual page. The route also falls back to the converted manual content when the prompt file is missing or unreadable. If an install-prompt page's prompt is missing or blank, the HTML page falls back to its standard hero, note, and manual steps without rendering a prompt card.
 
 #### Choosing a status
 
@@ -1043,6 +1014,10 @@ interface CodeBlockProps {
   del?: Array<Mark>
   collapsible?: boolean
   fold?: Array<[start: LineNumber, end: LineNumber, label?: string]>
+  /** Defaults to true. Set false to hide the line-number gutter. */
+  lineNumbers?: boolean
+  /** Soft-wraps long lines instead of scrolling horizontally. Renders as verbatim text: no gutter (`lineNumbers`/`prompt` don't apply) and no diff-marker inference. */
+  wrap?: boolean
 }
 ```
 
@@ -1114,6 +1089,33 @@ Do these actions to complete Step 2.
 The image below shows what this example looks like once rendered.
 
 ![An example of a <Steps /> component](../.github/media/steps.png)
+
+### `<Prompt />`
+
+Agent prompts live in [`prompts/`](../prompts/) and are wired to pages entirely in MDX — there is no prompt frontmatter. The `<Prompt />` component renders them, with two orthogonal axes: `variant` picks the HTML rendering, `output` picks what agent-facing markdown does with the prompt:
+
+```mdx
+<Prompt variant="card" src="prompts/nextjs-quickstart.md" title="Add Clerk to Next.js" output="replace" />
+```
+
+All four props are required and validated at build time, and `src` is checked against the prompt library:
+
+- **`variant`** - `card` (the install-prompt card, which renders the prompt's contents behind an expand control with a copy button) or `banner` (the compact inline banner with **Open in Cursor** and **Copy prompt** buttons — no expand control).
+- **`src`** - The prompt file, which must use a `prompts/` path.
+- **`title`** - The card or banner heading; also identifies the prompt in analytics.
+- **`output`** - What agent-facing markdown does with the prompt:
+  - `replace` - The page's `.md` route serves the prompt instead of the page (`?manual=1` bypasses it), and the LLM actions hide — this prompt is the page's agent artifact. One per page.
+  - `inline` - The prompt's contents are embedded into the page's markdown output as a code block.
+  - `link` - Markdown output links to the prompt file served by the `/docs/raw` route.
+
+The card comes with a page-shape treatment, authored in the page's MDX with the copy included. The lead-in line above the card and the "Or set up Clerk yourself…" line are plain authored prose, and two more components carry the parts prose can't. Each is inert on pages without an active prompt (no `<Prompt />` declaration, or the prompt file failed to load), so the same source renders as a standard manual page there and in the `.md` route's `?manual=1` view:
+
+- `<ManualSteps>` - Use in place of `<Steps>` for the manual step-by-step content — one per page, which the build enforces (the disclosure and the table of contents share a fixed id). While the prompt is active it collapses behind a **Step-by-step setup instructions** disclosure; the table of contents shows one entry for the collapsed disclosure and restores the individual step headings when it opens. Without an active prompt it renders as a plain `<Steps>` block. Both treatment primitives require an `output="replace"` prompt on the same page — the build fails otherwise, since `<PromptOnly>` content would never render and `<ManualSteps>` without a prompt is just `<Steps>`.
+- `<PromptOnly>` - Wraps prose that refers to the prompt card, such as the "Hand this prompt to your agent…" lead-in and the "Or set up Clerk yourself…" line. Rendered while the prompt is active, hidden otherwise, and removed from all `.md` output — the manual markdown a prompt's fallback links point agents at must read cleanly without the card.
+
+Two visibility rules that aren't prompt-specific also matter on these pages: `<If is="human">` renders in the browser but is removed from all agent-facing markdown (use it for content that helps people but distracts agents following steps), and bare content renders everywhere (use it for notes both audiences need, like the App-vs-Pages Router pointer). Pick the narrowest wrapper each piece of content actually justifies — or none.
+
+Prompt files belong in the top-level [`prompts/`](../prompts/) directory so the rendered page and its agent-facing output share one source. When a page declares a primary prompt, its `.md` route returns the prompt instead of the manual page content; add `?manual=1` to bypass the prompt and return the converted manual page. The route also falls back to the converted manual content when the prompt file is missing or unreadable. If an install-prompt page's prompt is missing or blank, the HTML page renders without the card or its `PromptOnly` prose, and the manual steps render expanded.
 
 ### Callouts
 

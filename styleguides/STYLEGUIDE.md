@@ -298,12 +298,12 @@ title: 'Clerk: `<SignedIn>` is not available in @clerk/nextjs Core 3'
 description: Learn why SignedIn was removed in Core 3 and how to replace it with Show.
 ---
 
-```text
+```text {{ lineNumbers: false, wrap: true }}
 Clerk: <SignedIn> is not available in @clerk/nextjs Core 3. Learn more at https://clerk.com/err/signedin-is-not-available-in-clerk-nextjs.
 ```
 ````
 
-The title is the searchable summary; this block is the literal text, link and all. When one thrown message covers several distinct strings — one per component, say — give each its own page so each carries its own verbatim block, rather than making the title or body dynamic.
+The title is the searchable summary; this block is the literal text, link and all. The `{{ lineNumbers: false, wrap: true }}` options render it as prose-like text — no line number gutter, soft-wrapped instead of scrolling — which suits a verbatim message better than code styling. When one thrown message covers several distinct strings — one per component, say — give each its own page so each carries its own verbatim block, rather than making the title or body dynamic.
 
 ### Sections, in order
 
@@ -318,7 +318,7 @@ Most error pages are short — a reason and one fix. Reach for the full structur
 
 ### Agent-oriented remediation (optional)
 
-When an error is one AI agents commonly cause — outdated training data, a removed API — the agent that wrote the code won't read the page. Point the fix at the tools instead: an `<LLMPrompt>` block linking a prompt in `prompts/`, and an agent-first "Migrate with an agent (recommended)" fix that installs the [Clerk CLI](/docs/cli) and [Clerk Skills](/docs/guides/ai/skills). Use these only when the error is agent-caused. If the pattern proves out across more pages, promote it from optional to expected.
+When an error is one AI agents commonly cause — outdated training data, a removed API — the agent that wrote the code won't read the page. Point the fix at the tools instead: a `<Prompt variant="banner" … output="link" />` linking a prompt in `prompts/`, and an agent-first "Migrate with an agent (recommended)" fix that installs the [Clerk CLI](/docs/cli) and [Clerk Skills](/docs/guides/ai/skills). Use these only when the error is agent-caused. If the pattern proves out across more pages, promote it from optional to expected.
 
 ## Accessibility
 

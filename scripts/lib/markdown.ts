@@ -111,7 +111,7 @@ export const parseInMarkdownFile =
           markDirty(file.filePath, typedoc)
         }),
       )
-      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false, embed: false }))
+      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false, pageScope: false }))
       // Capture the tree the pipeline ends with. A transformer can change the
       // tree two ways: mutate the original in place (caught via `node` below) or
       // return a new root that unified swaps in for later plugins (caught via

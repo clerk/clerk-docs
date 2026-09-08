@@ -151,9 +151,46 @@ const getSdkFromPath = (path: string, validSdks: readonly SDK[]): SDK | null => 
 
 const getSdkDisplayName = (sdk: SDK): string => SDK_DISPLAY_NAMES[sdk] ?? sdk
 
-export const writeLLMsFull = async (outputtedDocsFiles: OutputtedDocsFiles, validSdks: readonly SDK[]) => {
+/**
+ * Prompt-page primitives are UI chrome, not content. Strip `PromptOnly` prose
+ * (it refers to a card that markdown output never contains) and unwrap
+ * `ManualSteps` (the collapsible wrapper around real steps). `Prompt` follows
+ * its `output` prop: "replace" strips (that prompt takes over the page's own
+ * `.md` route instead), "inline" embeds the prompt's contents as a code
+ * block, and "link" becomes a link to the file the /docs/raw route serves.
+ * (Interim measure — full component normalization for these exports is
+ * DOCS-12052.)
+ */
+export const stripPromptPrimitives = (content: string, prompts: ReadonlyMap<string, string>): string =>
+  content
+    .replace(/<PromptOnly>[\s\S]*?<\/PromptOnly>\n*/g, '')
+    .replace(/<Prompt\b([\s\S]*?)\/>\n*/g, (_match, attributes: string) => {
+      const output = attributes.match(/\boutput="([^"]+)"/)?.[1]
+      const src = attributes.match(/\bsrc="([^"]+)"/)?.[1]
+      const title = attributes.match(/\btitle="([^"]+)"/)?.[1]
+      if (output === 'replace' || !src || !title) return ''
+      if (output === 'inline') {
+        const contents = prompts.get(src)
+        if (contents !== undefined) {
+          // Prompts routinely contain fenced code blocks, so the wrapping
+          // fence must be longer than any backtick run inside the prompt.
+          const longestRun = (contents.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0)
+          const fence = '`'.repeat(Math.max(3, longestRun + 1))
+          return fence + 'md\n' + contents.trim() + '\n' + fence + '\n\n'
+        }
+      }
+      return `[${title}](https://clerk.com/docs/raw/${src})\n\n`
+    })
+    .replace(/^<\/?ManualSteps>\n?/gm, '')
+
+export const writeLLMsFull = async (
+  outputtedDocsFiles: OutputtedDocsFiles,
+  validSdks: readonly SDK[],
+  // Keyed by dist path (`_prompts/<name>`), matching the rewritten src attrs.
+  prompts: ReadonlyMap<string, string> = new Map(),
+) => {
   const content = emitSdkFirstReferenceUrls(
-    LLMS_FULL_HEADER + outputtedDocsFiles.map((file) => file.content).join('\n'),
+    LLMS_FULL_HEADER + stripPromptPrimitives(outputtedDocsFiles.map((file) => file.content).join('\n'), prompts),
     validSdks,
   )
   assertConsistentReferenceUrlShapes(content, validSdks)

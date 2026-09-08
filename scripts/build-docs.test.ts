@@ -11733,3 +11733,253 @@ sdk: react, js-frontend
     expect(output).not.toContain('warning Hash "sign-in" not found in the react variant of /docs/reference')
   })
 })
+
+describe('Prompt validation', () => {
+  const promptsConfig = { inputPath: '../prompts', outputPath: '_prompts' }
+
+  test('Fails the build when a <Prompt /> inside a partial is missing a required prop', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/_partials/prompt-partial.mdx',
+        content: `<Prompt src="prompts/test-prompt.md" title="Test" output="inline" />`,
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Include src="_partials/prompt-partial" />`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: promptsConfig,
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('<Prompt /> requires "variant"')
+  })
+
+  test('A valid <Prompt /> inside a partial builds and gets its src rewritten in the page output', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/_partials/prompt-partial.mdx',
+        content: `<Prompt variant="banner" src="prompts/test-prompt.md" title="Test" output="inline" />`,
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Include src="_partials/prompt-partial" />`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: promptsConfig,
+      }),
+    )
+
+    expect(await readFile('./dist/simple-test.mdx')).toContain('_prompts/test-prompt.md')
+  })
+
+  test('Fails the build when a page declares more than one output="replace" prompt', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Prompt variant="card" src="prompts/test-prompt.md" title="One" output="replace" />
+
+<Prompt variant="card" src="prompts/test-prompt.md" title="Two" output="replace" />`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: promptsConfig,
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('Only one <Prompt')
+  })
+})
+
+describe('Prompt validation on the composed page tree', () => {
+  const promptsConfig = { inputPath: '../prompts', outputPath: '_prompts' }
+
+  test('Fails the build when two partials each contribute a replace prompt to one page', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/_partials/replace-one.mdx',
+        content: `<Prompt variant="card" src="prompts/test-prompt.md" title="One" output="replace" />`,
+      },
+      {
+        path: './docs/_partials/replace-two.mdx',
+        content: `<Prompt variant="card" src="prompts/test-prompt.md" title="Two" output="replace" />`,
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Include src="_partials/replace-one" />
+
+<Include src="_partials/replace-two" />`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: promptsConfig,
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('Only one <Prompt')
+  })
+
+  test('A page-level <ManualSteps> is satisfied by a replace prompt that arrives via a partial', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/_partials/replace-prompt.mdx',
+        content: `<Prompt variant="card" src="prompts/test-prompt.md" title="Test" output="replace" />`,
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Include src="_partials/replace-prompt" />
+
+<ManualSteps>
+  ## Step one
+
+  Content.
+</ManualSteps>`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: promptsConfig,
+      }),
+    )
+
+    expect(await readFile('./dist/simple-test.mdx')).toContain('_prompts/test-prompt.md')
+  })
+})
+
+describe('ManualSteps validation', () => {
+  test('Fails the build when a page has two <ManualSteps> blocks', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Prompt variant="card" src="prompts/test-prompt.md" title="Test" output="replace" />
+
+<ManualSteps>
+  ## Step one
+
+  Content.
+</ManualSteps>
+
+<ManualSteps>
+  ## Step two
+
+  More content.
+</ManualSteps>`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: { inputPath: '../prompts', outputPath: '_prompts' },
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('Only one <ManualSteps>')
+  })
+})

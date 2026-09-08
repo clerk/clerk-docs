@@ -91,9 +91,22 @@ export const errorMessages = {
   'partials-inside-partials': (): string =>
     'Partials inside of partials is not yet supported (this is a bug with the build script, please report)',
 
-  // LLMPrompt component errors
-  'src-not-in-prompts': (src: string): string => `<LLMPrompt /> prop "src" must start with "prompts/"`,
+  // Prompt component errors
+  'src-not-in-prompts': (component: string, src: string): string =>
+    `<${component} /> prop "src" must start with "prompts/" (got "${src}")`,
   'prompt-not-found': (src: string): string => `Prompt ${src} not found`,
+  'prompt-missing-prop': (prop: string, valid: string[] | null): string =>
+    `<Prompt /> requires "${prop}"${valid ? ` (one of: ${valid.join(', ')})` : ''}`,
+  'prompt-invalid-prop': (prop: string, value: string, valid: string[]): string =>
+    `<Prompt /> prop "${prop}" has invalid value "${value}" (one of: ${valid.join(', ')})`,
+  'prompt-banner-removed': (): string =>
+    `<PromptBanner /> was removed — use <Prompt variant="banner" src title output /> instead`,
+  'treatment-primitive-without-replace-prompt': (name: string): string =>
+    `<${name} /> requires a <Prompt … output="replace" /> on the same page — without one, ${name === 'PromptOnly' ? 'its content never renders' : 'use <Steps> instead'}`,
+  'multiple-replace-prompts': (): string =>
+    `Only one <Prompt … output="replace" /> is allowed per page — the .md route can only serve one prompt`,
+  'multiple-manual-steps': (): string =>
+    `Only one <ManualSteps> is allowed per page — the disclosure and the table of contents share a fixed id`,
 
   // Link validation errors
   'link-doc-not-found': (url: string, file: string): string =>

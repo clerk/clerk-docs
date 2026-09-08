@@ -866,6 +866,23 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(validateAnchorText(config, partial.path, 'partials'))
           .use(validateLinkTargets(config, partial.path, 'partials'))
           .use(validateProperNouns(config, partial.path, 'partials'))
+          // Partials never reach parseInMarkdownFile's checkPrompts run, and the
+          // per-page passes that see their embedded content don't report warnings
+          // for every page — so a <Prompt> in a partial is validated here. The
+          // src rewrite (update) still happens post-embed in the page passes.
+          .use(
+            checkPrompts(
+              config,
+              prompts,
+              { filePath: partial.path },
+              {
+                reportWarnings: true,
+                update: false,
+                section: 'partials',
+                pageScope: false,
+              },
+            ),
+          )
         const tree = processor.parse(inputFile)
         node = await processor.run(tree, inputFile)
 
@@ -1201,7 +1218,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               foundTooltips.add(tooltip)
             }),
           )
-          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true, embed: true }))
+          // The only pass that sees every page with its partials embedded — the
+          // page-scope prompt rules (one replace prompt, no orphan primitives)
+          // are judged here on the composed tree.
+          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true, pageScope: true }))
           // Variant-aware hash validation for unscoped docs, which render for every
           // SDK. Runs after the embed plugins so links inside partials/typedocs/
           // tooltips are seen. Scoped docs pass an empty list — the SDK output pass
@@ -1389,7 +1409,7 @@ ${yaml.stringify({
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true, embed: true }))
+              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
               // Variant-aware hash validation. Runs after the embed plugins so links
               // inside partials/typedocs/tooltips are seen, and checks each link's
               // anchor against the linked doc's `targetSdk` variant instead of the
@@ -1567,7 +1587,11 @@ ${yaml.stringify({
     const outputtedDocsFiles = listOutputDocsFiles(store.writtenFiles, mdxFilePaths)
 
     if (config.llms?.fullPath) {
-      const llmsFull = await generateLLMsFull(outputtedDocsFiles, config.validSdks)
+      const llmsFull = await generateLLMsFull(
+        outputtedDocsFiles,
+        config.validSdks,
+        new Map(prompts.map((prompt) => [`${config.prompts?.outputPathRelative}/${prompt.name}`, prompt.content])),
+      )
       await writeFile(config.llms.fullPath, llmsFull)
     }
 

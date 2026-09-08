@@ -1,9 +1,9 @@
 ---
 title: How Clerk implements OAuth
-description: Learn how to configure and secure OAuth flows with Clerk, including Client ID Metadata Documents, dynamic client registration, consent screens, PKCE, public clients, and scopes.
+description: Learn how to configure and secure OAuth flows with Clerk, including Device Authorization Grant, Client ID Metadata Documents, dynamic client registration, consent screens, PKCE, public clients, and scopes.
 ---
 
-Clerk supports secure, standards-compliant OAuth flows for your applications. You can create OAuth apps, manage URL-identified clients, enable dynamic client registration, manage consent screens, and configure public clients. This guide covers all key OAuth features and configurations in Clerk and helps you set up the right OAuth flow for your needs.
+Clerk supports secure, standards-compliant OAuth flows for your applications. You can create OAuth apps, authorize CLIs and input-constrained devices, manage URL-identified clients, enable dynamic client registration, manage consent screens, and configure public clients. This guide covers all key OAuth features and configurations in Clerk and helps you set up the right OAuth flow for your needs.
 
 <If is="llm">
   **For AI agents:** Instead of creating and configuring OAuth apps in the Dashboard, manage them with the CLI: run `npx clerk@latest api oauth_applications` to list existing OAuth apps (pass `-d` with the app JSON to create one), and discover the related endpoints with `npx clerk@latest api ls oauth`. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
@@ -117,6 +117,17 @@ This ensures that even if an attacker intercepts the authorization code, they ca
 
 To enable PKCE for a public client, you can enable the **Public** option for each OAuth app [in the Clerk Dashboard](https://dashboard.clerk.com/~/oauth-applications).
 
+### Device Authorization Grant <BetaTag />
+
+> [!BETA]
+> OAuth 2.0 Device Authorization Grant is currently in beta. To have it enabled for your account, [contact support](/contact/support).
+
+Clerk supports [OAuth 2.0 Device Authorization Grant](https://www.rfc-editor.org/rfc/rfc8628) for CLIs, TVs, game consoles, and other clients that cannot open a browser or easily accept text input. The device displays a short user code and verification URL while it polls Clerk for the user's decision.
+
+Device Authorization Grant can be used by public and confidential clients. Public clients send only their **Client ID**, while confidential clients must authenticate with their **Client ID** and **Client Secret**. Unlike an [Authorization Code Flow](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.1) for a public client, Device Authorization Grant does not use PKCE or a redirect URI.
+
+Enable the grant for each eligible OAuth application on the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard or through the [Clerk Backend API](/docs/reference/backend-api){{ target: '_blank' }}, then implement the device request, browser verification, and token polling steps. See [Use OAuth Device Authorization Grant](/docs/guides/configure/auth-strategies/oauth/device-authorization-grant) for the complete flow.
+
 ### Consent screen management
 
 The OAuth consent screen shows users a confirmation dialog before they authorize OAuth applications. It ensures users understand _exactly_ what permissions they're granting before completing the OAuth flow.
@@ -148,6 +159,7 @@ When an OAuth client requests the `user:org:read` scope, the OAuth consent scree
 - OAuth access tokens expire **after 1 day**.
 - Refresh tokens **never expire**.
 - Authorization codes expire **after 10 minutes**.
+- Device codes and user codes expire **after 10 minutes**.
 - OIDC `id_token`s expire **after 1 day**.
 
 ## Access token format
@@ -175,10 +187,15 @@ This endpoint exposes all relevant details in a standardized JSON format. A samp
 {
   "issuer": "https://well-hagfish-71.clerk.accounts.dev",
   "authorization_endpoint": "https://well-hagfish-71.clerk.accounts.dev/oauth/authorize",
+  "device_authorization_endpoint": "https://well-hagfish-71.clerk.accounts.dev/oauth/device_authorization",
   "token_endpoint": "https://well-hagfish-71.clerk.accounts.dev/oauth/token",
   "jwks_uri": "https://well-hagfish-71.clerk.accounts.dev/.well-known/jwks.json",
   "response_types_supported": ["code"],
-  "grant_types_supported": ["authorization_code", "refresh_token"],
+  "grant_types_supported": [
+    "authorization_code",
+    "refresh_token",
+    "urn:ietf:params:oauth:grant-type:device_code"
+  ],
   "token_endpoint_auth_methods_supported": ["client_secret_basic", "none"],
   "client_id_metadata_document_supported": true,
   "scopes_supported": [
@@ -200,7 +217,8 @@ This endpoint exposes all relevant details in a standardized JSON format. A samp
 }
 ```
 
-Clerk advertises `client_id_metadata_document_supported: true` only when you enable **Advertise CIMD support** on the **CIMD Clients** tab, which lets compatible clients select [CIMD](!client-id-metadata-document) instead of Dynamic Client Registration. Clerk omits the field otherwise. Applications that still use Clerk's legacy OAuth implementation never advertise it and don't support CIMD clients.
+### Conditional metadata
 
-> [!NOTE]
-> The `user:org:read` scope and `org_id` claim are only included in this metadata when the instance has Organizations enabled. See [Organizations and OAuth](#organizations-and-oauth) for details.
+- **CIMD:** Clerk advertises `client_id_metadata_document_supported: true` only when you enable **Advertise CIMD support** on the **CIMD Clients** tab. This lets compatible clients select [CIMD](!client-id-metadata-document) instead of Dynamic Client Registration. Clerk omits the field otherwise. Applications using Clerk's legacy OAuth implementation don't support or advertise CIMD.
+- **Device Authorization Grant:** Clerk includes `device_authorization_endpoint` and the Device Authorization Grant type in `grant_types_supported` only when Device Authorization Grant is available and the user verification page is reachable. OAuth clients should rely on the metadata instead of constructing the endpoint themselves.
+- **Organizations:** Clerk includes `user:org:read` in `scopes_supported` and `org_id` in `claims_supported` only when the instance has Organizations enabled. See [Organizations and OAuth](#organizations-and-oauth) for details.

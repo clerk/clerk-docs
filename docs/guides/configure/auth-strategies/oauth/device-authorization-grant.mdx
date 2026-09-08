@@ -1,0 +1,159 @@
+---
+title: Use OAuth Device Authorization Grant
+description: Learn how to authorize CLIs, TVs, and other input-constrained devices with Clerk's OAuth 2.0 Device Authorization Grant.
+tag: beta
+---
+
+> [!BETA]
+> OAuth 2.0 Device Authorization Grant is currently in beta. To have it enabled for your account, [contact support](/contact/support).
+
+[OAuth 2.0 Device Authorization Grant](https://www.rfc-editor.org/rfc/rfc8628) lets a user authorize a device or application that cannot open a browser or easily accept text input. It is commonly used by command-line tools, TVs, game consoles, and other input-constrained devices.
+
+The device displays a short user code and a verification URL. The user opens the URL on a second device, signs in to Clerk, reviews the requested access, and approves or denies the request. While the user completes that step, the original device polls Clerk until it can receive tokens or the request ends.
+
+> [!NOTE]
+> Device Authorization Grant does not use redirect URIs or [PKCE (Proof Key for Code Exchange)](https://datatracker.ietf.org/doc/html/rfc7636). The short-lived device code, user verification on a separate browser-capable device, client binding, and polling interval protect this flow. Public clients using the Authorization Code Flow should continue to use PKCE.
+
+## How the flow works
+
+1. The device requests a device code from Clerk's `/oauth/device_authorization` endpoint.
+1. Clerk returns a private `device_code`, a short `user_code`, verification URLs, an expiry, and a minimum polling interval.
+1. The device shows the user the `user_code` and `verification_uri`. It can also turn `verification_uri_complete` into a link or QR code.
+1. The user opens the verification page in a browser, signs in, reviews the OAuth application and scopes, and approves or denies access.
+1. The device polls `/oauth/token` at the required interval. After approval, Clerk returns an [access token](!oauth-access-token) and refresh token. If the client requested the `openid` scope, Clerk also returns an ID token.
+
+Both the `device_code` and `user_code` expire after 10 minutes. A `device_code` can be exchanged only once.
+
+## Configure an OAuth application
+
+Device Authorization Grant must be enabled for each OAuth application that uses it. To do so, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard, create or select an application, and enable **Device authorization grant**. You can also configure the application through the [Clerk Backend API](/docs/reference/backend-api){{ target: '_blank' }} using the [Clerk CLI](/docs/cli).
+
+For a public client, set `public` to `true`. Public clients identify themselves with their **Client ID** and do not send a **Client Secret**:
+
+```sh {{ filename: 'terminal' }}
+npx clerk@latest api oauth_applications -d '{
+  "name": "Living room app",
+  "scopes": "openid profile email offline_access",
+  "public": true,
+  "device_authorization_grant_enabled": true
+}'
+```
+
+To enable Device Authorization Grant for an existing application, pass its **OAuth application ID**:
+
+```sh {{ filename: 'terminal' }}
+npx clerk@latest api oauth_applications/<OAUTH_APPLICATION_ID> \
+  -X PATCH \
+  -d '{"device_authorization_grant_enabled":true}'
+```
+
+> [!WARNING]
+> Keep confidential clients private and authenticate them with their Client ID and Client Secret. Do not embed a Client Secret in a CLI, mobile application, TV application, or other environment where a user can extract it.
+
+## Start a device authorization request
+
+Send a form-encoded `POST` request to the `device_authorization_endpoint` advertised in [Clerk's metadata](#discover-device-authorization-grant-support). The examples in this guide use your Clerk [Frontend API URL](!frontend-api-url). A public client sends its Client ID without a Client Secret:
+
+```sh {{ filename: 'terminal' }}
+curl "https://{{fapi_url}}/oauth/device_authorization" \
+  -X POST \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'client_id=<OAUTH_CLIENT_ID>' \
+  --data-urlencode 'scope=openid profile email offline_access'
+```
+
+A confidential client must also authenticate. [HTTP Basic authentication](https://datatracker.ietf.org/doc/html/rfc7617) is recommended:
+
+```sh {{ filename: 'terminal' }}
+curl "https://{{fapi_url}}/oauth/device_authorization" \
+  -X POST \
+  -u '<OAUTH_CLIENT_ID>:<OAUTH_CLIENT_SECRET>' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'client_id=<OAUTH_CLIENT_ID>' \
+  --data-urlencode 'scope=openid profile email offline_access'
+```
+
+The requested scopes must be assigned to the OAuth application. You can also send an OpenID Connect `nonce`; when present, it must contain at least eight characters.
+
+A successful request returns a response with this structure:
+
+```json
+{
+  "device_code": "5FZ4RVGZ8QW3HJ7KM2NP9TXC6BD1YS0AE5RGH4KJVQW",
+  "user_code": "BCDF-GHJK",
+  "verification_uri": "https://accounts.example.com/device",
+  "verification_uri_complete": "https://accounts.example.com/device?user_code=BCDF-GHJK",
+  "expires_in": 600,
+  "interval": 5
+}
+```
+
+- Keep `device_code` private. The device uses it to poll the token endpoint and must never show it to the user.
+- Show `user_code` and `verification_uri` together so the user can complete the flow manually.
+- Use `verification_uri_complete` for a convenient link or QR code that pre-fills the user code. Do not make it the only way to continue.
+- Treat `expires_in` and `interval` as authoritative. Do not hardcode their current values.
+
+## Poll the token endpoint
+
+Wait at least the number of seconds specified by `interval` between requests to `/oauth/token`. Public clients must include their Client ID:
+
+```sh {{ filename: 'terminal' }}
+curl "https://{{fapi_url}}/oauth/token" \
+  -X POST \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'client_id=<OAUTH_CLIENT_ID>' \
+  --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:device_code' \
+  --data-urlencode 'device_code=<DEVICE_CODE>'
+```
+
+A confidential client authenticates the token request with its Client ID and Client Secret:
+
+```sh {{ filename: 'terminal' }}
+curl "https://{{fapi_url}}/oauth/token" \
+  -X POST \
+  -u '<OAUTH_CLIENT_ID>:<OAUTH_CLIENT_SECRET>' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:device_code' \
+  --data-urlencode 'device_code=<DEVICE_CODE>'
+```
+
+Keep polling only while the request is pending:
+
+| OAuth error | Client behavior |
+| - | - |
+| `authorization_pending` | Wait for the current polling interval, then try again. |
+| `slow_down` | Increase the polling interval by at least five seconds before trying again. |
+| `access_denied` | Stop polling. The user denied the request. |
+| `expired_token` | Stop polling and start a new device authorization request if the user wants to retry. |
+
+For any other OAuth error, including `invalid_grant` or `invalid_client`, stop polling and surface a useful retry or configuration message. Network failures can be retried with backoff while the device code is still valid.
+
+After the user approves the request, the token endpoint returns the same token response shape as Clerk's other OAuth grants. Store access and refresh tokens using the secure storage available on the device. To use the access token with your API, see [Verify OAuth tokens](/docs/guides/configure/auth-strategies/oauth/verify-oauth-tokens).
+
+## User verification
+
+By default, Clerk hosts the verification page in the [Account Portal](/docs/guides/account-portal/overview). The page lets the user enter or confirm the user code, displays the requesting OAuth application and scopes, and provides equally visible approve and deny actions.
+
+When the application requests `user:org:read`, the verification page also lets the user select an Organization. Clerk includes the selected Organization's ID as the `org_id` claim in the access token. If the client also requested the `openid` scope, Clerk includes `org_id` in the ID token.
+
+## Discover Device Authorization Grant support
+
+OAuth clients can retrieve Clerk's metadata from either of these endpoints on your Clerk [Frontend API URL](!frontend-api-url):
+
+- `https://<YOUR_FRONTEND_API_URL>/.well-known/oauth-authorization-server`
+- `https://<YOUR_FRONTEND_API_URL>/.well-known/openid-configuration`
+
+When Device Authorization Grant is available and the verification page is reachable, a sample metadata document includes:
+
+```json
+{
+  "device_authorization_endpoint": "https://{{fapi_url}}/oauth/device_authorization",
+  "grant_types_supported": [
+    "authorization_code",
+    "refresh_token",
+    "urn:ietf:params:oauth:grant-type:device_code"
+  ]
+}
+```
+
+Clients should use the advertised endpoint instead of constructing it from the issuer URL.

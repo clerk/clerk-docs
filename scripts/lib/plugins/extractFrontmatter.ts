@@ -12,6 +12,11 @@ export type Frontmatter = {
   sdk?: SDK[]
   tag?: 'experimental' | 'beta' | 'new' | 'legacy' | 'deprecated' | 'removed'
   maintainer?: 'community'
+  /**
+   * Sidenav label for the SDKs this file renders. Build-only: consumed by the manifest
+   * serializer and never written to generated MDX. Only valid on docs with SDK variants.
+   */
+  navTitle?: string
 }
 
 export const extractFrontmatter =
@@ -35,7 +40,7 @@ export const extractFrontmatter =
         if (!('value' in node)) return
         if (typeof node.value !== 'string') return
 
-        const frontmatterYaml: Record<'title' | 'description' | 'sdk' | 'tag' | 'maintainer', string | undefined> =
+        const frontmatterYaml: Record<'title' | 'description' | 'sdk' | 'tag' | 'maintainer' | 'navTitle', unknown> =
           yaml.parse(node.value)
 
         if (frontmatterYaml === null) {
@@ -52,7 +57,7 @@ export const extractFrontmatter =
           safeMessage(config, vfile, filePath, section, 'frontmatter-missing-description', [], node.position)
         }
 
-        const frontmatterSDKs = frontmatterYaml.sdk?.split(', ')
+        const frontmatterSDKs = (frontmatterYaml.sdk as string | undefined)?.split(', ')
 
         if (frontmatterSDKs !== undefined && validateSDKs(frontmatterSDKs) === false) {
           const invalidSDKs = frontmatterSDKs.filter((sdk) => isValidSdk(config)(sdk) === false)
@@ -78,7 +83,7 @@ export const extractFrontmatter =
               filePath,
               section,
               'invalid-tag-in-frontmatter',
-              [frontmatterYaml.tag],
+              [frontmatterYaml.tag as string],
               node.position,
             )
             return
@@ -96,7 +101,7 @@ export const extractFrontmatter =
               filePath,
               section,
               'invalid-maintainer-in-frontmatter',
-              [frontmatterYaml.maintainer],
+              [frontmatterYaml.maintainer as string],
               node.position,
             )
             return
@@ -104,12 +109,23 @@ export const extractFrontmatter =
           maintainerValue = parsed.data
         }
 
+        let navTitleValue: string | undefined
+        if (frontmatterYaml.navTitle !== undefined) {
+          const raw = frontmatterYaml.navTitle
+          if (typeof raw !== 'string' || raw.trim() === '') {
+            safeFail(config, vfile, filePath, section, 'invalid-navtitle-in-frontmatter', [raw], node.position)
+            return
+          }
+          navTitleValue = raw.trim()
+        }
+
         frontmatter = {
-          title: frontmatterYaml.title,
-          description: frontmatterYaml.description,
+          title: frontmatterYaml.title as string,
+          description: frontmatterYaml.description as string | undefined,
           sdk: frontmatterSDKs,
           tag: tagValue,
           maintainer: maintainerValue,
+          navTitle: navTitleValue,
         }
       },
     )

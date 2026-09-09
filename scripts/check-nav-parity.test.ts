@@ -7,6 +7,7 @@ import {
   normalizeOldDist,
   VIEWS,
 } from './check-nav-parity'
+import { VALID_SDKS } from './lib/schemas'
 
 const page = (title: string, sdk?: string[]) => ({ title, href: `/docs/${title}`, ...(sdk ? { sdk } : {}) })
 
@@ -451,7 +452,8 @@ describe('documented normalization deltas', () => {
 
 // The old-vs-new mode had one job and it is done. The standing use is new-vs-new: build a
 // dist before a manifest-affecting change and one after, and prove the nav data is unmoved
-// (DOCS-11971's SDK-group de-dup PRs are the case this exists for).
+// (a manifest edit that moves groups or changes what a page's frontmatter scopes is the case
+// this exists for).
 describe('new-vs-new mode', () => {
   it('detects the mode from the first dist rather than assuming', () => {
     expect(detectMode(oldDist)).toBe('old-vs-new')
@@ -468,10 +470,10 @@ describe('new-vs-new mode', () => {
     expect(result.mode).toBe('new-vs-new')
     expect(result.ok).toBe(true)
     expect(result.diffs).toEqual([])
-    expect(result.counts).toHaveLength(VIEWS.length)
+    expect(result.counts).toHaveLength(VIEWS.length - 1)
     // Both sides run through the same normalizer, so the counts are the shared new-format ones.
-    expect(Object.fromEntries(result.counts.map(({ view, old, new: next }) => [view, [old, next]])).default).toEqual([
-      3, 3,
+    expect(Object.fromEntries(result.counts.map(({ view, old, new: next }) => [view, [old, next]])).nextjs).toEqual([
+      2, 2,
     ])
   })
 
@@ -484,9 +486,9 @@ describe('new-vs-new mode', () => {
 
     expect(result.mode).toBe('new-vs-new')
     expect(result.ok).toBe(false)
-    // `default` and every SDK view that renders from it surface the rename.
-    expect(result.diffs.map(({ view }) => view)).toContain('default')
-    expect(result.diffs.find(({ view }) => view === 'default')?.diff).toContain('a-renamed')
+    // `nextjs` and every SDK view that renders from the default tree surface the rename.
+    expect(result.diffs.map(({ view }) => view)).toContain('nextjs')
+    expect(result.diffs.find(({ view }) => view === 'nextjs')?.diff).toContain('a-renamed')
   })
 
   it('names an SDK-keyed view when only that entry changed', () => {
@@ -517,7 +519,124 @@ describe('new-vs-new mode', () => {
     // The override pins the mode, it does not reinterpret the data: forced on to a legacy dist
     // it fails loudly rather than reporting parity over a tree it could not read.
     expect(() => compareDistManifests({ flags: {}, ...oldDist }, { flags: {}, ...newDist }, 'new-vs-new')).toThrow(
-      'No navigation entry for view "default"',
+      'No navigation entry for view "nextjs"',
     )
+  })
+
+  it('fails an all-SDK array becoming absent on an unscoped href unless the default change is allowed', () => {
+    // Every hydrated SDK view still contains the item and the href has no placeholder, so no SDK
+    // view differs. But the default tree's `sdk` array itself moved (present to absent), and that
+    // tree is what renders before hydration: the comparison keeps literal arrays there and fails
+    // the run. `allowDefaultChange` turns the failure into a note once the browser check is done.
+    const before = {
+      flags: {},
+      navigation: {
+        default: { type: 'sectioned', sections: [{ title: 'Guides', items: [page('a', [...VALID_SDKS])] }] },
+      },
+    }
+    const after = {
+      flags: {},
+      navigation: { default: { type: 'sectioned', sections: [{ title: 'Guides', items: [page('a')] }] } },
+    }
+    const result = compareDistManifests(before, after)
+    expect(result.mode).toBe('new-vs-new')
+    expect(result.ok).toBe(false)
+    expect(result.diffs.map(({ view }) => view)).toEqual(['default (pre-hydration)'])
+    expect(result.notes).toEqual([])
+
+    const allowed = compareDistManifests(before, after, undefined, { allowDefaultChange: true })
+    expect(allowed.ok).toBe(true)
+    expect(allowed.diffs).toEqual([])
+    expect(allowed.notes).toEqual(['default tree structure or sdk arrays changed; accepted via --allow-default-change'])
+  })
+
+  it('still reports present-vs-absent sdk on a :sdk: href (the placeholder renders differently)', () => {
+    const scoped = { title: 'q', href: '/docs/:sdk:/q', sdk: [...VALID_SDKS] }
+    const unscoped = { title: 'q', href: '/docs/:sdk:/q' }
+    const before = {
+      flags: {},
+      navigation: { default: { type: 'sectioned', sections: [{ title: 'G', items: [scoped] }] } },
+    }
+    const after = {
+      flags: {},
+      navigation: { default: { type: 'sectioned', sections: [{ title: 'G', items: [unscoped] }] } },
+    }
+    const result = compareDistManifests(before, after)
+    expect(result.ok).toBe(false)
+    expect(result.diffs.map(({ view }) => view)).toContain('nextjs')
+  })
+
+  it('passes a folder merge that renders identically in every SDK view', () => {
+    const before = {
+      flags: {},
+      navigation: {
+        default: {
+          type: 'sectioned',
+          sections: [
+            {
+              title: 'Guides',
+              items: [
+                {
+                  title: 'Getting started',
+                  sdk: ['nextjs'],
+                  items: [{ title: 'Quickstart (App Router)', href: '/docs/:sdk:/q', sdk: ['nextjs', 'react'] }],
+                },
+                {
+                  title: 'Getting started',
+                  sdk: ['react'],
+                  items: [{ title: 'Quickstart', href: '/docs/:sdk:/q', sdk: ['nextjs', 'react'] }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    }
+    const after = {
+      flags: {},
+      navigation: {
+        default: {
+          type: 'sectioned',
+          sections: [
+            {
+              title: 'Guides',
+              items: [
+                {
+                  title: 'Getting started',
+                  items: [
+                    { title: 'Quickstart (App Router)', href: '/docs/:sdk:/q', sdk: ['nextjs'] },
+                    { title: 'Quickstart', href: '/docs/:sdk:/q', sdk: ['react'] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    }
+    const strict = compareDistManifests(before, after)
+    expect(strict.ok).toBe(false)
+    expect(strict.diffs.map(({ view }) => view)).toEqual(['default (pre-hydration)'])
+
+    const result = compareDistManifests(before, after, undefined, { allowDefaultChange: true })
+    expect(result.ok).toBe(true)
+    expect(result.notes).toEqual(['default tree structure or sdk arrays changed; accepted via --allow-default-change'])
+  })
+
+  it('still fails when an SDK view loses an item', () => {
+    const before = {
+      flags: {},
+      navigation: {
+        default: { type: 'sectioned', sections: [{ title: 'G', items: [page('a'), page('b', ['react'])] }] },
+      },
+    }
+    const after = {
+      flags: {},
+      navigation: { default: { type: 'sectioned', sections: [{ title: 'G', items: [page('a')] }] } },
+    }
+    const result = compareDistManifests(before, after)
+    expect(result.ok).toBe(false)
+    // The react view lost the item, and the default tree (which renders pre-hydration) lost it too.
+    expect(result.diffs.map(({ view }) => view)).toEqual(['react', 'default (pre-hydration)'])
   })
 })

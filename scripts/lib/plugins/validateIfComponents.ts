@@ -3,7 +3,7 @@ import { visit as mdastVisit } from 'unist-util-visit'
 import type { VFile } from 'vfile'
 import { type BuildConfig } from '../config'
 import { safeFail } from '../error-messages'
-import { ManifestItem } from '../manifest'
+import { ScopedManifestItem } from '../manifest'
 import { type SDK } from '../schemas'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
@@ -62,7 +62,7 @@ export const validateIfComponents =
     config: BuildConfig,
     filePath: string,
     doc: { file: { href: string }; sdk?: SDK[] },
-    flatSDKScopedManifest: ManifestItem[],
+    flatSDKScopedManifest: ScopedManifestItem[],
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
@@ -142,6 +142,11 @@ export const validateIfComponents =
         ;(() => {
           // The doc is generic so we are skipping it
           if (availableSDKs.length === 0) return
+
+          // An occurrence with no scope (listed unscoped in the main manifest) renders for every
+          // SDK, so nothing is unavailable — the union of the scoped occurrences would be wrong.
+          // Mirrors the `universal` flag `combinedItemSDKs` computes in build-docs.ts.
+          if (manifestItems.some((item) => item.sdk === undefined)) return
 
           const available = availableSDKs.includes(sdk)
 

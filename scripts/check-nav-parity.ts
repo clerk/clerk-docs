@@ -9,8 +9,15 @@
  *  - `old-vs-new` — the format flip's migration gate, comparing a pre-flip dist against a
  *    post-flip one. Nothing on `main` emits the old format any more, so this is history.
  *  - `new-vs-new` — the standing use: build a dist before a manifest-affecting change and one
- *    after, and prove the change is nav-output-neutral (e.g. the DOCS-11971 SDK-group de-dup
- *    PRs, or any edit to `build-docs.ts`'s manifest handling).
+ *    after, and prove the change is nav-output-neutral (e.g. a manifest edit that moves groups
+ *    or changes what a page's frontmatter scopes, or any edit to `build-docs.ts`'s manifest
+ *    handling). It compares the 16 rendered SDK views only, after the same folder-first
+ *    visibility filter the site applies — `sdk` arrays are consumed by that filter and then
+ *    dropped, surviving only as a `scoped` marker on a `/:sdk:/` href, because that is the one
+ *    place a residual array can still change what renders. The default tree renders before
+ *    hydration for readers whose SDK is not in the URL, and its literal `sdk` arrays drive that
+ *    first paint, so a structural or `sdk`-array change to it fails the run unless
+ *    `--allow-default-change` vouches for it after a browser check (it then prints as a `note:`).
  *
  * Everything below the normalization step — the VIEWS enumeration, NormNode, per-view counts,
  * the non-vacuity guard, the diff — is shared by both modes; only which normalizer runs over
@@ -24,17 +31,19 @@
  * (`default` plus every SDK in VALID_SDKS) and diffs them.
  *
  * Why comparing DATA is enough — and stronger than simulating a render:
- * the sidebar is a pure function of (kind, title, href, sdk, order, children) plus the
- * presentation flags (tag/icon/wrap/target/hideTitle), all of which are compared
- * here. Core/deprecation visibility is deliberately NOT simulated: `visible(itemSDKs, core,
- * showIfDeprecated)` reads nothing but the `sdk` arrays this checker already compares, so
- * equal normalized trees imply equal visibility outcomes for every core, not just one.
+ * the sidenav is a pure function of (kind, title, href, order, children) plus the presentation
+ * flags (tag/icon/wrap/target/hideTitle) and, in old-vs-new, the literal `sdk` array — all of
+ * which are compared here. In new-vs-new, `sdk` is not itself part of the comparison: it has
+ * already done its only remaining job (deciding which nodes are in this view, via the same
+ * visibility filter the site runs) by the time a view is normalized, so equal per-view node
+ * sets already imply equal `visible(itemSDKs, core, showIfDeprecated)` outcomes for every
+ * core, not just one — see the `baseNode` comment for what a residual array can still change.
  *
  * Views, not dist keys: the checker enumerates `default` + VALID_SDKS. Enumerating the new
  * dist's navigation keys would silently skip nextjs/react/… , which have no keyed entry and
  * render from the default view.
  *
- * Usage: bun scripts/check-nav-parity.ts [--new-both] <dist-manifest.json> <dist-manifest.json>
+ * Usage: bun scripts/check-nav-parity.ts [--new-both] [--allow-default-change] <dist-manifest.json> <dist-manifest.json>
  *        (--new-both forces new-vs-new; without it the mode is detected from the first dist)
  */
 
@@ -58,6 +67,7 @@ export type NormNode = {
   wrap?: boolean
   target?: string
   hideTitle?: boolean
+  scoped?: true
   children?: NormNode[]
 }
 
@@ -123,13 +133,32 @@ const normalizeSDK = (raw: RawNode, sdk: string | undefined): string[] | undefin
   return sdk === undefined ? [...raw.sdk].sort() : [sdk]
 }
 
-const baseNode = (raw: RawNode, kind: NormNode['kind'], sdk: string | undefined): NormNode => {
+type NormMode = ParityMode
+
+/**
+ * `sdk` in a view.
+ *
+ * old-vs-new keeps its documented behaviour (the block above `normalizeSDK`).
+ *
+ * new-vs-new compares what renders. The arrays are consumed by the view projection — the
+ * folder-first visibility filter that decides which nodes each SDK view contains — and then
+ * dropped, because inside a view the only remaining consumer that can change output is
+ * `sdkScopeHref`, which substitutes `/:sdk:/` iff the node is scoped at all. So a placeholder
+ * href keeps a `scoped` marker and every other node loses the array. The default tree is compared
+ * separately with its literal `sdk` arrays, because it renders before hydration; a change to it
+ * fails the run unless `allowDefaultChange` vouches for it, in which case it is a note.
+ */
+const baseNode = (raw: RawNode, kind: NormNode['kind'], sdk: string | undefined, mode: NormMode): NormNode => {
   const node: NormNode = { kind, title: raw.title }
 
   if (raw.href !== undefined) node.href = raw.href
 
-  const sdks = normalizeSDK(raw, sdk)
-  if (sdks !== undefined) node.sdk = sdks
+  if (mode === 'new-vs-new') {
+    if (Array.isArray(raw.sdk) && typeof raw.href === 'string' && raw.href.includes(':sdk:')) node.scoped = true
+  } else {
+    const sdks = normalizeSDK(raw, sdk)
+    if (sdks !== undefined) node.sdk = sdks
+  }
 
   if (raw.tag !== undefined) node.tag = raw.tag
   if (raw.maintainer !== undefined) node.maintainer = raw.maintainer
@@ -142,12 +171,12 @@ const baseNode = (raw: RawNode, kind: NormNode['kind'], sdk: string | undefined)
 }
 
 /** A folder emptied by the sdk filter is not rendered, so it is not part of the view. */
-const normalizeItem = (raw: RawNode, sdk: string | undefined): NormNode | null => {
+const normalizeItem = (raw: RawNode, sdk: string | undefined, mode: NormMode = 'old-vs-new'): NormNode | null => {
   const kind = isHeading(raw) ? 'heading' : isFolder(raw) ? 'folder' : 'page'
-  const node = baseNode(raw, kind, sdk)
+  const node = baseNode(raw, kind, sdk, mode)
 
   if (kind === 'folder') {
-    const children = normalizeItems(asItems(raw.items), sdk)
+    const children = normalizeItems(asItems(raw.items), sdk, mode)
     if (sdk !== undefined && children.length === 0) return null
     node.children = children
   }
@@ -155,10 +184,10 @@ const normalizeItem = (raw: RawNode, sdk: string | undefined): NormNode | null =
   return node
 }
 
-const normalizeItems = (items: RawNode[], sdk: string | undefined): NormNode[] =>
+const normalizeItems = (items: RawNode[], sdk: string | undefined, mode: NormMode = 'old-vs-new'): NormNode[] =>
   items
     .filter((item) => sdk === undefined || matchesSDK(item, sdk))
-    .map((item) => normalizeItem(item, sdk))
+    .map((item) => normalizeItem(item, sdk, mode))
     .filter((node): node is NormNode => node !== null)
 
 type SectionShape = {
@@ -191,11 +220,19 @@ const NEW_SECTIONS: SectionShape = {
  * cannot express interleaving the old single ordered list could. Order within each list is
  * preserved, and no authored section mixes the two.
  */
-const sectionNode = (raw: RawNode, shape: SectionShape, sdk: string | undefined): NormNode | null => {
+const sectionNode = (
+  raw: RawNode,
+  shape: SectionShape,
+  sdk: string | undefined,
+  mode: NormMode = 'old-vs-new',
+): NormNode | null => {
   if (sdk !== undefined && !matchesSDK(raw, sdk)) return null
 
-  const node = baseNode(raw, 'section', sdk)
-  const children = [...sectionNodes(shape.nestedOf(raw), shape, sdk), ...normalizeItems(shape.itemsOf(raw), sdk)]
+  const node = baseNode(raw, 'section', sdk, mode)
+  const children = [
+    ...sectionNodes(shape.nestedOf(raw), shape, sdk, mode),
+    ...normalizeItems(shape.itemsOf(raw), sdk, mode),
+  ]
 
   if (sdk !== undefined && children.length === 0) return null
 
@@ -203,8 +240,12 @@ const sectionNode = (raw: RawNode, shape: SectionShape, sdk: string | undefined)
   return node
 }
 
-const sectionNodes = (raws: RawNode[], shape: SectionShape, sdk: string | undefined): NormNode[] =>
-  raws.map((raw) => sectionNode(raw, shape, sdk)).filter((node): node is NormNode => node !== null)
+const sectionNodes = (
+  raws: RawNode[],
+  shape: SectionShape,
+  sdk: string | undefined,
+  mode: NormMode = 'old-vs-new',
+): NormNode[] => raws.map((raw) => sectionNode(raw, shape, sdk, mode)).filter((node): node is NormNode => node !== null)
 
 // ---------------------------------------------------------------------------------------
 // Old dist (main): one tree, `topNav` groups are sections, the `flatNav` group is the
@@ -244,18 +285,19 @@ const oldFlatItems = (items: RawNode[], sdk: string): RawNode[] => {
   return out
 }
 
-export const normalizeOldDist = (dist: Dist, sdk?: string): NormNode[] => {
+export const normalizeOldDist = (dist: Dist, sdk?: string, mode: NormMode = 'old-vs-new'): NormNode[] => {
   const top = asItems(dist.navigation)
 
   if (sdk !== undefined) {
     const usesFlatNav = top.some((item) => isFlatNavGroup(item) && matchesSDK(item, sdk))
-    if (usesFlatNav) return normalizeItems(oldFlatItems(top, sdk), sdk)
+    if (usesFlatNav) return normalizeItems(oldFlatItems(top, sdk), sdk, mode)
   }
 
   return sectionNodes(
     top.filter((item) => isTopNav(item) && !isFlatNavGroup(item)),
     OLD_SECTIONS,
     sdk,
+    mode,
   )
 }
 
@@ -263,7 +305,7 @@ export const normalizeOldDist = (dist: Dist, sdk?: string): NormNode[] => {
 // New dist (this branch): navigation keyed by view.
 // ---------------------------------------------------------------------------------------
 
-export const normalizeNewDist = (dist: Dist, sdk?: string): NormNode[] => {
+export const normalizeNewDist = (dist: Dist, sdk?: string, mode: NormMode = 'old-vs-new'): NormNode[] => {
   const navigation = dist.navigation ?? {}
   const view = (sdk !== undefined ? navigation[sdk] : undefined) ?? navigation.default
 
@@ -271,9 +313,9 @@ export const normalizeNewDist = (dist: Dist, sdk?: string): NormNode[] => {
 
   // A keyed entry is already scoped to its SDK, but its items can still carry narrower
   // scopes, so the same filter runs over both shapes.
-  if (view.type === 'flat') return normalizeItems(view.items ?? [], sdk)
+  if (view.type === 'flat') return normalizeItems(view.items ?? [], sdk, mode)
 
-  return sectionNodes(view.sections ?? [], NEW_SECTIONS, sdk)
+  return sectionNodes(view.sections ?? [], NEW_SECTIONS, sdk, mode)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -362,11 +404,27 @@ export const detectMode = (dist: Dist): ParityMode =>
     ? 'new-vs-new'
     : 'old-vs-new'
 
+export type CompareOptions = {
+  /**
+   * new-vs-new only: accept a changed default tree (structure or `sdk` arrays) as a note
+   * instead of a failure. Pass it only after checking the pre-hydration nav in the browser —
+   * that tree is what readers see before hydration swaps in their SDK's view.
+   */
+  allowDefaultChange?: boolean
+}
+
 export const compareDistManifests = (
   oldDist: Dist,
   newDist: Dist,
   modeOverride?: ParityMode,
-): { ok: boolean; diffs: { view: string; diff: string }[]; counts: ViewCount[]; mode: ParityMode } => {
+  options: CompareOptions = {},
+): {
+  ok: boolean
+  diffs: { view: string; diff: string }[]
+  counts: ViewCount[]
+  mode: ParityMode
+  notes: string[]
+} => {
   const mode = modeOverride ?? detectMode(oldDist)
   const normalizeLeft = mode === 'new-vs-new' ? normalizeNewDist : normalizeOldDist
 
@@ -377,10 +435,13 @@ export const compareDistManifests = (
   const newFlags = stableStringify(newDist.flags ?? {})
   if (oldFlags !== newFlags) diffs.push({ view: 'flags', diff: formatDiff(oldFlags, newFlags) })
 
-  for (const view of VIEWS) {
+  const notes: string[] = []
+  const views = mode === 'new-vs-new' ? VIEWS.filter((view) => view !== 'default') : VIEWS
+
+  for (const view of views) {
     const sdk = view === 'default' ? undefined : view
-    const oldNodes = normalizeLeft(oldDist, sdk)
-    const newNodes = normalizeNewDist(newDist, sdk)
+    const oldNodes = normalizeLeft(oldDist, sdk, mode)
+    const newNodes = normalizeNewDist(newDist, sdk, mode)
 
     counts.push({ view, old: countNodes(oldNodes), new: countNodes(newNodes) })
 
@@ -390,23 +451,46 @@ export const compareDistManifests = (
     if (oldView !== newView) diffs.push({ view, diff: formatDiff(oldView, newView) })
   }
 
+  // The default tree renders before hydration for every reader whose SDK is not in the URL, and
+  // its `sdk` arrays drive that first paint's CSS visibility, so a change to it is a failure
+  // unless the caller vouches for it after checking that surface in the browser.
+  if (mode === 'new-vs-new') {
+    const oldDefault = JSON.stringify(normalizeNewDist(oldDist, undefined, 'old-vs-new'), null, 1)
+    const newDefault = JSON.stringify(normalizeNewDist(newDist, undefined, 'old-vs-new'), null, 1)
+    if (oldDefault !== newDefault) {
+      if (options.allowDefaultChange) {
+        notes.push('default tree structure or sdk arrays changed; accepted via --allow-default-change')
+      } else {
+        diffs.push({
+          view: 'default (pre-hydration)',
+          diff:
+            'default tree structure or sdk arrays changed. This tree is what renders before hydration; ' +
+            'check it in the browser, then re-run with --allow-default-change to accept.\n' +
+            formatDiff(oldDefault, newDefault),
+        })
+      }
+    }
+  }
+
   // Non-vacuity: two empty trees compare equal, so a truncated, stale or wrong-shaped dist
   // would otherwise report parity while comparing nothing at all (`normalizeOldDist` yields
   // [] for any navigation that isn't an array). The default view always has content in a real
-  // build, so an empty one is a broken input, not a passing comparison.
-  const defaultCount = counts.find(({ view }) => view === 'default')
-  if (defaultCount === undefined || defaultCount.old === 0 || defaultCount.new === 0) {
+  // build, so an empty one is a broken input, not a passing comparison. new-vs-new has no
+  // default view, so guard on nextjs.
+  const guardView = mode === 'new-vs-new' ? 'nextjs' : 'default'
+  const guardCount = counts.find(({ view }) => view === guardView)
+  if (guardCount === undefined || guardCount.old === 0 || guardCount.new === 0) {
     diffs.unshift({
       view: 'non-vacuity',
       diff:
-        `the default view normalized to 0 nodes ` +
-        `(old: ${defaultCount?.old ?? 0}, new: ${defaultCount?.new ?? 0}). ` +
+        `the ${guardView} view normalized to 0 nodes ` +
+        `(old: ${guardCount?.old ?? 0}, new: ${guardCount?.new ?? 0}). ` +
         `An empty tree compares equal to an empty tree, so this is not parity — check that ` +
         `both dist manifests are complete and in the format their side is expected to emit.`,
     })
   }
 
-  return { ok: diffs.length === 0, diffs, counts, mode }
+  return { ok: diffs.length === 0, diffs, counts, mode, notes }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -416,26 +500,31 @@ export const compareDistManifests = (
 const main = () => {
   const args = process.argv.slice(2)
   const forceNewBoth = args.includes('--new-both')
-  const [oldPath, newPath] = args.filter((arg) => arg !== '--new-both')
+  const allowDefaultChange = args.includes('--allow-default-change')
+  const [oldPath, newPath] = args.filter((arg) => !arg.startsWith('--'))
 
   if (oldPath === undefined || newPath === undefined) {
-    console.error('usage: bun scripts/check-nav-parity.ts [--new-both] <dist-manifest.json> <dist-manifest.json>')
+    console.error(
+      'usage: bun scripts/check-nav-parity.ts [--new-both] [--allow-default-change] <dist-manifest.json> <dist-manifest.json>',
+    )
     process.exit(2)
   }
 
   const read = (filePath: string): Dist => JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-  const { ok, diffs, counts, mode } = compareDistManifests(
+  const { ok, diffs, counts, mode, notes } = compareDistManifests(
     read(oldPath),
     read(newPath),
     forceNewBoth ? 'new-vs-new' : undefined,
+    { allowDefaultChange },
   )
 
   // Printed either way: which normalizer ran over the left-hand dist decides what the result
   // means, and it is detected rather than declared.
   console.log(`mode: ${mode}`)
+  for (const note of notes) console.log(`note: ${note}`)
 
   if (ok) {
-    console.log(`parity: OK (${VIEWS.length} views compared)`)
+    console.log(`parity: OK (${counts.length} views compared)`)
     console.log(formatCounts(counts))
     return
   }
@@ -447,7 +536,7 @@ const main = () => {
     console.error(`\n=== ${view} ===`)
     console.error(diff)
   }
-  console.error(`\nparity: FAILED (${diffs.length} problem(s) reported across ${VIEWS.length} views)`)
+  console.error(`\nparity: FAILED (${diffs.length} problem(s) reported across ${counts.length} views)`)
   process.exit(1)
 }
 

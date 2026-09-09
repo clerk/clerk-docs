@@ -301,12 +301,6 @@ type LinkItem = {
    * Set to "_blank" to open link in a new tab
    */
   target?: '_blank'
-  /**
-   * Limit this page to only show when the user has one of the specified sdks active
-   *
-   * @example ['nextjs', 'react']
-   */
-  sdk?: string[]
 }
 
 /**
@@ -316,12 +310,6 @@ type LinkItem = {
 type HeadingItem = {
   title: string
   type: 'heading'
-  /**
-   * Limit this heading to only show when the user has one of the specified sdks active
-   *
-   * @example ['nextjs', 'react']
-   */
-  sdk?: string[]
 }
 
 type SubNavItem = {
@@ -377,16 +365,10 @@ type SubNavItem = {
    * Whether to hide this group's own title, showing only its children
    */
   hideTitle?: boolean
-  /**
-   * Limit this group to only show when the user has one of the specified sdks active
-   *
-   * @example ['nextjs', 'react']
-   */
-  sdk?: string[]
 }
 ```
 
-Per-SDK manifests (`manifest.<sdk>.json`) use the exact same `NavItem` union, always as a single top-level flat array (`navigationType: 'flat'`). `clerk-docs/scripts/build-docs.ts` discovers them by checking, for every SDK in `scripts/lib/schemas.ts`'s `VALID_SDKS`, whether `docs/manifest.<sdk>.json` exists — for an SDK already in that enum, adding the file is enough, there's no separate registry to update. (A brand-new SDK key must first be added to `VALID_SDKS` — see "Add a new SDK".) SDK-scoped groups appearing in both the main manifest and a `manifest.<sdk>.json` is legal and expected; de-duplicating that overlap is deferred (tracked as DOCS-11971).
+Per-SDK manifests (`manifest.<sdk>.json`) use the exact same `NavItem` union, always as a single top-level flat array (`navigationType: 'flat'`). `clerk-docs/scripts/build-docs.ts` discovers them by checking, for every SDK in `scripts/lib/schemas.ts`'s `VALID_SDKS`, whether `docs/manifest.<sdk>.json` exists — for an SDK already in that enum, adding the file is enough, there's no separate registry to update. (A brand-new SDK key must first be added to `VALID_SDKS` — see "Add a new SDK".) Manifests carry no `sdk` property; the build rejects one. A page's SDK availability comes from its frontmatter `sdk:` and its `<page>.<sdk>.mdx` variants, a folder's from its children, and a `manifest.<sdk>.json`'s from its file name. This means an external link, a heading, or a group with no pages cannot be scoped inside the shared manifest; if one must only appear for some SDK, it belongs in that SDK's `manifest.<sdk>.json`.
 
 </details>
 
@@ -493,7 +475,8 @@ In the `clerk/clerk` repo:
 Then, in this repo (`clerk-docs`):
 
 1. In the `manifest.schema.json`, update the `sdk` enum to use the new key.
-1. In the `manifest.json`, update the `sdk` arrays to use the new key.
+1. Update every frontmatter `sdk:` value, rename every `<page>.<old-key>.mdx` variant file, and rename `docs/manifest.<old-key>.json` if one exists.
+1. In `scripts/lib/schemas.ts`, add the new key to `VALID_SDKS` alongside the old one (and mirror it in `manifest.schema.json`'s `$defs.sdk` enum), then remove the old key once nothing references it.
 1. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
 
 ## Editing content
@@ -824,9 +807,15 @@ This does a couple things:
 - Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
+The `sdk` list is not the whole story. A page's available SDKs are the base file's `sdk` list plus one SDK for every `<page>.<sdk>.mdx` variant beside it, so the base file only needs to list the SDKs it renders itself. See [Doc variants](#doc-variants).
+
+#### navTitle
+
+`navTitle` (optional, string) — sidenav label for the SDKs this file renders. Build-only (never written to generated MDX). Only takes effect on pages whose base file declares frontmatter `sdk`: on that base file, or on one of its `<page>.<sdk>.mdx` variant files. A `<page>.<sdk>.mdx` file beside a base file without `sdk:` fails the build (`variant-without-scoped-base`), with or without `navTitle`. The build emits one sidenav entry per distinct label. Example: `docs/getting-started/quickstart.mdx` sets `navTitle: Quickstart (App Router)` so the Next.js sidenav reads that while every other SDK reads the manifest's `Quickstart`.
+
 ### Doc variants
 
-A **doc variant** is a version of a page that is specific to a particular SDK. For example, the `quickstart.react.mdx` page is a variant of the `quickstart.mdx` page that is specific to the React SDK. This is useful when you want to show different content for different SDKs but want to keep the route the same.
+A **doc variant** is a version of a page that is specific to a particular SDK. For example, the `quickstart.react.mdx` page is a variant of the `quickstart.mdx` page that is specific to the React SDK. This is useful when you want to show different content for different SDKs but want to keep the route the same. A variant also adds its SDK to the page: `quickstart.mdx` declares `sdk: nextjs`, and its fifteen `quickstart.<sdk>.mdx` variants are what make the quickstart render for all sixteen SDKs. The base file's `sdk` list only needs the SDKs the base file itself renders.
 
 > [!NOTE]
 > When creating doc variants, there will be a base doc that is used as the reference for the variants. Take the example from before, `quickstart.mdx` would be the base doc. Base docs should always be written for Next.js as it's our most popular and maintained SDK.

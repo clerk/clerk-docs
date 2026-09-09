@@ -52,16 +52,20 @@ export const errorMessages = {
     `Invalid tag "${tag}" in frontmatter. Must be one of: ${tagSchema.options.join(', ')}.`,
   'invalid-maintainer-in-frontmatter': (maintainer: string): string =>
     `Invalid maintainer "${maintainer}" in frontmatter. Must be one of: ${maintainerSchema.options.join(', ')}.`,
+  'invalid-navtitle-in-frontmatter': (value: unknown): string =>
+    `navTitle must be a non-empty string, got ${JSON.stringify(value)}.`,
+  'variant-without-base': (filePath: string, baseHref: string): string =>
+    `${filePath} is an SDK variant file but no base doc exists at ${baseHref}, so it would never be published. Add the base <page>.mdx with frontmatter sdk, or rename the file.`,
+  'variant-without-scoped-base': (href: string, variants: SDK[]): string =>
+    `${href} has SDK variant file(s) for ${variants.join(', ')} but its base file declares no frontmatter sdk, so those variants would never be published. Add \`sdk:\` to the base file listing the SDKs it renders.`,
+  'navtitle-without-variants': (href: string): string =>
+    `navTitle is set on ${href} but the doc has no SDK variants. The manifest title is the only sidenav label for a single-file doc; navTitle only relabels a <page>.<sdk>.mdx variant, or the base file of a doc that declares frontmatter sdk and has variant files.`,
   'if-component-sdk-not-in-frontmatter': (sdk: SDK, docSdk: SDK[]): string =>
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
   'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>
-    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
+    `<If /> component is attempting to filter to sdk "${sdk}" but no navigation occurrence of ${href} makes it available for that SDK. Remove it from the <If />, or list the page where "${sdk}" can reach it (the default manifest.json, or manifest.${sdk}.json)`,
   'if-component-sdk-and-not-sdk-props-cannot-be-used-together': (): string =>
     `Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.`,
-  'doc-sdk-filtered-by-parent': (title: string, docSDK: SDK[], parentSDK: SDK[]): string =>
-    `Doc "${title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
-  'group-sdk-filtered-by-parent': (title: string, groupSDK: SDK[], parentSDK: SDK[]): string =>
-    `Group "${title}" is attempting to use ${JSON.stringify(groupSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
 
   // Document structure errors
   'doc-not-in-manifest': (): string =>

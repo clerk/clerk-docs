@@ -198,8 +198,8 @@ export const validateProperNouns =
     visit(tree)
 
     // Frontmatter `title` and `description` render as the page's h1 and meta
-    // description, so they are visible prose too — the rest of the frontmatter
-    // (hrefs, sdk lists, ...) is not.
+    // description, and `navTitle` renders as the sidenav label, so they are
+    // visible prose too — the rest of the frontmatter (hrefs, sdk lists, ...) is not.
     const root = tree as Node & { children?: Node[] }
     const frontmatterNode = root.children?.find((child) => child.type === 'yaml')
 
@@ -214,7 +214,7 @@ export const validateProperNouns =
 
       if (frontmatter === null || typeof frontmatter !== 'object') return
 
-      for (const key of ['title', 'description'] as const) {
+      for (const key of ['title', 'description', 'navTitle'] as const) {
         const value = (frontmatter as Record<string, unknown>)[key]
         if (typeof value !== 'string') continue
 

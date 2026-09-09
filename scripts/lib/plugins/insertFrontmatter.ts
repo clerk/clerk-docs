@@ -3,6 +3,9 @@ import { VFile } from 'vfile'
 import yaml from 'yaml'
 import type { Node } from 'unist'
 
+// Authored keys the build consumes and never publishes.
+const BUILD_ONLY_KEYS = ['navTitle'] as const
+
 export const insertFrontmatter =
   (newFrontmatter: Record<string, string | undefined>) => () => (tree: Node, vfile: VFile) => {
     return mdastMap(tree, (node) => {
@@ -11,6 +14,9 @@ export const insertFrontmatter =
       if (typeof node.value !== 'string') return node
 
       const frontmatter = yaml.parse(node.value)
+      if (frontmatter !== null && typeof frontmatter === 'object') {
+        for (const key of BUILD_ONLY_KEYS) delete frontmatter[key]
+      }
 
       const transformedFrontmatter = { ...frontmatter, ...newFrontmatter }
 

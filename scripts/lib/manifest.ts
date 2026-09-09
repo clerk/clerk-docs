@@ -6,7 +6,7 @@ import { fromError } from 'zod-validation-error'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { parseJSON } from './io'
-import { icon, maintainer, sdk, tag, type Icon, type Maintainer, type SDK, type Tag } from './schemas'
+import { icon, maintainer, tag, type Icon, type Maintainer, type SDK, type Tag } from './schemas'
 import { VFile } from 'vfile'
 
 // read in the manifest, create a vfile to write warnings to
@@ -26,6 +26,7 @@ export const readManifest = (config: BuildConfig) => async () => {
 
   const manifest = await z
     .object({ navigationType: navigationTypeSchema, navigation: manifestSchema })
+    .strict()
     .safeParseAsync(json)
 
   if (manifest.success === true) {
@@ -49,13 +50,11 @@ export type ManifestItem = {
   wrap?: boolean
   icon?: Icon
   target?: '_blank'
-  sdk?: SDK[]
 }
 
 export type ManifestHeading = {
   title: string
   type: 'heading'
-  sdk?: SDK[]
 }
 
 export type ManifestGroup = {
@@ -67,10 +66,15 @@ export type ManifestGroup = {
   wrap?: boolean
   icon?: Icon
   hideTitle?: boolean
-  sdk?: SDK[]
 }
 
 export type Manifest = (ManifestItem | ManifestHeading | ManifestGroup)[]
+
+// The build stamps a derived scope on every node it walks; authored manifests never carry one.
+export type ScopedManifestItem = ManifestItem & { sdk?: SDK[] }
+export type ScopedManifestHeading = ManifestHeading & { sdk?: SDK[] }
+export type ScopedManifestGroup = Omit<ManifestGroup, 'items'> & { sdk?: SDK[]; items: ScopedManifest }
+export type ScopedManifest = (ScopedManifestItem | ScopedManifestHeading | ScopedManifestGroup)[]
 
 // Create manifest schema based on config
 const createManifestSchema = (config: BuildConfig) => {
@@ -83,7 +87,6 @@ const createManifestSchema = (config: BuildConfig) => {
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),
       target: z.enum(['_blank']).optional(),
-      sdk: z.array(sdk).optional(),
     })
     .strict()
 
@@ -91,7 +94,6 @@ const createManifestSchema = (config: BuildConfig) => {
     .object({
       title: z.string(),
       type: z.literal('heading'),
-      sdk: z.array(sdk).optional(),
     })
     .strict()
 
@@ -105,7 +107,6 @@ const createManifestSchema = (config: BuildConfig) => {
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),
       hideTitle: z.boolean().default(config.manifestOptions.hideTitleDefault),
-      sdk: z.array(sdk).optional(),
     })
     .strict()
 
@@ -132,7 +133,7 @@ export const traverseTree = async <
   OutTree extends BlankTree<OutItem, OutGroup>,
 >(
   tree: Tree,
-  itemCallback: (item: InItem, tree: Tree) => Promise<OutItem | null> = async (item) => item,
+  itemCallback: (item: InItem, tree: Tree) => Promise<OutItem | OutItem[] | null> = async (item) => item,
   groupCallback: (group: InGroup, tree: Tree) => Promise<OutGroup | null> = async (group) => group,
   errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
 ): Promise<OutTree> => {
@@ -168,7 +169,7 @@ export const traverseTree = async <
     }),
   )
 
-  return result.filter((item): item is NonNullable<typeof item> => item !== null) as unknown as OutTree
+  return result.flat().filter((item): item is NonNullable<typeof item> => item !== null) as unknown as OutTree
 }
 
 export const traverseTreeItemsFirst = async <
@@ -251,6 +252,7 @@ export const readSDKManifest = (config: BuildConfig) => async (manifestPath: str
   const sdkManifestSchema = z.array(z.union([manifestItem, manifestHeading, manifestGroup]))
   const manifest = await z
     .object({ navigationType: z.literal('flat'), navigation: sdkManifestSchema })
+    .strict()
     .safeParseAsync(json)
 
   if (manifest.success === true) {

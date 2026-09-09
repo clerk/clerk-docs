@@ -15,7 +15,10 @@ To enable free trials for your Plans:
 
 1. Navigate to the [**Subscription plans**](https://dashboard.clerk.com/~/billing/plans) page in the Clerk Dashboard.
 1. Select the Plan you want to enable free trials on.
-1. Enable **Free trial** and set the number of trial days (minimum is 1 day).
+1. Enable **Free trial** and set the number of trial days (between 1 and 365).
+
+> [!NOTE]
+> Changes to a Plan's free trial settings only apply to new trials. Existing trials retain their original end date.
 
 ## Payment method requirement
 
@@ -27,7 +30,7 @@ You can disable this requirement to allow users to start a free trial without en
 1. Toggle off the **Require payment method for free trials** option.
 
 > [!WARNING]
-> If you disable this requirement, users who don't add a payment method during checkout won't be automatically charged when their trial ends. They'll need to add a payment method and manually subscribe to continue accessing the service.
+> If you disable this requirement, users can start a free trial without a payment method on file. If a user still has no default payment method when their trial ends, they're moved to the free Plan and aren't charged. To keep access, they'll need to add a payment method and subscribe. If they add a default payment method before the trial ends and don't cancel their Subscription, Clerk attempts to charge it when the trial ends.
 
 > [!NOTE]
 > Clerk Billing does not currently support 3D Secure (3DS). This includes free trial renewals. See the [Billing FAQ](/docs/guides/billing/overview#does-clerk-billing-support-additional-factor-authentication-like-3-d-secure) for more information.
@@ -36,21 +39,25 @@ You can disable this requirement to allow users to start a free trial without en
 
 ### Starting a trial
 
-Only users who have never paid for a Subscription and have never used a free trial can start a free trial.
+A user can receive one free trial in an application. To be eligible, they must not have previously held a paid Subscription.
 
 To detect when a trial starts, listen for the `subscriptionItem.active` webhook event and check that the event's `data.is_free_trial` property is `true`.
 
 ### During a trial
 
-Users get access to the Plan's paid Features for the configured number of days. If they cancel during their trial, they keep access until the original trial end date.
+Users get access to the Plan's paid Features for the configured number of days. The following rules apply during the trial:
+
+- If a user cancels their Subscription during their trial, they keep access until the original trial end date. Once the trial ends, they are moved back to the free Plan and are not charged.
+- If a user switches to a different paid Plan during an active free trial, their current trial ends and they are charged for a full billing period of the new Plan. They receive access through the new paid Plan and are not granted another free trial.
 
 ### When the trial ends
 
-If the user didn't cancel their Subscription during the trial, they are charged using their default payment method on file. This may be a different payment method than the one used during checkout when the trial started.
+What happens when the trial ends depends on the Subscription's state and payment method:
 
-If the user cancels their Subscription during the trial, they lose access at the end of the trial and are moved back to the free Plan. They are not charged.
+- If the Subscription was canceled or no default payment method is on file, the user is moved to the free Plan and is not charged.
+- Otherwise, Clerk attempts to charge the default payment method on file. This may be different from the payment method used during checkout. If the payment succeeds, the paid Subscription begins. If it fails, the user is moved to the free Plan immediately. Failed free trial renewals do not receive a grace period.
 
-Both you and your users will receive notifications when a trial is about to expire:
+If the trial hasn't been canceled, both you and your users will receive notifications when it is about to expire:
 
 - You'll receive a `subscriptionItem.freeTrialEnding` webhook event 3 days before the trial expires.
 - Users receive an email notification 3 days before their trial expires.

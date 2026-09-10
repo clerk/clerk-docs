@@ -10534,14 +10534,56 @@ Content.`,
 // doc-not-found warnings, :sdk: injection, routable-link validation, <If> validation), and that
 // the docsMap scope combination happens after every manifest entry is walked, not per-entry.
 describe('SDK Manifest Files (manifest.<sdk>.json)', () => {
-  test('frontmatter sdk stamping applies to an item reached only through an SDK manifest', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
+  test.each([
+    ['android', 'ios'],
+    ['ios', 'android'],
+  ] as const)('manifest.%s.json rejects a page scoped only to %s', async (manifestSdk, pageSdk) => {
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
           navigationType: 'flat',
           navigation: [],
         }),
+      },
+      {
+        path: `./docs/manifest.${manifestSdk}.json`,
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Shared Doc', href: '/docs/shared-doc' }],
+        }),
+      },
+      {
+        path: './docs/shared-doc.mdx',
+        content: `---
+title: Shared Doc
+sdk: ${pageSdk}
+---
+
+Content for the wrong SDK manifest.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['ios', 'android'],
+      }),
+    )
+
+    // Reported as a fatal error (not a throw) so a manifest with several wrong-platform entries
+    // surfaces them all in one build, the same as the tag/maintainer mismatch checks alongside it.
+    expect(output).toContain(
+      `Manifest item "Shared Doc" (/docs/shared-doc) is in manifest.${manifestSdk}.json, but that page cannot render for the manifest's owning SDK "${manifestSdk}". Base frontmatter SDKs: ["${pageSdk}"]. Distinct SDK variants: []. Move or remove the item, add "${manifestSdk}" to the base page's frontmatter sdk list if the same content supports it, or add a matching <page>.${manifestSdk}.mdx variant. Do not add sdk to the manifest; manifest sdk properties are not supported.`,
+    )
+  })
+
+  test('an unsupported page can be suppressed with the standard .mdx ignoreWarnings key', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({ navigationType: 'flat', navigation: [] }),
       },
       {
         path: './docs/manifest.android.json',
@@ -10552,32 +10594,49 @@ describe('SDK Manifest Files (manifest.<sdk>.json)', () => {
       },
       {
         path: './docs/shared-doc.mdx',
-        content: `---
-title: Shared Doc
-sdk: ios
----
-
-Content that only makes sense on iOS, shared into the Android nav by mistake.`,
+        content: `---\ntitle: Shared Doc\nsdk: ios\n---\n\nContent for the wrong SDK manifest.`,
       },
     ])
 
-    await build(
+    // The error keys off the page's own .mdx path, not the manifest file, so a single page can be
+    // suppressed without muting the check for every other page in manifest.android.json.
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['ios', 'android'],
+        ignoreWarnings: {
+          ...baseConfig.ignoreWarnings,
+          docs: { 'shared-doc.mdx': ['sdk-manifest-unsupported-page'] },
+        },
       }),
     )
 
-    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
+    expect(output).not.toContain('sdk-manifest-unsupported-page')
+    expect(output).not.toContain('cannot render for')
+  })
 
-    // The item is reached through manifest.android.json (rootSDK ['android']), but the doc's own
-    // frontmatter sdk (['ios']) must win over the inherited root scope — proof that this entry ran
-    // through applyManifestSDKScoping's docSDK-over-parentSDK precedence, not a bypass that just
-    // stamps every item with the manifest's own SDK.
-    expect(manifest.navigation.android).toEqual({
+  test('an external link in an SDK manifest is exempt from page availability validation', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({ navigationType: 'flat', navigation: [] }),
+      },
+      {
+        path: './docs/manifest.ios.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'External', href: 'https://example.com', target: '_blank' }],
+        }),
+      },
+    ])
+
+    await build(await createConfig({ ...baseConfig, basePath: tempDir, validSdks: ['ios', 'android'] }))
+
+    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
+    expect(manifest.navigation.ios).toEqual({
       type: 'flat',
-      items: [{ title: 'Shared Doc', href: '/docs/shared-doc', sdk: ['ios'] }],
+      items: [{ title: 'External', href: 'https://example.com', target: '_blank', sdk: ['ios'] }],
     })
   })
 
@@ -10615,7 +10674,7 @@ Content that only makes sense on iOS, shared into the Android nav by mistake.`,
     expect(output).toContain('manifest.ios.json')
   })
 
-  test('an SDK manifest tag matching that SDK variant frontmatter does not error when the base doc differs', async () => {
+  test('a matching SDK variant makes the page available and supplies its tag frontmatter', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',

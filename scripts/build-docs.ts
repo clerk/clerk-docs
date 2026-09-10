@@ -10,6 +10,7 @@
 // - Validates hash links point to headings
 // - SDK filtering in three contexts:
 //   1. Manifest: derives folder scope from children's frontmatter and manifest.<sdk>.json root scope; authored `sdk` is rejected by the schema
+//      - Rejects internal pages that cannot render for a dedicated manifest's owning SDK
 //   2. Frontmatter: Validates SDK declarations in document metadata
 //   3. <If /> components: Ensures:
 //      - Referenced SDKs exist in the manifest
@@ -398,6 +399,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   // write in to the shared docsMap/routableDocsMap.
   const manifestEntries: {
     key: string
+    owningSDK?: SDK
     navigationType: NavigationType
     navigation: Manifest
     vfile: VFile
@@ -412,6 +414,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     },
     ...sdkManifests.map(({ sdk, navigationType, navigation, vfile }) => ({
       key: sdk as string,
+      owningSDK: sdk,
       navigationType,
       navigation,
       vfile,
@@ -587,7 +590,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   //
   // This pass only reads from docsMap; the scope it computes is written back to docsMap once,
   // after every entry has been walked (see combinedItemSDKs below).
-  const applyManifestSDKScoping = (items: Manifest, rootSDK: SDK[] | undefined, vfile: VFile) =>
+  const applyManifestSDKScoping = (items: Manifest, rootSDK: SDK[] | undefined, vfile: VFile, owningSDK?: SDK) =>
     traverseTree(
       { items, sdk: rootSDK },
       async (item, tree) => {
@@ -607,6 +610,26 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         if (doc === undefined) {
           safeMessage(config, vfile, item.href, 'docs', 'doc-not-found', [item.title, item.href])
           return item
+        }
+
+        // A dedicated manifest is a promise that every internal page it lists can render for
+        // the SDK named by the file. Check the immutable content-derived availability here,
+        // before manifest scoping can stamp that SDK on an otherwise unscoped doc. An unscoped
+        // base doc is shared; otherwise distinct <page>.<sdk>.mdx variants extend its declared
+        // frontmatter availability.
+        if (owningSDK !== undefined && doc.frontmatter.sdk !== undefined) {
+          const availableSDKs = [...doc.frontmatter.sdk, ...(doc.distinctSDKVariants ?? [])]
+
+          if (!availableSDKs.includes(owningSDK)) {
+            safeError(config, vfile, doc.file.filePath, 'docs', 'sdk-manifest-unsupported-page', [
+              path.basename(String(vfile.path)),
+              owningSDK,
+              item.title,
+              item.href,
+              doc.frontmatter.sdk,
+              doc.distinctSDKVariants ?? [],
+            ])
+          }
         }
 
         // Lifecycle status is stated in two places on purpose: frontmatter renders the page's h1
@@ -692,7 +715,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       navigationType: entry.navigationType,
       vfile: entry.vfile,
       rootSDK: entry.rootSDK,
-      tree: await applyManifestSDKScoping(entry.navigation, entry.rootSDK, entry.vfile),
+      tree: await applyManifestSDKScoping(entry.navigation, entry.rootSDK, entry.vfile, entry.owningSDK),
     })
   }
 

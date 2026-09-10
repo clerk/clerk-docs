@@ -30,6 +30,15 @@ export const errorMessages = {
     docMaintainer?: string,
   ): string =>
     `Manifest item "${title}" sets "maintainer": "${manifestMaintainer}" but ${filePath} ${docMaintainer ? `sets "maintainer": "${docMaintainer}"` : 'has no "maintainer"'} in its frontmatter, so the sidenav pill disagrees with the page's h1 pill. Update the manifest "maintainer" to match the frontmatter, or remove it if the status should no longer show in the sidenav.`,
+  'sdk-manifest-unsupported-page': (
+    manifestFileName: string,
+    manifestSdk: SDK,
+    title: string,
+    href: string,
+    frontmatterSdks: SDK[],
+    variantSdks: SDK[],
+  ): string =>
+    `Manifest item "${title}" (${href}) is in ${manifestFileName}, but that page cannot render for the manifest's owning SDK "${manifestSdk}". Base frontmatter SDKs: ${JSON.stringify(frontmatterSdks)}. Distinct SDK variants: ${JSON.stringify(variantSdks)}. Move or remove the item, add "${manifestSdk}" to the base page's frontmatter sdk list if the same content supports it, or add a matching <page>.${manifestSdk}.mdx variant. Do not add sdk to the manifest; manifest sdk properties are not supported.`,
 
   // Component errors
   'component-no-props': (componentName: string): string => `<${componentName} /> component has no props`,

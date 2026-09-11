@@ -175,7 +175,9 @@ When a member's Role is assigned through a group-to-role mapping, that Role assi
 When group data syncs from your IdP, Clerk stores the groups and their memberships. You then configure a mapping in the Clerk Dashboard from each IdP group to a Clerk Role. When a user is added to a group in the IdP, Clerk assigns the mapped Role. When a user is removed from a mapped group, Clerk re-resolves their Role from the remaining mapped groups in precedence order. They only fall back to the Organization's default Role if no mapped groups remain.
 
 > [!NOTE]
-> For Google Workspace, Role mapping considers **direct** group membership only. A user who belongs to a mapped group through a nested group won't inherit that group's Role. Add the user to the mapped group directly, or flatten nested groups in your Workspace.
+> Nested groups are not supported. Clerk considers **direct** group membership only, so a user who belongs to a mapped group through another group won't inherit that group's Role. Add users to mapped groups directly, or flatten nested groups in your IdP.
+>
+> For Okta, Microsoft Entra ID, and custom SCIM providers, a group pushed as a member of another group is rejected with an `invalidValue` error (HTTP 400) and retried every provisioning cycle — surfacing as recurring errors in your IdP's provisioning logs until the nesting is removed.
 
 ### Configure Role mapping
 
@@ -195,6 +197,13 @@ If a user belongs to multiple groups that each map to different Clerk Roles, Cle
 ### Group deletion behavior
 
 When a group is deleted in your IdP, Clerk removes the group and re-resolves each affected user's Role from their remaining mapped groups in precedence order. Users only fall back to the Organization's default Role if they have no mapped groups left. When a Role mapping changes, a background job queues Role reassignment for all affected group members.
+
+When Clerk removes the group depends on your IdP:
+
+- **SCIM providers** (Okta, Microsoft Entra ID, or a custom integration): Clerk removes the group when the IdP sends the deletion. For Okta and Entra, this is typically the next scheduled provisioning cycle rather than immediately, so the group stays visible in Clerk until then.
+- **Google Workspace**: Clerk polls Google on a schedule and removes a group only after it's been absent from several consecutive syncs, so removal can take a few cycles.
+
+If a group lingers longer than expected, confirm it was actually removed in your IdP.
 
 ### Disable Role mapping
 

@@ -2,49 +2,34 @@
 /**
  * Nav parity checker: proves two built `dist/manifest.json`s render the same navigation.
  *
- * Two modes, picked by the shape of the FIRST dist's `navigation` (an array is the legacy
- * format, an object is the current one) and printed as a `mode:` line so a run can never be
- * read as the mode it wasn't:
+ * The standing use: build a dist before a manifest-affecting change and one after, and prove
+ * the change is nav-output-neutral (e.g. a manifest edit that moves groups or changes what a
+ * page's frontmatter scopes, or any edit to `build-docs.ts`'s manifest handling).
  *
- *  - `old-vs-new` — the format flip's migration gate, comparing a pre-flip dist against a
- *    post-flip one. Nothing on `main` emits the old format any more, so this is history.
- *  - `new-vs-new` — the standing use: build a dist before a manifest-affecting change and one
- *    after, and prove the change is nav-output-neutral (e.g. a manifest edit that moves groups
- *    or changes what a page's frontmatter scopes, or any edit to `build-docs.ts`'s manifest
- *    handling). It compares the 16 rendered SDK views only, after the same folder-first
- *    visibility filter the site applies — `sdk` arrays are consumed by that filter and then
- *    dropped, surviving only as a `scoped` marker on a `/:sdk:/` href, because that is the one
- *    place a residual array can still change what renders. The default tree renders before
- *    hydration for readers whose SDK is not in the URL, and its literal `sdk` arrays drive that
- *    first paint, so a structural or `sdk`-array change to it fails the run unless
- *    `--allow-default-change` vouches for it after a browser check (it then prints as a `note:`).
- *
- * Everything below the normalization step — the VIEWS enumeration, NormNode, per-view counts,
- * the non-vacuity guard, the diff — is shared by both modes; only which normalizer runs over
- * the left-hand dist changes.
- *
- * `main` builds `dist/manifest.json` as `{ flags, navigation: Array<Array<…>> }` — one tree
- * whose `topNav` groups are the sections and whose `flatNav` group is the mobile sidebar.
- * This branch builds `{ flags, navigation: { default: { type: 'sectioned', sections },
- * <sdk>: { type: 'flat', items } } }`. The two shapes are different; the nav the reader sees
- * must not be. This script normalizes both dists in to one `NormNode` tree per rendered view
- * (`default` plus every SDK in VALID_SDKS) and diffs them.
+ * A dist is `{ flags, navigation: { default: { type: 'sectioned', sections }, <sdk>: { type:
+ * 'flat', items } } }`. The checker normalizes each dist in to one `NormNode` tree per rendered
+ * SDK view and diffs them, after the same folder-first visibility filter the site applies —
+ * `sdk` arrays are consumed by that filter and then dropped, surviving only as a `scoped`
+ * marker on a `/:sdk:/` href, because that is the one place a residual array can still change
+ * what renders. The default tree renders before hydration for readers whose SDK is not in the
+ * URL, and its literal `sdk` arrays drive that first paint, so it is compared separately with
+ * those arrays kept; a structural or `sdk`-array change to it fails the run unless
+ * `--allow-default-change` vouches for it after a browser check (it then prints as a `note:`).
  *
  * Why comparing DATA is enough — and stronger than simulating a render:
  * the sidenav is a pure function of (kind, title, href, order, children) plus the presentation
- * flags (tag/icon/wrap/target/hideTitle) and, in old-vs-new, the literal `sdk` array — all of
- * which are compared here. In new-vs-new, `sdk` is not itself part of the comparison: it has
- * already done its only remaining job (deciding which nodes are in this view, via the same
- * visibility filter the site runs) by the time a view is normalized, so equal per-view node
- * sets already imply equal `visible(itemSDKs, core, showIfDeprecated)` outcomes for every
- * core, not just one — see the `baseNode` comment for what a residual array can still change.
+ * flags (tag/icon/wrap/target/hideTitle), all of which are compared here. `sdk` is not itself
+ * part of an SDK view's comparison: it has already done its only remaining job (deciding which
+ * nodes are in this view, via the same visibility filter the site runs) by the time a view is
+ * normalized, so equal per-view node sets already imply equal
+ * `visible(itemSDKs, core, showIfDeprecated)` outcomes for every core, not just one — see the
+ * `baseNode` comment for what a residual array can still change.
  *
- * Views, not dist keys: the checker enumerates `default` + VALID_SDKS. Enumerating the new
- * dist's navigation keys would silently skip nextjs/react/… , which have no keyed entry and
- * render from the default view.
+ * Views, not dist keys: the checker enumerates VALID_SDKS. Enumerating the dist's navigation
+ * keys would silently skip nextjs/react/… , which have no keyed entry and render from the
+ * default view.
  *
- * Usage: bun scripts/check-nav-parity.ts [--new-both] [--allow-default-change] <dist-manifest.json> <dist-manifest.json>
- *        (--new-both forces new-vs-new; without it the mode is detected from the first dist)
+ * Usage: bun scripts/check-nav-parity.ts [--allow-default-change] <dist-manifest.json> <dist-manifest.json>
  */
 
 import fs from 'node:fs'
@@ -74,90 +59,34 @@ export type NormNode = {
 type RawNode = Record<string, any>
 type Dist = { flags?: unknown; navigation: any }
 
-/** Old dist items nest one array level (`[[a, b], [c]]`); new dist items do not. Accept both. */
-const asItems = (items: unknown): RawNode[] => {
-  if (!Array.isArray(items)) return []
-  return items.flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
-}
-
 const isFolder = (raw: RawNode) => Array.isArray(raw.items)
 const isHeading = (raw: RawNode) => raw.type === 'heading'
-const isTopNav = (raw: RawNode) => isFolder(raw) && raw.topNav === true
-const isFlatNavGroup = (raw: RawNode) => isFolder(raw) && raw.flatNav === true
 
 const matchesSDK = (raw: RawNode, sdk: string) => !Array.isArray(raw.sdk) || raw.sdk.includes(sdk)
 
 /**
- * Mirrors the site's `hasVisibleChildren`: a folder is checked against its own `sdk` BEFORE
- * its children, so an sdk-excluded folder is dropped folder-and-children rather than having
- * its children promoted in to the view.
- */
-const hasVisibleDescendant = (raw: RawNode, sdk: string): boolean => {
-  if (isFolder(raw)) {
-    if (!matchesSDK(raw, sdk)) return false
-    return asItems(raw.items).some((child) => hasVisibleDescendant(child, sdk))
-  }
-  return matchesSDK(raw, sdk)
-}
-
-/**
- * `sdk` in a single-SDK view.
- *
- * The old dist's mobile items inherited the Mobile group's `['ios', 'android']`; the new
- * dist's flat entries carry the manifest's own root scope (`['ios']`) unless frontmatter
- * says otherwise. Collapsing a present array to `[sdk]` inside an SDK view makes those two
- * compare equal. Two of the three consumers of a residual array are plainly indifferent:
- * `visible()` is a membership test against the active SDK (already applied to build this
- * view), and `sdkScopeHref()` substitutes `/:sdk:/` iff the active SDK is a member.
- *
- * `cssVisibilitySDKs()` is NOT indifferent, and the honest reason the collapse is still safe
- * is structural, not algebraic. That chain feeds `useActiveSDKStyleDisplay`, which — when
- * `activeSDK` is undefined (SSR / pre-hydration, the case the chain exists for) — builds a
- * var-chain over EVERY member of the array, so `['ios','android']` and `['ios']` genuinely
- * differ there. Under the new format each flat tree is a keyed per-SDK entry that is only
- * ever rendered under its own SDK, so that pre-hydration chain is single-valued by
- * construction: the narrower array is the correct one for the only view it can appear in.
- * That is a property of the site rewrite (Tasks 8–11), which this checker does not inspect —
- * Task 12's browser verification owns the pre-hydration and SDK-switch surface.
- *
- * What the collapse preserves: that the item is scoped at all (an unscoped `:sdk:` href
- * renders the placeholder verbatim, so present-vs-absent is NOT normalized away), and that
- * the view's SDK is a member. Nothing hides behind it either — every SDK gets its own view,
- * so an item that gained or lost an SDK shows up as an added/removed node in that SDK's view.
- *
- * The default view keeps the literal (sorted) array — there the arrays are the data the site
- * filters with, so they are compared strictly.
- */
-const normalizeSDK = (raw: RawNode, sdk: string | undefined): string[] | undefined => {
-  if (!Array.isArray(raw.sdk)) return undefined
-  return sdk === undefined ? [...raw.sdk].sort() : [sdk]
-}
-
-type NormMode = ParityMode
-
-/**
  * `sdk` in a view.
  *
- * old-vs-new keeps its documented behaviour (the block above `normalizeSDK`).
- *
- * new-vs-new compares what renders. The arrays are consumed by the view projection — the
+ * An SDK view compares what renders. The arrays are consumed by the view projection — the
  * folder-first visibility filter that decides which nodes each SDK view contains — and then
  * dropped, because inside a view the only remaining consumer that can change output is
  * `sdkScopeHref`, which substitutes `/:sdk:/` iff the node is scoped at all. So a placeholder
- * href keeps a `scoped` marker and every other node loses the array. The default tree is compared
- * separately with its literal `sdk` arrays, because it renders before hydration; a change to it
- * fails the run unless `allowDefaultChange` vouches for it, in which case it is a note.
+ * href keeps a `scoped` marker and every other node loses the array.
+ *
+ * The default tree (no `sdk`) keeps the literal array, sorted so authoring order is not a
+ * diff: there the arrays are the data the site filters with before hydration, so they are
+ * compared strictly. A change to that tree fails the run unless `allowDefaultChange` vouches
+ * for it, in which case it is a note.
  */
-const baseNode = (raw: RawNode, kind: NormNode['kind'], sdk: string | undefined, mode: NormMode): NormNode => {
+const baseNode = (raw: RawNode, kind: NormNode['kind'], sdk: string | undefined): NormNode => {
   const node: NormNode = { kind, title: raw.title }
 
   if (raw.href !== undefined) node.href = raw.href
 
-  if (mode === 'new-vs-new') {
-    if (Array.isArray(raw.sdk) && typeof raw.href === 'string' && raw.href.includes(':sdk:')) node.scoped = true
-  } else {
-    const sdks = normalizeSDK(raw, sdk)
-    if (sdks !== undefined) node.sdk = sdks
+  if (sdk === undefined) {
+    if (Array.isArray(raw.sdk)) node.sdk = [...raw.sdk].sort()
+  } else if (Array.isArray(raw.sdk) && typeof raw.href === 'string' && raw.href.includes(':sdk:')) {
+    node.scoped = true
   }
 
   if (raw.tag !== undefined) node.tag = raw.tag
@@ -171,12 +100,12 @@ const baseNode = (raw: RawNode, kind: NormNode['kind'], sdk: string | undefined,
 }
 
 /** A folder emptied by the sdk filter is not rendered, so it is not part of the view. */
-const normalizeItem = (raw: RawNode, sdk: string | undefined, mode: NormMode = 'old-vs-new'): NormNode | null => {
+const normalizeItem = (raw: RawNode, sdk: string | undefined): NormNode | null => {
   const kind = isHeading(raw) ? 'heading' : isFolder(raw) ? 'folder' : 'page'
-  const node = baseNode(raw, kind, sdk, mode)
+  const node = baseNode(raw, kind, sdk)
 
   if (kind === 'folder') {
-    const children = normalizeItems(asItems(raw.items), sdk, mode)
+    const children = normalizeItems(raw.items, sdk)
     if (sdk !== undefined && children.length === 0) return null
     node.children = children
   }
@@ -184,55 +113,26 @@ const normalizeItem = (raw: RawNode, sdk: string | undefined, mode: NormMode = '
   return node
 }
 
-const normalizeItems = (items: RawNode[], sdk: string | undefined, mode: NormMode = 'old-vs-new'): NormNode[] =>
+const normalizeItems = (items: RawNode[], sdk: string | undefined): NormNode[] =>
   items
     .filter((item) => sdk === undefined || matchesSDK(item, sdk))
-    .map((item) => normalizeItem(item, sdk, mode))
+    .map((item) => normalizeItem(item, sdk))
     .filter((node): node is NormNode => node !== null)
-
-type SectionShape = {
-  /** The child sections of a section, in the shape of the dist being normalized. */
-  nestedOf: (raw: RawNode) => RawNode[]
-  /** The non-section children of a section. */
-  itemsOf: (raw: RawNode) => RawNode[]
-}
-
-/** `topNav` groups are the old dist's sections; a nested `topNav` group is a nested section. */
-const OLD_SECTIONS: SectionShape = {
-  nestedOf: (raw) => asItems(raw.items).filter(isTopNav),
-  itemsOf: (raw) => asItems(raw.items).filter((item) => !isTopNav(item)),
-}
-
-/** The new dist splits the two apart itself. */
-const NEW_SECTIONS: SectionShape = {
-  nestedOf: (raw) => raw.sections ?? [],
-  itemsOf: (raw) => raw.items ?? [],
-}
 
 /**
  * Sections carry the same presentation fields as any other node here. `buildSections` copies
- * only title/icon/sdk on to a section, so a `tag`/`wrap`/`hideTitle` authored on a `topNav`
- * group WOULD surface as a diff — deliberately. Those fields change how a section renders, so
- * losing them is a behaviour change to report, not noise to normalize away. (No authored
- * section carries any of them today, so this costs nothing on the real manifests.)
+ * only title/icon/sdk on to a section, so a `tag`/`wrap`/`hideTitle` on a section WOULD
+ * surface as a diff — deliberately. Those fields change how a section renders, so losing them
+ * is a behaviour change to report, not noise to normalize away. (No authored section carries
+ * any of them today, so this costs nothing on the real manifests.)
  *
- * `children` is nested sections first, then items: the new format splits the two apart, which
- * cannot express interleaving the old single ordered list could. Order within each list is
- * preserved, and no authored section mixes the two.
+ * `children` is nested sections first, then items, in the order the dist lists them.
  */
-const sectionNode = (
-  raw: RawNode,
-  shape: SectionShape,
-  sdk: string | undefined,
-  mode: NormMode = 'old-vs-new',
-): NormNode | null => {
+const sectionNode = (raw: RawNode, sdk: string | undefined): NormNode | null => {
   if (sdk !== undefined && !matchesSDK(raw, sdk)) return null
 
-  const node = baseNode(raw, 'section', sdk, mode)
-  const children = [
-    ...sectionNodes(shape.nestedOf(raw), shape, sdk, mode),
-    ...normalizeItems(shape.itemsOf(raw), sdk, mode),
-  ]
+  const node = baseNode(raw, 'section', sdk)
+  const children = [...sectionNodes(raw.sections ?? [], sdk), ...normalizeItems(raw.items ?? [], sdk)]
 
   if (sdk !== undefined && children.length === 0) return null
 
@@ -240,82 +140,23 @@ const sectionNode = (
   return node
 }
 
-const sectionNodes = (
-  raws: RawNode[],
-  shape: SectionShape,
-  sdk: string | undefined,
-  mode: NormMode = 'old-vs-new',
-): NormNode[] => raws.map((raw) => sectionNode(raw, shape, sdk, mode)).filter((node): node is NormNode => node !== null)
-
-// ---------------------------------------------------------------------------------------
-// Old dist (main): one tree, `topNav` groups are sections, the `flatNav` group is the
-// mobile sidebar for the SDKs it covers.
-// ---------------------------------------------------------------------------------------
+const sectionNodes = (raws: RawNode[], sdk: string | undefined): NormNode[] =>
+  raws.map((raw) => sectionNode(raw, sdk)).filter((node): node is NormNode => node !== null)
 
 /**
- * FlatNav semantics, from `FlatNav.tsx`.
- *
- * `Nav` picks flat-vs-sectioned by looking for a `flatNav` group visible for the active SDK,
- * then hands FlatNav the ENTIRE manifest — not that group. `processItems` walks every
- * top-level group, skips anything `hasVisibleChildren` rejects (a folder's own `sdk` is
- * checked before its children, hence ancestor-first), unwraps `topNav` and `hideTitle`
- * folders in to their children, and keeps everything else in place. So this walks the whole
- * manifest too. On today's data `Guides`/`Reference` list no mobile SDK and drop out on their
- * own, but leaning on that would bake in an unrecorded precondition: a `topNav` section that
- * ever covered a flat SDK belongs in that SDK's old-side view, and must surface as a diff if
- * the new format drops it.
+ * One view of a dist: an SDK's rendered tree (`sdk` given) or the default tree (`sdk`
+ * omitted). A keyed entry is already scoped to its SDK, but its items can still carry narrower
+ * scopes, so the same filter runs over both shapes.
  */
-const oldFlatItems = (items: RawNode[], sdk: string): RawNode[] => {
-  const out: RawNode[] = []
-
-  const walk = (level: RawNode[]) => {
-    for (const item of level) {
-      if (!hasVisibleDescendant(item, sdk)) continue
-
-      if (isFolder(item) && (item.topNav === true || item.hideTitle === true)) {
-        walk(asItems(item.items))
-        continue
-      }
-
-      out.push(item)
-    }
-  }
-
-  walk(items)
-  return out
-}
-
-export const normalizeOldDist = (dist: Dist, sdk?: string, mode: NormMode = 'old-vs-new'): NormNode[] => {
-  const top = asItems(dist.navigation)
-
-  if (sdk !== undefined) {
-    const usesFlatNav = top.some((item) => isFlatNavGroup(item) && matchesSDK(item, sdk))
-    if (usesFlatNav) return normalizeItems(oldFlatItems(top, sdk), sdk, mode)
-  }
-
-  return sectionNodes(
-    top.filter((item) => isTopNav(item) && !isFlatNavGroup(item)),
-    OLD_SECTIONS,
-    sdk,
-    mode,
-  )
-}
-
-// ---------------------------------------------------------------------------------------
-// New dist (this branch): navigation keyed by view.
-// ---------------------------------------------------------------------------------------
-
-export const normalizeNewDist = (dist: Dist, sdk?: string, mode: NormMode = 'old-vs-new'): NormNode[] => {
+export const normalizeDist = (dist: Dist, sdk?: string): NormNode[] => {
   const navigation = dist.navigation ?? {}
   const view = (sdk !== undefined ? navigation[sdk] : undefined) ?? navigation.default
 
   if (view === undefined) throw new Error(`No navigation entry for view "${sdk ?? 'default'}" and no default entry`)
 
-  // A keyed entry is already scoped to its SDK, but its items can still carry narrower
-  // scopes, so the same filter runs over both shapes.
-  if (view.type === 'flat') return normalizeItems(view.items ?? [], sdk, mode)
+  if (view.type === 'flat') return normalizeItems(view.items ?? [], sdk)
 
-  return sectionNodes(view.sections ?? [], NEW_SECTIONS, sdk, mode)
+  return sectionNodes(view.sections ?? [], sdk)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -372,7 +213,8 @@ const formatDiff = (oldText: string, newText: string): string => {
   ].join('\n')
 }
 
-export const VIEWS: string[] = ['default', ...VALID_SDKS]
+/** The rendered SDK views. The default tree is compared separately, with its `sdk` arrays. */
+export const VIEWS: string[] = [...VALID_SDKS]
 
 export type ViewCount = { view: string; old: number; new: number }
 
@@ -388,27 +230,11 @@ export const formatCounts = (counts: ViewCount[]): string =>
     })
     .join('\n')
 
-export type ParityMode = 'old-vs-new' | 'new-vs-new'
-
-/**
- * Which normalizer the left-hand dist needs, from its own shape: the legacy format's
- * `navigation` is an array of arrays, the current format's is an object keyed by view.
- *
- * Detecting rather than assuming is what stops a new-format dist fed to the left-hand side
- * from being normalized as legacy — `normalizeOldDist` returns `[]` for anything that isn't an
- * array, which would surface as the non-vacuity guard complaining about a truncated dist
- * instead of the plain "you passed two new dists" that it is.
- */
-export const detectMode = (dist: Dist): ParityMode =>
-  dist.navigation !== null && typeof dist.navigation === 'object' && !Array.isArray(dist.navigation)
-    ? 'new-vs-new'
-    : 'old-vs-new'
-
 export type CompareOptions = {
   /**
-   * new-vs-new only: accept a changed default tree (structure or `sdk` arrays) as a note
-   * instead of a failure. Pass it only after checking the pre-hydration nav in the browser —
-   * that tree is what readers see before hydration swaps in their SDK's view.
+   * Accept a changed default tree (structure or `sdk` arrays) as a note instead of a failure.
+   * Pass it only after checking the pre-hydration nav in the browser — that tree is what
+   * readers see before hydration swaps in their SDK's view.
    */
   allowDefaultChange?: boolean
 }
@@ -416,18 +242,13 @@ export type CompareOptions = {
 export const compareDistManifests = (
   oldDist: Dist,
   newDist: Dist,
-  modeOverride?: ParityMode,
   options: CompareOptions = {},
 ): {
   ok: boolean
   diffs: { view: string; diff: string }[]
   counts: ViewCount[]
-  mode: ParityMode
   notes: string[]
 } => {
-  const mode = modeOverride ?? detectMode(oldDist)
-  const normalizeLeft = mode === 'new-vs-new' ? normalizeNewDist : normalizeOldDist
-
   const diffs: { view: string; diff: string }[] = []
   const counts: ViewCount[] = []
 
@@ -436,12 +257,10 @@ export const compareDistManifests = (
   if (oldFlags !== newFlags) diffs.push({ view: 'flags', diff: formatDiff(oldFlags, newFlags) })
 
   const notes: string[] = []
-  const views = mode === 'new-vs-new' ? VIEWS.filter((view) => view !== 'default') : VIEWS
 
-  for (const view of views) {
-    const sdk = view === 'default' ? undefined : view
-    const oldNodes = normalizeLeft(oldDist, sdk, mode)
-    const newNodes = normalizeNewDist(newDist, sdk, mode)
+  for (const view of VIEWS) {
+    const oldNodes = normalizeDist(oldDist, view)
+    const newNodes = normalizeDist(newDist, view)
 
     counts.push({ view, old: countNodes(oldNodes), new: countNodes(newNodes) })
 
@@ -454,43 +273,38 @@ export const compareDistManifests = (
   // The default tree renders before hydration for every reader whose SDK is not in the URL, and
   // its `sdk` arrays drive that first paint's CSS visibility, so a change to it is a failure
   // unless the caller vouches for it after checking that surface in the browser.
-  if (mode === 'new-vs-new') {
-    const oldDefault = JSON.stringify(normalizeNewDist(oldDist, undefined, 'old-vs-new'), null, 1)
-    const newDefault = JSON.stringify(normalizeNewDist(newDist, undefined, 'old-vs-new'), null, 1)
-    if (oldDefault !== newDefault) {
-      if (options.allowDefaultChange) {
-        notes.push('default tree structure or sdk arrays changed; accepted via --allow-default-change')
-      } else {
-        diffs.push({
-          view: 'default (pre-hydration)',
-          diff:
-            'default tree structure or sdk arrays changed. This tree is what renders before hydration; ' +
-            'check it in the browser, then re-run with --allow-default-change to accept.\n' +
-            formatDiff(oldDefault, newDefault),
-        })
-      }
+  const oldDefault = JSON.stringify(normalizeDist(oldDist), null, 1)
+  const newDefault = JSON.stringify(normalizeDist(newDist), null, 1)
+  if (oldDefault !== newDefault) {
+    if (options.allowDefaultChange) {
+      notes.push('default tree structure or sdk arrays changed; accepted via --allow-default-change')
+    } else {
+      diffs.push({
+        view: 'default (pre-hydration)',
+        diff:
+          'default tree structure or sdk arrays changed. This tree is what renders before hydration; ' +
+          'check it in the browser, then re-run with --allow-default-change to accept.\n' +
+          formatDiff(oldDefault, newDefault),
+      })
     }
   }
 
   // Non-vacuity: two empty trees compare equal, so a truncated, stale or wrong-shaped dist
-  // would otherwise report parity while comparing nothing at all (`normalizeOldDist` yields
-  // [] for any navigation that isn't an array). The default view always has content in a real
-  // build, so an empty one is a broken input, not a passing comparison. new-vs-new has no
-  // default view, so guard on nextjs.
-  const guardView = mode === 'new-vs-new' ? 'nextjs' : 'default'
-  const guardCount = counts.find(({ view }) => view === guardView)
+  // would otherwise report parity while comparing nothing at all. The nextjs view always has
+  // content in a real build, so an empty one is a broken input, not a passing comparison.
+  const guardCount = counts.find(({ view }) => view === 'nextjs')
   if (guardCount === undefined || guardCount.old === 0 || guardCount.new === 0) {
     diffs.unshift({
       view: 'non-vacuity',
       diff:
-        `the ${guardView} view normalized to 0 nodes ` +
+        `the nextjs view normalized to 0 nodes ` +
         `(old: ${guardCount?.old ?? 0}, new: ${guardCount?.new ?? 0}). ` +
         `An empty tree compares equal to an empty tree, so this is not parity — check that ` +
-        `both dist manifests are complete and in the format their side is expected to emit.`,
+        `both dist manifests are complete builds.`,
     })
   }
 
-  return { ok: diffs.length === 0, diffs, counts, mode, notes }
+  return { ok: diffs.length === 0, diffs, counts, notes }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -499,28 +313,19 @@ export const compareDistManifests = (
 
 const main = () => {
   const args = process.argv.slice(2)
-  const forceNewBoth = args.includes('--new-both')
   const allowDefaultChange = args.includes('--allow-default-change')
   const [oldPath, newPath] = args.filter((arg) => !arg.startsWith('--'))
 
   if (oldPath === undefined || newPath === undefined) {
     console.error(
-      'usage: bun scripts/check-nav-parity.ts [--new-both] [--allow-default-change] <dist-manifest.json> <dist-manifest.json>',
+      'usage: bun scripts/check-nav-parity.ts [--allow-default-change] <dist-manifest.json> <dist-manifest.json>',
     )
     process.exit(2)
   }
 
   const read = (filePath: string): Dist => JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-  const { ok, diffs, counts, mode, notes } = compareDistManifests(
-    read(oldPath),
-    read(newPath),
-    forceNewBoth ? 'new-vs-new' : undefined,
-    { allowDefaultChange },
-  )
+  const { ok, diffs, counts, notes } = compareDistManifests(read(oldPath), read(newPath), { allowDefaultChange })
 
-  // Printed either way: which normalizer ran over the left-hand dist decides what the result
-  // means, and it is detected rather than declared.
-  console.log(`mode: ${mode}`)
   for (const note of notes) console.log(`note: ${note}`)
 
   if (ok) {

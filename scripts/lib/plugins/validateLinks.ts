@@ -234,6 +234,15 @@ function combinedHeadingHashes(docsMap: DocsMap, url: string, linkedDoc: NonNull
 }
 
 /**
+ * The heading hashes a reader of `doc` sees when it renders for `sdk`: the
+ * <If sdk/notSdk>-filtered set when the doc has <If /> components, otherwise
+ * every heading in the doc.
+ */
+export function headingHashesForSdk(doc: NonNullable<ReturnType<DocsMap['get']>>, sdk: SDK) {
+  return doc.headingsHashesBySdk?.get(sdk) ?? doc.headingsHashes
+}
+
+/**
  * Variant-aware hash validation for the per-SDK output pass. Only looks at links
  * and code-block URLs that actually render for `targetSdk` (content behind
  * <If /> components for other SDKs is skipped) and warns when an anchor exists
@@ -335,11 +344,11 @@ function checkHashExistsForSdk(
       const distinctSDKVariant = docsMap.get(`${url}.${targetSdk}`)
 
       if (distinctSDKVariant !== undefined) {
-        return distinctSDKVariant.headingsHashesBySdk?.get(targetSdk) ?? distinctSDKVariant.headingsHashes
+        return headingHashesForSdk(distinctSDKVariant, targetSdk)
       }
     }
 
-    return linkedDoc.headingsHashesBySdk?.get(targetSdk) ?? linkedDoc.headingsHashes
+    return headingHashesForSdk(linkedDoc, targetSdk)
   })()
 
   if (variantHashes.has(hash)) return

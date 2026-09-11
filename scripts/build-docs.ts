@@ -118,7 +118,7 @@ import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { getRoutableDocHref } from './lib/utils/getRoutableDocHref'
-import { createDocsLinkManifest } from './lib/linkManifest'
+import { createDocsLinkManifest, headingAnchorsForDistPage } from './lib/linkManifest'
 import { existsSync } from 'node:fs'
 
 const stringSchema = z.string()
@@ -1656,9 +1656,10 @@ ${yaml.stringify({
   // Source routes from mdxFilePaths (the physically emitted dist pages, same set directory.json
   // uses), not routableDocsMap. routableDocsMap is seeded from docsArray, which carries internal
   // `<page>.<sdk>` variant lookup keys (e.g. `/docs/quickstart.react`) that never resolve as URLs —
-  // publishing them would tell downstream link validators that 404ing paths are valid.
+  // publishing them would tell downstream link validators that 404ing paths are valid. Each
+  // route's heading anchors come from the doc that dist page was written from.
   const linkManifest = createDocsLinkManifest({
-    routes: mdxFilePaths.map(({ url }) => url),
+    routes: mdxFilePaths.map(({ path, url }) => ({ url, anchors: headingAnchorsForDistPage(config, docsMap, path) })),
     staticRedirects: staticCompactRedirects ?? {},
     dynamicRedirects: dynamicRedirects ?? [],
     generatedAt: new Date(),

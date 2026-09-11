@@ -342,7 +342,10 @@ title: MDX Doc
         path: './docs/manifest.json',
         content: JSON.stringify({
           navigationType: 'flat',
-          navigation: [{ title: 'Guide', href: '/docs/guide' }],
+          navigation: [
+            { title: 'Guide', href: '/docs/guide' },
+            { title: 'Plain', href: '/docs/plain' },
+          ],
         }),
       },
       {
@@ -352,7 +355,37 @@ title: Guide
 sdk: react, nextjs
 ---
 
-# Guide`,
+# Guide
+
+## Shared
+
+<If sdk="react">
+  ## React only
+
+  ## Options
+</If>
+
+<If sdk="nextjs">
+  ## Options
+</If>`,
+      },
+      {
+        path: './docs/guide.expo.mdx',
+        content: `---
+title: Guide
+---
+
+# Expo guide
+
+## Expo only`,
+      },
+      {
+        path: './docs/plain.mdx',
+        content: `---
+title: Plain
+---
+
+No headings here.`,
       },
       {
         path: './redirects/static.json',
@@ -383,7 +416,7 @@ sdk: react, nextjs
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs'],
+        validSdks: ['react', 'nextjs', 'expo'],
         redirects: {
           static: {
             inputPath: '../redirects/static.json',
@@ -422,11 +455,22 @@ sdk: react, nextjs
 
     // routes must be exactly the routable dist URLs — no internal `<page>.<sdk>` variant
     // lookup keys (e.g. `/docs/guide.react`), which are not real URLs and would 404.
-    expect(links.routes).toEqual([...new Set(directory.map(({ url }) => url))].sort())
+    expect(Object.keys(links.routes)).toEqual([...new Set(directory.map(({ url }) => url))].sort())
 
     expect(links).toMatchObject({
       sourceRevision: 'test-revision',
-      routes: expect.arrayContaining(['/docs/guide', '/docs/react/guide', '/docs/nextjs/guide']),
+      routes: {
+        // The unscoped SDK-chooser page carries the union of every variant's anchors,
+        // concrete per-SDK pages carry only the anchors their readers land on, and a
+        // page with no headings is still listed so it can't be mistaken for a missing page.
+        // "Options" repeats across mutually exclusive <If /> branches: every rendered page
+        // has `options`, and none has the unfiltered slug counter's `options-2`.
+        '/docs/guide': ['expo-guide', 'expo-only', 'guide', 'options', 'react-only', 'shared'],
+        '/docs/react/guide': ['guide', 'options', 'react-only', 'shared'],
+        '/docs/nextjs/guide': ['guide', 'options', 'shared'],
+        '/docs/expo/guide': ['expo-guide', 'expo-only'],
+        '/docs/plain': [],
+      },
       redirects: {
         static: {
           '/docs/page-1': '/docs/page-3',
@@ -442,6 +486,56 @@ sdk: react, nextjs
       },
     })
     expect(new Date(links.generatedAt).toISOString()).toBe(links.generatedAt)
+  })
+
+  test('links.json keeps the unfiltered anchors of an unscoped doc that manifest scoping stamps', async () => {
+    // An unscoped doc listed under a per-SDK manifest gets `sdk` stamped onto its docsMap copy,
+    // but it's still emitted as one root page with every <If /> branch intact, and the site
+    // assigns heading ids with one counter over that whole page. So a heading repeated across
+    // mutually exclusive branches really renders as `options` and `options-2`, and the manifest
+    // has to publish both rather than the per-SDK filtered union.
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Conditional', href: '/docs/conditional' }],
+        }),
+      },
+      {
+        path: './docs/manifest.expo.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Conditional', href: '/docs/conditional' }],
+        }),
+      },
+      {
+        path: './docs/conditional.mdx',
+        content: `---
+title: Conditional
+---
+
+<If notSdk="expo">
+  ## Options
+</If>
+
+<If sdk="expo">
+  ## Options
+</If>`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'expo'],
+      }),
+    )
+
+    const links = JSON.parse(await readFile('./dist/links.json'))
+
+    expect(links.routes).toEqual({ '/docs/conditional': ['options', 'options-2'] })
   })
 })
 

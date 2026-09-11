@@ -167,6 +167,7 @@ async function treeDir(baseDir: string) {
 }
 
 const baseConfig = {
+  sourceRevision: 'test-revision',
   dataPath: '../data',
   docsPath: '../docs',
   baseDocsLink: '/docs/',
@@ -341,8 +342,17 @@ title: MDX Doc
         path: './docs/manifest.json',
         content: JSON.stringify({
           navigationType: 'flat',
-          navigation: [],
+          navigation: [{ title: 'Guide', href: '/docs/guide' }],
         }),
+      },
+      {
+        path: './docs/guide.mdx',
+        content: `---
+title: Guide
+sdk: react, nextjs
+---
+
+# Guide`,
       },
       {
         path: './redirects/static.json',
@@ -373,7 +383,7 @@ title: MDX Doc
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react'],
+        validSdks: ['react', 'nextjs'],
         redirects: {
           static: {
             inputPath: '../redirects/static.json',
@@ -406,6 +416,32 @@ title: MDX Doc
         permanent: true,
       },
     ])
+
+    const links = JSON.parse(await readFile('./dist/links.json'))
+    const directory = JSON.parse(await readFile('./dist/directory.json')) as Array<{ path: string; url: string }>
+
+    // routes must be exactly the routable dist URLs — no internal `<page>.<sdk>` variant
+    // lookup keys (e.g. `/docs/guide.react`), which are not real URLs and would 404.
+    expect(links.routes).toEqual([...new Set(directory.map(({ url }) => url))].sort())
+
+    expect(links).toMatchObject({
+      sourceRevision: 'test-revision',
+      routes: expect.arrayContaining(['/docs/guide', '/docs/react/guide', '/docs/nextjs/guide']),
+      redirects: {
+        static: {
+          '/docs/page-1': '/docs/page-3',
+          '/docs/page-2': '/docs/page-3',
+        },
+        dynamic: [
+          {
+            source: '/docs/login/:path*',
+            destination: '/docs/signin/:path*',
+            permanent: true,
+          },
+        ],
+      },
+    })
+    expect(new Date(links.generatedAt).toISOString()).toBe(links.generatedAt)
   })
 })
 
@@ -1786,9 +1822,10 @@ sdk: vue
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(4)
+    expect(distFiles.length).toBe(5)
     expect(distFiles).toContain('manifest.json')
     expect(distFiles).toContain('directory.json')
+    expect(distFiles).toContain('links.json')
     expect(distFiles).toContain('quickstart/vue.mdx')
     expect(distFiles).toContain('quickstart/react.mdx')
   })
@@ -1849,9 +1886,10 @@ Testing with a simple page.`,
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(6)
+    expect(distFiles.length).toBe(7)
     expect(distFiles).toContain('manifest.json')
     expect(distFiles).toContain('directory.json')
+    expect(distFiles).toContain('links.json')
     expect(distFiles).toContain('simple-test.mdx')
     expect(distFiles).toContain('react/simple-test.mdx')
     expect(distFiles).toContain('vue/simple-test.mdx')
@@ -2754,7 +2792,12 @@ sourceFile: /docs/references/react/guide.mdx
 # React Guide
 `)
 
-    expect(await listFiles('dist/')).toEqual(['directory.json', 'manifest.json', 'references/react/guide.mdx'])
+    expect(await listFiles('dist/')).toEqual([
+      'directory.json',
+      'links.json',
+      'manifest.json',
+      'references/react/guide.mdx',
+    ])
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
@@ -2830,7 +2873,7 @@ sourceFile: /docs/guide.mdx
 # React Guide
 `)
 
-    expect(await listFiles('dist/')).toEqual(['directory.json', 'guide.mdx', 'manifest.json'])
+    expect(await listFiles('dist/')).toEqual(['directory.json', 'guide.mdx', 'links.json', 'manifest.json'])
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
@@ -3117,7 +3160,12 @@ sdk: nextjs
     })
 
     // Should process document without redirect page
-    expect(await listFiles('dist/')).toEqual(['directory.json', 'manifest.json', 'quickstarts/nextjs-pages-router.mdx'])
+    expect(await listFiles('dist/')).toEqual([
+      'directory.json',
+      'links.json',
+      'manifest.json',
+      'quickstarts/nextjs-pages-router.mdx',
+    ])
 
     expect(await readFile('./dist/quickstarts/nextjs-pages-router.mdx')).toBe(`---
 title: Next.js Quickstart (Pages Router)
@@ -9370,6 +9418,7 @@ canonical: /docs/:sdk:/api-doc
       'api-doc.mdx',
       'directory.json',
       'expo/api-doc.mdx',
+      'links.json',
       'manifest.json',
       'nextjs/api-doc.mdx',
       'react/api-doc.mdx',
@@ -9477,6 +9526,7 @@ canonical: /docs/:sdk:/test
 
     expect(await listFiles('dist/')).toEqual([
       'directory.json',
+      'links.json',
       'manifest.json',
       'nextjs/test.mdx',
       'react/test.mdx',

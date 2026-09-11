@@ -45,6 +45,7 @@ import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
 import symlinkDir from 'symlink-dir'
+import simpleGit from 'simple-git'
 import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
@@ -117,6 +118,7 @@ import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { getRoutableDocHref } from './lib/utils/getRoutableDocHref'
+import { createDocsLinkManifest } from './lib/linkManifest'
 import { existsSync } from 'node:fs'
 
 const stringSchema = z.string()
@@ -149,9 +151,12 @@ if (require.main === module) {
 
 async function main() {
   const args = process.argv.slice(2)
+  const sourceRevision =
+    process.env.VERCEL_GIT_COMMIT_SHA?.trim() || (await simpleGit(__dirname).revparse(['HEAD'])).trim()
 
   const config = await createConfig({
     basePath: __dirname,
+    sourceRevision,
     dataPath: '../data',
     docsPath: '../docs',
     baseDocsLink: '/docs/',
@@ -1645,6 +1650,24 @@ ${yaml.stringify({
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 
   console.info('✓ Wrote out directory.json')
+
+  abortSignal?.throwIfAborted()
+
+  // Source routes from mdxFilePaths (the physically emitted dist pages, same set directory.json
+  // uses), not routableDocsMap. routableDocsMap is seeded from docsArray, which carries internal
+  // `<page>.<sdk>` variant lookup keys (e.g. `/docs/quickstart.react`) that never resolve as URLs —
+  // publishing them would tell downstream link validators that 404ing paths are valid.
+  const linkManifest = createDocsLinkManifest({
+    routes: mdxFilePaths.map(({ url }) => url),
+    staticRedirects: staticCompactRedirects ?? {},
+    dynamicRedirects: dynamicRedirects ?? [],
+    generatedAt: new Date(),
+    sourceRevision: config.sourceRevision,
+  })
+
+  await writeFile('links.json', JSON.stringify(linkManifest))
+
+  console.info('✓ Wrote out links.json')
 
   abortSignal?.throwIfAborted()
 

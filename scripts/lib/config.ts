@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs'
 
 type BuildConfigOptions = {
   basePath: string
+  sourceRevision: string
   validSdks: readonly SDK[]
   dataPath: string
   docsPath: string
@@ -161,6 +162,7 @@ export async function createConfig(config: BuildConfigOptions) {
 
     return {
       basePath: config.basePath,
+      sourceRevision: config.sourceRevision,
       baseDocsLink: config.baseDocsLink,
       validSdks: config.validSdks,
 

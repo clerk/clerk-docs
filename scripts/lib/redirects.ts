@@ -7,6 +7,7 @@ import { BloomFilter } from 'bloom-filters'
 export interface Redirect {
   source: string
   destination: string
+  permanent?: boolean
 }
 
 export interface RedirectOutput extends Redirect {

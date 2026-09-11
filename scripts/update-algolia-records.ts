@@ -17,7 +17,7 @@
 // - SDK-specific content already filtered
 // - Final URLs and frontmatter
 
-import { slugifyWithCounter } from '@sindresorhus/slugify'
+import { slugifyWithCounter } from './lib/utils/slugify'
 import { algoliasearch, type SynonymHit } from 'algoliasearch'
 import 'dotenv/config'
 import { execSync } from 'node:child_process'

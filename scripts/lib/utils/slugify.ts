@@ -1,5 +1,12 @@
 import slugify from '@sindresorhus/slugify'
 
+// `decamelize` is off so camelCase terms keep their written form ("OAuth" ->
+// "oauth", "useAuth" -> "useauth", never "o-auth"/"use-auth"). Must match the
+// renderer's configuration in clerk/clerk `src/lib/slugify.ts` (DOCS-11886) —
+// the validators here and the live anchors there have to agree.
+// Options are a module constant, so the string-keyed memo below stays valid.
+const slugifyOptions = { decamelize: false }
+
 const slugifyMemo = new Map<string, string>()
 
 // Strips one or more trailing numeric suffixes (e.g. "-2", "-2-3") so we can
@@ -9,7 +16,7 @@ const TRAILING_NUMBER_SUFFIX = /(?:-\d+?)+?$/
 const memoizedSlugify = (string: string) => {
   let result = slugifyMemo.get(string)
   if (result === undefined) {
-    result = slugify(string)
+    result = slugify(string, slugifyOptions)
     slugifyMemo.set(string, result)
   }
   return result

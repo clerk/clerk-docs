@@ -342,15 +342,15 @@ Use as little [jargon](https://dictionary.cambridge.org/dictionary/english/jargo
 
 ### Avoid "click"
 
-"Click" is an outdated term that assumes the learner is using a mouse. But learners may be navigating by touchscreen, keyboard, or assistive technology. Often there are better words than "click", like "select" and "open".
+"Click" is an outdated term that assumes the learner is using a mouse. But learners may be navigating by touchscreen, keyboard, or assistive technology. Use "select" to describe activating a UI element, including a tab. Reserve "open" for files, pages, menus, dialogs, and other containers.
 
 > ❌
-> Click the **Settings tab.**
+> Click the **Settings** tab.
 >
 > Click the **Google** social connection.
 
 > ✅
-> Open the **Settings tab.**
+> Select the **Settings** tab.
 >
 > Select the **Google** social connection.
 
@@ -501,7 +501,7 @@ When instructing learners to perform an operation in the Clerk Dashboard, begin 
 > Find fallback redirects in the Redirect tab on the Account Portal in the Clerk Dashboard.
 
 > ✅
-> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/~/account-portal)** page and open the **Redirects** tab.
+> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/~/account-portal)** page and select the **Redirects** tab.
 
 ### Avoid using "appears"
 

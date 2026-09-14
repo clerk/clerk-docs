@@ -20,19 +20,19 @@ To create or edit an OAuth app, navigate to the [**OAuth applications**](https:/
 
 Clerk supports [Client ID Metadata Documents (CIMD)](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/), which let a public OAuth client use an HTTPS metadata-document URL as its `client_id`. Clerk fetches the document to identify the client and validate its redirect URIs without requiring Dynamic Client Registration.
 
-CIMD clients always use PKCE with the `S256` method and always show the OAuth consent screen. You can explicitly allow clients, control whether previously unknown clients may connect, restrict their scopes, and review their metadata from the **CIMD Clients** tab on the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page. Enable **Advertise CIMD support** on that tab to publish CIMD support in your authorization server metadata.
+CIMD clients always use Proof Key for Code Exchange (PKCE) with the `S256` method and always show the OAuth consent screen. You can explicitly allow clients, restrict their scopes, and review their metadata from the **Applications** tab on the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page. On the **Settings** tab, enable **Publish CIMD support** under **Client onboarding** to publish CIMD support in your authorization server metadata and configure whether previously unknown clients may connect.
 
 For configuration instructions and metadata requirements, see [Manage OAuth clients with Client ID Metadata Documents](/docs/guides/configure/auth-strategies/oauth/client-id-metadata-documents).
 
 ### Dynamic client registration
 
 > [!WARNING]
-> For clients that support Client ID Metadata Documents, prefer CIMD over Dynamic Client Registration because it doesn't expose an unauthenticated client-registration write endpoint. Enable **Dynamic client registration** only for clients that require it.
+> For clients that support Client ID Metadata Documents, prefer CIMD over Dynamic Client Registration because it doesn't expose an unauthenticated client-registration write endpoint. Enable dynamic client registration only for clients that require it.
 
-In addition to configuring OAuth apps manually through the [Clerk Dashboard](https://dashboard.clerk.com/~/oauth-applications), Clerk supports [dynamic client registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing OAuth clients to be created programmatically via a public API endpoint. To enable this feature, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard and enable **Dynamic client registration**.
+In addition to configuring OAuth apps manually through the [Clerk Dashboard](https://dashboard.clerk.com/~/oauth-applications), Clerk supports [dynamic client registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing OAuth clients to be created programmatically via a public API endpoint. To enable this feature, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard, select the **Settings** tab, and under **Client onboarding**, enable **Publish DCR support**.
 
 > [!WARNING]
-> Dynamic client registration creates a public, unauthenticated endpoint that anyone can use to register OAuth clients with your authorization service. While this can enable use cases like multi-tenant SaaS platforms, developer marketplaces, and some MCP integrations, it also introduces significant security risks:
+> Dynamic client registration creates a public, unauthenticated endpoint that anyone can use to register OAuth clients with your authorization service. While this can enable use cases like multi-tenant SaaS platforms, developer marketplaces, and some Model Context Protocol (MCP) integrations, it also introduces significant security risks:
 >
 > - Attackers can create clients anonymously without audit trails.
 > - Malicious clients can use legitimate-sounding names to trick users.
@@ -50,7 +50,7 @@ When a client omits `scope`, you can configure the default scopes Clerk should a
 
 You can configure default scopes for your instance in either of these ways:
 
-- In the Clerk Dashboard, open [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications), configure **Default scopes**, and save your changes. The **Default scopes** setting is available when **Advertise CIMD support** or **Dynamic client registration** is enabled.
+- In the Clerk Dashboard, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page, select the **Settings** tab, and under **Client onboarding**, configure **Default scopes for dynamic clients** and save your changes. The **Default scopes for dynamic clients** setting is available when **Publish CIMD support** or **Publish DCR support** is enabled.
 - Use the Backend API through the CLI:
 
   ```sh {{ filename: 'terminal' }}
@@ -98,7 +98,7 @@ In OAuth flows where a private server environment is available, the server can s
 
 To support these use cases, Clerk's OAuth implementation allows public clients to exchange an authorization code **without requiring a `client_secret`**. This makes it easier for mobile and browser-based apps to complete the token exchange and retrieve access and refresh tokens, without the risk of exposing long-lived secrets.
 
-However, this process means **public clients** often need an additional layer of security to protect against interception attacks. This is where **[PKCE (Proof Key for Code Exchange)](https://datatracker.ietf.org/doc/html/rfc7636)** comes in - PKCE helps secure public clients by replacing the `client_secret` with a dynamically generated proof that **only the client who started the OAuth flow can provide**.
+However, this process means **public clients** often need an additional layer of security to protect against interception attacks. This is where [PKCE](https://datatracker.ietf.org/doc/html/rfc7636) comes in - PKCE helps secure public clients by replacing the `client_secret` with a dynamically generated proof that **only the client who started the OAuth flow can provide**.
 
 Here's how it works: instead of relying on a pre-shared secret, the client generates a random value called a **code verifier** at the start of each OAuth flow, along with a **code challenge**, which is a hashed version of the code verifier. The client sends the code challenge when starting the authorization flow, and later, during the token exchange, sends the original code verifier to prove it initiated the flow. The authorization service can then hash the code verifier to ensure it matches the code challenge.
 
@@ -115,7 +115,28 @@ This ensures that even if an attacker intercepts the authorization code, they ca
 >
 > Additionally, each PKCE flow uses a unique `code_verifier`, so even if one was somehow compromised, it couldn't be reused for other users or future flows.
 
-To enable PKCE for a public client, you can enable the **Public** option for each OAuth app [in the Clerk Dashboard](https://dashboard.clerk.com/~/oauth-applications).
+#### Configure PKCE for a public OAuth application
+
+To configure a manually registered OAuth application as a public client, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard, select the application, and enable **Public**. This allows the client to exchange an authorization code without a `client_secret`.
+
+Because **Public** does not enforce PKCE by itself, Clerk recommends also requiring PKCE for public clients. Enable **Require PKCE** in the application's settings.
+
+### Require PKCE for all clients
+
+[OAuth 2.1](https://oauth.net/2.1/) requires PKCE for all clients that use the authorization code flow, including public and confidential clients.
+
+To enforce PKCE for every manually registered and dynamically registered OAuth application, enable the instance-level **Require PKCE** setting. This applies to both public and confidential applications and takes precedence over their individual settings. CIMD clients always require the `S256` method, regardless of the instance or application settings.
+
+> [!WARNING]
+> Enabling **Require PKCE** will reject authorization requests from clients that omit PKCE or use a method other than `S256`. Authorization codes issued before enabling the setting remain valid, as do existing refresh tokens. See [PKCE Code Challenge Methods](https://www.iana.org/assignments/oauth-parameters#pkce-code-challenge-method) for registered methods.
+
+**Require PKCE** is enabled by default for newly created Clerk instances. To enable it for an existing instance, in the Clerk Dashboard, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page and select the **Settings** tab. Under **Authorization security**, enable **Require PKCE** and select **Save**.
+
+You can also configure the setting through the Clerk CLI:
+
+```sh {{ filename: 'terminal' }}
+npx clerk@latest api instance/oauth_application_settings -X PATCH -d '{"pkce_required":true}'
+```
 
 ### Device Authorization Grant <BetaTag />
 
@@ -168,7 +189,7 @@ Clerk issues OAuth access tokens as [JSON Web Tokens (JWTs)](/docs/guides/how-cl
 
 If your use case requires instant token revocation, you can configure your OAuth application to issue [opaque tokens](!opaque-token) instead. Unlike JWTs, opaque tokens require a network request to Clerk for verification, but can be revoked immediately.
 
-To configure the token format for an OAuth application, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard and select the "Settings" tab, then toggle the **Generate access tokens as JWTs** switch on or off depending on your needs.
+To configure the token format for an OAuth application, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard and select the **Settings** tab. Under **Access token format**, select **JWT access tokens** or **Opaque access tokens**.
 
 For a detailed comparison of JWT and opaque token formats, including trade-offs and when to use each, see [Token formats](/docs/guides/development/machine-auth/token-formats).
 
@@ -219,6 +240,6 @@ This endpoint exposes all relevant details in a standardized JSON format. A samp
 
 ### Conditional metadata
 
-- **CIMD:** Clerk advertises `client_id_metadata_document_supported: true` only when you enable **Advertise CIMD support** on the **CIMD Clients** tab. This lets compatible clients select [CIMD](!client-id-metadata-document) instead of Dynamic Client Registration. Clerk omits the field otherwise. Applications using Clerk's legacy OAuth implementation don't support or advertise CIMD.
+- **CIMD:** Clerk advertises `client_id_metadata_document_supported: true` only when you enable **Publish CIMD support** under **Client onboarding** on the **Settings** tab. This lets compatible clients select [CIMD](!client-id-metadata-document) instead of Dynamic Client Registration. Clerk omits the field otherwise. Applications using Clerk's legacy OAuth implementation don't support or advertise CIMD.
 - **Device Authorization Grant:** Clerk includes `device_authorization_endpoint` and the Device Authorization Grant type in `grant_types_supported` only when Device Authorization Grant is available and the user verification page is reachable. OAuth clients should rely on the metadata instead of constructing the endpoint themselves.
 - **Organizations:** Clerk includes `user:org:read` in `scopes_supported` and `org_id` in `claims_supported` only when the instance has Organizations enabled. See [Organizations and OAuth](#organizations-and-oauth) for details.

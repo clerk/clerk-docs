@@ -9,7 +9,7 @@ These are the guidelines we use to write our SSO guides.
   ```mdx
   ---
   title: Add <SSO_PROVIDER> as a <SSO_TYPE> connection
-  description: Learn how to allow users to sign up and sign in to your Clerk app with their <SSO_PROVIDER> account using <SSO_TYPE>.
+  description: Learn how to allow users to sign up and sign in to your Clerk application with their <SSO_PROVIDER> account using <SSO_TYPE>.
   ---
   ```
 
@@ -17,7 +17,7 @@ These are the guidelines we use to write our SSO guides.
 - The introductory sentence should be formatted as follows:
 
   ```mdx
-  Enabling <TYPE_OF_SSO> with <SSO_PROVIDER> allows your users to sign up and sign in to your Clerk application with their <SSO_PROVIDER> account.
+  Enabling <TYPE_OF_SSO> with [<SSO_PROVIDER>](SSO_PROVIDER_OAUTH_URL) allows your users to sign up and sign in to your Clerk app with their <SSO_PROVIDER> account.
   ```
 
 - **Social connection guides only** The instructions for **development** versus **production** should be formatted as follows:
@@ -31,7 +31,7 @@ These are the guidelines we use to write our SSO guides.
 
   For _production instances_, you must provide custom credentials.
 
-  To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
+  Keep two browser tabs open during setup: one for the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
   ```
 
 - Use `<Steps />` to lay out the steps

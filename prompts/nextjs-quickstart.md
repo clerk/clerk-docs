@@ -2,71 +2,77 @@
 
 Set up Clerk authentication in this Next.js project with the Clerk CLI.
 
-```bash
-npx -y clerk@latest init
-```
+## Existing authentication
+
+Before `init`, inspect for existing auth — never env files. If found, stop and get approval for migrating users, passwords/OAuth, routes, tokens, sessions, and rollout. Until then, do not run `init` or change providers, middleware, or auth routes.
 
 ## Why the CLI
 
-`clerk init` needs no Clerk account. It detects agent environments and runs in agent mode — non-interactive, so nothing blocks waiting on the user and no keys pass through the conversation. Signed out, it runs accountless: it provisions a claimable app, writes dev keys to `.env.local`, and wires up the SDK, provider, middleware, and auth routes. Signing in later claims that app.
+`npx -y clerk@latest init` needs no Clerk account. It detects agent environments and runs non-interactively, so no keys pass through the conversation. Signed out, it provisions a claimable application, writes dev keys to `.env.local`, and configures the SDK, provider, middleware, and auth routes. Signing in later claims it.
 
-Accountless apps stay configurable from the CLI — `clerk enable orgs` and `clerk config patch` work before claiming; billing and some auth settings need claiming first.
+Before claiming, `npx -y clerk@latest enable orgs` and `npx -y clerk@latest config patch` work; Billing and some auth settings require claiming.
 
-In agent mode it also installs Clerk agent skills globally into `~/.agents/skills/`, linked into supported agent tools.
+Agent mode installs Clerk agent skills globally and links supported agent tools.
 
 ## Quick setup
 
-Before running any commands, present the user with a preliminary setup checklist:
+Show this checklist and wait for approval:
 
 ```
 Here's what I'll do to get you set up with Clerk.
 
 1. Set up Clerk in this project, or scaffold a new Next.js app with Clerk if this directory is empty
 2. Start your app with Clerk installed.
-3. Optionally sign in later to claim the app.
+3. Stay signed out and optionally sign in later to claim the app, or sign in first to use an existing Clerk application.
 
 Shall I proceed?
 ```
 
 ## Step 1: Run the Clerk CLI
 
-No install needed — run `clerk` commands through the project's package runner: `npx -y clerk@latest <command>`, `pnpm dlx clerk@latest`, `bunx clerk@latest`, or `yarn dlx clerk@latest` (yarn 2+ only). If `clerk` is already installed, run `clerk update --yes` and use it directly.
+No install needed — run Clerk CLI commands through the project's package runner: `npx -y clerk@latest <command>`, `pnpm dlx clerk@latest`, `bunx clerk@latest`, or `yarn dlx clerk@latest` (yarn 2+ only).
 
 ## Step 2: Sign in to Clerk (optional)
 
-Only sign in if the user wants to use an existing Clerk account or app:
+Stay signed out by default. Sign in before `init` only to use an existing Clerk application:
 
 ```bash
 npx -y clerk@latest auth login
 ```
 
-Pause while the user completes the login flow. Do not list apps or ask which app to use.
+Pause while the user completes the login flow.
+
+Then run `npx -y clerk@latest apps list --json`, show the names and IDs, and ask which application to use. Never choose for them.
 
 ## Step 3: Initialize Clerk
 
-If this is an existing Next.js project, run:
+If Step 2 selected an application, run:
 
 ```bash
-clerk init
+npx -y clerk@latest init --app <application_id>
 ```
 
-`clerk init` is the default setup action, signed in or not. It detects the framework and package manager and applies the Next.js setup described above. Do not pass `--framework` or `--pm` for existing projects unless the user explicitly wants to override detection or the CLI asks for those values.
+Otherwise, for an existing Next.js project, run:
+
+```bash
+npx -y clerk@latest init
+```
+
+`npx -y clerk@latest init` is the default setup action, signed in or not. It detects the framework and package manager and applies the Next.js setup described above. Do not pass `--framework` or `--pm` for existing projects unless the user explicitly wants to override detection or the CLI asks for those values.
 
 If the directory is empty, ask the user which package manager they want to use. If they have no preference, use npm. Then scaffold a fresh Next.js app:
 
 ```bash
-clerk init --framework next --pm <package-manager>
+npx -y clerk@latest init --framework next --pm <package-manager>
 ```
 
 If the directory has a leftover lockfile, match the package manager to it (`pnpm-lock.yaml` → `pnpm`, `yarn.lock` → `yarn`, `bun.lock`/`bun.lockb` → `bun`, `package-lock.json` → `npm`) instead of asking.
 
-Do not add `--app` or list apps unless the user wants to link a specific existing application: `clerk init --app <application_id>` (find IDs with `clerk apps list --json`, then ask which to use).
-
 ## Step 4: Fall back to manual setup when init is incomplete
 
-Only do this if `clerk init` has already run and failed — do not start here.
+Only do this if `npx -y clerk@latest init` has already run and failed — do not start here.
 
-If `clerk init` reports an error or does not finish the setup, finish manually: install `@clerk/nextjs`, create a middleware file that calls `clerkMiddleware()` from `@clerk/nextjs/server` (see Critical rules for the filename), and wrap the app with `<ClerkProvider>` as shown in Step 5.
+If `npx -y clerk@latest init` reports an error or does not finish the setup, finish manually: install `@clerk/nextjs`, create a middleware file that calls `clerkMiddleware()` from `@clerk/nextjs/server` (see Critical rules for the filename), and wrap the app with `<ClerkProvider>` as shown in Step 5.
 
 ## Step 5: Ensure clear auth controls are visible
 
@@ -104,7 +110,7 @@ If clear auth controls already exist, reuse or adapt them instead of duplicating
 
 ## Step 6: Verify the setup
 
-After `clerk init` completes, run:
+After `npx -y clerk@latest init` completes, run:
 
 ```bash
 npx -y clerk@latest doctor
@@ -130,9 +136,9 @@ Add to global CSS:
 
 ## Critical rules
 
-- Setup is `clerk init` (`npx -y clerk@latest init`), signed in or not. Do not install `@clerk/nextjs` or hand-write setup unless it has run and failed
-- `clerk init` writes `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to `.env.local`. Do not ask the user to copy keys
-- Name the middleware file by the `next` version in `package.json`: `proxy.ts` on Next.js 16+, `middleware.ts` on 15 and below. The contents are identical; `clerk init` creates it
+- Setup is `npx -y clerk@latest init`, signed in or not. Do not install `@clerk/nextjs` or hand-write setup unless it has run and failed
+- `npx -y clerk@latest init` writes `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to `.env.local`. Do not ask the user to copy keys
+- Name the middleware file by the `next` version in `package.json`: `proxy.ts` on Next.js 16+, `middleware.ts` on 15 and below. The contents are identical; `npx -y clerk@latest init` creates it
 - `auth()` from `@clerk/nextjs/server` is async. Always `await auth()`
 - `ClerkProvider` goes inside `<body>`, not wrapping `<html>`
 - Never expose `CLERK_SECRET_KEY` in client code

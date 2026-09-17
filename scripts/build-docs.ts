@@ -102,7 +102,7 @@ import { validateManifestProperNouns, validateProperNouns } from './lib/plugins/
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateLinkTargets } from './lib/plugins/validateLinkTargets'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
-import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
+import { checkPromptInvariants, checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
 import {
   createRedirectsBloomFilter,
   analyzeAndFixRedirects as optimizeRedirects,
@@ -1647,6 +1647,12 @@ ${yaml.stringify({
       return { path, url: `${base}${slug}` }
     })
 
+  const promptInvariantVFiles = checkPromptInvariants(
+    prompts,
+    mdxFilePaths.map(({ url }) => url),
+  )
+  console.info('✓ Validated prompt invariants')
+
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 
   console.info('✓ Wrote out directory.json')
@@ -1736,6 +1742,7 @@ ${yaml.stringify({
     manifestVfile,
     ...sdkManifests.map(({ vfile }) => vfile),
     ...headingValidationVFiles,
+    ...promptInvariantVFiles,
   ]
 
   const deduplicatedVFiles: VFile[] = []

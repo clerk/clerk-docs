@@ -2,7 +2,7 @@
 
 Guidance for AI agents working in clerk-docs. Keep this file and the docs it points to in sync: when a change affects anything documented here, update it.
 
-This repo is Clerk's documentation — MDX content in `docs/`, built by a custom TypeScript pipeline (`scripts/build-docs.ts`) into the site served at clerk.com/docs. Authoring and style conventions live in `contributing/CONTRIBUTING.md` and `styleguides/STYLEGUIDE.md`; read them before writing docs. This file only covers what tends to surprise agents.
+This repo is Clerk's documentation — MDX content in `docs/`, built by a custom TypeScript pipeline (`scripts/build-docs.ts`) into the site served at clerk.com/docs. Authoring and style conventions live in `contributing/CONTRIBUTING.md` and `styleguides/STYLEGUIDE.md`; agent-facing prompt conventions live in `styleguides/SKILLS.STYLEGUIDE.md`. Read the relevant guide before writing. This file only covers what tends to surprise agents.
 
 ## Do not
 
@@ -79,3 +79,4 @@ Skill files live in `.agents/skills/<skill-name>/SKILL.md`. Read the relevant on
 
 - Authoring, validation, and new-feature/reference checklists: `contributing/CONTRIBUTING.md`
 - Writing style: `styleguides/STYLEGUIDE.md`
+- Agent-facing prompt style: `styleguides/SKILLS.STYLEGUIDE.md`

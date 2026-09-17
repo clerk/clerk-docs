@@ -17,10 +17,12 @@ Shall I proceed?
 
 ## Existing authentication
 
-Before `init`, inspect auth dependencies, routes, middleware, sessions, and user records. If auth already exists, stop and propose a migration plan covering:
+Before `init`, inspect auth dependencies, routes, middleware, sessions, and user records — never environment files. If auth exists, stop and get approval for a migration plan covering:
 
-- User export/import through the Backend API with stable external IDs, compatible password hashes, and OAuth continuity.
-- Protected routes, tokens, possible session termination at cutover, and a big-bang or gradual rollout.
+- Backend API user import, stable external IDs, compatible password hashes, and OAuth continuity.
+- Protected routes, tokens, session cutover, and rollout strategy.
+
+Do not modify or remove existing auth without approval.
 
 Migration guide: https://clerk.com/docs/guides/development/migrating/overview
 
@@ -32,7 +34,7 @@ From the project root:
 npx -y clerk@latest init
 ```
 
-`init` detects the framework and package manager, installs the SDK, and applies framework setup — provider, middleware, auth routes, env. Do not pass `--framework` or `--pm` unless the user wants to override detection. Do not list apps or ask which Clerk app to use.
+`init` detects the framework and package manager, installs the SDK, and configures the provider, middleware, auth routes, and environment. Don't pass `--framework` or `--pm` unless asked. Only list apps to link a user-requested existing application (Step 1c).
 
 ## Step 1b: Empty directory
 

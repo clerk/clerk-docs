@@ -1,0 +1,64 @@
+---
+title: SMS delivery events
+description: Trace SMS delivery, understand failures, and troubleshoot missing verification codes in Application Logs.
+---
+
+[Application Logs](/docs/guides/dashboard/logs/application-logs) record delivery events for SMS messages sent by Clerk, including phone verification codes, one-time passcodes, and password reset codes. When a user reports a missing code, these events show whether the message was accepted, delivered, rejected, or left unconfirmed.
+
+SMS events appear in Application Logs and follow the same retention rules. The [SMS logs view](https://dashboard.clerk.com/~/sms-logs) shows only `sms.*` events and adds a phone-number column and filter. To learn how to inspect event details and understand retention, see the [Logs overview](/docs/guides/dashboard/logs/overview).
+
+> [!NOTE]
+> Clerk only records these events for messages it sends. Messages sent through your own provider don't appear in Application Logs.
+
+## The delivery lifecycle
+
+A message can generate several events as its delivery status changes. Not every intermediate state is recorded, so the first event may already show the final delivery status.
+
+| Event type | Meaning |
+| - | - |
+| `sms.accepted` | The delivery provider accepted the message for delivery. This is not yet proof it reached the phone. |
+| `sms.delivered` | The carrier confirmed delivery to the recipient's handset. |
+| `sms.failed` | The send stopped before handoff, or the provider rejected it outright. Carries a `reason`. |
+| `sms.undeliverable` | The carrier could not deliver the message after the provider accepted it. Carries a `reason`. |
+| `sms.unconfirmed` | The provider reported an unknown delivery outcome — no delivery evidence either way. |
+
+The typical path is `sms.accepted` → `sms.delivered`. An `sms.failed` event means delivery could not proceed. An `sms.undeliverable` event means the message was accepted but could not be delivered. An `sms.unconfirmed` event means the final outcome is unknown.
+
+## Understanding failures
+
+The `sms.failed` and `sms.undeliverable` events include a normalized `reason` that you can use to understand and filter failures.
+
+| Reason | Meaning |
+| - | - |
+| `country_not_supported` | Clerk blocks SMS to the destination country for this instance. |
+| `delivery_expired` | The message expired before it could be delivered. |
+| `delivery_rejected` | The carrier filtered or refused the message (for example, the recipient opted out). |
+| `destination_unreachable` | The handset or carrier could not be reached. |
+| `invalid_phone_number` | The destination number is invalid or not a mobile number. |
+| `monthly_limit_reached` | The instance's monthly SMS limit is exhausted (development instances). |
+| `rate_limited` | Clerk or the delivery provider rate-limited the send. |
+| `restricted_destination` | Sending to this region is not permitted. |
+| `sending_limit_reached` | A provider-side sending or price limit was reached. |
+| `service_error` | The delivery provider call failed. |
+| `unknown` | The provider reported a failure with no classifiable cause. |
+
+> [!NOTE]
+> On an `sms.failed` event, `rejected_before_send: true` means Clerk stopped the message before contacting a provider. Investigate your Clerk settings or usage limits rather than carrier delivery. This always applies to `country_not_supported` and `monthly_limit_reached`; `rate_limited` can come from either Clerk or the provider. Provider failures may include a `raw_error` field with additional diagnostic information.
+
+For privacy, these events never include the message body, the verification code, or the delivery provider's identity.
+
+## Debugging a missing SMS
+
+When a user reports they never received a code, open the [SMS logs view](https://dashboard.clerk.com/~/sms-logs) in the Clerk Dashboard — it lists only `sms.*` events — and filter by the recipient's phone number, then check the most recent event for that message:
+
+1. **No `sms.*` event** — First, confirm that the event would still be within your plan's [Application Logs retention window](/docs/guides/dashboard/logs/overview#plans-and-retention): 1 day on Hobby, 7 days on Pro, or 30 days on Business. Within that window, no event usually means the send was not attempted. Older events may no longer be available.
+1. **`sms.failed`** — if `rejected_before_send` is true, Clerk stopped the send before contacting a provider. Otherwise, inspect `reason` and `raw_error` for more detail.
+1. **`sms.accepted` with no `sms.delivered`** — the message left Clerk but the carrier never confirmed. Delivery receipts can lag; a lasting gap points to a carrier or handset issue for that number.
+1. **`sms.undeliverable`** — the carrier bounced it. `destination_unreachable` and `invalid_phone_number` point at the number itself.
+1. **`sms.unconfirmed`** — no delivery signal exists; if the user did not receive the code, have them retry.
+
+All events for a message share a trace ID. Filter by it to view the message's full timeline.
+
+## Supported events
+
+For the full list of SMS event types alongside every other Application Logs event, see [Supported events](/docs/guides/dashboard/logs/application-logs#sms-events).

@@ -64,6 +64,7 @@ Terms treated as proper nouns include: Agent Task, Billing, Feature, Membership 
 Keep lowercase:
 
 - **Generic usage**, where the word doesn't refer to the Clerk feature. For example, "your organization's directory service" (the reader's company), "billing information" (payment details like invoices and payment methods), and Clerk's own pricing tiers ("the Hobby plan", "the application's Clerk plan").
+- **Industry terms**, such as "identity provider" and "service provider," which aren't Clerk features or proper nouns.
 - **Bold UI labels** that mirror Clerk Dashboard text exactly, even when the Dashboard uses lowercase. For example, **Create first organization automatically**.
 - **Component-rendered text**, such as button labels and default values. For example, the `<OrganizationSwitcher />` component's "Create an organization" button and the "My organization" fallback name.
 - **Code**, including inline code, code blocks, prop values, string literals, URL paths, and API field or parameter names.
@@ -84,7 +85,7 @@ Use "sign in" and "sign out" rather than "log in" or "log out".
 
 ### Write out abbreviations when introducing them
 
-If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g., APIs, IDEs or OSes.
+When introducing a term with an abbreviation, write out the term fully first, then put the abbreviation in parentheses. Do this even if the abbreviation isn't used again in the article, as defining it helps readers recognize it elsewhere. If the term appears again, use the abbreviation. For example, write **identity provider (IdP)** or **service provider (SP)** on first mention, then use **IdP** or **SP**, respectively. To make an abbreviation plural, treat it as a regular word, e.g., APIs, IDEs, or OSes.
 
 > ❌
 > An AST is a tree representation of code. AST's are a fundamental part of the way a compiler works.

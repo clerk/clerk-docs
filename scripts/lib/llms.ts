@@ -139,6 +139,11 @@ const getSdkDisplayName = (sdk: SDK): string => SDK_DISPLAY_NAMES[sdk] ?? sdk
 export const formatLLMsDocLine = (page: OutputtedDocsFiles[number]) =>
   page.description ? `- [${page.title}](${page.url}): ${page.description}` : `- [${page.title}](${page.url})`
 
+// Sits under the `# Clerk` heading of /docs/llms.txt so an agent that lands on the index
+// learns how to search before it scans the list. {{SITE_URL}} is substituted by the route.
+export const LLMS_OVERVIEW_INTRO =
+  'Search these docs: `{{SITE_URL}}/docs/search.md?q=<query>` (optional `&sdk=<sdk>`). Append `.md` to a docs page URL for markdown (the API references are OpenAPI specs instead).'
+
 export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdks: readonly SDK[]) => {
   const generic: OutputtedDocsFiles = []
   const bySdk = new Map<SDK, OutputtedDocsFiles>()
@@ -165,7 +170,7 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles, validSdk
   }
 
   const content = emitSdkFirstReferenceUrls(
-    `# Clerk\n\n${sections.filter((section) => section.length > 0).join('\n\n')}`,
+    `# Clerk\n\n${LLMS_OVERVIEW_INTRO}\n\n${sections.filter((section) => section.length > 0).join('\n\n')}`,
     validSdks,
   )
   assertConsistentReferenceUrlShapes(content, validSdks)

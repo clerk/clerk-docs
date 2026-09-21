@@ -9108,6 +9108,8 @@ description: Generated API docs
 
     expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
 
+Search these docs: \`{{SITE_URL}}/docs/search.md?q=<query>\` (optional \`&sdk=<sdk>\`). Append \`.md\` to a docs page URL for markdown (the API references are OpenAPI specs instead).
+
 ## Docs
 
 - [API Documentation]({{SITE_URL}}/docs/api-doc.md): Generated API docs`)
@@ -9159,6 +9161,8 @@ description: Guides overview
     )
 
     expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+Search these docs: \`{{SITE_URL}}/docs/search.md?q=<query>\` (optional \`&sdk=<sdk>\`). Append \`.md\` to a docs page URL for markdown (the API references are OpenAPI specs instead).
 
 ## Docs
 
@@ -9213,6 +9217,8 @@ sdk: nextjs, react
     )
 
     expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+Search these docs: \`{{SITE_URL}}/docs/search.md?q=<query>\` (optional \`&sdk=<sdk>\`). Append \`.md\` to a docs page URL for markdown (the API references are OpenAPI specs instead).
 
 ## Docs
 
@@ -9306,6 +9312,8 @@ description: Express middleware reference
     )
 
     expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+Search these docs: \`{{SITE_URL}}/docs/search.md?q=<query>\` (optional \`&sdk=<sdk>\`). Append \`.md\` to a docs page URL for markdown (the API references are OpenAPI specs instead).
 
 ## Docs
 

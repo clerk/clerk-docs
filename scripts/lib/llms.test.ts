@@ -4,6 +4,7 @@ import {
   emitSdkFirstReferenceUrls,
   formatLLMsDocLine,
   listOutputDocsFiles,
+  LLMS_OVERVIEW_INTRO,
   normalizeFrontmatterDescription,
   writeLLMs,
 } from './llms'
@@ -203,6 +204,8 @@ describe('writeLLMs', () => {
     expect(result).toBe(
       [
         '# Clerk',
+        '',
+        LLMS_OVERVIEW_INTRO,
         '',
         '## Docs',
         '',

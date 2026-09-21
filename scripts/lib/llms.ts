@@ -13,10 +13,7 @@ export const LLMS_FULL_HEADER = `# Clerk Documentation (full content)
 
 ## Companion files
 
-- [All sections index](https://clerk.com/llms-full.txt): Top-level index linking to every llms-full.txt file on clerk.com
-- [Articles](https://clerk.com/articles/llms-full.txt): Full content of all Clerk articles
-- [Blog](https://clerk.com/blog/llms-full.txt): Full content of all Clerk blog posts
-- [Changelog](https://clerk.com/changelog/llms-full.txt): Full content of all Clerk changelog entries
+- [Clerk index](https://clerk.com/llms.txt): Top-level index of Clerk's agent tooling, docs, product pages, and content sections
 
 ---
 

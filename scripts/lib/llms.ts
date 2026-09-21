@@ -6,18 +6,6 @@ type Docs = Map<string, string>
 // Collapses any run of whitespace into a single space.
 const whitespaceRunRegex = /\s+/g
 
-export const LLMS_FULL_HEADER = `# Clerk Documentation (full content)
-
-> Complete Clerk documentation: every doc page concatenated into one file
-> for LLM/agent consumption.
-
-## Companion files
-
-- [Clerk index](https://clerk.com/llms.txt): Top-level index of Clerk's agent tooling, docs, product pages, and content sections
-
----
-
-`
 // Display names for SDKs when rendered as sub-headers in llms.txt.
 // Keep these in sync with VALID_SDKS in ./schemas.ts.
 const SDK_DISPLAY_NAMES: Record<SDK, string> = {
@@ -94,7 +82,7 @@ export const emitSdkFirstReferenceUrls = (content: string, validSdks: readonly S
   }))
 
   // `canonical:` frontmatter keeps the page's real, reference-first canonical URL — rewriting it
-  // makes llms-full.txt disagree with the live page's <link rel="canonical">.
+  // would make generated output disagree with the live page's <link rel="canonical">.
   return content
     .split('\n')
     .map((line) => {
@@ -147,52 +135,6 @@ const getSdkFromPath = (path: string, validSdks: readonly SDK[]): SDK | null => 
 }
 
 const getSdkDisplayName = (sdk: SDK): string => SDK_DISPLAY_NAMES[sdk] ?? sdk
-
-/**
- * Prompt-page primitives are UI chrome, not content. Strip `PromptOnly` prose
- * (it refers to a card that markdown output never contains) and unwrap
- * `ManualSteps` (the collapsible wrapper around real steps). `Prompt` follows
- * its `output` prop: "replace" strips (that prompt takes over the page's own
- * `.md` route instead), "inline" embeds the prompt's contents as a code
- * block, and "link" becomes a link to the file the /docs/raw route serves.
- * (Interim measure — full component normalization for these exports is
- * DOCS-12052.)
- */
-export const stripPromptPrimitives = (content: string, prompts: ReadonlyMap<string, string>): string =>
-  content
-    .replace(/<PromptOnly>[\s\S]*?<\/PromptOnly>\n*/g, '')
-    .replace(/<Prompt\b([\s\S]*?)\/>\n*/g, (_match, attributes: string) => {
-      const output = attributes.match(/\boutput="([^"]+)"/)?.[1]
-      const src = attributes.match(/\bsrc="([^"]+)"/)?.[1]
-      const title = attributes.match(/\btitle="([^"]+)"/)?.[1]
-      if (output === 'replace' || !src || !title) return ''
-      if (output === 'inline') {
-        const contents = prompts.get(src)
-        if (contents !== undefined) {
-          // Prompts routinely contain fenced code blocks, so the wrapping
-          // fence must be longer than any backtick run inside the prompt.
-          const longestRun = (contents.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0)
-          const fence = '`'.repeat(Math.max(3, longestRun + 1))
-          return fence + 'md\n' + contents.trim() + '\n' + fence + '\n\n'
-        }
-      }
-      return `[${title}](https://clerk.com/docs/raw/${src})\n\n`
-    })
-    .replace(/^<\/?ManualSteps>\n?/gm, '')
-
-export const writeLLMsFull = async (
-  outputtedDocsFiles: OutputtedDocsFiles,
-  validSdks: readonly SDK[],
-  // Keyed by dist path (`_prompts/<name>`), matching the rewritten src attrs.
-  prompts: ReadonlyMap<string, string> = new Map(),
-) => {
-  const content = emitSdkFirstReferenceUrls(
-    LLMS_FULL_HEADER + stripPromptPrimitives(outputtedDocsFiles.map((file) => file.content).join('\n'), prompts),
-    validSdks,
-  )
-  assertConsistentReferenceUrlShapes(content, validSdks)
-  return content
-}
 
 export const formatLLMsDocLine = (page: OutputtedDocsFiles[number]) =>
   page.description ? `- [${page.title}](${page.url}): ${page.description}` : `- [${page.title}](${page.url})`

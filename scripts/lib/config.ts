@@ -54,7 +54,6 @@ type BuildConfigOptions = {
   }
   llms?: {
     overviewPath?: string
-    fullPath?: string
   }
   siteFlags?: {
     inputPath: string
@@ -245,7 +244,6 @@ export async function createConfig(config: BuildConfigOptions) {
       llms: config.llms
         ? {
             overviewPath: config.llms.overviewPath,
-            fullPath: config.llms.fullPath,
           }
         : null,
 

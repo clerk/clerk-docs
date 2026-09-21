@@ -90,7 +90,7 @@ import { extractSDKsFromIfProp } from './lib/utils/extractSDKsFromIfProp'
 import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK'
 
 import { VFile } from 'vfile'
-import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
+import { writeLLMs as generateLLMs, listOutputDocsFiles } from './lib/llms'
 import { checkPartials } from './lib/plugins/checkPartials'
 import { checkTypedoc } from './lib/plugins/checkTypedoc'
 import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut'
@@ -254,7 +254,6 @@ async function main() {
     },
     llms: {
       overviewPath: '_llms/llms.txt',
-      fullPath: '_llms/llms-full.txt',
     },
     flags: {
       watch: args.includes('--watch'),
@@ -1692,22 +1691,10 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  if (config.llms?.fullPath || config.llms?.overviewPath) {
+  if (config.llms?.overviewPath) {
     const outputtedDocsFiles = listOutputDocsFiles(store.writtenFiles, mdxFilePaths)
-
-    if (config.llms?.fullPath) {
-      const llmsFull = await generateLLMsFull(
-        outputtedDocsFiles,
-        config.validSdks,
-        new Map(prompts.map((prompt) => [`${config.prompts?.outputPathRelative}/${prompt.name}`, prompt.content])),
-      )
-      await writeFile(config.llms.fullPath, llmsFull)
-    }
-
-    if (config.llms?.overviewPath) {
-      const llms = await generateLLMs(outputtedDocsFiles, config.validSdks)
-      await writeFile(config.llms.overviewPath, llms)
-    }
+    const llms = await generateLLMs(outputtedDocsFiles, config.validSdks)
+    await writeFile(config.llms.overviewPath, llms)
   }
 
   abortSignal?.throwIfAborted()

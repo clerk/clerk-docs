@@ -6,7 +6,6 @@ import {
   listOutputDocsFiles,
   normalizeFrontmatterDescription,
   writeLLMs,
-  writeLLMsFull,
 } from './llms'
 
 describe('formatLLMsDocLine', () => {
@@ -336,77 +335,5 @@ describe('emitSdkFirstReferenceUrls', () => {
 
     // Left byte-for-byte unchanged — the boundary before `/docs` (`=`, `/`) means it isn't a Clerk link.
     expect(emitSdkFirstReferenceUrls(content, ['js-frontend'])).toBe(content)
-  })
-})
-
-describe('writeLLMsFull', () => {
-  test('normalizes reference links while preserving canonical frontmatter', async () => {
-    const result = await writeLLMsFull(
-      [
-        {
-          path: 'reference/nextjs/overview.mdx',
-          url: '{{SITE_URL}}/docs/reference/nextjs/overview.md',
-          content: `---
-canonical: /docs/reference/nextjs/overview
----
-
-[Middleware](/docs/reference/nextjs/clerk-middleware)`,
-          title: 'Next.js Overview',
-          description: undefined,
-        },
-      ],
-      ['nextjs'],
-    )
-
-    expect(result).toContain('canonical: /docs/reference/nextjs/overview')
-    expect(result).not.toContain('canonical: /docs/nextjs/reference/overview')
-    expect(result).toContain('](/docs/nextjs/reference/clerk-middleware)')
-    expect(result).not.toContain('](/docs/reference/nextjs/clerk-middleware)')
-  })
-
-  test('handles prompt primitives by output and keeps the manual content', async () => {
-    const result = await writeLLMsFull(
-      [
-        {
-          path: 'getting-started/quickstart.mdx',
-          url: '{{SITE_URL}}/docs/getting-started/quickstart.md',
-          content: `---
-title: Quickstart
----
-
-<PromptOnly>
-  Hand this prompt to your agent.
-
-  <Prompt variant="card" src="_prompts/cli-setup.md" title="Set up Clerk" output="replace" />
-
-  Or set up Clerk yourself.
-</PromptOnly>
-
-<Prompt variant="banner" src="_prompts/fix.md" title="Use this prompt." output="link" />
-
-<Prompt variant="banner" src="_prompts/migrate.md" title="Migrate with AI." output="inline" />
-
-<ManualSteps>
-  ## Step one
-
-  Real content.
-</ManualSteps>`,
-          title: 'Quickstart',
-          description: undefined,
-        },
-      ],
-      ['nextjs'],
-      new Map([['_prompts/migrate.md', 'Migrate my project.\n\n```bash\nnpx clerk@latest init\n```']]),
-    )
-
-    expect(result).toContain('## Step one')
-    expect(result).toContain('Real content.')
-    expect(result).toContain('[Use this prompt.](https://clerk.com/docs/raw/_prompts/fix.md)')
-    // The wrapping fence must outrun the prompt's own fenced code blocks.
-    expect(result).toContain('````md\nMigrate my project.\n\n```bash\nnpx clerk@latest init\n```\n````')
-    expect(result).not.toContain('Hand this prompt to your agent.')
-    expect(result).not.toContain('PromptOnly')
-    expect(result).not.toContain('<Prompt ')
-    expect(result).not.toContain('ManualSteps')
   })
 })

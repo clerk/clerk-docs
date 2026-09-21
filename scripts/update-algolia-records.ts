@@ -1057,14 +1057,14 @@ async function readSynonyms(): Promise<SynonymHit[]> {
 async function main() {
   // Only clerk/clerk may index from Vercel. The clerk/clerk-docs repo is a public read-only
   // mirror of the clerk-docs folder, synced on every clerk/clerk main commit
-  // (.github/workflows/sync-clerk-docs.yml in clerk/clerk), so its Vercel project builds the
-  // same commit at the same time as clerk/clerk's. When both ran this script, the two runs
-  // raced the stale-record cleanup below: each pushed the same objectIDs under a different
-  // record_batch, and the later cleanup deleted the other run's entire push as "stale" —
-  // which emptied every live record out of prod search on 2026-07-07. The mirror's
-  // vercel.json buildCommand no longer runs search:update; this guard is defense in depth
-  // for any other surface that builds a non-clerk/clerk checkout. Local runs (no VERCEL env)
-  // are unaffected.
+  // (.github/workflows/sync-clerk-docs.yml in clerk/clerk). It once had its own Vercel
+  // project building the same commit at the same time as clerk/clerk's. When both ran this
+  // script, the two runs raced the stale-record cleanup below: each pushed the same objectIDs
+  // under a different record_batch, and the later cleanup deleted the other run's entire push
+  // as "stale" — which emptied every live record out of prod search on 2026-07-07. That
+  // project is gone (DOCS-12040; the mirror carries no vercel.json), so this guard is defense
+  // in depth for any other surface that builds a non-clerk/clerk checkout. Local runs (no
+  // VERCEL env) are unaffected.
   if (VERCEL === '1' && !(VERCEL_GIT_REPO_OWNER === 'clerk' && VERCEL_GIT_REPO_SLUG === 'clerk')) {
     console.log(
       `Skipping search index update — indexing only runs from clerk/clerk, not ${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}`,

@@ -230,7 +230,6 @@ async function main() {
         'guides/development/upgrading/upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
         'guides/development/ai-prompts.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/all-providers.mdx': ['doc-not-in-manifest'],
-        'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'getting-started/quickstart/setup-clerk.mdx': ['doc-not-in-manifest'],
         'pinning.mdx': ['doc-not-in-manifest'],

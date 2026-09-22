@@ -214,7 +214,6 @@ async function main() {
         'reference/overview.mdx': ['doc-not-in-manifest'],
         'maintenance-mode.mdx': ['doc-not-in-manifest'],
         'guides/development/deployment/staging-alternatives.mdx': ['doc-not-in-manifest'],
-        'reference/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
         'reference/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
         'reference/nextjs/errors/signedin-is-not-available-in-clerk-nextjs.mdx': ['doc-not-in-manifest'],
         'reference/nextjs/errors/signedout-is-not-available-in-clerk-nextjs.mdx': ['doc-not-in-manifest'],

@@ -1482,6 +1482,9 @@ The `<Properties>` component can be used to display a list of properties.
 
 `Properties` uses Markdown list syntax with each property separated by three dashes `---`.
 
+List properties alphabetically by property name. Mark optional properties with a trailing `?` in the property name.
+This ordering also applies when `<Properties>` is used for function parameters, options, or return values.
+
 ```mdx
 <Properties>
 

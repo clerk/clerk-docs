@@ -26,7 +26,7 @@ A component page _usually_ includes the following:
 - An image of the component at the top.
 - A description of the component.
 - An SDK-specific code example showing how to use the component, with an explanation.
-- A list of any optional properties the component accepts, rendered via the [`<Properties>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#properties-1) component.
+- A list of properties the component accepts, rendered via the [`<Properties>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#properties-1) component. List properties alphabetically by property name.
 - Any additional information.
 
 ### How to update component documentation

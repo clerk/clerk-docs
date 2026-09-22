@@ -238,6 +238,8 @@ async function main() {
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
+        'react/use-o-auth-device-verification-return.mdx': ['link-doc-not-found'],
+        'react/use-o-auth-device-verification.mdx': ['link-doc-not-found'],
         'shared/o-auth-application-namespace.mdx': ['link-doc-not-found'],
         'shared/use-o-auth-device-verification-return.mdx': ['link-doc-not-found'],
         'shared/use-o-auth-device-verification.mdx': ['link-doc-not-found'],

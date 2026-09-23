@@ -1,67 +1,43 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   collectDashboardLinks,
-  discoverDashboardRoutes,
   extractDashboardLinks,
-  extractOrgLevelShortcuts,
-  extractProxyRoutes,
-  extractRedirectRoutes,
   findInvalidDashboardLinks,
+  loadLinkManifest,
   normalizeDashboardLink,
-  normalizeRoutePattern,
-  routeMatches,
-  routePatternFromPage,
+  parseLinkManifest,
 } from './check-dashboard-links'
 
 const temporaryDirectories: string[] = []
 
 afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
   for (const directory of temporaryDirectories.splice(0)) fs.rmSync(directory, { force: true, recursive: true })
 })
 
 describe('normalizeDashboardLink', () => {
-  it('normalizes instance shortcuts and ignores query strings', () => {
-    expect(normalizeDashboardLink('https://dashboard.clerk.com/~/api-keys?tab=react')).toEqual({
-      namespace: 'instance',
-      route: '/api-keys',
-    })
-    expect(normalizeDashboardLink('https://dashboard.clerk.com/~/')).toEqual({ namespace: 'instance', route: '/' })
-    expect(normalizeDashboardLink('${process.env.NEXT_PUBLIC_DASHBOARD_URL}/~/plan-billing')).toEqual({
-      namespace: 'instance',
-      route: '/plan-billing',
-    })
-  })
-
-  it('treats direct URLs as global', () => {
-    expect(normalizeDashboardLink('https://dashboard.clerk.com/setup/supabase')).toEqual({
-      namespace: 'global',
-      route: '/setup/supabase',
-    })
-    expect(normalizeDashboardLink('https://dashboard.clerk.com/last-active?path=billing/plans/')).toEqual({
-      namespace: 'global',
-      route: '/last-active',
-    })
+  it('reduces a URL to the path Dashboard lists, ignoring query strings and trailing slashes', () => {
+    expect(normalizeDashboardLink('https://dashboard.clerk.com/~/api-keys?tab=react')).toBe('/~/api-keys')
+    expect(normalizeDashboardLink('https://dashboard.clerk.com/~/')).toBe('/~')
+    expect(normalizeDashboardLink('https://dashboard.clerk.com/setup/supabase/')).toBe('/setup/supabase')
+    expect(normalizeDashboardLink('${process.env.NEXT_PUBLIC_DASHBOARD_URL}/~/plan-billing')).toBe('/~/plan-billing')
+    expect(normalizeDashboardLink('https://dashboard.clerk.com/last-active?path=billing/plans/')).toBe('/last-active')
   })
 
   it('rejects look-alike hosts and accepts uppercase ones', () => {
     expect(normalizeDashboardLink('https://dashboard.clerk.com.evil/not-a-route')).toBeNull()
-    expect(normalizeDashboardLink('https://DASHBOARD.CLERK.COM/~/api-keys')).toEqual({
-      namespace: 'instance',
-      route: '/api-keys',
-    })
+    expect(normalizeDashboardLink('https://DASHBOARD.CLERK.COM/~/api-keys')).toBe('/~/api-keys')
   })
 
   it('trims a trailing sentence period and handles ports via the origin check', () => {
     // A bare origin ending a sentence: the period trims off, leaving the real origin.
-    expect(normalizeDashboardLink('https://dashboard.clerk.com.')).toEqual({ namespace: 'global', route: '/' })
+    expect(normalizeDashboardLink('https://dashboard.clerk.com.')).toBe('/')
     // The default HTTPS port normalizes to the real origin; a non-default port does not.
-    expect(normalizeDashboardLink('https://dashboard.clerk.com:443/~/api-keys')).toEqual({
-      namespace: 'instance',
-      route: '/api-keys',
-    })
+    expect(normalizeDashboardLink('https://dashboard.clerk.com:443/~/api-keys')).toBe('/~/api-keys')
     expect(normalizeDashboardLink('https://dashboard.clerk.com:8443/not-a-route')).toBeNull()
   })
 })
@@ -78,8 +54,7 @@ describe('extractDashboardLinks', () => {
         column: 17,
         file: 'example.mdx',
         line: 2,
-        namespace: 'instance',
-        route: '/api-keys',
+        path: '/~/api-keys',
         url: 'https://dashboard.clerk.com/~/api-keys',
       },
     ])
@@ -91,7 +66,7 @@ describe('extractDashboardLinks', () => {
         'const url = `${process.env.NEXT_PUBLIC_DASHBOARD_URL}/last-active?path=/plan-billing`',
         'example.ts',
       ),
-    ).toMatchObject([{ namespace: 'global', route: '/last-active' }])
+    ).toMatchObject([{ path: '/last-active' }])
   })
 
   it('does not extract look-alike hosts', () => {
@@ -105,170 +80,117 @@ describe('extractDashboardLinks', () => {
     fs.writeFileSync(path.join(contentRoot, 'page.test.ts'), 'https://dashboard.clerk.com/last-active?path=api-keys')
 
     expect(collectDashboardLinks([{ base: contentRoot, excludeTests: true, root: contentRoot }])).toMatchObject([
-      { file: 'page.ts', route: '/api-keys' },
+      { file: 'page.ts', path: '/~/api-keys' },
     ])
   })
 })
 
-describe('route normalization', () => {
-  it('removes route groups and converts App Router dynamic segments', () => {
-    expect(routePatternFromPage('(configure-no-sidebar)/billing/plans/[planId]/page.tsx')).toBe('/billing/plans/:')
-    expect(routePatternFromPage('(configure)/customization/email/[[...category]]/page.tsx')).toBe(
-      '/customization/email/**',
-    )
+describe('parseLinkManifest', () => {
+  const manifest = { links: ['/settings', '/~/api-keys'], redirects: { '/billing': '/settings/billing' }, version: 1 }
+
+  it('accepts a current manifest', () => {
+    expect(parseLinkManifest(JSON.stringify(manifest), 'test').links).toEqual(manifest.links)
   })
 
-  it('normalizes Next.js redirect parameters', () => {
-    expect(normalizeRoutePattern('/billing/:path*')).toBe('/billing/**')
-    expect(normalizeRoutePattern('/connections/:connectionId')).toBe('/connections/:')
-    expect(normalizeRoutePattern('/files/:parts+')).toBe('/files/*')
-  })
-})
-
-describe('extractRedirectRoutes', () => {
-  it('splits instance and global redirects and normalizes their parameters', () => {
-    const config = `
-      const basePath = 'apps/:applicationId/instances/:instanceId'
-      const config = {
-        async redirects() {
-          return [{ source: '/prepare-account', destination: '/' }]
-        },
-        async headers() {
-          return [{ source: '/(.*)', headers: [] }]
-        },
-      }
-      const pathChanges = [
-        { source: \`/\${basePath}/jwt-template/:slug\`, destination: '/somewhere' },
-        { source: '/billing/:path*', destination: '/settings/billing/:path*' },
-      ]
-    `
-
-    expect(extractRedirectRoutes(config)).toEqual({
-      global: ['/prepare-account', '/billing/**'],
-      instance: ['/jwt-template/:'],
-    })
+  it('rejects a sign-in page served in place of the manifest', () => {
+    expect(() => parseLinkManifest('<!doctype html><title>Sign in</title>', 'test')).toThrow(/did not return JSON/)
   })
 
-  it('captures the redirects() block even when it is the last async method', () => {
-    const config = `
-      const config = {
-        async rewrites() {
-          return []
-        },
-        async redirects() {
-          return [{ source: '/prepare-account', destination: '/' }]
-        },
-      }
-      const pathChanges = []
-    `
-
-    expect(extractRedirectRoutes(config)).toEqual({ global: ['/prepare-account'], instance: [] })
+  it('rejects a manifest version it does not understand', () => {
+    expect(() => parseLinkManifest(JSON.stringify({ ...manifest, version: 2 }), 'test')).toThrow(/version 2/)
   })
 
-  it('throws when an expected block is missing instead of silently returning nothing', () => {
-    expect(() => extractRedirectRoutes('const config = {}')).toThrow(/redirects\(\) block/)
+  it('rejects an empty link list instead of flagging every link', () => {
+    expect(() => parseLinkManifest(JSON.stringify({ ...manifest, links: [] }), 'test')).toThrow(/non-empty/)
+  })
+
+  it('rejects a manifest without redirects', () => {
+    expect(() => parseLinkManifest(JSON.stringify({ links: manifest.links, version: 1 }), 'test')).toThrow(/redirects/)
   })
 })
 
-describe('extractProxyRoutes', () => {
-  it('keeps exact proxy entry points and drops classification wildcards', () => {
-    const proxy = `
-      createRouteMatcher(unauthenticatedRoutes)
-      createRouteMatcher(['/apps/claim(.*)'])
-      createRouteMatcher(['/setup/supabase'])
-    `
+describe('loadLinkManifest', () => {
+  it('reads a manifest from a local file', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dashboard-manifest-'))
+    temporaryDirectories.push(directory)
+    const file = path.join(directory, 'links.json')
+    fs.writeFileSync(file, JSON.stringify({ links: ['/'], redirects: {}, version: 1 }))
 
-    expect(extractProxyRoutes(proxy)).toEqual(['/setup/supabase'])
+    expect((await loadLinkManifest(file)).links).toEqual(['/'])
   })
 })
 
-describe('extractOrgLevelShortcuts', () => {
-  it('extracts the aliases handled by the last-active shortcut page', () => {
-    const content = `
-      const ORG_LEVEL_PATHS: Record<string, string> = {
-        'admin-logs': '/settings/admin-logs',
-      }
-    `
+describe('loadLinkManifest over HTTP', () => {
+  const url = 'https://dashboard.clerk.com/links.json'
 
-    expect(extractOrgLevelShortcuts(content)).toEqual(['/admin-logs'])
+  it('says the manifest is not published on a 404, without retrying', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('Not found', { status: 404 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(loadLinkManifest(url)).rejects.toThrow(/HTTP 404: no Dashboard link manifest is published/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
-})
 
-describe('discoverDashboardRoutes', () => {
-  it('combines routes by namespace and excludes the legacy last-active page', () => {
-    const dashboardRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dashboard-routes-'))
-    temporaryDirectories.push(dashboardRoot)
-    const appRoot = path.join(dashboardRoot, 'apps', 'dashboard', 'app')
-    fs.mkdirSync(path.join(appRoot, '(routes)', 'apps', '[applicationId]', 'instances', '[instanceId]', 'api-keys'), {
-      recursive: true,
-    })
-    fs.writeFileSync(
-      path.join(appRoot, '(routes)', 'apps', '[applicationId]', 'instances', '[instanceId]', 'api-keys', 'page.tsx'),
-      '',
-    )
-    fs.mkdirSync(path.join(appRoot, '(routes)', 'apps', 'setup', 'convex'), { recursive: true })
-    fs.writeFileSync(path.join(appRoot, '(routes)', 'apps', 'setup', 'convex', 'page.tsx'), '')
-    fs.mkdirSync(path.join(appRoot, '(routes)', 'last-active'), { recursive: true })
-    fs.writeFileSync(path.join(appRoot, '(routes)', 'last-active', 'page.tsx'), '')
-    fs.writeFileSync(
-      path.join(dashboardRoot, 'apps', 'dashboard', 'next.config.ts'),
-      `
-        const config = {
-          async redirects() {
-            return [{ source: '/prepare-account', destination: '/' }]
-          },
-          async rewrites() { return [] },
-        }
-        const pathChanges = [
-          { source: '/billing/:path*', destination: '/settings/billing/:path*' },
-        ]
-      `,
-    )
-    fs.writeFileSync(
-      path.join(dashboardRoot, 'apps', 'dashboard', 'proxy.ts'),
-      "createRouteMatcher(['/setup/supabase'])",
-    )
-    const shortcutDirectory = path.join(appRoot, '(routes)', '~', '[[...rest]]')
-    fs.mkdirSync(shortcutDirectory, { recursive: true })
-    fs.writeFileSync(
-      path.join(shortcutDirectory, 'content.tsx'),
-      "const ORG_LEVEL_PATHS = { 'admin-logs': '/settings/admin-logs' }",
-    )
+  it('names the sign-in wall on a redirect, without following or retrying it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { headers: { Location: '/sign-in' }, status: 307 }))
+    vi.stubGlobal('fetch', fetchMock)
 
-    expect(discoverDashboardRoutes(dashboardRoot)).toEqual({
-      global: ['/apps/setup/convex', '/billing/**', '/prepare-account', '/setup/supabase'],
-      instance: ['/admin-logs', '/api-keys'],
-    })
+    await expect(loadLinkManifest(url)).rejects.toThrow(/redirected \(HTTP 307\).*sign-in wall/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(url, expect.objectContaining({ redirect: 'manual' }))
   })
-})
 
-describe('routeMatches', () => {
-  it('matches static, dynamic, required catch-all, and optional catch-all routes', () => {
-    expect(routeMatches('/api-keys', '/api-keys')).toBe(true)
-    expect(routeMatches('/billing/plans/plan_123', '/billing/plans/:')).toBe(true)
-    expect(routeMatches('/files/a/b/edit', '/files/*/edit')).toBe(true)
-    expect(routeMatches('/customization/email', '/customization/email/**')).toBe(true)
-    expect(routeMatches('/customization/email/waitlist', '/customization/email/**')).toBe(true)
-    expect(routeMatches('/billing/settings', '/billing/plans')).toBe(false)
+  it('retries a server error and reports it as an availability problem', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response('Bad gateway', { status: 502 })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = expect(loadLinkManifest(url)).rejects.toThrow(/after 3 attempts \(HTTP 502\).*rerun the check/)
+    await vi.runAllTimersAsync()
+    await result
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('recovers when a retry succeeds', async () => {
+    vi.useFakeTimers()
+    const body = JSON.stringify({ links: ['/'], redirects: {}, version: 1 })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('Bad gateway', { status: 502 }))
+      .mockResolvedValueOnce(new Response(body, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = loadLinkManifest(url)
+    await vi.runAllTimersAsync()
+    expect((await result).links).toEqual(['/'])
   })
 })
 
 describe('findInvalidDashboardLinks', () => {
-  it('validates each link against its own namespace', () => {
+  const manifest = {
+    links: ['/settings/billing', '/~/api-keys'],
+    redirects: { '/billing': '/settings/billing' },
+    version: 1,
+  }
+
+  it('flags links the manifest does not list', () => {
     const links = extractDashboardLinks(
-      '[valid](https://dashboard.clerk.com/~/api-keys) [invalid](https://dashboard.clerk.com/~/renamed) [global](https://dashboard.clerk.com/setup/supabase)',
+      '[valid](https://dashboard.clerk.com/~/api-keys) [invalid](https://dashboard.clerk.com/~/renamed)',
       'example.mdx',
     )
 
-    expect(findInvalidDashboardLinks(links, { global: ['/setup/supabase'], instance: ['/api-keys'] })).toMatchObject([
-      { namespace: 'instance', route: '/renamed' },
-    ])
+    expect(findInvalidDashboardLinks(links, manifest)).toMatchObject([{ path: '/~/renamed' }])
   })
 
-  it('does not let a global route validate an instance link', () => {
-    const links = extractDashboardLinks('[x](https://dashboard.clerk.com/~/settings)', 'example.mdx')
-    expect(findInvalidDashboardLinks(links, { global: ['/settings'], instance: [] })).toMatchObject([
-      { namespace: 'instance', route: '/settings' },
+  it('does not let a direct path validate its /~/ shortcut', () => {
+    const links = extractDashboardLinks('[x](https://dashboard.clerk.com/~/settings/billing)', 'example.mdx')
+    expect(findInvalidDashboardLinks(links, manifest)).toMatchObject([{ path: '/~/settings/billing' }])
+  })
+
+  it('fails a redirected link and names where it moved', () => {
+    const links = extractDashboardLinks('[x](https://dashboard.clerk.com/billing)', 'example.mdx')
+    expect(findInvalidDashboardLinks(links, manifest)).toMatchObject([
+      { movedTo: '/settings/billing', path: '/billing' },
     ])
   })
 })

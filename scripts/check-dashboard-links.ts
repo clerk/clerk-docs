@@ -1,12 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const DASHBOARD_ORIGIN = 'https://dashboard.clerk.com'
 const DASHBOARD_ENV_ORIGIN = '${process.env.NEXT_PUBLIC_DASHBOARD_URL}'
-const DASHBOARD_APP_ROOT = path.join('apps', 'dashboard', 'app')
-const INSTANCE_ROUTE_PREFIX = '/apps/:/instances/:'
 const CONTENT_DIRECTORIES = ['clerk-typedoc', 'data', 'docs', 'prompts']
 const SOURCE_EXTENSIONS = new Set(['.js', '.json', '.jsx', '.md', '.mdx', '.mjs', '.ts', '.tsx', '.yaml', '.yml'])
 const IGNORED_DIRECTORIES = new Set(['.git', '.next', 'dist', 'node_modules'])
@@ -17,36 +14,36 @@ const IGNORED_DIRECTORIES = new Set(['.git', '.next', 'dist', 'node_modules'])
 // default `:443` normalizes to the real origin. Case-insensitive so uppercase hosts still match.
 const DASHBOARD_URL_PATTERN =
   /(?:https:\/\/dashboard\.clerk\.com|\$\{process\.env\.NEXT_PUBLIC_DASHBOARD_URL\})[^\s<>"'`)\]}*]*/gi
-const DASHBOARD_REPOSITORY = 'clerk/dashboard'
-const EXCLUDED_GLOBAL_ROUTES = new Set(['/last-active'])
-
-// Dashboard links come in two namespaces that must not cross-validate:
-//   - instance: `/~/…` shortcuts that resolve inside the active instance
-//   - global:   direct URLs to non-instance pages (setup flows, org/account pages)
-// A route removed from one namespace should fail its links even if the other still has it.
-type RouteNamespace = 'instance' | 'global'
+// Dashboard publishes the links it serves, rebuilt with every deployment, so this URL always
+// describes dashboard.clerk.com right now — the same idea as clerk.com/docs/links.json. The
+// generator lives in clerk/dashboard at apps/dashboard/app/(routes)/(unauthenticated)/links.json.
+const DASHBOARD_LINKS_URL = `${DASHBOARD_ORIGIN}/links.json`
+const SUPPORTED_MANIFEST_VERSION = 1
+const FETCH_ATTEMPTS = 3
+const FETCH_TIMEOUT_MS = 10_000
 
 export interface DashboardLink {
   column: number
   file: string
   line: number
-  namespace: RouteNamespace
-  route: string
+  // The link as Dashboard lists it: origin, query, hash, and trailing slash removed.
+  path: string
   url: string
 }
 
-export interface DashboardRoutes {
-  global: string[]
-  instance: string[]
+export interface LinkManifest {
+  generatedAt?: string
+  // Every path static content can link to. Instance pages are listed as `/~/…` shortcuts.
+  links: string[]
+  // Paths that still resolve but have moved, mapped to where they land.
+  redirects: Record<string, string>
+  sourceRevision?: string | null
+  version: number
 }
 
-interface RouteManifest {
-  routes: DashboardRoutes
-  source: {
-    generatedAt: string
-    repository: string
-    revision: string
-  }
+export interface InvalidDashboardLink extends DashboardLink {
+  // Set when the link still works through a redirect. Link to this instead.
+  movedTo?: string
 }
 
 interface ContentRoot {
@@ -73,7 +70,7 @@ function trimUrl(url: string): string {
   return url.replace(/[),.;:]+$/, '')
 }
 
-export function normalizeDashboardLink(rawUrl: string): { namespace: RouteNamespace; route: string } | null {
+export function normalizeDashboardLink(rawUrl: string): string | null {
   let url: URL
   try {
     const resolvedUrl = rawUrl.startsWith(DASHBOARD_ENV_ORIGIN)
@@ -87,15 +84,9 @@ export function normalizeDashboardLink(rawUrl: string): { namespace: RouteNamesp
   }
   if (url.origin !== DASHBOARD_ORIGIN) return null
 
-  // `/~/…` resolves within the active instance, so it validates against instance routes.
-  if (url.pathname === '/~' || url.pathname === '/~/') return { namespace: 'instance', route: '/' }
-  if (url.pathname.startsWith('/~/')) {
-    return { namespace: 'instance', route: `/${url.pathname.slice(3).replace(/\/+$/, '')}` }
-  }
-
-  // Everything else is a direct, global URL. Legacy `/last-active?path=…` links normalize to
-  // `/last-active`, which is deliberately excluded from the global route set so they fail validation.
-  return { namespace: 'global', route: url.pathname.replace(/\/+$/, '') || '/' }
+  // Legacy `/last-active?path=…` links normalize to `/last-active`, which Dashboard
+  // deliberately leaves out of its manifest so they fail validation.
+  return url.pathname.replace(/\/+$/, '') || '/'
 }
 
 export function extractDashboardLinks(content: string, file: string): DashboardLink[] {
@@ -103,8 +94,8 @@ export function extractDashboardLinks(content: string, file: string): DashboardL
 
   for (const match of content.matchAll(DASHBOARD_URL_PATTERN)) {
     const url = trimUrl(match[0])
-    const normalized = normalizeDashboardLink(url)
-    if (!normalized) continue
+    const linkPath = normalizeDashboardLink(url)
+    if (!linkPath) continue
 
     const before = content.slice(0, match.index)
     const lines = before.split('\n')
@@ -112,8 +103,7 @@ export function extractDashboardLinks(content: string, file: string): DashboardL
       column: lines[lines.length - 1].length + 1,
       file,
       line: lines.length,
-      namespace: normalized.namespace,
-      route: normalized.route,
+      path: linkPath,
       url,
     })
   }
@@ -130,154 +120,16 @@ export function collectDashboardLinks(contentRoots: ContentRoot[]): DashboardLin
   })
 }
 
-function normalizeRouteSegment(segment: string): string | null {
-  if ((segment.startsWith('(') && segment.endsWith(')')) || segment.startsWith('@')) return null
-  if (/^\[\[\.\.\..+]]$/.test(segment) || /^:[^/]+[?*]$/.test(segment)) return '**'
-  if (/^\[\.\.\..+]$/.test(segment) || /^:[^/]+\+$/.test(segment)) return '*'
-  if (/^\[.+]$/.test(segment) || /^:[^/]+$/.test(segment)) return ':'
-  return segment
-}
+// A redirected link fails too. It works today, but a redirect is a grace period: the link
+// should point at the page itself before Dashboard retires the old path.
+export function findInvalidDashboardLinks(links: DashboardLink[], manifest: LinkManifest): InvalidDashboardLink[] {
+  const valid = new Set(manifest.links)
 
-export function normalizeRoutePattern(route: string): string {
-  const normalizedRoute = route.replace(/\(\.\*\)$/, '/**')
-  const segments = normalizedRoute
-    .split('/')
-    .map(normalizeRouteSegment)
-    .filter((segment): segment is string => Boolean(segment))
-
-  return `/${segments.join('/')}`
-}
-
-export function routePatternFromPage(relativePagePath: string): string {
-  return normalizeRoutePattern(relativePagePath.split(path.sep).slice(0, -1).join('/'))
-}
-
-// Capture a `{…}` or `[…]` block by matching delimiters, so extraction doesn't depend on
-// what follows the block (e.g. whether `redirects()` is the last async method). `startPattern`
-// must end at the opening delimiter. Throws when the block is absent or unbalanced, so an
-// upstream refactor fails the refresh loudly instead of silently shipping a smaller snapshot.
-function sliceBalancedBlock(source: string, startPattern: RegExp, label: string): string {
-  const match = startPattern.exec(source)
-  if (!match) throw new Error(`Could not locate ${label} in the Dashboard source — the extractor needs updating.`)
-
-  const openIndex = match.index + match[0].length - 1
-  const open = source[openIndex]
-  const close = open === '{' ? '}' : ']'
-  let depth = 0
-
-  for (let index = openIndex; index < source.length; index += 1) {
-    if (source[index] === open) depth += 1
-    else if (source[index] === close) {
-      depth -= 1
-      if (depth === 0) return source.slice(openIndex + 1, index)
-    }
-  }
-
-  throw new Error(`Unbalanced ${label} in the Dashboard source — the extractor needs updating.`)
-}
-
-export function extractRedirectRoutes(nextConfig: string): DashboardRoutes {
-  const redirects = sliceBalancedBlock(nextConfig, /async redirects\(\)\s*\{/, 'the redirects() block')
-  const pathChanges = sliceBalancedBlock(nextConfig, /const pathChanges\s*=\s*\[/, 'the pathChanges array')
-
-  const global: string[] = []
-  const instance: string[] = []
-  for (const match of `${redirects}\n${pathChanges}`.matchAll(
-    /source:\s*(?:`\/\$\{basePath}([^`]*)`|'([^']+)'|"([^"]+)")/g,
-  )) {
-    // The basePath template branch is instance-scoped; a plain string source is global.
-    if (match[1] !== undefined) instance.push(normalizeRoutePattern(match[1]))
-    else global.push(normalizeRoutePattern(match[2] ?? match[3]))
-  }
-
-  return { global, instance }
-}
-
-export function extractProxyRoutes(proxy: string): string[] {
-  return (
-    [...proxy.matchAll(/createRouteMatcher\(\[([^\]]+)]\)/gs)]
-      .flatMap((matcher) =>
-        [...matcher[1].matchAll(/['"]([^'"]+)['"]/g)].map((route) => normalizeRoutePattern(route[1])),
-      )
-      // Keep only exact entry points that rewrite to a page (e.g. `/setup/supabase`). A wildcard
-      // matcher such as `/apps/claim(.*)` classifies requests for auth; it is not a linkable page.
-      .filter((route) => !route.includes('*'))
-  )
-}
-
-export function extractOrgLevelShortcuts(content: string): string[] {
-  const shortcuts = sliceBalancedBlock(content, /ORG_LEVEL_PATHS[^=]*=\s*\{/, 'the ORG_LEVEL_PATHS map')
-  return [...shortcuts.matchAll(/^\s*['"]([^'"]+)['"]\s*:/gm)].map((match) => `/${match[1]}`)
-}
-
-function dedupeSorted(routes: string[]): string[] {
-  return routes.sort().filter((route, index, sorted) => route !== sorted[index - 1])
-}
-
-export function discoverDashboardRoutes(dashboardRoot: string): DashboardRoutes {
-  const appRoot = path.join(dashboardRoot, DASHBOARD_APP_ROOT)
-  if (!fs.existsSync(appRoot)) {
-    throw new Error(`Could not find the Dashboard App Router at ${appRoot}`)
-  }
-
-  const pageRoutes = walkFiles(appRoot)
-    .filter((file) => /^page\.(?:js|jsx|ts|tsx)$/.test(path.basename(file)))
-    .map((file) => routePatternFromPage(path.relative(appRoot, file)))
-
-  const isInstanceRoute = (route: string) =>
-    route === INSTANCE_ROUTE_PREFIX || route.startsWith(`${INSTANCE_ROUTE_PREFIX}/`)
-  // Instance pages are the routes `/~/…` resolves to, addressed without the instance prefix.
-  const instancePageRoutes = pageRoutes
-    .filter(isInstanceRoute)
-    .map((route) => route.slice(INSTANCE_ROUTE_PREFIX.length) || '/')
-  const globalPageRoutes = pageRoutes.filter((route) => !isInstanceRoute(route))
-
-  const nextConfigPath = path.join(dashboardRoot, 'apps', 'dashboard', 'next.config.ts')
-  if (!fs.existsSync(nextConfigPath)) throw new Error(`Could not find ${nextConfigPath}`)
-  const redirects = extractRedirectRoutes(fs.readFileSync(nextConfigPath, 'utf8'))
-
-  const proxyPath = path.join(dashboardRoot, 'apps', 'dashboard', 'proxy.ts')
-  if (!fs.existsSync(proxyPath)) throw new Error(`Could not find ${proxyPath}`)
-  const proxyRoutes = extractProxyRoutes(fs.readFileSync(proxyPath, 'utf8'))
-
-  const shortcutPath = path.join(appRoot, '(routes)', '~', '[[...rest]]', 'content.tsx')
-  if (!fs.existsSync(shortcutPath)) throw new Error(`Could not find the /~/ shortcut source at ${shortcutPath}`)
-  const orgLevelShortcuts = extractOrgLevelShortcuts(fs.readFileSync(shortcutPath, 'utf8'))
-
-  return {
-    global: dedupeSorted([...globalPageRoutes, ...redirects.global, ...proxyRoutes]).filter(
-      (route) => !EXCLUDED_GLOBAL_ROUTES.has(route),
-    ),
-    instance: dedupeSorted([...instancePageRoutes, ...redirects.instance, ...orgLevelShortcuts]),
-  }
-}
-
-function segmentsMatch(routeSegments: string[], patternSegments: string[], routeIndex = 0, patternIndex = 0): boolean {
-  const patternSegment = patternSegments[patternIndex]
-
-  if (patternSegment === undefined) return routeIndex === routeSegments.length
-  if (patternSegment === '**') {
-    return Array.from({ length: routeSegments.length - routeIndex + 1 }, (_, offset) => routeIndex + offset).some(
-      (nextRouteIndex) => segmentsMatch(routeSegments, patternSegments, nextRouteIndex, patternIndex + 1),
-    )
-  }
-  if (patternSegment === '*') {
-    return Array.from({ length: routeSegments.length - routeIndex }, (_, offset) => routeIndex + offset + 1).some(
-      (nextRouteIndex) => segmentsMatch(routeSegments, patternSegments, nextRouteIndex, patternIndex + 1),
-    )
-  }
-  if (routeSegments[routeIndex] === undefined) return false
-  if (patternSegment !== ':' && patternSegment !== routeSegments[routeIndex]) return false
-
-  return segmentsMatch(routeSegments, patternSegments, routeIndex + 1, patternIndex + 1)
-}
-
-export function routeMatches(route: string, pattern: string): boolean {
-  return segmentsMatch(route.split('/').filter(Boolean), pattern.split('/').filter(Boolean))
-}
-
-export function findInvalidDashboardLinks(links: DashboardLink[], routes: DashboardRoutes): DashboardLink[] {
-  return links.filter((link) => !routes[link.namespace].some((route) => routeMatches(link.route, route)))
+  return links.flatMap((link) => {
+    if (valid.has(link.path)) return []
+    const movedTo = manifest.redirects[link.path]
+    return [movedTo ? { ...link, movedTo } : link]
+  })
 }
 
 function parseArg(name: string): string | undefined {
@@ -294,27 +146,98 @@ function showHelp(): void {
 Usage: tsx scripts/check-dashboard-links.ts [options]
 
 Options:
-  --dashboard-root <path>  Derive routes from a clerk/dashboard checkout instead of the snapshot
-  --source-revision <sha>  Record a source revision when updating (defaults to the checkout HEAD)
-  --update                 Update the checked-in snapshot if the route set changed
-  --snapshot-only          Skip docs validation after updating (requires --update)
-  -h, --help               Show this help message
+  --links <url|path>  Read the link manifest from another deployment or a local file
+                      (defaults to ${DASHBOARD_LINKS_URL})
+  -h, --help           Show this help message
 `)
 }
 
-function dashboardRevision(dashboardRoot: string): string {
-  return execFileSync('git', ['-C', dashboardRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+// Throws on anything that isn't a usable manifest, so a Dashboard regression (an auth wall
+// serving HTML, an emptied route list, a breaking format change) fails the check loudly
+// instead of passing or flagging every link.
+export function parseLinkManifest(body: string, source: string): LinkManifest {
+  let manifest: Partial<LinkManifest>
+  try {
+    manifest = JSON.parse(body) as Partial<LinkManifest>
+  } catch {
+    throw new Error(`${source} did not return JSON — the Dashboard link manifest may be behind auth or missing.`)
+  }
+
+  if (manifest.version !== SUPPORTED_MANIFEST_VERSION) {
+    throw new Error(
+      `${source} is manifest version ${String(manifest.version)}, but this check reads version ` +
+        `${SUPPORTED_MANIFEST_VERSION} — update check-dashboard-links.ts for the new format.`,
+    )
+  }
+
+  const { links, redirects } = manifest
+  if (!Array.isArray(links) || links.length === 0 || !links.every((link) => typeof link === 'string')) {
+    throw new Error(`${source} is missing a non-empty links list.`)
+  }
+  if (!redirects || typeof redirects !== 'object' || Array.isArray(redirects)) {
+    throw new Error(`${source} is missing its redirects map.`)
+  }
+
+  return manifest as LinkManifest
 }
 
-function routesEqual(left: DashboardRoutes, right: DashboardRoutes): boolean {
-  // Default to [] so a legacy flat-array snapshot (no .global/.instance) reads as changed
-  // and gets rewritten into the current shape rather than throwing.
-  const listsEqual = (a: string[] = [], b: string[] = []) =>
-    a.length === b.length && a.every((route, index) => route === b[index])
-  return listsEqual(left.global, right.global) && listsEqual(left.instance, right.instance)
+// The server answered, and the answer is that the manifest isn't there: a 4xx, or a redirect
+// to the sign-in wall. Retrying can't change that, and calling it a network problem sends the
+// reader looking in the wrong place.
+class ManifestNotPublishedError extends Error {}
+
+async function fetchManifestBody(url: string): Promise<string> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      // `redirect: 'manual'` hands back the 3xx itself. Following it would land on the sign-in
+      // page, and `redirect: 'error'` would hide the status behind a generic fetch failure.
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      })
+      if (response.status >= 300 && response.status < 400) {
+        throw new ManifestNotPublishedError(
+          `${url} redirected (HTTP ${response.status}) instead of returning the Dashboard link manifest. ` +
+            'The manifest is never behind a redirect, so this is most likely the sign-in wall: /links.json ' +
+            "may have dropped out of Dashboard's unauthenticated routes. Use --links to check against another deployment.",
+        )
+      }
+      // 408 and 429 are the two 4xx codes that describe the moment, not the URL.
+      const isPermanent = response.status >= 400 && response.status < 500 && ![408, 429].includes(response.status)
+      if (isPermanent) {
+        throw new ManifestNotPublishedError(
+          `${url} returned HTTP ${response.status}: no Dashboard link manifest is published at that URL. ` +
+            'Either the deployment predates /links.json, the URL is wrong, or /links.json dropped out of ' +
+            "Dashboard's unauthenticated routes (Dashboard answers signed-out JSON requests with a 404). " +
+            'Use --links to check against another deployment.',
+        )
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      return await response.text()
+    } catch (error) {
+      if (error instanceof ManifestNotPublishedError) throw error
+      lastError = error
+      if (attempt < FETCH_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, attempt * 1000))
+    }
+  }
+
+  const reason = lastError instanceof Error ? lastError.message : String(lastError)
+  throw new Error(
+    `Could not fetch the Dashboard link manifest from ${url} after ${FETCH_ATTEMPTS} attempts (${reason}). ` +
+      'This is a network or Dashboard availability problem, not a docs problem — rerun the check.',
+  )
 }
 
-function run(): void {
+export async function loadLinkManifest(source: string): Promise<LinkManifest> {
+  const body = /^https?:\/\//.test(source)
+    ? await fetchManifestBody(source)
+    : fs.readFileSync(path.resolve(process.cwd(), source), 'utf8')
+  return parseLinkManifest(body, source)
+}
+
+async function run(): Promise<void> {
   if (process.argv.includes('-h') || process.argv.includes('--help')) {
     showHelp()
     return
@@ -323,39 +246,8 @@ function run(): void {
   const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
   const docsRoot = path.resolve(scriptDirectory, '..')
   const repositoryRoot = path.resolve(docsRoot, '..')
-  const manifestPath = path.join(scriptDirectory, 'dashboard-routes.json')
-  const dashboardRootArg = parseArg('--dashboard-root')
-  const sourceRevisionArg = parseArg('--source-revision')
-  const shouldUpdate = process.argv.includes('--update')
-  const snapshotOnly = process.argv.includes('--snapshot-only')
-
-  if (shouldUpdate && !dashboardRootArg) throw new Error('--update requires --dashboard-root')
-  if (sourceRevisionArg && !shouldUpdate) throw new Error('--source-revision requires --update')
-  if (snapshotOnly && !shouldUpdate) throw new Error('--snapshot-only requires --update')
-
-  const existingManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as RouteManifest
-  const dashboardRoot = dashboardRootArg ? path.resolve(process.cwd(), dashboardRootArg) : undefined
-  const routes = dashboardRoot ? discoverDashboardRoutes(dashboardRoot) : existingManifest.routes
-
-  if (shouldUpdate && dashboardRoot) {
-    if (routesEqual(routes, existingManifest.routes)) {
-      console.log(`Dashboard routes are unchanged from ${existingManifest.source.revision}`)
-    } else {
-      const manifest: RouteManifest = {
-        routes,
-        source: {
-          generatedAt: new Date().toISOString(),
-          repository: DASHBOARD_REPOSITORY,
-          revision: sourceRevisionArg ?? dashboardRevision(dashboardRoot),
-        },
-      }
-      fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
-      const total = routes.global.length + routes.instance.length
-      console.log(`Updated ${path.relative(process.cwd(), manifestPath)} with ${total} Dashboard routes`)
-    }
-  }
-
-  if (snapshotOnly) return
+  const manifestSource = parseArg('--links') ?? DASHBOARD_LINKS_URL
+  const manifest = await loadLinkManifest(manifestSource)
 
   const contentRoots = [
     ...CONTENT_DIRECTORIES.map((directory) => ({
@@ -366,22 +258,28 @@ function run(): void {
     { base: repositoryRoot, excludeTests: true, root: path.join(repositoryRoot, 'src') },
   ]
   const links = collectDashboardLinks(contentRoots)
-  const invalidLinks = findInvalidDashboardLinks(links, routes)
+  const invalidLinks = findInvalidDashboardLinks(links, manifest)
 
   if (invalidLinks.length > 0) {
-    console.error(`Found ${invalidLinks.length} Dashboard link(s) that do not match a current route:\n`)
-    for (const link of invalidLinks) console.error(`  ${link.file}:${link.line}:${link.column}  ${link.url}`)
-    console.error(
-      '\nIf Dashboard routes intentionally changed, update the links and refresh the route snapshot with ' +
-        '`pnpm dashboard-routes:update` from clerk-docs/.',
-    )
+    console.error(`Found ${invalidLinks.length} Dashboard link(s) that ${manifestSource} does not list:\n`)
+    for (const link of invalidLinks) {
+      const hint = link.movedTo ? `  → moved to ${DASHBOARD_ORIGIN}${link.movedTo}` : ''
+      console.error(`  ${link.file}:${link.line}:${link.column}  ${link.url}${hint}`)
+    }
+    console.error('\nUpdate each link to a path in that manifest. A moved link still redirects, but only for now.')
     process.exitCode = 1
     return
   }
 
   const uniqueUrls = new Set(links.map((link) => link.url))
-  const total = routes.global.length + routes.instance.length
-  console.log(`Checked ${links.length} Dashboard links (${uniqueUrls.size} unique) against ${total} routes`)
+  console.log(
+    `Checked ${links.length} Dashboard links (${uniqueUrls.size} unique) against ${manifest.links.length} links from ${manifestSource}`,
+  )
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) run()
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  run().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
+}

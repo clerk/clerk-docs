@@ -70,6 +70,7 @@ Keep lowercase:
 - **Code**, including inline code, code blocks, prop values, string literals, URL paths, and API field or parameter names.
 - **`invitation(s)`, `membership(s)`, and `webhook(s)`**, which aren't treated as feature proper nouns, even in phrases like "Organization invitation", "Organization membership", and "webhook event". Note that "Membership Request" _is_ a proper noun, per the list above.
 - **Compound adjectives** built on industry terms, like "role-based access control".
+- **Modes and mechanisms**, which describe how something works rather than name a Clerk object or product: "accountless", "passwordless", "multi-session", "satellite domains", "reverification". The proper-noun list is made of things Clerk creates and you manage, like an Organization, a Role, or a Plan. A name that describes behavior stays lowercase even when it's specific to Clerk: "an accountless application", "enable multi-session support", "add a satellite domain". Capitalize it only where any word would be, such as at the start of a sentence or heading.
 
 The docs build enforces the unambiguous collocations of these terms (e.g., "organization domains", "membership requests", "role sets", "agent tasks") as a hard failure — in prose, headings, link anchors, frontmatter titles and descriptions, and manifest nav titles, while honoring the exceptions above. Standalone words like "organization" or "billing" are deliberately not flagged, because generic usage is common — those remain judgment calls for authors and reviewers.
 

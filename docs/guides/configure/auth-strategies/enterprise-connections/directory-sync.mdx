@@ -24,7 +24,7 @@ Once configured, Clerk keeps your user base in sync with your directory and hand
 
 - **Create**: When a user is provisioned in your IdP, Clerk automatically creates a corresponding user account. A `user.created` webhook event is fired.
 - **Update**: When user attributes (such as name, email, or custom attributes) are updated in the IdP, Clerk syncs those changes automatically. A `user.updated` webhook event is fired.
-- **Delete / Disable**: When a user is removed or deactivated in the IdP, Clerk deactivates the corresponding Clerk user and immediately revokes all of their active sessions. A `user.updated` webhook event is fired.
+- **Delete / Disable**: When a user is removed or deactivated in the IdP, Clerk deactivates the corresponding Clerk user and immediately revokes all of their active sessions. A `user.updated` webhook event is fired. If the user is [managed by more than one directory](#users-managed-by-multiple-directories), they stay active until every enabled directory has deprovisioned them.
 
 Directory Sync works in conjunction with your existing enterprise SSO connection. You must have a SAML or OIDC enterprise connection set up before enabling Directory Sync.
 
@@ -215,6 +215,51 @@ You may want to disable Role mapping if you only want Directory Sync to sync pro
 1. Select the enterprise connection with Directory Sync enabled.
 1. Select the **Directory sync** tab and scroll to the **Role mapping** section.
 1. Disable the **Role mapping** toggle.
+
+## Users managed by multiple directories
+
+An Organization can have [several Enterprise Connections](/docs/guides/organizations/add-members/sso#multiple-enterprise-connections-per-organization), and each connection can have its own directory. The same person can therefore be provisioned by more than one directory. Clerk keeps a separate link between the user and each directory that manages them, and each link records that directory's view of whether the user is active.
+
+### How a user gets linked to a directory
+
+When a directory provisions a user whose email address matches a verified email address on an existing Clerk user, Clerk links the directory to that user instead of creating a duplicate account. A `user.updated` webhook event is fired for the linked user. If no user matches, Clerk creates one and fires `user.created`.
+
+A directory can only change users it has linked. When a directory sends a request for a user that only another directory has provisioned, what happens depends on the request:
+
+- An update that carries an email address is handled as a provisioning request. Clerk links the directory to the existing user, or creates the user if none matches, and then applies the update. This also applies when the update marks the user as inactive: the new link is created in the deactivated state.
+- A SCIM `DELETE`, or an update without an email address, is skipped. When the update carries enough information to identify the user, Clerk records a provisioning failure for that directory in [Application Logs](/docs/guides/dashboard/logs/application-logs), so you can see that the IdP is pushing changes for a user it doesn't manage. A skipped `DELETE` is not logged.
+
+### Deprovisioning
+
+Each directory deactivates or reactivates only its own link. Clerk determines whether the user is active based on all of their directory links:
+
+- A user stays active while at least one enabled directory reports them as active.
+- Clerk deactivates the user and revokes all of their sessions only when every enabled directory that manages them has deprovisioned them. A `user.updated` webhook event is fired.
+- A SCIM `DELETE` from the IdP is treated the same as deactivation: it deprovisions that directory's link. It does not delete the Clerk user.
+- Disabled directories don't count. If a directory is disabled, the user's status is decided by the remaining enabled directories.
+- When any directory reactivates a user, the user becomes active again.
+
+### Organization memberships and Roles
+
+Each directory grants the user access to the Organization linked to its Enterprise Connection. Clerk tracks each directory's grant separately:
+
+- Deprovisioning a user from one directory withdraws only that directory's grant. If another directory still grants the same membership, the membership and its ID are kept. Clerk deletes the membership, and fires an `organizationMembership.deleted` webhook event, only when the last grant is withdrawn. Memberships created outside of Directory Sync are not affected.
+- When a deprovisioned user is reactivated and their membership was deleted, Clerk creates a new membership. It has a new membership ID, and metadata from the previous membership is not restored. An `organizationMembership.created` webhook event is fired. If the membership was kept because another directory still granted it, the reactivated directory's grant is added to the existing membership.
+- [Role mapping](#role-mapping) is resolved per directory. When several directories grant the same membership, the Role comes from the group mapping of the directory that most recently granted access, among the directories that still do so.
+
+### Attributes
+
+Every directory that manages a user can update that user's attributes. Each sync from a directory writes the first name, last name, primary email address, and [custom attributes](#custom-attribute-mapping) it carries directly to the user. Clerk doesn't rank directories, so when two directories disagree about a value, the most recent sync wins. Custom attributes are merged into the user's public metadata, so keys mapped by only one directory are kept when another directory syncs.
+
+If a directory pushes an email address that is already verified on a different Clerk user, Clerk keeps the current primary email and skips that part of the update.
+
+### Directory lifecycle changes
+
+Disabling or deleting a directory withdraws the access it granted without waiting for the IdP to sync. Clerk queues a background job that recalculates each affected user's status, memberships, and Roles from the links that remain, so the change takes effect shortly after the directory is disabled or deleted rather than in the same request.
+
+- Memberships granted only by that directory are removed. Memberships that another directory still grants, or that were created outside of Directory Sync, are kept.
+- The user's status is recalculated from the remaining enabled directories. If every one of them has deprovisioned the user, Clerk deactivates the user and revokes their sessions. A directory that is disabled or deleted no longer has a say in whether the user is active, so a user managed only by that directory keeps their account and stays signed in. Deactivate the user from the IdP before removing the directory if you need them locked out.
+- Re-enabling a directory restores the access it grants based on the directory's current state.
 
 ## View directory users
 

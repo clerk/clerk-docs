@@ -134,3 +134,39 @@ Fill out the form as follows
 ```mdx
 Complete the form as follows
 ```
+
+## Updating the social connection guide validation
+
+`scripts/check-social-connection-guides.ts` validates active provider guides against the stable, mechanically
+checkable conventions in this style guide. It discovers active providers from the **All providers** group in
+`docs/manifest.json`; entries tagged `deprecated`, such as `twitter.mdx`, are intentionally skipped.
+
+When the shared template changes:
+
+1. Update this style guide and every active provider guide to the new convention.
+2. Update the validator and its focused failure fixture in `scripts/check-social-connection-guides.test.ts` when the
+   convention is objective enough to validate without false positives.
+3. Keep the provider's OAuth/OIDC documentation URL current in `PROVIDERS`. If a provider cannot follow the shared
+   convention, add the smallest possible override to that provider's entry and explain why. A title override must
+   include the current manifest label so a navigation rename cannot silently change the validator's expectation.
+   Custom credential steps must use an ordered list under their declared heading. Do not exempt an entire guide or rule
+   when a protocol, display-name, or structural override is sufficient.
+4. From `clerk-docs/`, run:
+
+   ```sh
+   pnpm lint:check-social-connection-guides
+   pnpm exec vitest run scripts/check-social-connection-guides.test.ts
+   ```
+
+The validator covers shared frontmatter, `TutorialHero`, introduction, environment sections, `<Steps>`, credential and
+test steps, heading depth, screenshots, and accessibility-language conventions. Contextual guidance—such as whether a
+redirect instruction is explicit enough—still requires human review.
+
+The validator checks structure and the exact strings this style guide gives as templates: titles, headings, required
+partials, link text and URLs, and where each section sits. It doesn't judge the wording of provider-specific
+instructions, such as whether a credential step names the right fields. Add a rule only when valid guides can't trip
+it; anything that depends on reading the instruction belongs in review.
+
+The validator parses YAML and MDX rather than searching the raw file. Quoted or folded frontmatter values are valid,
+and examples or wording inside code blocks and MDX comments do not satisfy or violate guide rules. Custom credential
+headings must be declared in `PROVIDERS` with whether they use the shared credential partial.

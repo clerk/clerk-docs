@@ -214,24 +214,25 @@ export const traverseTreeItemsFirst = async <
   return result.filter((item): item is NonNullable<typeof item> => item !== null) as unknown as OutTree
 }
 
+function* walkTree<Node>(tree: Node[]): Generator<Node> {
+  for (const node of tree) {
+    yield node
+    if (typeof node === 'object' && node !== null && 'items' in node && Array.isArray(node.items)) {
+      yield* walkTree(node.items as Node[])
+    }
+  }
+}
+
+export function findGroup<Node extends { title?: string }>(tree: Node[], title: string): Node | undefined {
+  return [...walkTree(tree)].find((node) => node.title === title && 'items' in node && Array.isArray(node.items))
+}
+
 export function flattenTree<
   Tree extends BlankTree<any, any>,
   InItem extends Extract<Tree[number], { href: string }>,
   InGroup extends Extract<Tree[number], { items: BlankTree<InItem, InGroup> }>,
 >(tree: Tree): InItem[] {
-  const result: InItem[] = []
-
-  for (const itemOrGroup of tree) {
-    if ('href' in itemOrGroup) {
-      // It's an item
-      result.push(itemOrGroup)
-    } else if ('items' in itemOrGroup && Array.isArray(itemOrGroup.items)) {
-      // It's a group with its own sub-tree, flatten it
-      result.push(...flattenTree(itemOrGroup.items))
-    }
-  }
-
-  return result
+  return [...walkTree(tree)].filter((node): node is InItem => 'href' in node)
 }
 
 // Read SDK-specific manifest files (e.g., manifest.ios.json, manifest.android.json)

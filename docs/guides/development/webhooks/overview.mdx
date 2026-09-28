@@ -91,6 +91,27 @@ The following example shows the payload of a `user.created` event:
 
 The payload should always be treated as unsafe until you validate the incoming webhook. Webhooks will originate from another server and be sent to your application as a POST request. A bad actor would fake a webhook event to try and gain access to your application or data.
 
+## Delivery guarantees
+
+### At-least-once delivery
+
+Clerk retries each event until your endpoint returns a `2xx` response or the [retries](#retry) run out. Clerk removes duplicate events before sending them, but retries mean an event can still reach your endpoint more than once. For example, if your endpoint processes an event but Clerk never gets the response, it retries the event.
+
+### No ordering guarantee
+
+Events aren't guaranteed to arrive in the order they occurred. For example, a `user.updated` event can arrive before the `user.created` event for the same user, or two `user.updated` events can arrive in reverse order. Retries make this more likely, since a failed event is resent after events that were delivered successfully in the meantime.
+
+### Handle out-of-order and duplicate events
+
+Your webhook handler should produce the same result no matter the order events arrive in, or how many times each one arrives. The following approaches can help:
+
+- **Skip events you've already processed**: Every delivery attempt for the same event carries the same `svix-id` header. If your handler has side effects, such as sending a welcome email on `user.created`, store the `svix-id` of each event you process and skip any you've already seen.
+- **Compare timestamps before writing**: Most objects in the payload include an `updated_at` timestamp. Store it alongside the data in your database, and skip an incoming event if its `data.updated_at` is older than the stored value. This discards stale events that arrive late. Not every change to an object's related data updates its `updated_at`. To break ties, also store the event's top-level `timestamp`, and skip an event with an equal `updated_at` if its `timestamp` is older.
+- **Use the event `timestamp` when the object doesn't have one**: Deleted objects, such as the payload of a `user.deleted` event, don't include `updated_at`. Use the top-level `timestamp` of the event instead.
+- **Don't let late events undo deletions**: If a create or update event arrives for an object you've already deleted, ignore it instead of recreating the object. A soft delete, such as a `deleted_at` column, lets you compare the event's timestamp against when the object was deleted.
+- **Upsert instead of insert**: Treat `*.created` and `*.updated` events the same way, by creating the record if it doesn't exist and updating it otherwise. This handles an update arriving before its create, and a create arriving twice.
+- **Fetch the latest state when order matters**: If your handler depends on the current state of an object, use the event as a signal and fetch the object from the [Backend API](/docs/reference/backend-api){{ target: '_blank' }} instead of relying on the payload.
+
 ## How Clerk handles delivery issues
 
 ### Retry

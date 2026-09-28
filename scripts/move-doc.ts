@@ -18,14 +18,10 @@
  * node scripts/move-doc.ts "/docs/references/**" "/docs/reference/sdk/**"
  * node scripts/move-doc.ts "/docs/quickstarts/*" "/docs/getting-started/*"
  *
- * @example SDK-scoped batch moves:
- * When moving files that have SDK frontmatter, both basic and SDK-scoped redirects are created
- *
- * Note: When using glob patterns, the script will:
- * 1. Always add a basic dynamic redirect (e.g., /docs/references{/*path} -> /docs/reference{/*path})
- * 2. If any files have SDK frontmatter, also add SDK-scoped redirect (/docs/:sdk/references{/*path} -> /docs/:sdk/reference{/*path})
- * 3. Update any existing static redirects that would conflict with the dynamic redirects
- * 4. Move the individual files and update their specific redirects/links
+ * A glob move handles each matched file like a single file move, adding one static redirect per file.
+ * It never adds dynamic redirects: they shadow static entries under their prefix and keep no record of
+ * the pages they serve. SDK-scoped URLs need no entries of their own, because the app strips the SDK
+ * segment before the lookup and restores it on the destination.
  *
  * Supported glob patterns:
  * - * matches any characters except /
@@ -42,6 +38,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import prettier from 'prettier'
 import { parse as parseJSONC } from 'jsonc-parser'
+import { match } from 'path-to-regexp'
 import { VALID_SDKS } from './lib/schemas'
 
 const DOCS_FILE = './redirects/static/docs.json'
@@ -58,14 +55,6 @@ interface StaticRedirect {
   source: string
   destination: string
 }
-
-interface DynamicRedirect {
-  source: string
-  destination: string
-  permanent: boolean
-}
-
-type Redirect = StaticRedirect | DynamicRedirect
 
 interface MoveResult {
   source: string
@@ -118,54 +107,9 @@ const writeJsonFile = async (filePath: string, data: any): Promise<void> => {
   }
 }
 
-const readJsoncFile = async (filePath: string): Promise<any> => {
-  try {
-    const content = await fs.readFile(filePath, 'utf-8')
-    return parseJSONC(content)
-  } catch (error) {
-    console.error(`Error reading ${filePath}:`, error)
-    throw error
-  }
-}
-
-const writeJsoncFile = async (filePath: string, data: any): Promise<void> => {
-  try {
-    const formatted = JSON.stringify(data, null, 2)
-    await fs.writeFile(filePath, formatted)
-  } catch (error) {
-    console.error(`Error writing ${filePath}:`, error)
-    throw error
-  }
-}
-
-// Check if any files have SDK frontmatter
-const hasSDKFrontmatter = async (filePaths: string[]): Promise<boolean> => {
-  for (const filePath of filePaths) {
-    try {
-      // Convert path to file system path
-      const fsPath = `${filePath.replace(/^\//, '')}.mdx`
-      const content = await fs.readFile(fsPath, 'utf-8')
-
-      // Extract frontmatter
-      const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
-      if (frontmatterMatch) {
-        const frontmatter = frontmatterMatch[1]
-        // Check for SDK line in frontmatter
-        if (/^sdk:\s*.+$/m.test(frontmatter)) {
-          return true
-        }
-      }
-    } catch (error) {
-      // File doesn't exist or can't be read, skip
-      continue
-    }
-  }
-  return false
-}
-
 // Finds all redirects that point to a given path
-const findRedirectChain = (redirects: Redirect[], targetPath: string): Redirect[] => {
-  const chain: Redirect[] = []
+const findRedirectChain = (redirects: StaticRedirect[], targetPath: string): StaticRedirect[] => {
+  const chain: StaticRedirect[] = []
   const seen = new Set<string>()
 
   const findSources = (path: string): void => {
@@ -418,205 +362,6 @@ const updateRedirects = async (oldPath: string, newPath: string): Promise<string
   return [...new Set(pathsToUpdate.map((p) => splitPathAndHash(p).path))]
 }
 
-// Convert a glob pattern to a basic dynamic redirect pattern (path-to-regexp syntax)
-const globToDynamicPattern = (globPattern: string): string => {
-  // Each glob becomes a named wildcard. A glob that follows a slash takes the slash with it, so the
-  // pattern also matches the bare prefix, like the redirect rules in redirects/dynamic/docs.jsonc.
-  // Examples:
-  // /docs/references/** -> /docs/references{/*path}
-  // /docs/quickstarts/* -> /docs/quickstarts{/*path}
-  // /docs/guides/*/* -> /docs/guides{/*path}{/*path2}
-  let wildcardCount = 0
-  const nextName = () => {
-    wildcardCount++
-    return wildcardCount === 1 ? 'path' : `path${wildcardCount}`
-  }
-
-  return globPattern.replace(/(\/?)\*\*?/g, (_, slash: string) => (slash ? `{/*${nextName()}}` : `*${nextName()}`))
-}
-
-// Convert a dynamic redirect pattern to a regex source for matching concrete paths
-const dynamicPatternToRegexSource = (dynamicPattern: string): string =>
-  dynamicPattern
-    .replace(/:sdk/g, '([^/]+)') // :sdk captures one path segment
-    .replace(/\{\/\*\w+\}/g, '/(.*)') // {/*path} captures everything after the slash
-    .replace(/\*\w+/g, '(.*)') // *path captures everything
-    .replace(/\//g, '\\/')
-
-// Convert a glob pattern to an SDK-scoped dynamic redirect pattern
-const globToSDKScopedPattern = (globPattern: string): string => {
-  // Convert glob patterns to SDK-scoped dynamic redirect patterns
-  // Examples:
-  // /docs/references/** -> /docs/:sdk/references{/*path}
-  // /docs/quickstarts/* -> /docs/:sdk/quickstarts{/*path}
-
-  // First convert basic glob patterns
-  let result = globToDynamicPattern(globPattern)
-
-  // Then inject :sdk after /docs/
-  if (result.startsWith('/docs/')) {
-    result = result.replace('/docs/', '/docs/:sdk/')
-  }
-
-  return result
-}
-
-// Add or update dynamic redirects (both basic and SDK-scoped if needed)
-const updateDynamicRedirects = async (
-  sourcePattern: string,
-  destPattern: string,
-  sourceFiles: string[],
-): Promise<string[]> => {
-  const dynamicRedirects: DynamicRedirect[] = await readJsoncFile(DYNAMIC_DOCS_FILE)
-  const addedPatterns: string[] = []
-
-  // Always add the basic dynamic redirect
-  const sourceDynamicPattern = globToDynamicPattern(sourcePattern)
-  const destDynamicPattern = globToDynamicPattern(destPattern)
-
-  // Skip if source and destination are the same (would create redundant redirect)
-  if (sourceDynamicPattern !== destDynamicPattern) {
-    const basicRedirect: DynamicRedirect = {
-      source: sourceDynamicPattern,
-      destination: destDynamicPattern,
-      permanent: true,
-    }
-
-    // Check if basic redirect already exists
-    const basicExistingIndex = dynamicRedirects.findIndex((redirect) => redirect.source === sourceDynamicPattern)
-
-    if (basicExistingIndex >= 0) {
-      dynamicRedirects[basicExistingIndex] = basicRedirect
-      console.log(`Updated dynamic redirect: ${sourceDynamicPattern} -> ${destDynamicPattern}`)
-    } else {
-      dynamicRedirects.push(basicRedirect)
-      console.log(`Added dynamic redirect: ${sourceDynamicPattern} -> ${destDynamicPattern}`)
-    }
-    addedPatterns.push(sourceDynamicPattern)
-  } else {
-    console.log(`Skipped redundant basic redirect: ${sourceDynamicPattern} -> ${destDynamicPattern}`)
-  }
-
-  // Check if any files have SDK frontmatter
-  const hasSDK = await hasSDKFrontmatter(sourceFiles)
-
-  if (hasSDK) {
-    // Also add SDK-scoped redirect
-    const sourceSDKPattern = globToSDKScopedPattern(sourcePattern)
-    const destSDKPattern = globToSDKScopedPattern(destPattern)
-
-    // Skip if source and destination are the same (would create redundant redirect)
-    if (sourceSDKPattern !== destSDKPattern) {
-      const sdkRedirect: DynamicRedirect = {
-        source: sourceSDKPattern,
-        destination: destSDKPattern,
-        permanent: true,
-      }
-
-      // Check if SDK redirect already exists
-      const sdkExistingIndex = dynamicRedirects.findIndex((redirect) => redirect.source === sourceSDKPattern)
-
-      if (sdkExistingIndex >= 0) {
-        dynamicRedirects[sdkExistingIndex] = sdkRedirect
-        console.log(`Updated SDK-scoped dynamic redirect: ${sourceSDKPattern} -> ${destSDKPattern}`)
-      } else {
-        dynamicRedirects.push(sdkRedirect)
-        console.log(`Added SDK-scoped dynamic redirect: ${sourceSDKPattern} -> ${destSDKPattern}`)
-      }
-      addedPatterns.push(sourceSDKPattern)
-    } else {
-      console.log(`Skipped redundant SDK-scoped redirect: ${sourceSDKPattern} -> ${destSDKPattern}`)
-    }
-  }
-
-  await writeJsoncFile(DYNAMIC_DOCS_FILE, dynamicRedirects)
-
-  return addedPatterns
-}
-
-// Update static redirects to account for new dynamic redirects
-const updateStaticRedirectsForDynamic = async (
-  sourceDynamicPatterns: string[],
-  destPattern: string,
-  sourcePattern: string,
-): Promise<void> => {
-  const staticRedirects: StaticRedirect[] = await readJsonFile(DOCS_FILE)
-
-  // Find static redirects that would be affected by the new dynamic redirects
-  // We need to update any static redirects that have sources or destinations that would be handled by the dynamic redirects
-  const updatedRedirects = staticRedirects.map((redirect) => {
-    const { path: destPath, hash: destHash } = splitPathAndHash(redirect.destination)
-    const { path: sourcePath, hash: sourceHash } = splitPathAndHash(redirect.source)
-
-    // Check each dynamic pattern to see if it would match this static redirect
-    for (const sourceDynamicPattern of sourceDynamicPatterns) {
-      const regex = new RegExp(`^${dynamicPatternToRegexSource(sourceDynamicPattern)}$`)
-
-      // Check if the static redirect's source would be caught by our dynamic redirect
-      const sourceMatch = sourcePath.match(regex)
-      if (sourceMatch) {
-        // The source of this static redirect would be caught by our dynamic redirect
-        // Update the source to point to where the dynamic redirect would send it
-        const newSource = mapSourceToDestination(sourcePath, sourcePattern, destPattern) + (sourceHash || '')
-
-        // Also check if the destination needs to be updated (if it's also being moved)
-        let newDestination = redirect.destination
-        const destMatch = destPath.match(regex)
-        if (destMatch) {
-          newDestination = mapSourceToDestination(destPath, sourcePattern, destPattern) + (destHash || '')
-          console.log(
-            `Updated static redirect source and destination due to dynamic redirect: ${redirect.source} -> ${newSource}, ${redirect.destination} -> ${newDestination}`,
-          )
-        } else {
-          console.log(`Updated static redirect source due to dynamic redirect: ${redirect.source} -> ${newSource}`)
-        }
-
-        return {
-          source: newSource,
-          destination: newDestination,
-        }
-      }
-
-      // Check if the static redirect's destination would be caught by our dynamic redirect
-      const destMatch = destPath.match(regex)
-      if (destMatch) {
-        // This static redirect's destination would be caught by our dynamic redirect
-        // Update it to point to the new destination using the same mapping logic as file moves
-        const newDestination = mapSourceToDestination(destPath, sourcePattern, destPattern) + (destHash || '')
-
-        console.log(`Updated static redirect destination: ${redirect.destination} -> ${newDestination}`)
-        return {
-          ...redirect,
-          destination: newDestination,
-        }
-      }
-    }
-
-    // Also check if this static redirect's destination points to a path that will be moved by our dynamic redirect
-    // If so, update the destination to point to the new location
-    const sourceRegex = new RegExp(`^${dynamicPatternToRegexSource(globToDynamicPattern(sourcePattern))}$`)
-    const sourceMatch = destPath.match(sourceRegex)
-
-    if (sourceMatch) {
-      // This static redirect points to a path that will be moved by our dynamic redirect
-      // Update its destination to point to the new location using the same mapping logic as file moves
-      const newDestination = mapSourceToDestination(destPath, sourcePattern, destPattern) + (destHash || '')
-
-      console.log(
-        `Updated static redirect destination due to dynamic redirect: ${redirect.destination} -> ${newDestination}`,
-      )
-      return {
-        ...redirect,
-        destination: newDestination,
-      }
-    }
-
-    return redirect
-  })
-
-  await writeJsonFile(DOCS_FILE, updatedRedirects)
-}
-
 // Check if a path contains glob patterns
 const isGlobPattern = (pattern: string): boolean => {
   return pattern.includes('*') || pattern.includes('?') || pattern.includes('[') || pattern.includes('{')
@@ -739,17 +484,34 @@ const moveFile = async (source: string, destination: string): Promise<void> => {
   await updateMdxLinks([source], destination)
 }
 
+// Dynamic redirects run before static ones, so a static redirect whose source a dynamic rule matches never
+// takes effect. Returns each old path that a dynamic rule would intercept, with the rule that matches it.
+const findShadowedSources = async (sourcePaths: string[]): Promise<string[]> => {
+  const rules = parseJSONC(await fs.readFile(DYNAMIC_DOCS_FILE, 'utf-8')) as Array<{ source: string }>
+  const matchers = rules.map((rule) => ({ source: rule.source, matches: match(rule.source) }))
+
+  return sourcePaths.flatMap((sourcePath) =>
+    matchers.filter(({ matches }) => matches(sourcePath)).map(({ source }) => `${sourcePath} (matched by ${source})`),
+  )
+}
+
+const shadowedSourcesMessage = (shadowed: string[]): string =>
+  `A dynamic redirect would intercept the static redirect for these paths, so the move would leave them pointing at the wrong page. Update or remove the dynamic rule in ${DYNAMIC_DOCS_FILE} first:\n${shadowed.map((entry) => `   ${entry}`).join('\n')}`
+
+// Moves one document, records the move as a static redirect, and repoints links to every old path
+const moveDocumentWithRedirects = async (source: string, destination: string): Promise<void> => {
+  await moveFile(source, destination)
+  const pathsToUpdate = await updateRedirects(source, destination)
+  await updateMdxLinks(pathsToUpdate, destination)
+}
+
 // Export all the main functions for testing
 export {
+  findShadowedSources,
   moveFile,
-  updateDynamicRedirects,
-  updateStaticRedirectsForDynamic,
   updateRedirects,
   updateManifestLinks,
   updateMdxLinks,
-  hasSDKFrontmatter,
-  globToDynamicPattern,
-  globToSDKScopedPattern,
   expandGlobPattern,
   mapSourceToDestination,
   isGlobPattern,
@@ -787,6 +549,13 @@ export async function moveDocuments(
 
     if (verbose) console.log(`📁 Found ${sourceFiles.length} files to move:`)
 
+    const shadowed = await findShadowedSources(sourceFiles)
+    if (shadowed.length > 0) {
+      const message = shadowedSourcesMessage(shadowed)
+      if (verbose) console.error(`❌ ${message}`)
+      return { success: false, message, results: [] }
+    }
+
     if (dryRun) {
       if (verbose) console.log('🔍 Dry run - showing what would be moved:')
       const results: MoveResult[] = sourceFiles.map((sourceFile) => {
@@ -797,22 +566,14 @@ export async function moveDocuments(
       return { success: true, message: `Dry run completed. Would move ${results.length} files`, results }
     }
 
-    // First, add the dynamic redirects for the glob pattern (both basic and SDK-scoped if needed)
-    if (verbose) console.log(`🔄 Adding dynamic redirects for pattern: ${source} -> ${destination}`)
-    const sourceDynamicPatterns = await updateDynamicRedirects(source, destination, sourceFiles)
-
-    // Update static redirects to account for the new dynamic redirects
-    if (verbose) console.log(`🔄 Updating static redirects to account for dynamic redirects`)
-    await updateStaticRedirectsForDynamic(sourceDynamicPatterns, destination, source)
-
-    // Process each file (using simple move without static redirects since we have dynamic redirects)
+    // Move each file like a single file move, with its own static redirect
     const results: MoveResult[] = []
     for (const sourceFile of sourceFiles) {
       try {
         const destFile = mapSourceToDestination(sourceFile, source, destination)
         if (verbose) console.log(`   ${sourceFile} → ${destFile}`)
 
-        await moveFile(sourceFile, destFile)
+        await moveDocumentWithRedirects(sourceFile, destFile)
         results.push({ source: sourceFile, destination: destFile, status: 'success' })
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -846,6 +607,11 @@ export async function moveDocuments(
   } else {
     // Handle single file move (existing behavior)
     try {
+      const shadowed = await findShadowedSources([source])
+      if (shadowed.length > 0) {
+        throw new Error(shadowedSourcesMessage(shadowed))
+      }
+
       if (dryRun) {
         if (verbose) console.log(`🔍 Dry run - would move: ${source} → ${destination}`)
         return {
@@ -855,15 +621,8 @@ export async function moveDocuments(
         }
       }
 
-      // Move the file
-      await moveFile(source, destination)
-
-      // Handle static redirects for single file moves
-      const pathsToUpdate = await updateRedirects(source, destination)
+      await moveDocumentWithRedirects(source, destination)
       if (verbose) console.log('Updated redirects in /static/docs.json')
-
-      // Update links in other MDX files for all old paths
-      await updateMdxLinks(pathsToUpdate, destination)
 
       if (verbose) console.log('Document move completed successfully')
       return {

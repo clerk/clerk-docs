@@ -4,16 +4,7 @@ import path from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { match } from 'path-to-regexp'
-import {
-  moveDocuments,
-  globToDynamicPattern,
-  globToSDKScopedPattern,
-  isGlobPattern,
-  isExcludedFromGlob,
-  mapSourceToDestination,
-  hasSDKFrontmatter,
-} from './move-doc'
+import { moveDocuments, isGlobPattern, isExcludedFromGlob, mapSourceToDestination } from './move-doc'
 
 const DELETE_DOC_SCRIPT_PATH = fileURLToPath(new URL('./delete-doc.mjs', import.meta.url))
 
@@ -103,28 +94,6 @@ describe('move-doc utility functions', () => {
     expect(isExcludedFromGlob('docs/.github/example.mdx')).toBe(false)
   })
 
-  test('globToDynamicPattern should convert glob patterns correctly', () => {
-    expect(globToDynamicPattern('/docs/references/**')).toBe('/docs/references{/*path}')
-    expect(globToDynamicPattern('/docs/quickstarts/*')).toBe('/docs/quickstarts{/*path}')
-    expect(globToDynamicPattern('/docs/guides/*/*')).toBe('/docs/guides{/*path}{/*path2}')
-  })
-
-  test('generated dynamic patterns compile with path-to-regexp', () => {
-    for (const glob of ['/docs/references/**', '/docs/quickstarts/*', '/docs/guides/*/*', '/docs/old-*']) {
-      expect(() => match(globToDynamicPattern(glob))).not.toThrow()
-      expect(() => match(globToSDKScopedPattern(glob))).not.toThrow()
-    }
-    expect(match(globToDynamicPattern('/docs/references/**'))('/docs/references')).toBeTruthy()
-    expect(match(globToDynamicPattern('/docs/references/**'))('/docs/references/a/b')).toMatchObject({
-      params: { path: ['a', 'b'] },
-    })
-  })
-
-  test('globToSDKScopedPattern should inject SDK parameter', () => {
-    expect(globToSDKScopedPattern('/docs/references/**')).toBe('/docs/:sdk/references{/*path}')
-    expect(globToSDKScopedPattern('/docs/quickstarts/*')).toBe('/docs/:sdk/quickstarts{/*path}')
-  })
-
   test('mapSourceToDestination should map files correctly', () => {
     const result = mapSourceToDestination(
       '/docs/references/authentication',
@@ -132,41 +101,6 @@ describe('move-doc utility functions', () => {
       '/docs/reference/**',
     )
     expect(result).toBe('/docs/reference/authentication')
-  })
-
-  test('hasSDKFrontmatter should detect SDK in frontmatter', async () => {
-    const { tempDir, cleanup } = await createTempFiles([
-      {
-        path: 'docs/with-sdk.mdx',
-        content: `---
-title: Test
-sdk: react, nextjs
----
-Content here`,
-      },
-      {
-        path: 'docs/without-sdk.mdx',
-        content: `---
-title: Test
----
-Content here`,
-      },
-    ])
-
-    // Change working directory to temp dir for the test
-    const originalCwd = process.cwd()
-    process.chdir(tempDir)
-
-    try {
-      const withSDK = await hasSDKFrontmatter(['/docs/with-sdk'])
-      const withoutSDK = await hasSDKFrontmatter(['/docs/without-sdk'])
-
-      expect(withSDK).toBe(true)
-      expect(withoutSDK).toBe(false)
-    } finally {
-      process.chdir(originalCwd)
-      await cleanup()
-    }
   })
 })
 
@@ -303,7 +237,8 @@ sdk: react, nextjs
     expect(manifest.navigation[0][0].href).toBe('/docs/guide/authentication')
   })
 
-  test('should handle glob pattern move with SDK detection', async () => {
+  test('should add a static redirect per file for a glob move', async () => {
+    const dynamicBefore = await tempSetup.readFile('redirects/dynamic/docs.jsonc')
     const result = await moveDocuments('/docs/references/**', '/docs/reference/**', { verbose: false })
 
     expect(result.success).toBe(true)
@@ -316,24 +251,22 @@ sdk: react, nextjs
     expect(files).toContain('docs/reference/users.mdx')
     expect(files).toContain('docs/reference/components/sign-in.mdx')
 
-    // Check dynamic redirects were added (both basic and SDK-scoped)
-    const dynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
+    // Each moved file gets its own static redirect, including SDK-scoped pages
+    const staticRedirects = JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))
+    expect(staticRedirects).toEqual(
+      expect.arrayContaining([
+        { source: '/docs/references/auth', destination: '/docs/reference/auth' },
+        { source: '/docs/references/users', destination: '/docs/reference/users' },
+        { source: '/docs/references/components/sign-in', destination: '/docs/reference/components/sign-in' },
+      ]),
+    )
 
-    // Should have basic redirect
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/references{/*path}',
-      destination: '/docs/reference{/*path}',
-      permanent: true,
-    })
+    // Existing redirects that pointed at a moved file follow it
+    expect(staticRedirects).toContainEqual({ source: '/docs/old-auth-guide', destination: '/docs/reference/auth' })
 
-    // Should have SDK-scoped redirect (since some files have SDK frontmatter)
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/:sdk/references{/*path}',
-      destination: '/docs/:sdk/reference{/*path}',
-      permanent: true,
-    })
+    // Dynamic redirects are left alone
+    expect(await tempSetup.readFile('redirects/dynamic/docs.jsonc')).toBe(dynamicBefore)
   })
-
   test('should handle error when source file does not exist', async () => {
     const result = await moveDocuments('/docs/nonexistent', '/docs/new-location', { verbose: false })
 
@@ -446,60 +379,27 @@ describe('move-doc redirect functionality', () => {
     })
   })
 
-  test('should create dynamic redirects for glob pattern move', async () => {
+  test('should create static redirects, not dynamic ones, for a glob move', async () => {
+    const dynamicBefore = await tempSetup.readFile('redirects/dynamic/docs.jsonc')
     const result = await moveDocuments('/docs/auth/**', '/docs/authentication/**', { verbose: false })
 
     expect(result.success).toBe(true)
 
-    // Check dynamic redirects were added
-    const dynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
-
-    // Should have basic dynamic redirect
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/auth{/*path}',
-      destination: '/docs/authentication{/*path}',
-      permanent: true,
+    const staticRedirects = JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))
+    expect(staticRedirects).toContainEqual({
+      source: '/docs/auth/overview',
+      destination: '/docs/authentication/overview',
     })
 
-    // Should preserve existing dynamic redirects
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/old-api{/*path}',
-      destination: '/docs/api{/*path}',
-      permanent: true,
-    })
+    // The existing dynamic redirects file is untouched
+    expect(await tempSetup.readFile('redirects/dynamic/docs.jsonc')).toBe(dynamicBefore)
   })
-
-  test('should create SDK-scoped dynamic redirects when files have SDK frontmatter', async () => {
-    const result = await moveDocuments('/docs/users/**', '/docs/user-guide/**', { verbose: false })
-
-    expect(result.success).toBe(true)
-
-    // Check dynamic redirects were added
-    const dynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
-
-    // Should have basic dynamic redirect
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/users{/*path}',
-      destination: '/docs/user-guide{/*path}',
-      permanent: true,
-    })
-
-    // Should have SDK-scoped dynamic redirect (since users/management.mdx has SDK frontmatter)
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/:sdk/users{/*path}',
-      destination: '/docs/:sdk/user-guide{/*path}',
-      permanent: true,
-    })
-  })
-
-  test('should update static redirect destinations when they conflict with new dynamic redirects', async () => {
-    // First, add a static redirect that points to a path that will be moved by our dynamic redirect
+  test('should repoint static redirects at files moved by a glob move', async () => {
     await tempSetup.writeFile(
       'redirects/static/docs.json',
       JSON.stringify([
         { source: '/docs/old-auth', destination: '/docs/auth/overview' },
         { source: '/docs/legacy-users', destination: '/docs/users/management' },
-        { source: '/docs/another-old-auth', destination: '/docs/auth/guide' }, // This should be updated
       ]),
     )
 
@@ -507,19 +407,12 @@ describe('move-doc redirect functionality', () => {
 
     expect(result.success).toBe(true)
 
-    // Check that static redirects were updated appropriately
     const staticRedirects = JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))
 
-    // The static redirects should be updated to point to the specific mapped destinations
-    // The improved implementation now maps to specific paths instead of using generic placeholders
+    // Redirects into a moved file now point at its new location
     expect(staticRedirects).toContainEqual({
       source: '/docs/old-auth',
       destination: '/docs/authentication/overview',
-    })
-
-    expect(staticRedirects).toContainEqual({
-      source: '/docs/another-old-auth',
-      destination: '/docs/authentication/guide',
     })
 
     // Unrelated redirects should remain unchanged
@@ -528,39 +421,27 @@ describe('move-doc redirect functionality', () => {
       destination: '/docs/users/management',
     })
   })
-
-  test('should not create redundant dynamic redirects', async () => {
-    // Create some files in a different location to avoid conflicts
+  test('should not duplicate static redirects when a glob move repeats', async () => {
     await tempSetup.writeFile('docs/guides/auth.mdx', '---\ntitle: "Auth Guide"\n---\n# Auth Guide')
     await tempSetup.writeFile('docs/guides/users.mdx', '---\ntitle: "Users Guide"\n---\n# Users Guide')
 
-    // First move that creates a dynamic redirect
     await moveDocuments('/docs/guides/**', '/docs/guide/**', { verbose: false })
 
-    // Get initial dynamic redirects count
-    const initialDynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
-    const initialCount = initialDynamicRedirects.length
-
-    // Create new source files to test redirect creation again
+    // A later file under the same prefix moves the same way
     await tempSetup.writeFile('docs/guides/new-auth.mdx', '---\ntitle: "New Auth"\n---\n# New Auth')
-
-    // Try to create the same redirect pattern again (should not add duplicate)
     const result = await moveDocuments('/docs/guides/**', '/docs/guide/**', { verbose: false })
 
     expect(result.success).toBe(true)
 
-    // Check that no duplicate redirects were created
-    const finalDynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
-    expect(finalDynamicRedirects.length).toBe(initialCount) // Should be same count
-
-    // Should still have the redirect
-    expect(finalDynamicRedirects).toContainEqual({
-      source: '/docs/guides{/*path}',
-      destination: '/docs/guide{/*path}',
-      permanent: true,
-    })
+    const staticRedirects: Array<{ source: string }> = JSON.parse(
+      await tempSetup.readFile('redirects/static/docs.json'),
+    )
+    const sources = staticRedirects.map((redirect) => redirect.source)
+    expect(sources).toEqual(
+      expect.arrayContaining(['/docs/guides/auth', '/docs/guides/users', '/docs/guides/new-auth']),
+    )
+    expect(new Set(sources).size).toBe(sources.length)
   })
-
   test('should not create redundant static redirects', async () => {
     // First move
     await moveDocuments('/docs/auth/overview', '/docs/authentication/guide', { verbose: false })
@@ -623,7 +504,7 @@ describe('move-doc redirect functionality', () => {
     expect(finalStaticRedirects.length).toBe(initialCount)
   })
 
-  test('should handle complex glob patterns in dynamic redirects', async () => {
+  test('should add static redirects for nested files in a glob move', async () => {
     // Create nested structure
     await tempSetup.writeFile('docs/api/v1/users.mdx', '---\ntitle: "Users API v1"\n---\n# Users API')
     await tempSetup.writeFile('docs/api/v1/auth.mdx', '---\ntitle: "Auth API v1"\n---\n# Auth API')
@@ -640,49 +521,32 @@ describe('move-doc redirect functionality', () => {
     expect(files).toContain('docs/reference/api/v2/users.mdx')
     expect(files).toContain('docs/reference/api/endpoints.mdx') // Original file
 
-    // Check dynamic redirect was created
-    const dynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/api{/*path}',
-      destination: '/docs/reference/api{/*path}',
-      permanent: true,
-    })
+    const staticRedirects = JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))
+    expect(staticRedirects).toEqual(
+      expect.arrayContaining([
+        { source: '/docs/api/v1/users', destination: '/docs/reference/api/v1/users' },
+        { source: '/docs/api/v1/auth', destination: '/docs/reference/api/v1/auth' },
+        { source: '/docs/api/v2/users', destination: '/docs/reference/api/v2/users' },
+        { source: '/docs/api/endpoints', destination: '/docs/reference/api/endpoints' },
+      ]),
+    )
   })
-
-  test('should update static redirect destinations when files are moved by dynamic redirect', async () => {
-    // We are moving /docs/api/v2/users to /docs/v2/users
-    // We will use a glob pattern to move all the docs in the api folder
-    // The end state is that so if the user goes to
-    // User goes to /docs/api/v1/users
-    // They will then be redirect to /docs/v1/users by the dynamic redirect
-    // And then be redirected to /docs/v2/users by the static redirect
-
-    // So we start with a file in the v2 docs folder
-    await tempSetup.writeFile('docs/api/v2/users.mdx', '---\ntitle: "Users API v1"\n---\n# Users API')
-
-    // We have a static redirect that sends users to the new version
+  test('should collapse an existing redirect chain when a glob move moves its destination', async () => {
+    // /docs/api/v1/users already redirects to /docs/api/v2/users
+    await tempSetup.writeFile('docs/api/v2/users.mdx', '---\ntitle: "Users API v2"\n---\n# Users API')
     await tempSetup.writeFile(
       'redirects/static/docs.json',
       JSON.stringify([{ source: '/docs/api/v1/users', destination: '/docs/api/v2/users' }]),
     )
 
-    // we then decide to drop the /api/ folder
+    // Drop the /api/ folder
     await moveDocuments('/docs/api/**', '/docs/**', { verbose: false })
 
-    // We should have a dynamic redirect that sends users over to the shortened path
-    expect(JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))).toContainEqual({
-      source: '/docs/api{/*path}',
-      destination: '/docs{/*path}',
-      permanent: true,
-    })
-
-    // And the existing static redirect should be updated to continue to point from v1 to v2
-    expect(JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))).toContainEqual({
-      source: '/docs/v1/users',
-      destination: '/docs/v2/users',
-    })
+    // Both the moved page and the old redirect into it land on the new location in one hop
+    const staticRedirects = JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))
+    expect(staticRedirects).toContainEqual({ source: '/docs/api/v2/users', destination: '/docs/v2/users' })
+    expect(staticRedirects).toContainEqual({ source: '/docs/api/v1/users', destination: '/docs/v2/users' })
   })
-
   test('should preserve hash fragments in redirects', async () => {
     // Test that redirects maintain hash fragments correctly
     await tempSetup.writeFile(
@@ -732,13 +596,34 @@ describe('move-doc redirect functionality', () => {
     expect(files).toContain('docs/reference/nextjs/auth.mdx')
     expect(files).toContain('docs/reference/vue/setup.mdx')
 
-    // Check dynamic redirects were created
-    const dynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
-    expect(dynamicRedirects).toContainEqual({
-      source: '/docs/guides{/*path}',
-      destination: '/docs/reference{/*path}',
-      permanent: true,
-    })
+    const staticRedirects = JSON.parse(await tempSetup.readFile('redirects/static/docs.json'))
+    expect(staticRedirects).toEqual(
+      expect.arrayContaining([
+        { source: '/docs/guides/react/auth', destination: '/docs/reference/react/auth' },
+        { source: '/docs/guides/nextjs/auth', destination: '/docs/reference/nextjs/auth' },
+        { source: '/docs/guides/vue/setup', destination: '/docs/reference/vue/setup' },
+      ]),
+    )
+  })
+
+  test('should refuse a move whose static redirect a dynamic rule would shadow', async () => {
+    await tempSetup.writeFile(
+      'redirects/dynamic/docs.jsonc',
+      JSON.stringify([{ source: '/docs/auth{/*path}', destination: '/docs/authentication{/*path}', permanent: true }]),
+    )
+    const staticBefore = await tempSetup.readFile('redirects/static/docs.json')
+
+    const single = await moveDocuments('/docs/auth/overview', '/docs/guide/auth', { verbose: false })
+    expect(single.success).toBe(false)
+    expect(single.message).toContain('/docs/auth/overview (matched by /docs/auth{/*path})')
+
+    const glob = await moveDocuments('/docs/auth/**', '/docs/guide/**', { verbose: false })
+    expect(glob.success).toBe(false)
+    expect(glob.message).toContain('/docs/auth/overview (matched by /docs/auth{/*path})')
+
+    // Nothing moved and no redirects written
+    expect(await tempSetup.listFiles()).toContain('docs/auth/overview.mdx')
+    expect(await tempSetup.readFile('redirects/static/docs.json')).toBe(staticBefore)
   })
 
   test('should handle missing from manifest file gracefully', async () => {

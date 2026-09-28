@@ -404,8 +404,8 @@ No headings here.`,
         path: './redirects/dynamic.jsonc',
         content: JSON.stringify([
           {
-            source: '/docs/login/:path*',
-            destination: '/docs/signin/:path*',
+            source: '/docs/login{/*path}',
+            destination: '/docs/signin{/*path}',
             permanent: true,
           },
         ]),
@@ -444,8 +444,8 @@ No headings here.`,
     })
     expect(JSON.parse(await readFile('./dist/_redirects/dynamic.jsonc'))).toEqual([
       {
-        source: '/docs/login/:path*',
-        destination: '/docs/signin/:path*',
+        source: '/docs/login{/*path}',
+        destination: '/docs/signin{/*path}',
         permanent: true,
       },
     ])
@@ -478,8 +478,8 @@ No headings here.`,
         },
         dynamic: [
           {
-            source: '/docs/login/:path*',
-            destination: '/docs/signin/:path*',
+            source: '/docs/login{/*path}',
+            destination: '/docs/signin{/*path}',
             permanent: true,
           },
         ],

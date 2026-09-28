@@ -4,6 +4,7 @@ import path from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { match } from 'path-to-regexp'
 import {
   moveDocuments,
   globToDynamicPattern,
@@ -103,14 +104,25 @@ describe('move-doc utility functions', () => {
   })
 
   test('globToDynamicPattern should convert glob patterns correctly', () => {
-    expect(globToDynamicPattern('/docs/references/**')).toBe('/docs/references/:path*')
-    expect(globToDynamicPattern('/docs/quickstarts/*')).toBe('/docs/quickstarts/:path*')
-    expect(globToDynamicPattern('/docs/guides/*/*')).toBe('/docs/guides/:path*/:path*')
+    expect(globToDynamicPattern('/docs/references/**')).toBe('/docs/references{/*path}')
+    expect(globToDynamicPattern('/docs/quickstarts/*')).toBe('/docs/quickstarts{/*path}')
+    expect(globToDynamicPattern('/docs/guides/*/*')).toBe('/docs/guides{/*path}{/*path2}')
+  })
+
+  test('generated dynamic patterns compile with path-to-regexp', () => {
+    for (const glob of ['/docs/references/**', '/docs/quickstarts/*', '/docs/guides/*/*', '/docs/old-*']) {
+      expect(() => match(globToDynamicPattern(glob))).not.toThrow()
+      expect(() => match(globToSDKScopedPattern(glob))).not.toThrow()
+    }
+    expect(match(globToDynamicPattern('/docs/references/**'))('/docs/references')).toBeTruthy()
+    expect(match(globToDynamicPattern('/docs/references/**'))('/docs/references/a/b')).toMatchObject({
+      params: { path: ['a', 'b'] },
+    })
   })
 
   test('globToSDKScopedPattern should inject SDK parameter', () => {
-    expect(globToSDKScopedPattern('/docs/references/**')).toBe('/docs/:sdk/references/:path*')
-    expect(globToSDKScopedPattern('/docs/quickstarts/*')).toBe('/docs/:sdk/quickstarts/:path*')
+    expect(globToSDKScopedPattern('/docs/references/**')).toBe('/docs/:sdk/references{/*path}')
+    expect(globToSDKScopedPattern('/docs/quickstarts/*')).toBe('/docs/:sdk/quickstarts{/*path}')
   })
 
   test('mapSourceToDestination should map files correctly', () => {
@@ -207,8 +219,8 @@ sdk: react, nextjs
         content: JSON.stringify(
           [
             {
-              source: '/docs/old-references/:path*',
-              destination: '/docs/references/:path*',
+              source: '/docs/old-references{/*path}',
+              destination: '/docs/references{/*path}',
               permanent: true,
             },
           ],
@@ -309,15 +321,15 @@ sdk: react, nextjs
 
     // Should have basic redirect
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/references/:path*',
-      destination: '/docs/reference/:path*',
+      source: '/docs/references{/*path}',
+      destination: '/docs/reference{/*path}',
       permanent: true,
     })
 
     // Should have SDK-scoped redirect (since some files have SDK frontmatter)
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/:sdk/references/:path*',
-      destination: '/docs/:sdk/reference/:path*',
+      source: '/docs/:sdk/references{/*path}',
+      destination: '/docs/:sdk/reference{/*path}',
       permanent: true,
     })
   })
@@ -392,7 +404,9 @@ describe('move-doc redirect functionality', () => {
       },
       {
         path: 'redirects/dynamic/docs.jsonc',
-        content: JSON.stringify([{ source: '/docs/old-api/:path*', destination: '/docs/api/:path*', permanent: true }]),
+        content: JSON.stringify([
+          { source: '/docs/old-api{/*path}', destination: '/docs/api{/*path}', permanent: true },
+        ]),
       },
     ])
 
@@ -442,15 +456,15 @@ describe('move-doc redirect functionality', () => {
 
     // Should have basic dynamic redirect
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/auth/:path*',
-      destination: '/docs/authentication/:path*',
+      source: '/docs/auth{/*path}',
+      destination: '/docs/authentication{/*path}',
       permanent: true,
     })
 
     // Should preserve existing dynamic redirects
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/old-api/:path*',
-      destination: '/docs/api/:path*',
+      source: '/docs/old-api{/*path}',
+      destination: '/docs/api{/*path}',
       permanent: true,
     })
   })
@@ -465,15 +479,15 @@ describe('move-doc redirect functionality', () => {
 
     // Should have basic dynamic redirect
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/users/:path*',
-      destination: '/docs/user-guide/:path*',
+      source: '/docs/users{/*path}',
+      destination: '/docs/user-guide{/*path}',
       permanent: true,
     })
 
     // Should have SDK-scoped dynamic redirect (since users/management.mdx has SDK frontmatter)
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/:sdk/users/:path*',
-      destination: '/docs/:sdk/user-guide/:path*',
+      source: '/docs/:sdk/users{/*path}',
+      destination: '/docs/:sdk/user-guide{/*path}',
       permanent: true,
     })
   })
@@ -541,8 +555,8 @@ describe('move-doc redirect functionality', () => {
 
     // Should still have the redirect
     expect(finalDynamicRedirects).toContainEqual({
-      source: '/docs/guides/:path*',
-      destination: '/docs/guide/:path*',
+      source: '/docs/guides{/*path}',
+      destination: '/docs/guide{/*path}',
       permanent: true,
     })
   })
@@ -629,8 +643,8 @@ describe('move-doc redirect functionality', () => {
     // Check dynamic redirect was created
     const dynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/api/:path*',
-      destination: '/docs/reference/api/:path*',
+      source: '/docs/api{/*path}',
+      destination: '/docs/reference/api{/*path}',
       permanent: true,
     })
   })
@@ -657,8 +671,8 @@ describe('move-doc redirect functionality', () => {
 
     // We should have a dynamic redirect that sends users over to the shortened path
     expect(JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))).toContainEqual({
-      source: '/docs/api/:path*',
-      destination: '/docs/:path*',
+      source: '/docs/api{/*path}',
+      destination: '/docs{/*path}',
       permanent: true,
     })
 
@@ -721,8 +735,8 @@ describe('move-doc redirect functionality', () => {
     // Check dynamic redirects were created
     const dynamicRedirects = JSON.parse(await tempSetup.readFile('redirects/dynamic/docs.jsonc'))
     expect(dynamicRedirects).toContainEqual({
-      source: '/docs/guides/:path*',
-      destination: '/docs/reference/:path*',
+      source: '/docs/guides{/*path}',
+      destination: '/docs/reference{/*path}',
       permanent: true,
     })
   })

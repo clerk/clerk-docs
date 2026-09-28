@@ -15,7 +15,7 @@
  * - Handles special cases:
  *   - External URLs (skipped)
  *   - Hash fragment URLs (validates base URL only)
- *   - Dynamic routes with parameters like :path* and :sdk (validates pattern)
+ *   - Dynamic routes with parameters like {/*path} and :sdk (validates pattern)
  *
  * Usage:
  *   npx tsx scripts/check-redirects.ts
@@ -25,7 +25,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseJSONC } from 'jsonc-parser'
-import { compile, match, MatchFunction, PathFunction } from 'path-to-regexp'
+import { compile, match, type MatchFunction, type ParamData, type PathFunction } from 'path-to-regexp'
 
 interface Redirect {
   source: string
@@ -34,8 +34,8 @@ interface Redirect {
 }
 
 interface DynamicRedirect extends Redirect {
-  matchesSource: MatchFunction<Record<string, string>>
-  getDestination: PathFunction<Record<string, string>>
+  matchesSource: MatchFunction<ParamData>
+  getDestination: PathFunction<ParamData>
 }
 
 interface StaticRedirect extends Redirect {
@@ -178,30 +178,17 @@ async function loadRedirects(): Promise<{
     const dynamicContent = await fs.readFile(dynamicPath, 'utf-8')
     const dynamicRedirectsRaw = parseJSONC(dynamicContent) as Redirect[]
 
-    // Process dynamic redirects with native path-to-regexp support
+    // Compile dynamic redirects with path-to-regexp, as production does. A pattern it can't parse
+    // would make every docs redirect lookup throw in production, so fail the check instead of skipping it.
     const dynamicRedirects: DynamicRedirect[] = dynamicRedirectsRaw.map((redirect) => {
       try {
-        // Use native path-to-regexp support for :path* patterns
-        const matcher = match<Record<string, string>>(redirect.source, { decode: decodeURIComponent })
-        const compiler = compile(redirect.destination, { encode: (str) => str, validate: false })
-
         return {
           ...redirect,
-          matchesSource: (url: string) => {
-            return matcher(url)
-          },
-          getDestination: (params: Record<string, any> | undefined) => {
-            return compiler(params || {})
-          },
+          matchesSource: match(redirect.source, { decode: decodeURIComponent }),
+          getDestination: compile(redirect.destination, { encode: (str) => str }),
         }
       } catch (error) {
-        // Fallback for patterns that don't work with path-to-regexp
-        console.warn(`Warning: Could not compile pattern ${redirect.source}: ${error}`)
-        return {
-          ...redirect,
-          matchesSource: () => false,
-          getDestination: () => redirect.destination,
-        } as DynamicRedirect
+        throw new Error(`Invalid dynamic redirect ${redirect.source} -> ${redirect.destination}: ${error}`)
       }
     })
 
@@ -218,10 +205,10 @@ function normalizeUrl(url: string): string {
   // Remove hash fragments for validation
   const urlWithoutHash = url.split('#')[0]
 
-  // Handle dynamic routes with :path* syntax
-  if (urlWithoutHash.includes(':path*')) {
-    // For validation purposes, replace :path* with a sample path
-    return urlWithoutHash.replace(':path*', 'sample')
+  // Handle dynamic routes with wildcard segments like {/*path}
+  if (hasWildcard(urlWithoutHash)) {
+    // For validation purposes, replace the wildcard with a sample path
+    return urlWithoutHash.replace(/\{\/\*\w+\}/g, '/sample').replace(WILDCARD_PATTERN, 'sample')
   }
 
   // Handle other dynamic parameters like :sdk
@@ -230,6 +217,22 @@ function normalizeUrl(url: string): string {
   }
 
   return urlWithoutHash
+}
+
+// A path-to-regexp wildcard parameter: `*path`, whether bare, after a slash, or in a `{/*path}` group
+const WILDCARD_PATTERN = /\*\w+/g
+
+function hasWildcard(url: string): boolean {
+  return url.replace(WILDCARD_PATTERN, '') !== url
+}
+
+// Whether at least one page matches a wildcard destination pattern
+function hasMatchingPage(destination: string, validUrls: Set<string>): boolean {
+  const matchesDestination = match(destination)
+  for (const url of validUrls) {
+    if (matchesDestination(url)) return true
+  }
+  return false
 }
 
 function hasHashFragment(url: string): boolean {
@@ -359,7 +362,7 @@ async function checkRedirects(): Promise<void> {
     }
 
     // Handle dynamic route patterns - these can't be directly validated as URLs
-    if (destination.includes(':')) {
+    if (destination.includes(':') || hasWildcard(destination)) {
       dynamicPatternCount++
 
       // For dynamic destination patterns, we should validate the base structure
@@ -386,10 +389,9 @@ async function checkRedirects(): Promise<void> {
         let hasValidSDKPath = false
         for (const sdk of knownSDKs) {
           let testDestination = destination.replace(':sdk', sdk)
-          if (testDestination.includes(':path*')) {
-            // For patterns with both :sdk and :path*, check if the base SDK path exists
-            const testBasePath = testDestination.replace(':path*', '')
-            if (validUrls.has(testBasePath) || Array.from(validUrls).some((url) => url.startsWith(testBasePath))) {
+          if (hasWildcard(testDestination)) {
+            // For patterns with both :sdk and a wildcard, check if any page matches the SDK path
+            if (hasMatchingPage(testDestination, validUrls)) {
               hasValidSDKPath = true
               break
             }
@@ -406,15 +408,11 @@ async function checkRedirects(): Promise<void> {
           isValidPattern = false
           errorMessage = `No valid SDK paths found for pattern: ${destination}`
         }
-      } else if (destination.includes(':path*')) {
-        // For :path* patterns (without :sdk), check if the base path exists or if similar paths exist
-        const basePath = destination.replace(':path*', '')
-        const hasBasePath = validUrls.has(basePath)
-        const hasSimilarPaths = Array.from(validUrls).some((url) => url.startsWith(basePath))
-
-        if (!hasBasePath && !hasSimilarPaths) {
+      } else if (hasWildcard(destination)) {
+        // For wildcard patterns (without :sdk), check if any page matches the pattern
+        if (!hasMatchingPage(destination, validUrls)) {
           isValidPattern = false
-          errorMessage = `Dynamic pattern base path may be invalid: ${destination} (no similar paths found)`
+          errorMessage = `Dynamic pattern base path may be invalid: ${destination} (no matching pages found)`
         }
       } else {
         // Other dynamic parameters - mark as potentially invalid for review

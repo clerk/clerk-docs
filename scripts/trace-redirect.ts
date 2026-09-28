@@ -11,7 +11,7 @@
  * - Takes a URL as input (command line argument)
  * - Loads redirect rules from dist/_redirects/ (static.json and dynamic.jsonc)
  * - Follows the redirect chain step by step using production-like matching logic
- * - Handles complex patterns like :path*, :sdk, and other dynamic parameters
+ * - Handles dynamic patterns like {/*path} and named parameters
  * - Detects infinite loops and circular redirects
  * - Shows the complete redirect path with matched rules
  * - Validates the final destination against directory.json
@@ -25,7 +25,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseJSONC } from 'jsonc-parser'
-import { compile, match, MatchFunction, PathFunction } from 'path-to-regexp'
+import { compile, match, type MatchFunction, type ParamData, type PathFunction } from 'path-to-regexp'
 import { VALID_SDKS } from './lib/schemas'
 
 interface Redirect {
@@ -35,8 +35,8 @@ interface Redirect {
 }
 
 interface DynamicRedirect extends Redirect {
-  matchesSource: MatchFunction<Record<string, string>>
-  getDestination: PathFunction<Record<string, string>>
+  matchesSource: MatchFunction<ParamData>
+  getDestination: PathFunction<ParamData>
 }
 
 interface DirectoryEntry {
@@ -116,30 +116,16 @@ async function loadRedirects() {
       permanent: boolean
     }[]
 
-    // Process dynamic redirects with path-to-regexp v6 syntax
-    const dynamicRedirects = dynamicRedirectsRaw.map((redirect) => {
+    // Compile dynamic redirects with path-to-regexp, as production does
+    const dynamicRedirects: DynamicRedirect[] = dynamicRedirectsRaw.map((redirect) => {
       try {
-        // Use native path-to-regexp support for :path* patterns
-        const matcher = match<Record<string, string>>(redirect.source, { decode: decodeURIComponent })
-        const compiler = compile(redirect.destination, { encode: (str) => str, validate: false })
-
         return {
           ...redirect,
-          matchesSource: (url: string) => {
-            return matcher(url)
-          },
-          getDestination: (params: Record<string, any> | undefined) => {
-            return compiler(params || {})
-          },
+          matchesSource: match(redirect.source, { decode: decodeURIComponent }),
+          getDestination: compile(redirect.destination, { encode: (str) => str }),
         }
       } catch (error) {
-        // Fallback for patterns that don't work with path-to-regexp
-        console.warn(`Warning: Could not compile pattern ${redirect.source}: ${error}`)
-        return {
-          ...redirect,
-          matchesSource: () => false,
-          getDestination: () => redirect.destination,
-        } as DynamicRedirect
+        throw new Error(`Invalid dynamic redirect ${redirect.source} -> ${redirect.destination}: ${error}`)
       }
     })
 

@@ -22,8 +22,8 @@
  * When moving files that have SDK frontmatter, both basic and SDK-scoped redirects are created
  *
  * Note: When using glob patterns, the script will:
- * 1. Always add a basic dynamic redirect (e.g., /docs/references/:path* -> /docs/reference/:path*)
- * 2. If any files have SDK frontmatter, also add SDK-scoped redirect (/docs/:sdk/references/:path* -> /docs/:sdk/reference/:path*)
+ * 1. Always add a basic dynamic redirect (e.g., /docs/references{/*path} -> /docs/reference{/*path})
+ * 2. If any files have SDK frontmatter, also add SDK-scoped redirect (/docs/:sdk/references{/*path} -> /docs/:sdk/reference{/*path})
  * 3. Update any existing static redirects that would conflict with the dynamic redirects
  * 4. Move the individual files and update their specific redirects/links
  *
@@ -418,33 +418,37 @@ const updateRedirects = async (oldPath: string, newPath: string): Promise<string
   return [...new Set(pathsToUpdate.map((p) => splitPathAndHash(p).path))]
 }
 
-// Convert a glob pattern to a basic dynamic redirect pattern
+// Convert a glob pattern to a basic dynamic redirect pattern (path-to-regexp syntax)
 const globToDynamicPattern = (globPattern: string): string => {
-  // Convert glob patterns to Next.js dynamic route patterns
+  // Each glob becomes a named wildcard. A glob that follows a slash takes the slash with it, so the
+  // pattern also matches the bare prefix, like the redirect rules in redirects/dynamic/docs.jsonc.
   // Examples:
-  // /docs/references/** -> /docs/references/:path*
-  // /docs/quickstarts/* -> /docs/quickstarts/:path*
+  // /docs/references/** -> /docs/references{/*path}
+  // /docs/quickstarts/* -> /docs/quickstarts{/*path}
+  // /docs/guides/*/* -> /docs/guides{/*path}{/*path2}
+  let wildcardCount = 0
+  const nextName = () => {
+    wildcardCount++
+    return wildcardCount === 1 ? 'path' : `path${wildcardCount}`
+  }
 
-  // Use a more systematic approach to avoid double replacements
-  let result = globPattern
-
-  // Replace all glob patterns with a temporary placeholder first
-  result = result.replace(/\*\*/g, '__DOUBLE_STAR__')
-  result = result.replace(/\*/g, '__SINGLE_STAR__')
-
-  // Then replace placeholders with the correct Next.js patterns
-  result = result.replace(/__DOUBLE_STAR__/g, ':path*')
-  result = result.replace(/__SINGLE_STAR__/g, ':path*')
-
-  return result
+  return globPattern.replace(/(\/?)\*\*?/g, (_, slash: string) => (slash ? `{/*${nextName()}}` : `*${nextName()}`))
 }
+
+// Convert a dynamic redirect pattern to a regex source for matching concrete paths
+const dynamicPatternToRegexSource = (dynamicPattern: string): string =>
+  dynamicPattern
+    .replace(/:sdk/g, '([^/]+)') // :sdk captures one path segment
+    .replace(/\{\/\*\w+\}/g, '/(.*)') // {/*path} captures everything after the slash
+    .replace(/\*\w+/g, '(.*)') // *path captures everything
+    .replace(/\//g, '\\/')
 
 // Convert a glob pattern to an SDK-scoped dynamic redirect pattern
 const globToSDKScopedPattern = (globPattern: string): string => {
-  // Convert glob patterns to SDK-scoped Next.js dynamic route patterns
+  // Convert glob patterns to SDK-scoped dynamic redirect patterns
   // Examples:
-  // /docs/references/** -> /docs/:sdk/references/:path*
-  // /docs/quickstarts/* -> /docs/:sdk/quickstarts/:path*
+  // /docs/references/** -> /docs/:sdk/references{/*path}
+  // /docs/quickstarts/* -> /docs/:sdk/quickstarts{/*path}
 
   // First convert basic glob patterns
   let result = globToDynamicPattern(globPattern)
@@ -546,13 +550,7 @@ const updateStaticRedirectsForDynamic = async (
 
     // Check each dynamic pattern to see if it would match this static redirect
     for (const sourceDynamicPattern of sourceDynamicPatterns) {
-      // Convert dynamic pattern to regex for matching, handling both :sdk and :path* parameters
-      const dynamicRegex = sourceDynamicPattern
-        .replace(/:sdk/g, '([^/]+)') // :sdk captures one path segment
-        .replace(/:path\*/g, '(.*)') // :path* captures everything
-        .replace(/\//g, '\\/')
-
-      const regex = new RegExp(`^${dynamicRegex}$`)
+      const regex = new RegExp(`^${dynamicPatternToRegexSource(sourceDynamicPattern)}$`)
 
       // Check if the static redirect's source would be caught by our dynamic redirect
       const sourceMatch = sourcePath.match(regex)
@@ -596,12 +594,7 @@ const updateStaticRedirectsForDynamic = async (
 
     // Also check if this static redirect's destination points to a path that will be moved by our dynamic redirect
     // If so, update the destination to point to the new location
-    const sourceDynamicRegex = globToDynamicPattern(sourcePattern)
-      .replace(/:sdk/g, '([^/]+)') // :sdk captures one path segment
-      .replace(/:path\*/g, '(.*)') // :path* captures everything
-      .replace(/\//g, '\\/')
-
-    const sourceRegex = new RegExp(`^${sourceDynamicRegex}$`)
+    const sourceRegex = new RegExp(`^${dynamicPatternToRegexSource(globToDynamicPattern(sourcePattern))}$`)
     const sourceMatch = destPath.match(sourceRegex)
 
     if (sourceMatch) {

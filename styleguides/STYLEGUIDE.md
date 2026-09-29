@@ -390,6 +390,8 @@ Use root-relative URLs for links to pages on `https://clerk.com`, and keep links
 
 Keep [`https://clerk.com/discord`](https://clerk.com/discord) absolute because it redirects to an external Discord invite. This is the only intentional exception for a `https://clerk.com` link.
 
+The same link-target rules apply to [`<Cards>`](../contributing/CONTRIBUTING.md#cards): absolute HTTP(S) links open in a new tab, while root-relative Clerk links stay in the current tab. Use root-relative URLs for Clerk pages in cards, except for the Discord redirect. The API reference annotation rule below applies to cards too.
+
 `pnpm run lint` enforces this convention for Markdown links, reference definitions, and bare autolinks in authored docs. This relative-link check does not scan generated Typedoc, which is maintained upstream in `clerk/javascript`. URLs inside code blocks are exempt because they are often intentional, copyable examples.
 
 Because the link component determines the tab behavior, an explicit `{{ target: '_blank' }}` annotation is almost never needed. Unexpected new tabs disorient readers — especially those using screen readers — and a redundant annotation is noise.

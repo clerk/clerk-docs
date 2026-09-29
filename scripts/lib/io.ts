@@ -50,7 +50,10 @@ export const readDocsFolder = (config: BuildConfig) => async () => {
   })
 }
 
-export type DocsFile = Awaited<ReturnType<ReturnType<typeof readDocsFolder>>>[number]
+export type DocsFile = Awaited<ReturnType<ReturnType<typeof readDocsFolder>>>[number] & {
+  // Generated pages can point their edit link at the source in the public docs mirror.
+  sourceFile?: `/${string}`
+}
 
 // checks if a folder exists, if not it will be created
 export const ensureDirectory = async (dirPath: string): Promise<void> => {

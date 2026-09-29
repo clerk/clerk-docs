@@ -55,6 +55,7 @@ import { z } from 'zod'
 import type { Root } from 'mdast'
 
 import { generateApiErrorDocs } from './lib/api-errors'
+import { generateTemplatesPage } from './lib/templates'
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeError, safeFail, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
@@ -351,6 +352,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Generated API Error MDX files')
   }
 
+  const templatesFile = await generateTemplatesPage(config)
+  if (templatesFile) console.info('✓ Generated templates MDX file')
+
   // The generated API error pages quote clerk_go's error copy verbatim, and
   // hand-edits to them are forbidden (the scheduled refresh would revert them),
   // so the proper-noun check skips these files — casing fixes go to clerk_go.
@@ -537,6 +541,20 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
             return markdownFile
           })
+        : []),
+      ...(templatesFile
+        ? [
+            (async () => {
+              const inManifest = docsInManifest.has(templatesFile.href)
+              const markdownFile = await markdownCache(templatesFile.filePath, () =>
+                parseMarkdownFile(templatesFile, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
+              )
+
+              docsMap.set(templatesFile.href, markdownFile)
+
+              return markdownFile
+            })(),
+          ]
         : []),
     ])
   ).map((doc) => {
@@ -1338,7 +1356,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
               sdkScoped: 'false',
               canonical: doc.file.href.replace('/index', ''),
-              sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
+              sourceFile: doc.file.sourceFile ?? `/docs/${doc.file.filePathInDocsFolder}`,
             }),
           )
           .process(doc.vfile),
@@ -1461,14 +1479,15 @@ ${yaml.stringify({
               if (distinctSDKVariant !== undefined) {
                 return {
                   fileContent: distinctSDKVariant.fileContent,
-                  sourceFile: `/docs/${distinctSDKVariant.file.filePathInDocsFolder}`,
+                  sourceFile:
+                    distinctSDKVariant.file.sourceFile ?? `/docs/${distinctSDKVariant.file.filePathInDocsFolder}`,
                   sourceNode: distinctSDKVariant.node,
                 }
               }
             }
             return {
               fileContent: doc.fileContent,
-              sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
+              sourceFile: doc.file.sourceFile ?? `/docs/${doc.file.filePathInDocsFolder}`,
               sourceNode: doc.node,
             }
           })()

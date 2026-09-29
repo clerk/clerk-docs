@@ -1335,6 +1335,8 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 
 The `<Cards>` component can be used to display a grid of cards in various styles.
 
+Card links follow the [docs link rules](../styleguides/STYLEGUIDE.md#use-consistent-link-targets): external HTTP(S) URLs open in a new tab, while root-relative Clerk URLs stay in the current tab. Use root-relative URLs for Clerk pages in authored docs, except `https://clerk.com/discord`, which redirects externally. Add `{{ target: '_blank' }}` only for links to the API reference pages that the styleguide identifies.
+
 `Cards` uses Markdown list syntax with each card separated by three dashes `---`.
 
 To show a status pill on a card, add a `tag` annotation to the card's link — plain-text suffixes like `(beta)` in the link text are not supported:

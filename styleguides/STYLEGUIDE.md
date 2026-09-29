@@ -301,7 +301,7 @@ description: Learn why SignedIn was removed in Core 3 and how to replace it with
 ---
 
 ```text {{ lineNumbers: false, wrap: true }}
-Clerk: <SignedIn> is not available in @clerk/nextjs Core 3. Learn more at https://clerk.com/err/signedin-is-not-available-in-clerk-nextjs.
+Clerk: <SignedIn> is not available in @clerk/nextjs Core 3. Learn more at https://clerk.com/err/signedin-is-not-available-in-clerk-nextjs
 ```
 ````
 

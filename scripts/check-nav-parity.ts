@@ -29,7 +29,10 @@
  * keys would silently skip nextjs/react/… , which have no keyed entry and render from the
  * default view.
  *
- * Usage: bun scripts/check-nav-parity.ts [--allow-default-change] <dist-manifest.json> <dist-manifest.json>
+ * Usage: bun scripts/check-nav-parity.ts [--allow-default-change] [--allow-new-view <sdk>]... <dist-manifest.json> <dist-manifest.json>
+ *
+ * `--allow-new-view <sdk>` accepts a view that is empty before and populated after (a newly added SDK)
+ * as a note instead of a diff; repeat the flag for more than one SDK.
  */
 
 import fs from 'node:fs'
@@ -237,6 +240,12 @@ export type CompareOptions = {
    * readers see before hydration swaps in their SDK's view.
    */
   allowDefaultChange?: boolean
+  /**
+   * Views that are new in this build. A view that normalizes to nothing before and to a
+   * populated tree after is what adding an SDK looks like; naming it here turns that diff
+   * into a note instead of a failure. Any other change to the named view still fails.
+   */
+  allowNewViews?: string[]
 }
 
 export const compareDistManifests = (
@@ -267,7 +276,13 @@ export const compareDistManifests = (
     const oldView = JSON.stringify(oldNodes, null, 1)
     const newView = JSON.stringify(newNodes, null, 1)
 
-    if (oldView !== newView) diffs.push({ view, diff: formatDiff(oldView, newView) })
+    if (oldView === newView) continue
+    const isNewView = options.allowNewViews?.includes(view) && countNodes(oldNodes) === 0 && countNodes(newNodes) > 0
+    if (isNewView) {
+      notes.push(`${view} view is new (0 → ${countNodes(newNodes)} nodes); accepted via --allow-new-view`)
+      continue
+    }
+    diffs.push({ view, diff: formatDiff(oldView, newView) })
   }
 
   // The default tree renders before hydration for every reader whose SDK is not in the URL, and
@@ -314,17 +329,35 @@ export const compareDistManifests = (
 const main = () => {
   const args = process.argv.slice(2)
   const allowDefaultChange = args.includes('--allow-default-change')
-  const [oldPath, newPath] = args.filter((arg) => !arg.startsWith('--'))
+  const allowNewViews: string[] = []
+  const positional: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--allow-default-change') continue
+    if (args[i] === '--allow-new-view') {
+      const view = args[++i]
+      if (view === undefined || view.startsWith('--')) {
+        console.error('--allow-new-view needs an SDK key, e.g. --allow-new-view electron')
+        process.exit(2)
+      }
+      allowNewViews.push(view)
+      continue
+    }
+    positional.push(args[i])
+  }
+  const [oldPath, newPath] = positional
 
   if (oldPath === undefined || newPath === undefined) {
     console.error(
-      'usage: bun scripts/check-nav-parity.ts [--allow-default-change] <dist-manifest.json> <dist-manifest.json>',
+      'usage: bun scripts/check-nav-parity.ts [--allow-default-change] [--allow-new-view <sdk>]... <dist-manifest.json> <dist-manifest.json>',
     )
     process.exit(2)
   }
 
   const read = (filePath: string): Dist => JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-  const { ok, diffs, counts, notes } = compareDistManifests(read(oldPath), read(newPath), { allowDefaultChange })
+  const { ok, diffs, counts, notes } = compareDistManifests(read(oldPath), read(newPath), {
+    allowDefaultChange,
+    allowNewViews,
+  })
 
   for (const note of notes) console.log(`note: ${note}`)
 

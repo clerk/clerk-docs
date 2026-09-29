@@ -416,19 +416,30 @@ If the SDK has docs that are internal, i.e., maintained in `clerk-docs`, then fo
 
 To add a new SDK, you'll need the SDK name (e.g., `Next.js`), key (e.g., `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/getting-started/quickstart/overview](https://clerk.com/docs/getting-started/quickstart/overview).
 
-In this repo (`clerk/clerk-docs`):
+In this repo (`clerk/clerk`), under `clerk-docs/`:
 
-1. In `scripts/lib/schemas.ts`, add the SDK key to `VALID_SDKS` and the icon name to the `icon` enum — these Zod enums are what the build enforces (and what `manifest.<sdk>.json` discovery iterates).
-1. In the `manifest.schema.json`, mirror both: add the reference name in the `icon` enum and the SDK key in the `sdk` enum.
-1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `getting-started/quickstart/overview.mdx`.
-1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
+1. `scripts/lib/schemas.ts`: add the SDK key to `VALID_SDKS`, and the icon name to the `icon` enum. These Zod enums are what the build enforces and what `manifest.<sdk>.json` discovery iterates.
+1. `docs/manifest.schema.json`: mirror both, in `$defs.sdk` and `$defs.icon`. `scripts/delete-doc.mjs` reads the `sdk` enum.
+1. `contributing/CONTRIBUTING.md`: add the SDK to the [`<If />` `sdk` values table](#if-) so authors know the key exists.
+1. `scripts/lib/llms.ts`: add the display name to `SDK_DISPLAY_NAMES`; it names the SDK's section in `llms.txt`.
+1. `scripts/search-regression-queries.ts`: add a golden query that boosts the SDK and expects its quickstart on top.
+1. `scripts/check-redirects.ts`: add the SDK key to the hard-coded `knownSDKs` array so `:sdk` redirect patterns may name it.
+1. Create `docs/getting-started/quickstart.<sdk>.mdx` with `sdk: <sdk>`. It rides the shared "Quickstart" manifest entry; set `navTitle` if the sidenav label should differ.
+1. Add a card to `docs/getting-started/quickstart/overview.mdx`. `docs/index.mdx` and `docs/reference/overview.mdx` render `<SDKCards>` from `SDK.tsx` and need no edit.
+1. End the quickstart with the appropriate next-steps partial: `frontend-sdks` for frontend SDKs or `backend-sdks` for backend SDKs. For a specialized SDK, add an `<If sdk="<sdk>">` block to `docs/_partials/quickstarts/next-steps/specialized-sdks.mdx` and include the `specialized-sdks` partial in the quickstart.
+1. Create `docs/reference/<sdk>/overview.mdx` and any method pages, and add a `hideTitle: true` group for them under "SDK Reference" in `docs/manifest.json`. Manifest `tag`s are optional and, when present, must match the page's frontmatter; a `hideTitle` group renders only its children, so put status on the pages, not the group.
+1. Opt the SDK into shared content by adding it to the `sdk:` lists of the pages that apply (hooks, components, objects, types, guides). Record what you excluded and why in the PR.
+1. Opting a page in does not make its `<If sdk="react">` examples render; add an `<If sdk="<sdk>">` block with the SDK's import path, and check `dist/react/<page>` against `dist/<sdk>/<page>` for pages with examples on one side only.
+1. Status is only ever `tag: beta` (or another lifecycle value) in frontmatter, on the manifest entry, and on the `SDK.tsx` entry. Never "(Beta)" in a title.
 
-Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
+In this repo (`clerk/clerk`), under `src/`:
 
-In the `clerk/clerk` repo:
+1. `src/app/docs/icons.tsx`: add the grayscale SVG to `icons` and the color SVG to `iconsLarge` under the same key, converted to JSX.
+1. `src/app/docs/SDK.tsx`: add the entry with at least `title`, `icon`, `route`, `referenceRoute`, `category`, `description`, in alphabetical position after the popular SDKs. `src/app/docs/SDK.test.ts` enforces the order and the icon coverage.
+1. `src/lib/mdx-to-markdown/convertMdxToMarkdown.ts`: add the display name to `sdkDisplayNames`.
+1. `src/app/docs/search-request.test.ts`: add the key to the pinned list in the `searchSDKKeys` test. The search SDK filter derives from `SDK.tsx`, and the test pins it so a new key is a deliberate change.
 
-1. In the `app/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
-1. In the `app/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `route`, `category`.
+Then verify: `cd clerk-docs && pnpm run build:tsx`, `pnpm test -- run` at the root, and a before/after `bun clerk-docs/scripts/check-nav-parity.ts --allow-default-change --allow-new-view <sdk> <before> <after>`: the shared tree changed, and the new SDK's view goes from empty to populated, which the checker reports as a diff unless you name it. The parity checker will list the new SDK's own view as a diff by design; the check passes as long as no other SDK's view shows a diff.
 
 #### Add an external SDK
 
@@ -436,18 +447,18 @@ If the SDK has docs that are external, e.g., Python located at `https://github.c
 
 To add a new SDK, you'll need the SDK name (e.g., `Python`), key (e.g., `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview).
 
-In this repo (`clerk/clerk-docs`):
+In this repo (`clerk/clerk`), under `clerk-docs/`:
 
-1. In `scripts/lib/schemas.ts`, add the SDK key to `VALID_SDKS` and the icon name to the `icon` enum — these Zod enums are what the build enforces (and what `manifest.<sdk>.json` discovery iterates).
-1. In the `manifest.schema.json`, mirror both: add the reference name in the `icon` enum and the SDK key in the `sdk` enum.
-1. Add the SDK to `index.mdx` and `reference/overview.mdx`.
+1. `scripts/lib/schemas.ts`: add the SDK key to `VALID_SDKS`, and the icon name to the `icon` enum. These Zod enums are what the build enforces and what `manifest.<sdk>.json` discovery iterates.
+1. `docs/manifest.schema.json`: mirror both, in `$defs.sdk` and `$defs.icon`. `scripts/delete-doc.mjs` reads the `sdk` enum.
+1. Nothing to add to `index.mdx` or `reference/overview.mdx`: both render their SDK cards from `src/app/docs/SDK.tsx` through `<SDKCards>`, so the entry you add there in the next section is what lists the SDK.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
 
 In the `clerk/clerk` repo:
 
-1. In the `app/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
-1. In the `app/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
+1. In the `src/app/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+1. In the `src/app/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
 
 #### Update the 'key' of an SDK
 
@@ -1666,6 +1677,7 @@ Available values for the `sdk` prop:
 | React                  | "react"                |
 | JavaScript             | "js-frontend"          |
 | Chrome Extension       | "chrome-extension"     |
+| Electron               | "electron"             |
 | Expo                   | "expo"                 |
 | Android                | "android"              |
 | iOS                    | "ios"                  |

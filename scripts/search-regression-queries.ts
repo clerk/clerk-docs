@@ -218,7 +218,7 @@ export const REGRESSION_CASES: RegressionCase[] = [
 
   // --- Title-tier keywords: curated `search.keywords` rank with page titles (DOCS-11955) ---
   // "native api" must not lose to the "Frontend API errors" page's lvl1 "api" hijack. topN 1 on
-  // all four: the keyword + SDK boost makes first place the advertised contract.
+  // all five: the keyword + SDK boost makes first place the advertised contract.
   {
     query: 'native api',
     boost: 'ios',
@@ -247,6 +247,36 @@ export const REGRESSION_CASES: RegressionCase[] = [
     topN: 1,
     source: 'DOCS-11955',
   },
+  {
+    query: 'electron',
+    boost: 'electron',
+    urls: ['/docs/electron/getting-started/quickstart'],
+    topN: 1,
+    source: 'DOCS-11976',
+  },
+  {
+    query: 'native api',
+    boost: 'electron',
+    urls: ['/docs/electron/getting-started/quickstart'],
+    topN: 1,
+    source: 'DOCS-11976',
+  },
+  {
+    query: 'desktop',
+    boost: 'electron',
+    urls: ['/docs/electron/getting-started/quickstart'],
+    topN: 1,
+    source: 'DOCS-11976',
+  },
+  // Per-word coverage for the Electron "native api" keyword (CONTRIBUTING.md: test the full
+  // keyword and each of its words). Mirrors the iOS `native` case above with the Electron boost.
+  {
+    query: 'native',
+    boost: 'electron',
+    urls: ['/docs/electron/getting-started/quickstart'],
+    topN: 3,
+    source: 'DOCS-11976',
+  },
   // Flip-side guard: the multi-word keyword's lone "api" word must not hijack plain "api" —
   // the reference pages stay on top (the quickstart may appear below them; that boost is fine).
   {
@@ -255,6 +285,13 @@ export const REGRESSION_CASES: RegressionCase[] = [
     urls: ['/docs/reference/api/overview', '/docs/reference/backend/types/backend-api-key'],
     topN: 3,
     source: 'DOCS-11955 (keyword individual-word guard)',
+  },
+  {
+    query: 'api',
+    boost: 'electron',
+    urls: ['/docs/reference/api/overview', '/docs/reference/backend/types/backend-api-key'],
+    topN: 3,
+    source: 'DOCS-11976 (keyword individual-word guard)',
   },
   // Guard against title-tier keyword hijacks: broad keywords removed in DOCS-11955 must not
   // resurface and steal these queries from the pages readers actually want. Any password-reset

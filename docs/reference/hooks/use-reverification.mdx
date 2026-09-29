@@ -1,7 +1,7 @@
 ---
 title: '`useReverification()`'
 description: Clerk's useReverification() hook enhances a fetcher function to handle a session's reverification flow.
-sdk: chrome-extension, nextjs, react, react-router, tanstack-react-start
+sdk: chrome-extension, electron, nextjs, react, react-router, tanstack-react-start
 ---
 
 Reverification allows you to prompt a user to verify their credentials before performing sensitive actions, even if they're already authenticated. For example, in a banking application, transferring money is considered a "sensitive action." Reverification can be used to confirm the user's identity.
@@ -234,6 +234,52 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
       ```
     </If>
 
+    <If sdk="electron">
+      ```tsx {{ filename: 'src/components/UpdateUserEmail.tsx', collapsible: true }}
+      import { useReverification, useUser } from '@clerk/electron/react'
+
+      export function UpdateUserEmail() {
+        // Use `useUser()` to get the current user's `User` object
+        // `User` includes the `update()` method to update the user's primary email address
+        const { user } = useUser()
+
+        // Use `useReverification()` to enhance the `update()` method
+        // to handle the reverification process
+        const changePrimaryEmail = useReverification((emailAddressId: string) =>
+          user?.update({ primaryEmailAddressId: emailAddressId }),
+        )
+
+        const handleClick = async (emailAddressId: string) => {
+          try {
+            await changePrimaryEmail(emailAddressId)
+          } catch (e) {
+            // Handle other errors
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(e, null, 2))
+          }
+        }
+
+        return (
+          <div>
+            <span>Your primary email address is {user?.primaryEmailAddress?.emailAddress}</span>
+
+            <ul>
+              {user?.emailAddresses.map((email) => (
+                <li key={email.id}>
+                  <span>{email.emailAddress}</span>
+                  {email.id !== user?.primaryEmailAddress?.id && (
+                    <button onClick={() => handleClick(email.id)}>Make primary</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      }
+      ```
+    </If>
+
     <If sdk="tanstack-react-start">
       ```tsx {{ filename: 'components/UpdateUserEmail.tsx', collapsible: true }}
       import { useReverification, useUser } from '@clerk/tanstack-react-start'
@@ -328,7 +374,7 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
 
         return (
           <div>
-            <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
+            <span>Your account balance is {balance !== null ? `$${balance}` : '$******'}</span>
             <button onClick={() => handleClick()}>See account balance</button>
           </div>
         )
@@ -371,7 +417,7 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
 
         return (
           <div>
-            <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
+            <span>Your account balance is {balance !== null ? `$${balance}` : '$******'}</span>
             <button onClick={() => handleClick()}>See account balance</button>
           </div>
         )
@@ -412,7 +458,7 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
 
         return (
           <div>
-            <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
+            <span>Your account balance is {balance !== null ? `$${balance}` : '$******'}</span>
             <button onClick={() => handleClick()}>See account balance</button>
           </div>
         )
@@ -452,7 +498,47 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
 
         return (
           <div>
-            <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
+            <span>Your account balance is {balance !== null ? `$${balance}` : '$******'}</span>
+            <button onClick={() => handleClick()}>See account balance</button>
+          </div>
+        )
+      }
+      ```
+    </If>
+
+    <If sdk="electron">
+      ```tsx {{ filename: 'src/components/AccountBalance.tsx' }}
+      import { useAuth, useReverification } from '@clerk/electron/react'
+      import { useState } from 'react'
+
+      export function AccountBalance() {
+        const { getToken } = useAuth()
+        const [balance, setBalance] = useState<number | null>(null)
+        const accountBalance = useReverification(async () => {
+          const response = await fetch('https://api.example.com/balance', {
+            headers: {
+              Authorization: `Bearer ${await getToken()}`,
+            },
+          })
+          return await response.json()
+        })
+
+        const handleClick = async () => {
+          try {
+            const accountBalanceResponse = await accountBalance()
+
+            setBalance(accountBalanceResponse.amount)
+          } catch (e) {
+            // Handle other errors
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            console.error('Error fetching account balance', e)
+          }
+        }
+
+        return (
+          <div>
+            <span>Your account balance is {balance !== null ? `$${balance}` : '$******'}</span>
             <button onClick={() => handleClick()}>See account balance</button>
           </div>
         )
@@ -493,7 +579,7 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
 
         return (
           <div>
-            <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
+            <span>Your account balance is {balance !== null ? `$${balance}` : '$******'}</span>
             <button onClick={() => handleClick()}>See account balance</button>
           </div>
         )
@@ -794,6 +880,90 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
           import { useReverification, useUser } from '@clerk/chrome-extension'
           import { useState } from 'react'
           import type { SessionVerificationLevel } from '@clerk/chrome-extension/types'
+          import { VerificationComponent } from './VerificationComponent'
+
+          export function UpdateUserEmail() {
+            // Use `useUser()` to get the current user's `User` object
+            // `User` includes the `update()` method to update the user's primary email address
+            const { user } = useUser()
+
+            // TODO: Update to use exported type once available
+            const [verificationState, setVerificationState] = useState<
+              | {
+                  complete: () => void
+                  cancel: () => void
+                  level: SessionVerificationLevel | undefined
+                  inProgress: boolean
+                }
+              | undefined
+            >(undefined)
+
+            // Use `useReverification()` to enhance the `update()` method
+            // to handle the reverification process
+            const changePrimaryEmail = useReverification(
+              (emailAddressId: string) => user?.update({ primaryEmailAddressId: emailAddressId }),
+              {
+                onNeedsReverification: ({ complete, cancel, level }) => {
+                  setVerificationState({
+                    complete,
+                    cancel,
+                    level,
+                    inProgress: true,
+                  })
+                },
+              },
+            )
+
+            const handleClick = async (emailAddressId: string) => {
+              try {
+                await changePrimaryEmail(emailAddressId)
+              } catch (e) {
+                // Handle other errors
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling
+                console.error(JSON.stringify(e, null, 2))
+              }
+            }
+
+            return (
+              <div>
+                <span>Your primary email address is {user?.primaryEmailAddress?.emailAddress}</span>
+
+                <ul>
+                  {user?.emailAddresses.map((email) => (
+                    <li key={email.id}>
+                      <span>{email.emailAddress}</span>
+                      {user?.primaryEmailAddressId !== email.id && (
+                        <button onClick={() => handleClick(email.id)}>Make primary</button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                {verificationState?.inProgress && (
+                  <VerificationComponent
+                    level={verificationState?.level}
+                    onComplete={() => {
+                      verificationState.complete()
+                      setVerificationState(undefined)
+                    }}
+                    onCancel={() => {
+                      verificationState.cancel()
+                      setVerificationState(undefined)
+                    }}
+                  />
+                )}
+              </div>
+            )
+          }
+          ```
+        </If>
+
+        <If sdk="electron">
+          ```tsx {{ filename: 'src/components/UpdateUserEmail.tsx', collapsible: true }}
+          import { useReverification, useUser } from '@clerk/electron/react'
+          import { useState } from 'react'
+          import type { SessionVerificationLevel } from '@clerk/shared/types'
           import { VerificationComponent } from './VerificationComponent'
 
           export function UpdateUserEmail() {
@@ -1236,6 +1406,92 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
             SessionVerificationLevel,
             SessionVerificationResource,
           } from '@clerk/chrome-extension/types'
+
+          export function VerificationComponent({
+            level = 'first_factor',
+            onComplete,
+            onCancel,
+          }: {
+            level: SessionVerificationLevel | undefined
+            onComplete: () => void
+            onCancel: () => void
+          }) {
+            const { session } = useSession()
+            const [code, setCode] = useState<string>('')
+            const reverificationRef = useRef<SessionVerificationResource | undefined>(undefined)
+            const [determinedStartingFirstFactor, setDeterminedStartingFirstFactor] = useState<
+              EmailCodeFactor | undefined
+            >()
+
+            useEffect(() => {
+              if (reverificationRef.current) {
+                return
+              }
+
+              session?.startVerification({ level }).then(async (response) => {
+                reverificationRef.current = response
+                await prepareEmailVerification(response)
+              })
+            }, [])
+
+            const prepareEmailVerification = async (verificationResource: SessionVerificationResource) => {
+              // To simplify the example we will only handle the first factor verification
+              if (verificationResource.status === 'needs_first_factor') {
+                // Determine the starting first factor from the supported first factors
+                const determinedStartingFirstFactor = verificationResource.supportedFirstFactors?.filter(
+                  (factor) => factor.strategy === 'email_code',
+                )[0]
+
+                if (determinedStartingFirstFactor) {
+                  setDeterminedStartingFirstFactor(determinedStartingFirstFactor)
+                  // Prepare the first factor verification with the determined starting first factor
+                  await session?.prepareFirstFactorVerification({
+                    strategy: determinedStartingFirstFactor.strategy,
+                    emailAddressId: determinedStartingFirstFactor?.emailAddressId,
+                  })
+                }
+              }
+            }
+
+            const handleVerificationAttempt = async () => {
+              try {
+                // Attempt to verify the session with the provided code
+                await session?.attemptFirstFactorVerification({
+                  strategy: 'email_code',
+                  code,
+                })
+                onComplete()
+              } catch (e) {
+                // Any error from the attempt to verify the session can be handled here
+                console.error('Error verifying session', e)
+              }
+            }
+
+            if (!determinedStartingFirstFactor) {
+              return null
+            }
+
+            return (
+              <div>
+                <p>Enter verification code sent to {determinedStartingFirstFactor.safeIdentifier || ''}</p>
+                <input type="number" name="code" onChange={(e) => setCode(e.target.value)} />
+                <button onClick={async () => handleVerificationAttempt()}>Complete</button>
+                <button onClick={() => onCancel()}>Cancel</button>
+              </div>
+            )
+          }
+          ```
+        </If>
+
+        <If sdk="electron">
+          ```tsx {{ filename: 'src/components/VerificationComponent.tsx', collapsible: true }}
+          import { useEffect, useRef, useState } from 'react'
+          import { useSession } from '@clerk/electron/react'
+          import type {
+            EmailCodeFactor,
+            SessionVerificationLevel,
+            SessionVerificationResource,
+          } from '@clerk/shared/types'
 
           export function VerificationComponent({
             level = 'first_factor',

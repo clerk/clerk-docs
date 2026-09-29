@@ -1,0 +1,143 @@
+---
+title: Configure passkeys for Electron
+description: Learn how passkeys work in Electron apps with Clerk, in the renderer and natively on macOS and Windows.
+sdk: electron
+tag: beta
+---
+
+> [!BETA]
+
+[Passkeys](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#passkeys) are a secure, passwordless sign-in method: users authenticate with biometrics and a physical device. In Electron, the Clerk Electron SDK chooses one of two WebAuthn implementations per request:
+
+- **Native mode** is the path for the typical Electron app, whose window loads a local bundle from a custom scheme (or the dev server) rather than a page on your domain. Clerk routes the ceremony over IPC to the main process, and the OS services it: AuthenticationServices on macOS and `webauthn.dll` on Windows, through the optional [`@clerk/electron-passkeys`](https://github.com/clerk/javascript/tree/main/packages/electron-passkeys) native module. There's no native path on Linux.
+- **Renderer mode** uses Chromium's built-in WebAuthn. It only works when the window's origin can satisfy the passkey's relying party (RP) ID, which Clerk sets to your instance's Frontend API host for native clients: in practice, an `https://` page served from your own domain. It doesn't work on `http://localhost` or a custom scheme; there, the sign-in form reports "Passkeys are not supported on this device." Windows Hello works out of the box; Touch ID on macOS requires Electron 42 or later and [`app.configureWebAuthn()`](https://www.electronjs.org/docs/latest/api/app#appconfigurewebauthnoptions-macos).
+
+Passkey autofill (conditional UI) is only available in renderer mode. In native mode, passkeys are offered through the explicit **Use passkey** action; the sign-in form never opens a passkey prompt on its own.
+
+<Steps>
+  ## Enable passkeys
+
+  In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication?user_auth_tab=passkeys) page and enable **Sign-in with passkey**.
+
+  ## Pass `passkeys` to `<ClerkProvider>`
+
+  Passkey code is only bundled and initialized when the `passkeys` prop is set. This alone is enough for renderer mode; native mode needs the next two steps as well.
+
+  ```tsx {{ filename: 'src/renderer.tsx', mark: [1, 16] }}
+  import { passkeys } from '@clerk/electron/passkeys'
+  import { ClerkProvider } from '@clerk/electron/react'
+  import { StrictMode } from 'react'
+  import { createRoot } from 'react-dom/client'
+  import App from './App'
+  import './index.css'
+
+  const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+  if (!PUBLISHABLE_KEY) {
+    throw new Error('Add your Clerk Publishable Key to the .env file')
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ClerkProvider publishableKey={PUBLISHABLE_KEY} passkeys={passkeys}>
+        <App />
+      </ClerkProvider>
+    </StrictMode>,
+  )
+  ```
+
+  Renderer mode now works on `https://` origins that match your RP ID. Local bundles, custom schemes, and the dev server need native mode; the remaining steps add it.
+
+  ## Install the native module
+
+  Install the package:
+
+  ```npm
+  npm install @clerk/electron-passkeys
+  ```
+
+  The package ships prebuilt binaries for macOS (arm64, x64) and Windows (arm64, x64) as optional platform packages. Install it before the next step: `createClerkBridge({ passkeys: true })` loads the module at startup, and when it's missing, native requests report `passkey_not_supported` and every launch logs:
+
+  ```text
+  Clerk: createClerkBridge({ passkeys: true }) requires the optional @clerk/electron-passkeys package. Install it with your package manager to enable native passkey support.
+  ```
+
+  ## Enable the native bridge in the main and preload processes
+
+  Set `passkeys: true` in both processes:
+
+  ```ts {{ filename: 'src/main.ts', mark: [5] }}
+  import { createClerkBridge } from '@clerk/electron'
+  import { storage } from '@clerk/electron/storage'
+
+  createClerkBridge({
+    passkeys: true,
+    storage: storage(),
+  })
+  ```
+
+  ```ts {{ filename: 'src/preload.ts', mark: [3] }}
+  import { exposeClerkBridge } from '@clerk/electron/preload'
+
+  exposeClerkBridge({ passkeys: true })
+  ```
+
+  ## Associate your macOS app with your domain
+
+  Like passkeys on iOS, the macOS platform APIs require a verified association between your app and your Clerk domain. Windows has no equivalent requirement.
+
+  1. In the Clerk Dashboard, navigate to the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page and ensure the Native API is enabled.
+  1. Select the **iOS** tab, then select **Add iOS App**. Enter your app's **App ID Prefix** and **Bundle ID**. An Electron macOS app uses the same configuration as an iOS app.
+  1. Sign your app with the `com.apple.developer.associated-domains` entitlement containing `webcredentials:<your Frontend API host>`. This is a restricted entitlement: the build must embed a provisioning profile with the Associated Domains capability for the bundle ID, and the entitlements must also include `com.apple.application-identifier` and `com.apple.developer.team-identifier` matching the profile.
+
+  > [!NOTE]
+  > These requirements all guard against the same vague "not associated with domain" error. Sign with an **Apple Development** identity and a **macOS App Development** profile that includes your Mac, and install the profile on the machine. Copy `.app` bundles with `ditto`; other copy methods can break the app seal, and macOS silently ignores the entitlements of an app whose signature fails `codesign --verify --deep --strict`. The system registers the association when the app launches; verify with `sudo swcutil show`, and if state is stuck, `sudo swcutil reset` and relaunch.
+</Steps>
+
+## Platform support
+
+| Platform | Renderer mode | Native mode |
+| - | - | - |
+| macOS | Electron 42+ for Touch ID with `app.configureWebAuthn()` | macOS 12+: Touch ID, iCloud Keychain, security keys |
+| Windows | Windows Hello, security keys | Windows 10 1903+: Windows Hello, security keys |
+| Linux | Security keys | Not supported |
+
+## Exports
+
+<Properties>
+  - `createPasskeyProvider(clerk, options?)`
+  - `(clerk: Clerk, options?: { mode?: 'auto' | 'renderer' | 'native' }) => PasskeySupport`
+
+  Wires passkey support into a `@clerk/clerk-js` instance you manage yourself. Call it before `clerk.load()`.
+
+  ---
+
+  - `createPasskeys(options?)`
+  - `(options?: { mode?: 'auto' | 'renderer' | 'native' }) => PasskeySupport`
+
+  Creates a passkey provider with an explicit mode. `auto` (the default) takes the renderer path when the window's origin can satisfy the requested RP ID (an `https://` origin matching it) and the native path otherwise; on macOS with Electron older than 42 it prefers native when the module is available. In `auto` mode, a renderer request that fails with an RP ID mismatch or an unsupported-authenticator error is retried natively when the native module is available; user cancellation isn't retried.
+
+  ---
+
+  - `passkeys`
+  - `PasskeySupport`
+
+  Ready-to-use passkey implementation for the `<ClerkProvider>` `passkeys` prop. Chooses renderer or native WebAuthn automatically per request.
+</Properties>
+
+## Use passkeys without `<ClerkProvider>`
+
+The following example wires passkey support into a `@clerk/clerk-js` instance you manage yourself:
+
+```ts {{ filename: 'src/renderer.ts' }}
+import { Clerk } from '@clerk/clerk-js'
+import { createPasskeyProvider } from '@clerk/electron/passkeys'
+
+const clerk = new Clerk(PUBLISHABLE_KEY)
+createPasskeyProvider(clerk)
+await clerk.load()
+```
+
+## Usage
+
+To learn how to create, delete, and authenticate with passkeys in your own UI, see the [custom flow guide](/docs/guides/development/custom-flows/authentication/passkeys).

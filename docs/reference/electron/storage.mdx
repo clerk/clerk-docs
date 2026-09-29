@@ -1,0 +1,70 @@
+---
+title: '`storage()`'
+description: storage() creates the default encrypted token storage adapter for the Clerk Electron SDK, backed by electron-store and Electron's safeStorage.
+sdk: electron
+tag: beta
+---
+
+> [!BETA]
+
+`storage()` creates a secure token storage adapter for the Electron main process. The adapter persists tokens with [`electron-store`](https://github.com/sindresorhus/electron-store) and encrypts them at rest with Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API, which is backed by the OS keystore: Keychain on macOS, DPAPI on Windows, and libsecret or KWallet on Linux. Pass the result to [`createClerkBridge()`](/docs/reference/electron/create-clerk-bridge).
+
+`electron-store` is an optional peer dependency of `@clerk/electron` (peer range `^8.2.0`). Install it when you use `storage()`:
+
+```npm
+npm install electron-store@8
+```
+
+## Usage
+
+```ts {{ filename: 'src/main.ts' }}
+import { createClerkBridge } from '@clerk/electron'
+import { storage } from '@clerk/electron/storage'
+
+createClerkBridge({ storage: storage({ name: 'my-app-tokens' }) })
+```
+
+## Options
+
+<Properties>
+  - `name?`
+  - `string`
+
+  The name of the file (without extension) used to persist tokens. Defaults to `clerk-tokens`.
+
+  ---
+
+  - `path?`
+  - `string`
+
+  The directory in which the token file is stored. Maps to `electron-store`'s `cwd` option. When omitted, the OS default user config directory (`app.getPath('userData')`) is used.
+
+  ---
+
+  - `unencryptedFallback?`
+  - `boolean`
+
+  When OS-level encryption is unavailable (for example, a Linux machine without a keyring), tokens aren't persisted by default, which signs the user out on the next app launch. Set this to `true` to instead persist tokens **unencrypted** in that scenario, keeping the user signed in across restarts at the cost of storing tokens in plaintext on disk. Defaults to `false`.
+</Properties>
+
+## Behavior
+
+- The adapter writes values as `enc:<base64 ciphertext>` when encrypted, or `raw:<value>` when `unencryptedFallback` applies. Entries in any other format are deleted on read. Entries that fail to decrypt are kept and read as `null`.
+- On Electron 42 and later, Electron uses the asynchronous `safeStorage` API when it reports itself available; otherwise it uses the synchronous API. Availability is decided by Electron and the OS at runtime.
+- `enc:` means the value went through Electron's `safeStorage`, which isn't the same as OS-keystore protection on every platform. On Linux without a keyring, Electron can select its `basic_text` backend, which encrypts with a hard-coded key and still reports encryption as available; the adapter doesn't inspect the selected backend. If that matters for your app, check `safeStorage.getSelectedStorageBackend()` on Linux and decide whether to persist tokens at all. The `unencryptedFallback` rules apply only when Electron reports encryption as unavailable.
+- When the OS rotates its key, the adapter silently re-encrypts the value.
+- When persistence is unavailable or a write fails, the adapter keeps the token in memory for the life of the process, so the user stays signed in until the app exits. On macOS this is what happens in an unsigned or ad-hoc-signed packaged app: `safeStorage` can't obtain a Keychain entry, and the console shows `Keychain lookup failed`. Sign the app (see the [deployment guide](/docs/guides/development/deployment/electron#package-and-sign)); `npm start` is unaffected.
+- Out-of-order IPC writes can't overwrite a newer token with an older one.
+
+The adapter logs one warning per instance, for the first of these conditions it hits:
+
+| Warning | Meaning |
+| - | - |
+| `Clerk: OS encryption is unavailable and unencryptedFallback is not enabled, so tokens are not being persisted. ...` | Nothing is written to disk; the user is signed out on the next launch. |
+| `Clerk: OS encryption is unavailable; falling back to unencrypted storage. ...` | `unencryptedFallback` engaged; the token is on disk in plaintext. |
+| `Clerk: failed to securely persist a token; it will only be available until the app exits.` | Encryption exists but the write failed; the token stays in memory. |
+| `Clerk: failed to persist a token; it will only be available until the app exits.` | The unencrypted write failed; the token stays in memory. |
+
+## Custom storage
+
+To store tokens somewhere else, pass any object matching the `TokenStorage` type instead. See [Custom storage](/docs/reference/electron/create-clerk-bridge#custom-storage).

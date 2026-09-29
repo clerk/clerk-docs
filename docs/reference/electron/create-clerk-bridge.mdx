@@ -1,0 +1,136 @@
+---
+title: '`createClerkBridge()`'
+description: createClerkBridge() sets up Clerk in the Electron main process, owning IPC handlers, token persistence, and OAuth deep-link transport.
+sdk: electron
+tag: beta
+---
+
+> [!BETA]
+
+`createClerkBridge()` creates the Clerk bridge for Electron's main process. It owns Clerk's IPC handlers, token persistence, and the OAuth deep-link transport. Call it before `app.whenReady()` and before creating any renderer windows, and call the returned `cleanup()` when tearing down the app.
+
+## Usage
+
+```ts {{ filename: 'src/main.ts' }}
+import { createClerkBridge } from '@clerk/electron'
+import { storage } from '@clerk/electron/storage'
+import { app } from 'electron'
+
+const clerk = createClerkBridge({
+  storage: storage(),
+  renderer: { scheme: 'my-app', host: 'renderer' },
+})
+
+if (clerk.isPrimaryInstance) {
+  app.whenReady().then(() => {
+    // create your windows
+  })
+}
+
+app.on('before-quit', () => {
+  clerk.cleanup()
+})
+```
+
+## Options
+
+<Properties>
+  - `manageSingleInstanceLock?`
+  - `boolean`
+
+  Whether Clerk should acquire and release Electron's process-wide single-instance lock for OAuth deep links. Defaults to `true`. Set this to `false` when the app manages the lock itself. Ignored on macOS, where deep links reach the running instance through `open-url`.
+
+  ---
+
+  - `passkeys?`
+  - `boolean`
+
+  Registers the IPC handlers for native passkey ceremonies. Native support also requires the optional `@clerk/electron-passkeys` package and `exposeClerkBridge({ passkeys: true })`. See [Passkeys](/docs/reference/electron/passkeys).
+
+  ---
+
+  - `renderer?`
+  - `{ scheme: string, host: string, privileges?: Electron.Privileges }`
+
+  Registers the custom scheme used to serve the Electron renderer from a stable origin, and enables the OAuth deep-link transport. `scheme` is a bare scheme name such as `my-app` (not `my-app://`) and `host` is a bare host name such as `renderer`. The redirect URL Clerk sends to OAuth providers is `scheme://host/`. Clerk registers the scheme as privileged with `{ standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }`; values in `privileges` override those defaults. Required for OAuth and SSO. See [Configure OAuth deep links](/docs/guides/configure/auth-strategies/oauth-deep-links).
+
+  ---
+
+  - `storage`
+  - `TokenStorage`
+
+  Storage adapter used by the main process to persist Clerk tokens. Required. Use [`storage()`](/docs/reference/electron/storage) from `@clerk/electron/storage`, or provide a [custom adapter](#custom-storage).
+
+  ---
+
+  - `userAgent?`
+  - `string`
+
+  Product token to use in Electron's user-agent fallback, such as `Acme Co/1.0.0`. Clerk uses the resulting user-agent for `<UserProfile />` session activity attribution when no `webContents`- or session-level user-agent is set. The Electron platform comment is preserved so device details such as macOS or Windows can still be detected.
+</Properties>
+
+## Returns
+
+<Properties>
+  - `cleanup`
+  - `() => void`
+
+  Removes IPC handlers and listeners registered by `createClerkBridge()`, rejects any pending OAuth flow, and releases the single-instance lock if Clerk acquired it.
+
+  ---
+
+  - `isPrimaryInstance`
+  - `boolean`
+
+  Whether this process is the one the app should keep booting. `false` only when Clerk detected a secondary instance on Windows or Linux, forwarded its deep-link arguments to the primary instance, and called `app.quit()`. Because `app.quit()` is asynchronous, skip window creation and the rest of your bootstrap when this is `false`. Always `true` on macOS.
+</Properties>
+
+## Errors
+
+`createClerkBridge()` throws during setup when:
+
+- `storage` is missing: `Clerk: createClerkBridge requires a storage adapter. Pass createClerkBridge({ storage: storage() }) from @clerk/electron/storage, or provide a custom storage adapter.`
+- `renderer.scheme` contains `:` or `/`: `Clerk: renderer.scheme must be a scheme name like "my-app", not a URL or protocol like "my-app://".`
+- `renderer.host` contains `:` or `/`: `Clerk: renderer.host must be a host name like "renderer", not a URL or origin like "my-app://renderer".`
+
+If setup throws partway through, everything already registered is torn down before the error is rethrown.
+
+## Custom storage
+
+`storage` accepts any object with the `TokenStorage` shape. Methods can be synchronous or return a promise. The SDK currently stores one key, `__clerk_client_jwt`.
+
+```ts {{ filename: 'src/token-storage.ts' }}
+import type { TokenStorage } from '@clerk/electron'
+
+const memory = new Map<string, string>()
+
+export const memoryStorage: TokenStorage = {
+  getItem: (key) => memory.get(key) ?? null,
+  setItem: (key, value) => {
+    memory.set(key, value)
+  },
+  removeItem: (key) => {
+    memory.delete(key)
+  },
+}
+```
+
+## Single-instance behavior on Windows and Linux
+
+When `renderer` is set, Clerk calls `app.requestSingleInstanceLock()` unless the app already holds it. If the lock is unavailable, Clerk calls `app.quit()` and returns `{ isPrimaryInstance: false }`. If you manage the lock yourself, acquire it before calling `createClerkBridge()` and pass `manageSingleInstanceLock: false`:
+
+```ts {{ filename: 'src/main.ts' }}
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+} else {
+  createClerkBridge({
+    storage: storage(),
+    renderer: { scheme: 'my-app', host: 'renderer' },
+    manageSingleInstanceLock: false,
+  })
+}
+```
+
+If `manageSingleInstanceLock` is `false` and the app doesn't hold the lock, Clerk logs a warning and OAuth callbacks can't be delivered on Windows or Linux until the lock is acquired.

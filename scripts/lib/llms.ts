@@ -13,6 +13,7 @@ const SDK_DISPLAY_NAMES: Record<SDK, string> = {
   react: 'React',
   'js-frontend': 'JavaScript',
   'chrome-extension': 'Chrome Extension',
+  electron: 'Electron',
   expo: 'Expo',
   android: 'Android',
   ios: 'iOS',

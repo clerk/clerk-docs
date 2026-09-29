@@ -384,6 +384,7 @@ async function checkRedirects(): Promise<void> {
           'react-router',
           'tanstack-react-start',
           'chrome-extension',
+          'electron',
         ]
 
         let hasValidSDKPath = false

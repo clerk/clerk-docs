@@ -258,6 +258,24 @@ describe('writeLLMs', () => {
     expect(result).toContain('/docs/js-frontend/reference/overview.md')
     expect(result).not.toContain('/docs/reference/javascript/')
   })
+
+  test('names the Electron section with its display name', async () => {
+    const result = await writeLLMs(
+      [
+        {
+          path: 'electron/getting-started/quickstart.mdx',
+          url: '{{SITE_URL}}/docs/electron/getting-started/quickstart',
+          content: '',
+          title: 'Electron Quickstart',
+          description: undefined,
+        },
+      ],
+      ['electron'],
+    )
+
+    expect(result).toContain('### Electron')
+    expect(result).not.toContain('### electron')
+  })
 })
 
 describe('assertConsistentReferenceUrlShapes', () => {

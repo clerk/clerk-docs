@@ -259,6 +259,54 @@ describe('compareDistManifests', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('treats a view that goes from empty to populated as a note when named in allowNewViews', () => {
+    // Adding an SDK creates a view that normalizes to nothing in the old dist and to a real tree in
+    // the new one. That is always a diff, so a fresh SDK could never pass without the flag.
+    const before = {
+      flags: {},
+      navigation: { default: { type: 'sectioned', sections: [{ title: 'Guides', items: [page('a', ['nextjs'])] }] } },
+    }
+    const after = {
+      flags: {},
+      navigation: {
+        default: { type: 'sectioned', sections: [{ title: 'Guides', items: [page('a', ['nextjs', 'electron'])] }] },
+      },
+    }
+    const result = compareDistManifests(before, after, { allowDefaultChange: true })
+    expect(result.ok).toBe(false)
+    expect(result.diffs.map(({ view }) => view)).toEqual(['electron'])
+
+    const allowed = compareDistManifests(before, after, { allowDefaultChange: true, allowNewViews: ['electron'] })
+    expect(allowed.ok).toBe(true)
+    expect(allowed.diffs).toEqual([])
+    expect(
+      allowed.notes.some(
+        (note) => note.startsWith('electron view is new (0 → ') && note.endsWith('accepted via --allow-new-view'),
+      ),
+    ).toBe(true)
+  })
+
+  it('still fails a named new view that was not empty before', () => {
+    const before = {
+      flags: {},
+      navigation: {
+        default: { type: 'sectioned', sections: [{ title: 'Guides', items: [page('a', ['nextjs', 'electron'])] }] },
+      },
+    }
+    const after = {
+      flags: {},
+      navigation: {
+        default: {
+          type: 'sectioned',
+          sections: [{ title: 'Guides', items: [page('a', ['nextjs', 'electron']), page('b', ['electron'])] }],
+        },
+      },
+    }
+    const result = compareDistManifests(before, after, { allowDefaultChange: true, allowNewViews: ['electron'] })
+    expect(result.ok).toBe(false)
+    expect(result.diffs.map(({ view }) => view)).toEqual(['electron'])
+  })
+
   it('fails the non-vacuity guard when both dists are empty', () => {
     const empty = { flags: {}, navigation: { default: { type: 'sectioned', sections: [] } } }
     const result = compareDistManifests(empty, structuredClone(empty))

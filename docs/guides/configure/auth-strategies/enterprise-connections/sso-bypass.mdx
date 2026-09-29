@@ -1,0 +1,122 @@
+---
+title: SSO bypass
+description: Learn how to let specific users sign in with an email code when their enterprise SSO connection is unavailable.
+---
+
+When an enterprise single sign-on (SSO) connection is active, every user with an email address on one of its domains must sign in through the identity provider ([IdP](!identity-provider)). If the IdP becomes unavailable or the connection breaks (e.g., because of an expired certificate or a configuration change), users on that domain can no longer sign in. This can also lock out the people responsible for fixing the issue.
+
+SSO bypass prevents that lockout by giving specific users an alternative way to sign in. Users added to the allowlist can sign in with a one-time code sent to their email address instead of going through the IdP. Everyone else on the domain must continue to use SSO.
+
+A bypass sign-in creates a standard user session and doesn't restrict what the user can do once signed in. The allowlist only controls who can use the bypass method. An admin can use SSO bypass to sign in and repair the enterprise connection, or deactivate it until the IdP recovers, so that other users can sign in again.
+
+> [!IMPORTANT]
+> SSO bypass is available on every instance that uses enterprise connections, but it's opt-in. Users can only bypass SSO after you add them to the allowlist.
+
+## Who can bypass SSO
+
+A user can bypass SSO when all of the following are true:
+
+- The [**Email verification code**](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#email) sign-in option is enabled for the instance.
+- The user is on the allowlist of an active enterprise connection that serves the email address they're signing in with.
+
+You can only add users to the allowlist if they have a verified email address on a domain that the connection serves. This prevents the allowlist from enabling non-SSO sign-in for addresses outside your domains. However, Clerk doesn't verify that the email address exists in your IdP, so remove users from the allowlist when they leave your organization.
+
+If multiple enterprise connections serve the same domain, a user can bypass SSO if they're on the allowlist for any of those connections. Because the bypass isn't tied to a specific connection, the user doesn't need to choose one.
+
+Clerk automatically removes an allowlist entry when you delete the user or the enterprise connection. If you deactivate a connection, users on that connection's allowlist can't bypass SSO until you reactivate it.
+
+## Manage the allowlist
+
+There are three ways to manage the allowlist:
+
+- [In the Clerk Dashboard](#in-the-clerk-dashboard)
+- [From `<OrganizationProfile />`](#from-organizationprofile), if your application uses [Clerk Organizations](/docs/guides/organizations/overview) and you're an Organization [admin](/docs/guides/organizations/control-access/roles-and-permissions)
+- [With the Backend API](#with-the-backend-api)
+
+> [!IMPORTANT]
+> The Clerk Dashboard and Backend API work whether or not your app uses Organizations. Unlike `<OrganizationProfile />`, they don't require the allowlisted user to be an Organization member.
+
+### In the Clerk Dashboard
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections/enterprise) page.
+1. Select the connection you want to manage the allowlist for.
+1. For a Security Assertion Markup Language (SAML) or OpenID Connect (OIDC) connection, select the **SSO** tab. For an EASIE connection, the allowlist is on the connection's page.
+1. In the **SSO bypass** section, select **Add user**, choose the user, and confirm.
+
+To remove a user, open the menu on their row and select **Remove**. This removes them from every connection's allowlist on the instance immediately. They can no longer use a code sent before their removal.
+
+### From `<OrganizationProfile />`
+
+For Organizations with an enterprise connection, the **Security** tab of [`<OrganizationProfile />`](/docs/reference/components/organization/organization-profile) includes an **SSO bypass** section. Members need the `org:sys_entconns_sso_bypass:manage` [System Permission](/docs/guides/organizations/control-access/roles-and-permissions#system-permissions) to manage the allowlist.
+
+The default [**Admin**](/docs/guides/organizations/control-access/roles-and-permissions#default-roles) Role includes this Permission. If you've defined custom Roles, add it to any Role whose members should manage the allowlist. This Permission is separate from `org:sys_entconns:manage`, so you can grant allowlist access without letting someone change the connection.
+
+Members with this Permission can:
+
+- Add a member by email address.
+- Add all members with a given Role. Clerk skips members whose email addresses aren't on a domain served by the Organization's connections. This adds current members only; members who receive the Role later aren't added automatically.
+- Search the allowlist and remove members.
+
+> [!IMPORTANT]
+> In `<OrganizationProfile />`, members with this Permission can manage bypass access only for their Organization's members and enterprise connections.
+
+To build your own allowlist UI, use the [`ssoBypassAllowlist`](/docs/reference/objects/organization#properties) property of the `Organization` object. It requires the same Permission.
+
+### With the Backend API
+
+Use the following Backend API endpoints to manage the allowlist from your backend:
+
+- [List allowlisted users](/docs/reference/backend-api/tag/sso-bypass/GET/sso_bypass_allowlist_users){{ target: '_blank' }}. Pass `enterprise_connection_id` to list only the users on one connection's allowlist.
+- [Add a user to the allowlist](/docs/reference/backend-api/tag/sso-bypass/POST/sso_bypass_allowlist_users){{ target: '_blank' }}. The user is added to the allowlist of every connection that serves one of their verified email addresses. If none does, the request fails with `sso_bypass_domain_not_served`.
+- [Remove a user from the allowlist](/docs/reference/backend-api/tag/sso-bypass/DELETE/sso_bypass_allowlist_users/%7BuserID%7D){{ target: '_blank' }}. The user is removed from the allowlist of every connection on the instance.
+
+## How users sign in
+
+When a user on the allowlist enters their email address in the [`<SignIn />`](/docs/reference/components/authentication/sign-in) component, Clerk shows a **Can't use SSO?** link alongside the usual SSO option. Clerk redirects other users to the IdP as usual without showing the link.
+
+After the user selects the link, Clerk explains that their organization requires SSO and that it will log a successful bypass sign-in. Clerk then sends a one-time code to their email address. Once they enter it, Clerk continues the sign-in as usual: [second factor verification](!second-factor-verification), then any [session tasks](/docs/guides/configure/session-tasks).
+
+> [!NOTE]
+> The bypass only supports email verification codes. Password, email link, and passkey sign-ins are still blocked for users on a domain served by an enterprise connection.
+
+### Multi-factor authentication (MFA)
+
+When a user signs in through SSO, Clerk skips its own [required MFA](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication) enrollment, because the IdP is expected to handle MFA. A bypass sign-in never reaches the IdP, so Clerk's MFA requirements apply in full, including enrollment if the user hasn't set up MFA yet.
+
+Clerk allows a bypass user to add a phone number for SMS MFA enrollment, even if the connection has disabled additional identifiers. This way, a user isn't stuck in enrollment when SMS is the only [second factor](!second-factor) available.
+
+## Build a custom flow
+
+If you use a [custom sign-in flow](/docs/guides/development/custom-flows/overview), check [`signIn.ssoBypassFirstFactors`](/docs/reference/objects/sign-in-future#properties) after creating the sign-in. It's kept separate from `supportedFirstFactors`, which only includes `enterprise_sso`, so existing flows keep redirecting to the IdP.
+
+`ssoBypassFirstFactors` is empty unless the user can bypass SSO. When they can, it holds a single `email_code` factor. Pass its `emailAddressId` to [`signIn.emailCode.sendCode()`](/docs/reference/objects/sign-in-future#emailcode-sendcode) exactly as it is, then verify the code as you would for any email code sign-in.
+
+```ts
+await signIn.create({ identifier: emailAddress })
+
+const bypassFactor = signIn.ssoBypassFirstFactors.find((factor) => factor.strategy === 'email_code')
+
+if (bypassFactor) {
+  // Show a "Can't use SSO?" option next to the SSO option.
+  // When the user chooses it, send the code:
+  await signIn.emailCode.sendCode({ emailAddressId: bypassFactor.emailAddressId })
+
+  // Then, with the code the user entered:
+  await signIn.emailCode.verifyCode({ code })
+}
+```
+
+Make the bypass a secondary option rather than the default, and tell the user the sign-in is recorded, as [`<SignIn />`](/docs/reference/components/authentication/sign-in) does.
+
+## Audit bypass sign-ins
+
+Clerk records a `sign_in.sso_bypass.succeeded` event in your [Application logs](/docs/guides/dashboard/logs/application-logs) for every successful bypass sign-in. The event includes the user, the email address they signed in with, and the connections and Organizations whose allowlist granted access. Clerk doesn't record failed attempts or send an email or webhook when someone bypasses SSO.
+
+In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections/enterprise) page. Select the connection, open the menu on the user's row in the **SSO bypass** section, and select **View usage** to see their bypass sign-ins.
+
+## Security considerations
+
+- **Keep the allowlist short.** Every entry is a way into your app that doesn't go through your IdP. Add the people who can repair the connection, not everyone who might want access during an outage.
+- **Email may go down with SSO.** Many organizations use the same vendor for identity and email, such as Microsoft or Google. An outage at that vendor can take down both, so the bypass mostly helps when a single connection is misconfigured.
+- **Require MFA.** A bypass sign-in only proves access to an inbox. [Requiring MFA](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication) adds a second factor that doesn't depend on the IdP.
+- **The sign-in response shows whether an address is on the allowlist.** `ssoBypassFirstFactors` is only populated for allowlisted addresses, so anyone who starts a sign-in with an address can tell whether it's on the allowlist.

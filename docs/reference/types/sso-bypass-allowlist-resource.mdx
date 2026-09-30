@@ -1,0 +1,132 @@
+---
+title: '`SSOBypassAllowlistResource`'
+description: An interface that defines the methods for managing an Organization's single sign-on (SSO) bypass allowlist.
+sdk: js-frontend, astro, chrome-extension, electron, expo, nextjs, react, react-router, tanstack-react-start, nuxt, vue
+---
+
+The `SSOBypassAllowlistResource` object lets you manage which Organization members can sign in with an email code instead of using their enterprise single sign-on (SSO) connection. Access these methods through [`organization.ssoBypassAllowlist`](/docs/reference/objects/organization#properties).
+
+These methods only manage the allowlists of the Organization's own enterprise connections. To manage the allowlist for every connection on the instance, use the [Clerk Dashboard or the Backend API](/docs/guides/configure/auth-strategies/enterprise-connections/sso-bypass#manage-the-allowlist).
+
+> [!IMPORTANT]
+> These methods require the `org:sys_entconns_sso_bypass:manage` [System Permission](/docs/guides/organizations/control-access/roles-and-permissions#system-permissions).
+
+## Methods
+
+### `getUsers()`
+
+Lists the Organization members on the SSO bypass allowlist. Returns an array of [`SSOBypassAllowlistUserResource`](#ssobypassallowlistuserresource) objects.
+
+```typescript
+function getUsers(): Promise<SSOBypassAllowlistUserResource[]>
+```
+
+### `addUser()`
+
+Adds an Organization member to the allowlist. The member must have a verified email address on a domain served by one of the Organization's enterprise connections. Returns the member's [`SSOBypassAllowlistUserResource`](#ssobypassallowlistuserresource) object. Adding a member who's already on the allowlist returns their existing entry.
+
+```typescript
+function addUser(params: { userId: string }): Promise<SSOBypassAllowlistUserResource>
+```
+
+#### Parameters
+
+<Properties>
+  - `userId`
+  - `string`
+
+  The ID of the Organization member to add.
+</Properties>
+
+### `addUsers()`
+
+Adds Organization members to the allowlist. The method sends one request per 100 IDs, one after another. If a request fails, the promise rejects, and members added by earlier requests stay on the allowlist.
+
+```typescript
+function addUsers(params: { userIds: string[] }): Promise<SSOBypassAllowlistBulkCreateResult>
+```
+
+#### Parameters
+
+<Properties>
+  - `userIds`
+  - `string[]`
+
+  The IDs of the Organization members to add.
+</Properties>
+
+#### Returns
+
+`addUsers()` returns an `SSOBypassAllowlistBulkCreateResult` object with the following properties:
+
+<Properties>
+  - `data`
+  - [`SSOBypassAllowlistUserResource[]`](#ssobypassallowlistuserresource)
+
+  The members on the allowlist, including members who were already on it.
+
+  ---
+
+  - `errors`
+  - `{ userId: string, code: string }[]`
+
+  The members who couldn't be added. The `code` is `resource_not_found` when the user isn't a member of the Organization, and `sso_bypass_domain_not_served` when the member has no verified email address on a domain served by one of the Organization's enterprise connections.
+</Properties>
+
+An error for one member doesn't prevent other members from being added.
+
+### `removeUser()`
+
+Removes an Organization member from the allowlist. Entries on enterprise connections outside the Organization aren't affected. Returns a [`DeletedObjectResource`](/docs/reference/types/deleted-object-resource) object.
+
+```typescript
+function removeUser(userId: string): Promise<DeletedObjectResource>
+```
+
+#### Parameters
+
+<Properties>
+  - `userId`
+  - `string`
+
+  The ID of the Organization member to remove.
+</Properties>
+
+## `SSOBypassAllowlistUserResource`
+
+An Organization member's entry on the SSO bypass allowlist.
+
+<Properties>
+  - `createdAt`
+  - `Date`
+
+  The date when the member was added to the allowlist.
+
+  ---
+
+  - `id`
+  - `string`
+
+  The unique identifier for the entry. Same as `userId`.
+
+  ---
+
+  - `publicUserData`
+  - [`PublicUserData`](/docs/reference/types/public-user-data)
+
+  Information about the member that's publicly available.
+
+  ---
+
+  - `updatedAt`
+  - `Date`
+
+  The date when the entry was last updated.
+
+  ---
+
+  - `userId`
+  - `string`
+
+  The ID of the member.
+</Properties>

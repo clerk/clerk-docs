@@ -1,0 +1,122 @@
+---
+title: Self-serve Directory Sync
+description: Learn how to let your customers' IT admins set up Directory Sync (SCIM provisioning) for their own enterprise SSO connection within your application.
+search:
+  keywords:
+    - self-serve SCIM
+    - self-serve provisioning
+---
+
+[Directory Sync](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync) automatically provisions, updates, and deprovisions an Organization's members based on changes in its identity provider (IdP). Normally, your team configures it in the Clerk Dashboard and exchanges a SCIM endpoint and bearer token with the customer's IT admin.
+
+Self-serve Directory Sync lets an Organization admin handle this setup instead. It builds on [self-serve SSO](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso). After configuring the Organization's SSO connection from the **Security** tab of [`<OrganizationProfile />`](/docs/reference/components/organization/organization-profile), the admin can configure Directory Sync, review attribute mappings, and test provisioning from the **Directory Sync** section.
+
+The directory remains attached to the Organization's SSO connection, and your team can continue to manage it from the Clerk Dashboard. The **Directory Sync** section appears automatically for every Organization with self-serve SSO enabled.
+
+> [!IMPORTANT]
+> Self-serve Directory Sync is free to use in development instances. To use it in a production instance, your application must be on the Pro or Business plan and have the [B2B Authentication add-on](/pricing).
+
+## Requirements
+
+For an admin to set up Directory Sync, the following must be true:
+
+- [Self-serve SSO is enabled for the Organization](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso#enable-self-serve-sso), and an [SSO connection has been configured](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso#how-the-flow-works). The connection doesn't need to be active; see [Provisioning before SSO is active](#provisioning-before-sso-is-active).
+- The admin has the `org:sys_entconns:manage` [System Permission](/docs/guides/organizations/control-access/roles-and-permissions#system-permissions). This Permission is included in the default [**Admin**](/docs/guides/organizations/control-access/roles-and-permissions#default-roles) Role.
+- The SSO connection uses **Okta Workforce**, **Microsoft Entra ID**, **Google Workspace**, or a custom SAML or OIDC provider that supports SCIM 2.0 provisioning.
+- The admin has access to the provisioning settings for the application in their IdP. For Google Workspace, they need a Google Cloud project and a Workspace Super Administrator account.
+
+## Enable self-serve Directory Sync
+
+Self-serve Directory Sync has no separate setting. When you [enable self-serve SSO for an Organization](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso#enable-self-serve-sso), the **Directory Sync** section becomes available in the **Security** tab of that Organization's [`<OrganizationProfile />`](/docs/reference/components/organization/organization-profile) for admins. If your application already renders `<OrganizationProfile />`, including through the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component, the section appears there automatically. If not, render `<OrganizationProfile />` on a page where Organization admins can reach it.
+
+Your team can also configure Directory Sync from the Clerk Dashboard by following the [Directory Sync guide](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#enable-and-configure-directory-sync). The Organization admin then sees the configured directory in the **Security** tab.
+
+## How the flow works
+
+The **Directory Sync** section appears directly beneath the SSO section in the **Security** tab and shows an **Unconfigured**, **Active**, or **Inactive** status badge. Until an SSO connection exists, **Start configuration** is disabled and displays an **SSO Required** badge. Otherwise, selecting it opens a three-step wizard with embedded IdP instructions.
+
+<Steps>
+  ## Configure
+
+  Selecting **Start configuration** creates the directory. The Directory Sync provider is determined automatically from the SSO connection's IdP, so the admin doesn't need to choose one.
+
+  | SSO connection provider | Directory Sync provider |
+  | - | - |
+  | Okta Workforce | Okta Workforce |
+  | Microsoft Entra ID | Microsoft Entra ID |
+  | Google Workspace | Google Workspace |
+  | Custom SAML provider or OIDC provider | Custom SCIM provider |
+
+  This step shows the connection's name, verified domains, and provider-specific instructions. For Okta Workforce, Microsoft Entra ID, and custom SCIM providers, it also shows two values to add to the IdP:
+
+  - **SCIM endpoint URL**: The base URL that receives provisioning requests from the IdP.
+  - **Bearer token**: The secret the IdP uses to authenticate its requests.
+
+  Clerk displays the bearer token only once, during the session in which it is generated. If the admin loses it or returns in a later session, they must select **Generate new token**. By default, the previous token remains valid for 10 minutes so the admin has time to update the IdP.
+
+  The inline instructions summarize the IdP-side setup:
+
+  - **Okta Workforce**: Open the application used for the SSO connection, then navigate to **Provisioning** > **Integration**. Paste the SCIM endpoint URL and bearer token, then enable provisioning for new users, profile updates, deactivations, and groups. For complete provider instructions, including group push for Role mapping, see [Configure Directory Sync with Okta](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#okta).
+  - **Microsoft Entra ID**: In the Microsoft Entra admin center, open the application used for the SSO connection. Under **Connectivity**, enter the SCIM endpoint URL as the **Tenant URL** and the bearer token as the **Secret Token**, then select **Test Connection**. Set the provisioning mode to **Automatic**, assign the users and groups to provision, and turn provisioning **On**. For complete provider instructions, see [Configure Directory Sync with Microsoft Entra ID](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#microsoft-entra-id).
+  - **Google Workspace**: There's no SCIM endpoint URL or bearer token, because Clerk reads the directory through the Google Admin SDK. Create a service account, enable the **Admin SDK API**, and grant the service account domain-wide delegation with the read-only directory scopes. Then select **Upload JSON key** and enter the email address of a Workspace admin to read the directory as. Clerk validates the credential against the directory before storing it, so a missing scope or an incomplete delegation fails here rather than at the first sync. For complete provider instructions, see [Configure Directory Sync with Google Workspace](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#google-workspace).
+  - **Custom SCIM provider**: Create a SCIM 2.0 provisioning integration in the IdP, paste the SCIM endpoint URL as its base URL, configure it to authenticate with the bearer token, and enable provisioning for user create, update, and deactivate events.
+
+  > [!IMPORTANT]
+  > Clerk requires an email address in the SCIM `emails` attribute for every user. Even if the IdP's `userName` is an email address, the IdP must also send it in `emails`. Users whose SCIM payloads omit an email fail to provision.
+
+  For SCIM providers, there's no separate activation step; the IdP can start pushing users after the admin saves the SCIM endpoint URL and bearer token. For Google Workspace, uploading valid service account credentials activates the directory.
+
+  ### Provisioning before SSO is active
+
+  Directory Sync can be configured before the SSO connection is [activated](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso#how-the-flow-works). The wizard warns that members can be provisioned immediately but cannot sign in until SSO is active. This lets the admin populate the Organization's membership before moving users to the IdP.
+
+  ## Review attributes
+
+  This step lists the standard SCIM attributes that Clerk maps to user attributes. These mappings are preconfigured and read-only. Attributes that aren't listed here and don't have a custom mapping are ignored. Clerk stores custom-mapped values in the user's `publicMetadata`.
+
+  | Directory attribute | User attribute |
+  | - | - |
+  | `userName` | Username / primary identifier |
+  | `emails[0].value` | Email address |
+  | `name.givenName` | First name |
+  | `name.familyName` | Last name |
+
+  Google Workspace uses the same mappings. A user's primary email maps to both `userName` and `emails[0].value`. When a user is suspended or archived in Google Workspace, Clerk deprovisions them.
+
+  Custom attributes and group-to-Role mappings aren't part of the self-serve flow. Your team manages them for the connection in the Clerk Dashboard. See [Custom attribute mapping](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#custom-attribute-mapping) and [Role mapping](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#role-mapping).
+
+  ## Test provisioning
+
+  The admin assigns or pushes a test user to the application in their IdP. While this step is open, it polls for provisioned users and lists the most recent activity first. Each entry shows the user's email address, name, provisioning time, and **Active** or **Deprovisioned** status.
+
+  > [!NOTE]
+  > With Google Workspace, there's nothing to push. Instead, the step shows a **Directory sync** row with the last sync's time and result, and a **Sync now** action that pulls the directory immediately rather than waiting for the next scheduled sync, which runs every five minutes.
+
+  Only users whose email address is on one of the connection's domains are processed. A test user on another domain never appears in the list.
+
+  After confirming that provisioning works, the admin selects **Complete** to close the wizard and return to the **Security** tab. The directory is already active, so selecting **Complete** does not activate it.
+</Steps>
+
+## Manage Directory Sync
+
+After setup, the section's menu offers the following actions:
+
+- **Edit**: Reopens the wizard to generate a new bearer token or review recent provisioning activity. For Google Workspace, it's also where the admin replaces the service account key or starts a sync.
+- **Deactivate** / **Activate**: Pauses or resumes provisioning without deleting anything. While the directory is inactive, the section shows **Inactive**. A Google Workspace directory can't be activated until a service account key is stored.
+- **Remove**: Permanently deletes the directory after the admin confirms by typing the Organization's name. The directory stops syncing, but existing members keep their memberships and accounts. For SCIM providers, removal also deletes the bearer token, and setting up Directory Sync again generates a new endpoint and token. For Google Workspace, removal destroys Clerk's copy of the service account key.
+
+### What your team sees
+
+A self-serve directory behaves like any other Clerk directory attached to an Organization's enterprise connection. It appears on the connection's **Directory sync** and **Directory users** tabs in the Clerk Dashboard. From there, your team can [map custom attributes](/docs/guides/configure/auth-strategies/enterprise-connections/custom-attribute-mapping#map-attributes-for-scim-directory-sync), [configure Role mapping](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#role-mapping), and [view directory users](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync#view-directory-users).
+
+> [!IMPORTANT]
+> Unlike a Dashboard-created directory, a self-serve directory starts with Role mapping disabled. Groups from the IdP are stored, but they don't affect member Roles until your team enables Role mapping for the connection.
+
+## Next steps
+
+After setup, changes in the IdP's directory are reflected in the Organization's membership. Provisioned users sign in through the Organization's SSO connection. To learn more, see:
+
+- [Directory Sync](/docs/guides/configure/auth-strategies/enterprise-connections/directory-sync)
+- [Self-serve SSO](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso)
+- [Just-in-Time (JIT) Provisioning](/docs/guides/configure/auth-strategies/enterprise-connections/jit-provisioning)
+- [Custom attribute mapping](/docs/guides/configure/auth-strategies/enterprise-connections/custom-attribute-mapping)

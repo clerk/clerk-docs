@@ -78,6 +78,7 @@ interface ProviderConfig {
 
 /** Provider-specific URLs and exceptions. A title override also pins the manifest label so nav and frontmatter cannot drift. */
 const PROVIDERS: Record<string, ProviderConfig> = {
+  'agentid.mdx': { documentationUrl: 'https://www.agentid.com/docs' },
   // Apple's product link and four-part credential form use different wording from the shared template.
   'apple.mdx': {
     documentationUrl: 'https://developer.apple.com/sign-in-with-apple/',

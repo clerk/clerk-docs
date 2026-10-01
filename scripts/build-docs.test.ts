@@ -9019,12 +9019,53 @@ describe('API Errors Generation', () => {
           navigation: [
             { title: 'Backend API', href: '/docs/guides/development/errors/backend-api' },
             { title: 'Frontend API', href: '/docs/guides/development/errors/frontend-api' },
+            { title: 'Platform API', href: '/docs/guides/development/errors/platform-api' },
           ],
         }),
       },
       {
         path: './data/api_errors.json',
-        content: await fs.readFile(path.join(__dirname, '..', 'data', 'api_errors.json'), 'utf-8'),
+        content: JSON.stringify([
+          {
+            name: 'BackendOnly',
+            description: 'BackendOnly is returned by the Backend API.',
+            status: 400,
+            shortMessage: 'Backend error',
+            longMessage: 'A Backend API error occurred.',
+            code: 'backend_error',
+            meta: '{"param_name": "<paramName>"}',
+            usage: { bapi: true, fapi: false, plapi: false },
+            file: 'backend.go',
+          },
+          {
+            name: 'FrontendOnly',
+            description: 'FrontendOnly is returned by the Frontend API.',
+            status: 401,
+            shortMessage: 'Frontend error',
+            longMessage: 'A Frontend API error occurred.',
+            code: 'frontend_error',
+            usage: { bapi: false, fapi: true, plapi: false },
+            file: 'frontend.go',
+          },
+          {
+            name: 'PlatformOnly',
+            description: 'PlatformOnly is returned by the Platform API.',
+            status: 403,
+            shortMessage: 'Platform error',
+            longMessage: 'A Platform API error occurred.',
+            code: 'platform_error',
+            usage: { bapi: false, fapi: false, plapi: true },
+            file: 'platform.go',
+          },
+          {
+            name: 'SharedBackendAndPlatform',
+            status: 404,
+            shortMessage: 'Shared error',
+            code: 'shared_error',
+            usage: { bapi: true, fapi: false, plapi: true },
+            file: 'shared.go',
+          },
+        ]),
       },
     ])
 
@@ -9044,32 +9085,166 @@ describe('API Errors Generation', () => {
 
     const bapi = await readFile('./dist/guides/development/errors/backend-api.mdx')
     const fapi = await readFile('./dist/guides/development/errors/frontend-api.mdx')
+    const plapi = await readFile('./dist/guides/development/errors/platform-api.mdx')
 
     expect(bapi).toContain('title: Backend API errors')
     expect(fapi).toContain('title: Frontend API errors')
+    expect(plapi).toContain('title: Platform API errors')
 
     // Headings
-    expect(bapi).toContain('## Actor Tokens')
-    expect(fapi).toContain('## Actor Tokens')
+    expect(bapi).toContain('## Backend')
+    expect(fapi).toContain('## Frontend')
+    expect(plapi).toContain('## Platform')
 
-    // Error names
-    expect(bapi).toContain('### <code><wbr />Actor<wbr />Token<wbr />Cannot<wbr />Be<wbr />Revoked</code>')
-    expect(fapi).toContain('### <code><wbr />Actor<wbr />Token<wbr />Already<wbr />Used</code>')
+    // API-specific and shared errors
+    expect(bapi).toContain('### <code><wbr />Backend<wbr />Only</code>')
+    expect(bapi).toContain('### <code><wbr />Shared<wbr />Backend<wbr />And<wbr />Platform</code>')
+    expect(bapi).not.toContain('<wbr />Platform<wbr />Only')
+    expect(fapi).toContain('### <code><wbr />Frontend<wbr />Only</code>')
+    expect(fapi).not.toContain('<wbr />Platform<wbr />Only')
+    expect(plapi).toContain('### <code><wbr />Platform<wbr />Only</code>')
+    expect(plapi).toContain('### <code><wbr />Shared<wbr />Backend<wbr />And<wbr />Platform</code>')
+    expect(plapi).not.toContain('<wbr />Frontend<wbr />Only')
 
-    // Error Schema
-    expect(bapi).toContain('"longMessage":')
-    expect(bapi).toContain('"shortMessage":')
-    expect(bapi).toContain('"code":')
-    expect(bapi).toContain('"meta":')
+    // Each block is the HTTP response body, with the wire field names. `meta` appears only when the error has one.
+    expect(bapi).toContain(`\`\`\`json {{ filename: 'Status Code: 400' }}
+{
+  "errors": [
+    {
+      "message": "Backend error",
+      "long_message": "A Backend API error occurred.",
+      "code": "backend_error",
+      "meta": {
+        "param_name": "<paramName>"
+      }
+    }
+  ]
+}
+\`\`\``)
+    expect(fapi).toContain(`\`\`\`json {{ filename: 'Status Code: 401' }}
+{
+  "errors": [
+    {
+      "message": "Frontend error",
+      "long_message": "A Frontend API error occurred.",
+      "code": "frontend_error"
+    }
+  ]
+}
+\`\`\``)
+    expect(plapi).toContain(`\`\`\`json {{ filename: 'Status Code: 403' }}
+{
+  "errors": [
+    {
+      "message": "Platform error",
+      "long_message": "A Platform API error occurred.",
+      "code": "platform_error"
+    }
+  ]
+}
+\`\`\``)
 
-    expect(fapi).toContain('"longMessage":')
-    expect(fapi).toContain('"shortMessage":')
-    expect(fapi).toContain('"code":')
-    expect(fapi).toContain('"meta":')
+    // Without a long message, the API sends the short message as `long_message`
+    expect(plapi).toContain(`\`\`\`json {{ filename: 'Status Code: 404' }}
+{
+  "errors": [
+    {
+      "message": "Shared error",
+      "long_message": "Shared error",
+      "code": "shared_error"
+    }
+  ]
+}
+\`\`\``)
 
-    // Error status codes
-    expect(bapi).toContain('Status Code: 400')
-    expect(fapi).toContain('Status Code: 400')
+    for (const page of [bapi, fapi, plapi]) {
+      expect(page).not.toContain('"shortMessage":')
+      expect(page).not.toContain('"longMessage":')
+    }
+    for (const page of [fapi, plapi]) {
+      expect(page).not.toContain('"meta":')
+    }
+  })
+
+  test('should derive sentence-case section headings from Go filenames', async () => {
+    const files = [
+      'instance_settings.go',
+      'jwt_templates.go',
+      'redirect_urls.go',
+      'enterprise_sso.go',
+      'oauth_application.go',
+      'totp.go',
+      'apikeys.go',
+      'awscognito.go',
+      'oauth2_idp.go',
+      'sign_in_tokens.go',
+      'agent_tasks.go',
+      'cimd_client.go',
+      'easie.go',
+      'github_student_pack.go',
+    ]
+
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Backend API', href: '/docs/guides/development/errors/backend-api' },
+            { title: 'Frontend API', href: '/docs/guides/development/errors/frontend-api' },
+            { title: 'Platform API', href: '/docs/guides/development/errors/platform-api' },
+          ],
+        }),
+      },
+      {
+        path: './data/api_errors.json',
+        content: JSON.stringify(
+          files.map((file, i) => ({
+            name: `Error${i}`,
+            status: 400,
+            shortMessage: 'Error',
+            code: `error_${i}`,
+            usage: { bapi: true, fapi: false, plapi: false },
+            file,
+          })),
+        ),
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        flags: {
+          skipApiErrors: false,
+          skipGit: true,
+        },
+      }),
+    )
+
+    expect(output).toBe('')
+
+    const headings = (await readFile('./dist/guides/development/errors/backend-api.mdx'))
+      .split('\n')
+      .filter((line) => line.startsWith('## '))
+
+    expect(headings).toEqual([
+      '## Agent Tasks',
+      '## API keys',
+      '## AWS Cognito',
+      '## CIMD client',
+      '## EASIE',
+      '## Enterprise SSO',
+      '## GitHub Student Pack',
+      '## Instance settings',
+      '## JWT templates',
+      '## OAuth 2.0 IdP',
+      '## OAuth application',
+      '## Redirect URLs',
+      '## Sign-in tokens',
+      '## TOTP',
+    ])
   })
 })
 

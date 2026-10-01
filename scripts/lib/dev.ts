@@ -6,6 +6,7 @@ import path from 'path'
 import type { build } from '../build-docs'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'
+import { API_ERROR_PAGES, API_ERRORS_FOLDER } from './api-errors'
 import chokidar from 'chokidar'
 import fs from 'node:fs/promises'
 
@@ -113,7 +114,7 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
   }
 
   watcher.subscribe(config.dataPath, (err, events) => {
-    handleFilesChanged(['/docs/errors/backend-api.mdx', '/docs/errors/frontend-api.mdx'])
+    handleFilesChanged(API_ERROR_PAGES.map((page) => path.join(config.docsPath, API_ERRORS_FOLDER, `${page.slug}.mdx`)))
   })
 
   if (config.redirects) {

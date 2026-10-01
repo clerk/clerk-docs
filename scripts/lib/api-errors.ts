@@ -10,6 +10,40 @@ const uppercaseLetterRegex = /([A-Z])/g
 // Matches a single trailing newline at the end of the string.
 const trailingNewlineRegex = /\n$/
 
+// Section headings come from Go filenames (`jwt_templates.go` -> "JWT templates") and are sentence case, per the
+// styleguide. Filenames come from clerk_go, so casing the default can't produce lives here.
+
+// Words that keep a fixed casing wherever they appear in a filename.
+const TITLE_WORDS: Record<string, string> = {
+  cimd: 'CIMD',
+  easie: 'EASIE',
+  idp: 'IdP',
+  jwt: 'JWT',
+  oauth: 'OAuth',
+  pkce: 'PKCE',
+  saml: 'SAML',
+  scim: 'SCIM',
+  sms: 'SMS',
+  sso: 'SSO',
+  totp: 'TOTP',
+  url: 'URL',
+  urls: 'URLs',
+}
+
+// Whole filenames the word rules can't produce: run-together words, Clerk feature proper nouns, product names, and
+// hyphenated nouns.
+const TITLE_OVERRIDES: Record<string, string> = {
+  agent_tasks: 'Agent Tasks',
+  apikeys: 'API keys',
+  awscognito: 'AWS Cognito',
+  github_student_pack: 'GitHub Student Pack',
+  google_one_tap: 'Google One Tap',
+  oauth2_idp: 'OAuth 2.0 IdP',
+  sign_in: 'Sign-in',
+  sign_in_tokens: 'Sign-in tokens',
+  sign_up: 'Sign-up',
+}
+
 interface ApiError {
   name: string
   description?: string
@@ -17,13 +51,25 @@ interface ApiError {
   shortMessage: string
   longMessage?: string
   code: string
+  // Not rendered: the extractor records Go field and variable names, not the JSON keys and values the API sends
   meta?: string
   usage: {
     fapi: boolean
     bapi: boolean
+    plapi: boolean
   }
   file?: string
 }
+
+// Where the generated error pages live, relative to the docs folder.
+export const API_ERRORS_FOLDER = 'guides/development/errors'
+
+// One generated page per API. `usage` is the flag in api_errors.json that routes an error to the page.
+export const API_ERROR_PAGES = [
+  { slug: 'backend-api', api: 'Backend API', usage: 'bapi' },
+  { slug: 'frontend-api', api: 'Frontend API', usage: 'fapi' },
+  { slug: 'platform-api', api: 'Platform API', usage: 'plapi' },
+] as const satisfies { slug: string; api: string; usage: keyof ApiError['usage'] }[]
 
 interface ParseApiErrorsOpts {
   title: string
@@ -40,14 +86,6 @@ type: reference
 ${opts.description}
 
 `
-  const parseMeta = (meta: string) => {
-    try {
-      return JSON.parse(meta.toLowerCase())
-    } catch (error) {
-      return meta
-    }
-  }
-
   const parseDescription = (name: string, description: string | undefined) => {
     if (!description) return ''
 
@@ -61,9 +99,13 @@ ${opts.description}
 
   const parseTitle = (file: string) => {
     if (!file) return 'Other'
-    const words = file.replace('.go', '').split('_')
-    const title = words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-    return title
+    const name = file.replace('.go', '')
+    if (TITLE_OVERRIDES[name]) return TITLE_OVERRIDES[name]
+    const title = name
+      .split('_')
+      .map((word) => TITLE_WORDS[word] ?? word)
+      .join(' ')
+    return title.charAt(0).toUpperCase() + title.slice(1)
   }
 
   // Handles line break opportunities in the error name
@@ -71,9 +113,23 @@ ${opts.description}
     return name.replace(uppercaseLetterRegex, '<wbr />$1')
   }
 
-  const parseCode = (code: {}, status: number) => {
-    return `\`\`\`json {{ filename: 'Status Code: ${status}' }}
-${JSON.stringify(code, null, 2)}
+  // Renders the response body as the API sends it (clerk_go api/apierror/response.go). Without a long message, the API
+  // falls back to the short one. `meta` holds the JSON keys the API sends, with `<placeholders>` for values only known
+  // at runtime. `clerk_trace_id` is left out because it's per request, not per error.
+  const parseCode = (error: ApiError) => {
+    const body = {
+      errors: [
+        {
+          message: error.shortMessage,
+          long_message: error.longMessage || error.shortMessage,
+          code: error.code,
+          ...(error.meta && { meta: JSON.parse(error.meta) }),
+        },
+      ],
+    }
+
+    return `\`\`\`json {{ filename: 'Status Code: ${error.status}' }}
+${JSON.stringify(body, null, 2)}
 \`\`\``
   }
 
@@ -99,16 +155,9 @@ ${JSON.stringify(code, null, 2)}
       const fileErrors = errorsByFile[file]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((error) => {
-          const errorJson = {
-            shortMessage: error.shortMessage,
-            ...(error.longMessage && { longMessage: error.longMessage }),
-            code: error.code,
-            ...(error.meta && { meta: parseMeta(error.meta) }),
-          }
-
           return `### <code>${parseName(error.name)}</code>
 ${parseDescription(error.name, error.description)}
-${parseCode(errorJson, error.status)}
+${parseCode(error)}
 `
         })
         .join('\n')
@@ -132,61 +181,37 @@ export async function generateApiErrorDocs(config: BuildConfig) {
     const apiErrorsContent = await fs.readFile(apiErrorsPath, 'utf-8')
     const errors: ApiError[] = JSON.parse(apiErrorsContent)
 
-    // Generate the documentation
-    const docsBAPI = parseApiErrors(
-      errors.filter((error) => error.usage.bapi),
-      {
-        title: 'Backend API errors',
-        description: 'An index of Clerk Backend API errors.',
-      },
-    )
-    const docsFAPI = parseApiErrors(
-      errors.filter((error) => error.usage.fapi),
-      {
-        title: 'Frontend API errors',
-        description: 'An index of Clerk Frontend API errors.',
-      },
-    )
-
-    const outputPath = path.join(config.distTempPath, 'guides/development/errors')
+    const outputPath = path.join(config.distTempPath, API_ERRORS_FOLDER)
     await fs.mkdir(outputPath, { recursive: true })
 
-    // Write the output file
-    await fs.writeFile(path.join(outputPath, 'backend-api.mdx'), docsBAPI, 'utf-8')
-    await fs.writeFile(path.join(outputPath, 'frontend-api.mdx'), docsFAPI, 'utf-8')
+    return await Promise.all(
+      API_ERROR_PAGES.map(async (page) => {
+        const content = parseApiErrors(
+          errors.filter((error) => error.usage[page.usage]),
+          {
+            title: `${page.api} errors`,
+            description: `An index of Clerk ${page.api} errors.`,
+          },
+        )
 
-    return [
-      {
-        filePath: '/docs/guides/development/errors/backend-api.mdx',
-        relativeFilePath: 'docs/guides/development/errors/backend-api.mdx',
-        fullFilePath: path.join(
-          config.basePath,
-          '..',
-          '/docs/guides/development/errors/backend-api.mdx',
-        ) as `${string}.mdx`,
-        filePathInDocsFolder: 'guides/development/errors/backend-api.mdx',
+        await fs.writeFile(path.join(outputPath, `${page.slug}.mdx`), content, 'utf-8')
 
-        href: '/docs/guides/development/errors/backend-api',
-        relativeHref: 'docs/guides/development/errors/backend-api',
+        const filePath = `/docs/${API_ERRORS_FOLDER}/${page.slug}.mdx` as const
+        const href = `/docs/${API_ERRORS_FOLDER}/${page.slug}` as const
 
-        content: docsBAPI,
-      },
-      {
-        filePath: '/docs/guides/development/errors/frontend-api.mdx',
-        relativeFilePath: 'docs/guides/development/errors/frontend-api.mdx',
-        fullFilePath: path.join(
-          config.basePath,
-          '..',
-          '/docs/guides/development/errors/frontend-api.mdx',
-        ) as `${string}.mdx`,
-        filePathInDocsFolder: 'guides/development/errors/frontend-api.mdx',
+        return {
+          filePath,
+          relativeFilePath: filePath.substring(1) as `docs/${string}.mdx`,
+          fullFilePath: path.join(config.basePath, '..', filePath) as `${string}.mdx`,
+          filePathInDocsFolder: `${API_ERRORS_FOLDER}/${page.slug}.mdx`,
 
-        href: '/docs/guides/development/errors/frontend-api',
-        relativeHref: 'docs/guides/development/errors/frontend-api',
+          href,
+          relativeHref: href.substring(1) as `docs/${string}`,
 
-        content: docsFAPI,
-      },
-    ] as const satisfies (DocsFile & { content: string })[]
+          content,
+        } satisfies DocsFile & { content: string }
+      }),
+    )
   } catch (error) {
     console.error('Error generating documentation:', error)
     throw error

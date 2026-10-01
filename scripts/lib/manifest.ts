@@ -11,7 +11,7 @@ import { VFile } from 'vfile'
 
 // read in the manifest, create a vfile to write warnings to
 
-export const navigationTypeSchema = z.enum(['sectioned', 'flat'])
+const navigationTypeSchema = z.enum(['sectioned', 'flat'])
 export type NavigationType = z.infer<typeof navigationTypeSchema>
 
 export const readManifest = (config: BuildConfig) => async () => {
@@ -42,7 +42,7 @@ export const readManifest = (config: BuildConfig) => async () => {
 
 // verify the manifest is valid
 
-export type ManifestItem = {
+type ManifestItem = {
   title: string
   href: string
   tag?: Tag
@@ -52,12 +52,12 @@ export type ManifestItem = {
   target?: '_blank'
 }
 
-export type ManifestHeading = {
+type ManifestHeading = {
   title: string
   type: 'heading'
 }
 
-export type ManifestGroup = {
+type ManifestGroup = {
   title: string
   items: Manifest
   topNav?: boolean
@@ -72,9 +72,9 @@ export type Manifest = (ManifestItem | ManifestHeading | ManifestGroup)[]
 
 // The build stamps a derived scope on every node it walks; authored manifests never carry one.
 export type ScopedManifestItem = ManifestItem & { sdk?: SDK[] }
-export type ScopedManifestHeading = ManifestHeading & { sdk?: SDK[] }
+type ScopedManifestHeading = ManifestHeading & { sdk?: SDK[] }
 export type ScopedManifestGroup = Omit<ManifestGroup, 'items'> & { sdk?: SDK[]; items: ScopedManifest }
-export type ScopedManifest = (ScopedManifestItem | ScopedManifestHeading | ScopedManifestGroup)[]
+type ScopedManifest = (ScopedManifestItem | ScopedManifestHeading | ScopedManifestGroup)[]
 
 // Create manifest schema based on config
 const createManifestSchema = (config: BuildConfig) => {
@@ -236,9 +236,6 @@ export function flattenTree<
 }
 
 // Read SDK-specific manifest files (e.g., manifest.ios.json, manifest.android.json)
-
-export type SDKManifestItem = ManifestItem | ManifestHeading | ManifestGroup
-
 export const readSDKManifest = (config: BuildConfig) => async (manifestPath: string) => {
   const { manifestItem, manifestHeading, manifestGroup } = createManifestSchema(config)
 

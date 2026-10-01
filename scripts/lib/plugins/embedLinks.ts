@@ -1,4 +1,4 @@
-import { Node } from 'unist'
+import type { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
@@ -151,7 +151,7 @@ export const embedLinks =
  * Returns a function that, when called with a node, returns true if the node is inside the component,
  * and false otherwise. Useful for context-aware processing (e.g., skipping link replacements inside certain components).
  */
-export function watchComponentScope(componentName: string) {
+function watchComponentScope(componentName: string) {
   let inComponent = false
   let offset: number | null = null
 

@@ -11,7 +11,7 @@
 // deliberately biased toward false negatives: an occurrence it cannot classify
 // with certainty is left alone rather than flagged.
 
-import { Node, Position } from 'unist'
+import type { Node, Position } from 'unist'
 import type { VFile } from 'vfile'
 import yaml from 'yaml'
 import { type BuildConfig } from '../config'
@@ -80,7 +80,7 @@ export type ProperNounViolation = {
   length: number
 }
 
-export const findProperNounViolations = (text: string): ProperNounViolation[] => {
+const findProperNounViolations = (text: string): ProperNounViolation[] => {
   const violations: ProperNounViolation[] = []
 
   for (const rule of PROPER_NOUN_RULES) {

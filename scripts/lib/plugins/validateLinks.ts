@@ -1,4 +1,4 @@
-import { Node } from 'unist'
+import type { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { map as mdastMap } from 'unist-util-map'
 import { visit as mdastVisit } from 'unist-util-visit'
@@ -16,7 +16,7 @@ const CLERK_DOCS_URL_PATTERN = /https?:\/\/clerk\.com(\/docs\/[^\s\)\]"'`}]+)/g
 // `/discord` is a vanity redirect to an off-site destination (the Discord invite),
 // so it reads as an external link and is left absolute on purpose. Every other
 // same-origin path is Clerk-owned and should be relative.
-export const ABSOLUTE_CLERK_LINK_EXCEPTIONS = ['/discord'] as const
+const ABSOLUTE_CLERK_LINK_EXCEPTIONS = ['/discord'] as const
 // Trailing punctuation accidentally captured at the end of a URL (e.g. sentence punctuation).
 const trailingPunctuationRegex = /[,;:\.]+$/
 // Trailing closing parens accidentally captured at the end of a URL.
@@ -35,7 +35,7 @@ export type AbsoluteClerkLink = {
  * Returns the relative form of a same-origin Clerk link, unless its path is an
  * intentional redirect shortcut that must remain absolute.
  */
-export function getRelativeClerkUrl(url: string): string | undefined {
+function getRelativeClerkUrl(url: string): string | undefined {
   let parsedUrl: URL
 
   try {

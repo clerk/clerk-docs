@@ -1,8 +1,8 @@
 import yaml from 'yaml'
 
-export const explicitAssetPathRegex = /\/docs\/images\/[^\s)"'}\]]+/g
+const explicitAssetPathRegex = /\/docs\/images\/[^\s)"'}\]]+/g
 export const previewAssetBasePath = '/docs/images/ui-components'
-export const previewAssetExtensions = ['svg', 'png', 'jpg', 'jpeg', 'webp', 'gif'] as const
+const previewAssetExtensions = ['svg', 'png', 'jpg', 'jpeg', 'webp', 'gif'] as const
 
 const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---/
 // Trailing punctuation (commas/semicolons/colons) accidentally captured at the end of an asset path.
@@ -45,7 +45,7 @@ function getPreviewSlug(previewSrc: string): string | undefined {
 
 export type PreviewIssueReason = 'invalid-src' | 'no-matching-asset'
 
-export interface PreviewResolutionIssue {
+interface PreviewResolutionIssue {
   previewSrc: string
   reason: PreviewIssueReason
 }

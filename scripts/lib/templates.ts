@@ -10,7 +10,7 @@ import {
   type TemplateGitHubMetadata,
 } from './template-graphql'
 
-export interface AdditionalExample {
+interface AdditionalExample {
   path: string
   description: string
 }

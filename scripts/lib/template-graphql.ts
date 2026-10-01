@@ -35,7 +35,7 @@ function readDate(value: unknown) {
   return normalized.replace('.000Z', 'Z')
 }
 
-export function buildTemplateMetadataQuery(repositories: TemplateRepository[]) {
+function buildTemplateMetadataQuery(repositories: TemplateRepository[]) {
   const fields = repositories.map((repository, index) => {
     const paths = examplePaths(repository)
     const histories = paths

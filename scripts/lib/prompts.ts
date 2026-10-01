@@ -222,8 +222,8 @@ const asString = (value: string | boolean | undefined): string | undefined =>
 // The single prompt component. `variant` picks the HTML rendering, `output`
 // picks what agent-facing markdown does with the prompt; both are required so
 // every declaration is an explicit decision.
-export const PROMPT_VARIANTS = ['card', 'banner'] as const
-export const PROMPT_OUTPUTS = ['link', 'inline', 'replace'] as const
+const PROMPT_VARIANTS = ['card', 'banner'] as const
+const PROMPT_OUTPUTS = ['link', 'inline', 'replace'] as const
 
 export const checkPrompts =
   (

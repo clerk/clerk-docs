@@ -25,8 +25,6 @@ export const VALID_SDKS = [
 
 export type SDK = (typeof VALID_SDKS)[number]
 
-export const sdk = z.enum(VALID_SDKS)
-
 export const icon = z.enum([
   'apple',
   'application-2',

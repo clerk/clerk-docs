@@ -5,7 +5,7 @@
 // "Read more", ...) belongs outside the link, not in the anchor.
 
 import { toString } from 'mdast-util-to-string'
-import { Node } from 'unist'
+import type { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import type { VFile } from 'vfile'
 import { type BuildConfig } from '../config'

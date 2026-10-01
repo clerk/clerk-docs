@@ -1646,7 +1646,7 @@ Relative partials are best for:
 The `<Typedoc />` component is used to inject the contents of an MDX file from the `./clerk-typedoc` folder. The files inside that folder are not manually created and maintained; they are automatically created from the [`clerk/javascript`](https://github.com/clerk/javascript) repository. This has a couple of implications:
 
 - If you want to edit the contents of a file that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment. For information on how to author Typedoc comments, see [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
-- Once your PR in `clerk/javascript` has been merged and a release is published, a PR will be opened in `clerk-docs` to merge in the Typedoc changes.
+- Once your PR in `clerk/javascript` has been merged and a release is published, a GitHub action opens a PR in Clerk's internal monorepo to merge in the Typedoc changes.
 
 For example, in the `/reference/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 

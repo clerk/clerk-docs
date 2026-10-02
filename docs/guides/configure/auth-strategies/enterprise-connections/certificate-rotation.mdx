@@ -1,0 +1,81 @@
+---
+title: Rotate IdP signing certificates
+description: Learn how to add, replace, and remove the signing certificates of a SAML enterprise connection without interrupting sign-ins.
+---
+
+A Security Assertion Markup Language (SAML) identity provider ([IdP](!identity-provider)) signs every response it sends to Clerk with a private key, and Clerk verifies that signature with the matching certificate stored on the enterprise connection. IdPs rotate their keys periodically, and most of them publish the next certificate ahead of the switch so that service providers can start trusting it early.
+
+A SAML enterprise connection trusts up to five signing certificates at once. During a sign-in, Clerk accepts a response signed with any of them. This lets you add the next certificate before the IdP switches to it and remove the old one afterwards, so the rotation never rejects a sign-in.
+
+## How certificates are stored
+
+Each connection keeps an ordered list of certificates. The list has these properties:
+
+- **All certificates are trusted.** When verifying a response, Clerk checks the signature against every certificate in the list, so the order doesn't affect which sign-ins succeed.
+- **The first certificate is the primary.** It's the one returned in the connection's `idp_certificate` field, which older integrations still read. When you save the list, Clerk moves the first certificate that is currently valid to the front, so an expired or not-yet-valid certificate never becomes the primary.
+- **Saving replaces the whole list.** Every way of updating certificates sends the complete set, so the connection ends up with exactly the certificates you listed, down to a single one.
+- **Expiry is read from the certificate.** Clerk stores each certificate's validity window and shows it alongside the certificate. An expired certificate stays in the list until you remove it; Clerk keeps rejecting responses signed with it.
+
+A connection must keep at least one certificate while it's active.
+
+## Rotate a certificate without downtime
+
+Most IdPs publish their next signing certificate in their metadata, or in their admin console, before they start signing with it. Rotate in three steps:
+
+<Steps>
+  ## Add the new certificate
+
+  Add the IdP's next certificate to the connection, keeping the current one in place. Both are now trusted, so sign-ins keep working whichever key the IdP uses.
+
+  ## Let the IdP switch keys
+
+  When the IdP starts signing with the new key, nothing changes on the Clerk side. If the IdP rolls back to the old key, that still works too.
+
+  ## Remove the old certificate
+
+  Once the IdP no longer signs with the old key, remove its certificate. Removing it is also how you stop trusting a key that was leaked or retired.
+</Steps>
+
+If the IdP already switched keys and sign-ins are failing, add the new certificate right away. Sign-ins recover as soon as the connection is saved; you can clean up the old certificate afterwards.
+
+> [!TIP]
+> If the connection was set up from a metadata URL, Clerk reads every signing certificate the metadata lists when you save the connection, so a rotation handled through metadata needs no certificate uploads.
+
+## Manage certificates
+
+There are three ways to manage a connection's certificates:
+
+- [In the Clerk Dashboard](#in-the-clerk-dashboard)
+- [From `<OrganizationProfile />`](#from-organizationprofile), if your application uses [self-serve SSO](/docs/guides/configure/auth-strategies/enterprise-connections/self-serve-sso) and you're an Organization [admin](/docs/guides/organizations/control-access/roles-and-permissions)
+- [With the Backend API](#with-the-backend-api)
+
+### In the Clerk Dashboard
+
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page and select the connection.
+1. Select the **SSO** tab. In the **Identity Provider configuration** section, the **Certificates** list shows every certificate the connection trusts, its expiry date, and which one is the primary. A certificate that expires within 30 days is highlighted, and an expired one is marked in red.
+1. To add a certificate, select **Add** and choose the file. A file holding several PEM certificates adds all of them. Clerk accepts `.pem`, `.crt`, `.cer`, and `.cert` files.
+1. To remove a certificate, select the trash icon on its row. You can't remove the last certificate.
+1. Select **Save**. The list is sent only when you changed it, so saving other settings on the page never touches the certificates.
+
+### From `<OrganizationProfile />`
+
+For Organizations with an enterprise connection, the **Security** tab of [`<OrganizationProfile />`](/docs/reference/components/organization/organization-profile) shows the connection's certificates in the **Identity provider** section. Members with the `org:sys_entconns:manage` [System Permission](/docs/guides/organizations/control-access/roles-and-permissions#system-permissions) can select **Edit**, choose **Configure manually**, and add or remove certificates in the **Signing certificates** list the same way as in the Clerk Dashboard. The same list is available in the manual configuration step of the self-serve SSO setup.
+
+### With the Backend API
+
+Pass the complete list of certificates in the `idp_certificates` array when you [create](/docs/reference/backend-api/tag/enterprise-connections/POST/enterprise_connections){{ target: '_blank' }} or [update](/docs/reference/backend-api/tag/enterprise-connections/PATCH/enterprise_connections/\{enterprise_connection_id}){{ target: '_blank' }} an enterprise connection. Each entry is one certificate, as PEM or as its bare base64 body, and the array replaces the connection's whole set.
+
+```json {{ title: 'PATCH /v1/enterprise_connections/{enterprise_connection_id}' }}
+{
+  "saml": {
+    "idp_certificates": [
+      "-----BEGIN CERTIFICATE-----\nMIIC...\n-----END CERTIFICATE-----",
+      "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----"
+    ]
+  }
+}
+```
+
+Responses include an `idp_certificates` array with each certificate's `certificate`, `issued_at`, and `expires_at` (Unix timestamps in milliseconds), primary first.
+
+The single `idp_certificate` field still works but is deprecated. It accepts one certificate or a PEM bundle and also replaces the whole set, so an integration that sends the stored value back unchanged shrinks the list to that one certificate. Switch to `idp_certificates` when you can. The same fields exist on the deprecated [SAML connections](/docs/reference/backend-api/tag/saml-connections/PATCH/saml_connections/\{saml_connection_id}){{ target: '_blank' }} endpoints and on the [Backend SDK](/docs/reference/backend/enterprise-connections/update-enterprise-connection) as `saml.idpCertificates`.

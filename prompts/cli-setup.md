@@ -94,6 +94,8 @@ npx -y clerk@latest doctor
 
 Then start the app, confirm the auth controls render, and fix anything the CLI reports.
 
+Bot protection can block sign-ups in browsers you automate. If you test a new accountless app in one, run `npx -y clerk@latest users create --email <unique>+clerk_test@example.com --password <random-16-char-alphanumeric> --yes`, then sign in. If asked for a verification code, enter 424242. Tell the user you created this test user. For an existing app, ask the user before creating users. To test sign-up, use @clerk/testing: https://clerk.com/docs/guides/development/testing/playwright/overview.md
+
 ## Step 5: If using shadcn/ui
 
 If `components.json` exists in the project root, add `@clerk/ui` with the package manager from Step 1 — `npm install`, `pnpm add`, `yarn add`, or `bun add`.

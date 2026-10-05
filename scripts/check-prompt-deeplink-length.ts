@@ -22,7 +22,8 @@ const DEEPLINK_BASE = 'https://cursor.com/link/prompt'
  * Add filenames here only when a prompt intentionally exceeds
  * the limit (e.g., it's delivered via a different mechanism).
  */
-const EXCLUDED_PROMPTS: string[] = ['core-3-upgrade.md']
+// cli-setup.md and nextjs-quickstart.md only render as install-prompt cards, which have no Cursor button.
+const EXCLUDED_PROMPTS: string[] = ['cli-setup.md', 'core-3-upgrade.md', 'nextjs-quickstart.md']
 
 function generateDeeplinkUrl(promptText: string): string {
   const url = new URL(DEEPLINK_BASE)

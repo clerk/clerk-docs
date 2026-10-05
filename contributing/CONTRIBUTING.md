@@ -139,6 +139,12 @@ The API error reference pages (`/docs/guides/development/errors/*`) are built fr
 - To change an error's message or description, update its definition in `clerk_go` (`api/apierror/`) — the text comes from the Go code and its comments.
 - To pull in newly added errors immediately rather than waiting for the schedule, run the workflow manually (Actions → Refresh API error docs → Run workflow) instead of regenerating by hand.
 
+The "Supported events" tables on the [Admin Logs](/docs/guides/dashboard/logs/admin-logs) and [Application Logs](/docs/guides/dashboard/logs/application-logs) pages work the same way. They're generated from the `event_stream` annotations in `clerk_go` (`api/shared/event_stream/payloads.proto`) and sit between `GENERATED:log-events` markers in each page. The scheduled **Refresh log event docs** workflow (`.github/workflows/refresh-log-docs.yml`) regenerates the marked region from the latest production deploy and opens a refresh pull request when it changes. A pull request that edits the region by hand fails its guard check. The prose outside the markers is hand-written.
+
+- To change an event's description or group, update its `docs_description`, `docs_group`, or `docs_subgroup` in `clerk_go`.
+- To list or hide an event, set its `docs_public` in `clerk_go`. Only events with `docs_public: true` appear.
+- To pull in new events immediately, run the workflow manually (Actions → Refresh log event docs → Run workflow).
+
 ## Creating an issue
 
 If you have found a contribution you would like to make, but it is rather large, it is recommended to open an [issue](https://github.com/clerk/clerk-docs/issues) first. Doing so not only helps keep track of what you plan to work on, but also facilitates discussions with maintainers, who can provide valuable feedback and ideas even before you begin implementing changes.

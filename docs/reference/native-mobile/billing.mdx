@@ -1,0 +1,194 @@
+---
+title: Billing
+description: Read Billing Plans, Subscriptions, statements, payment attempts, payment methods, and credits with the Clerk Android SDK.
+sdk: android
+---
+
+> [!IMPORTANT]
+> The Android SDK's Billing APIs are currently read-only. Checkout, Plan changes, and payment method management are only available in web applications. See [Does Clerk Billing work in native mobile apps?](/docs/guides/billing/overview#does-clerk-billing-work-in-native-mobile-apps).
+
+Use `Clerk.billing` in your Android application to list [Clerk Billing](/docs/guides/billing/overview) Plans and read billing information for a user or Organization, including their Subscription, statements, payment attempts, and credit balance. Billing methods are `suspend` functions that return `ClerkResult`, so handle both `ClerkResult.Success` and `ClerkResult.Failure`.
+
+```kotlin
+import com.clerk.api.Clerk
+import com.clerk.api.network.serialization.ClerkResult
+
+when (val result = Clerk.billing.getPlans()) {
+    is ClerkResult.Success -> {
+        val plans = result.value.data
+    }
+    is ClerkResult.Failure -> {
+        // Show an error state.
+    }
+}
+```
+
+The rest of the examples on this page use `successOrElse { return }` from `com.clerk.api.network.serialization` to return early on failure.
+
+## Check whether Billing is enabled
+
+`Clerk.commerceSettings` reflects the Billing settings from the Clerk Dashboard. Use it to hide Billing UI when Billing isn't enabled for users or Organizations. Before the SDK loads the environment, it reports Billing as disabled.
+
+```kotlin
+val billing = Clerk.commerceSettings.billing
+
+if (billing.user.enabled) {
+    // Show Billing UI for the user.
+}
+
+if (billing.organization.hasPaidPlans) {
+    // Show paid Plans for Organizations.
+}
+```
+
+## Check Plan and Feature access
+
+Use `Clerk.has()` to check whether the signed-in user or their [Active Organization](!active-organization) has a Plan or Feature. It returns a `Boolean` synchronously, and it returns `false` when no user is signed in or the session isn't active.
+
+```kotlin
+if (Clerk.has(plan = "gold")) {
+    // Show content for the Gold Plan.
+}
+
+if (Clerk.has(feature = "widgets")) {
+    // Show the widgets Feature.
+}
+```
+
+A Plan or Feature slug without a prefix matches either the user's or the Active Organization's Subscription. Prefix it with `user:` or `org:` to check only one of them (e.g., `org:widgets`).
+
+`has()` reads Plans and Features from the claims of the current session token, so a Subscription change is reflected after the token refreshes. For Role, Permission, and reverification checks, see [Authorization checks](/docs/guides/secure/authorization-checks).
+
+## Plans
+
+### List Plans
+
+`getPlans()` lists your publicly visible Plans. Plans are for users by default. Pass `forPayer = ForPayerType.ORGANIZATION` to list Organization Plans.
+
+```kotlin
+val plans = Clerk.billing.getPlans(forPayer = ForPayerType.ORGANIZATION).successOrElse { return }.data
+
+for (plan in plans) {
+    println("${plan.name} ${plan.fee?.amountFormatted} ${plan.features.map { it.name }}")
+}
+```
+
+`BillingPlan` includes the Plan's `fee`, `annualMonthlyFee`, `features`, and free trial settings. Amounts are `BillingMoneyAmount` values, which include a display-ready `amountFormatted` string and a `currencySymbol`.
+
+### Get a Plan
+
+```kotlin
+val plan = Clerk.billing.getPlan(id = "cplan_123").successOrElse { return }
+```
+
+## Subscriptions
+
+### Get a Subscription
+
+`getSubscription()` returns the signed-in user's Subscription. Pass an Organization ID to get that Organization's Subscription instead.
+
+```kotlin
+val subscription = Clerk.billing.getSubscription().successOrElse { return }
+
+val organizationSubscription = Clerk.billing.getSubscription(orgId = organization.id).successOrElse { return }
+```
+
+A `BillingSubscription` contains one or more `subscriptionItems`, one per Plan. Each item has its own `plan`, `planPeriod`, `status`, and `nextPayment`. Dates such as `nextPayment.date` are Unix timestamps in milliseconds.
+
+```kotlin
+for (item in subscription.subscriptionItems) {
+    if (item.status != BillingSubscriptionStatus.ACTIVE) continue
+    println("${item.plan.name} ${item.planPeriod} ${item.nextPayment?.amount?.amountFormatted}")
+}
+
+subscription.nextPayment?.let { nextPayment ->
+    println("Next payment of ${nextPayment.amount.amountFormatted} on ${Instant.ofEpochMilli(nextPayment.date)}")
+}
+```
+
+## Statements
+
+### List statements
+
+```kotlin
+val statements = Clerk.billing.getStatements().successOrElse { return }.data
+
+for (statement in statements) {
+    println("${Instant.ofEpochMilli(statement.timestamp)} ${statement.totals.grandTotal.amountFormatted}")
+}
+```
+
+### Get a statement
+
+```kotlin
+val statement = Clerk.billing.getStatement(id = "stmt_123").successOrElse { return }
+```
+
+## Payment attempts
+
+### List payment attempts
+
+```kotlin
+val payments = Clerk.billing.getPaymentAttempts().successOrElse { return }.data
+
+for (payment in payments) {
+    println("${payment.amount.amountFormatted} ${payment.status}")
+}
+```
+
+### Get a payment attempt
+
+```kotlin
+val payment = Clerk.billing.getPaymentAttempt(id = "payment_123").successOrElse { return }
+```
+
+## Payment methods
+
+Payment methods are listed from the payer: `User` for the signed-in user and `Organization` for an Organization.
+
+```kotlin
+val user = Clerk.user ?: return
+val paymentMethods = user.getPaymentMethods().successOrElse { return }.data
+
+for (paymentMethod in paymentMethods) {
+    println("${paymentMethod.cardType} ${paymentMethod.last4} ${paymentMethod.isDefault}")
+}
+
+val organizationPaymentMethods = organization.getPaymentMethods().successOrElse { return }.data
+```
+
+## Credits
+
+### Get the credit balance
+
+```kotlin
+val creditBalance = Clerk.billing.getCreditBalance().successOrElse { return }
+val balance = creditBalance.balance?.amountFormatted
+```
+
+### Get the credit history
+
+```kotlin
+val entries = Clerk.billing.getCreditHistory().successOrElse { return }.data
+```
+
+## Organization Billing
+
+Every method that reads a payer's Billing data accepts an optional `orgId`. Omit it to read the signed-in user's data, or pass an Organization ID to read that Organization's data. The user needs the `org:sys_billing:read` Permission in that Organization. Check it with [`organizationMembership.canReadBilling`](/docs/reference/native-mobile/organizations#check-membership-permissions).
+
+```kotlin
+val organization = Clerk.organization ?: return
+if (Clerk.organizationMembership?.canReadBilling != true) return
+
+val statements = Clerk.billing.getStatements(orgId = organization.id).successOrElse { return }.data
+```
+
+## Pagination
+
+List methods return a `ClerkPaginatedResponse` with the page's `data` and the `totalCount` across all pages. Use `limit` and `offset` to request a page. The defaults are `limit = 20` and `offset = 0`.
+
+```kotlin
+val response = Clerk.billing.getStatements(limit = 20, offset = 20).successOrElse { return }
+val statements = response.data
+val hasMore = 20 + response.data.size < response.totalCount
+```

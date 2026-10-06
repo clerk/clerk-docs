@@ -1,0 +1,189 @@
+---
+title: Billing
+description: Read Billing Plans, Subscriptions, statements, payment attempts, payment methods, and credits with the Clerk iOS SDK.
+sdk: ios
+---
+
+> [!IMPORTANT]
+> The iOS SDK's Billing APIs are currently read-only. Checkout, Plan changes, and payment method management are only available in web applications. See [Does Clerk Billing work in native mobile apps?](/docs/guides/billing/overview#does-clerk-billing-work-in-native-mobile-apps).
+
+Use `clerk.billing` in your iOS application to list [Clerk Billing](/docs/guides/billing/overview) Plans and read billing information for a user or Organization, including their Subscription, statements, payment attempts, and credit balance. Billing methods use Swift concurrency and throw when a request fails, so call them with `try await` from an async context.
+
+```swift
+import ClerkKit
+
+do {
+  let plans = try await Clerk.shared.billing.getPlans().data
+} catch {
+  // Show an error state.
+}
+```
+
+## Check whether Billing is enabled
+
+`commerceSettings` on the environment reflects the Billing settings from the Clerk Dashboard. Use it to hide Billing UI when Billing isn't enabled for users or Organizations.
+
+```swift
+guard let environment = clerk.environment else { return }
+let billing = environment.commerceSettings.billing
+
+if billing.user.enabled {
+  // Show Billing UI for the user.
+}
+
+if billing.organization.hasPaidPlans {
+  // Show paid Plans for Organizations.
+}
+```
+
+## Check Plan and Feature access
+
+Use `clerk.has()` to check whether the signed-in user or their [Active Organization](!active-organization) has a Plan or Feature. It returns a `Bool` synchronously, so you can use it directly in view code, and it returns `false` when no user is signed in or the session isn't active.
+
+```swift
+if clerk.has(plan: "gold") {
+  // Show content for the Gold Plan.
+}
+
+if clerk.has(feature: "widgets") {
+  // Show the widgets Feature.
+}
+```
+
+A Plan or Feature slug without a prefix matches either the user's or the Active Organization's Subscription. Prefix it with `user:` or `org:` to check only one of them (e.g., `org:widgets`).
+
+`has()` reads Plans and Features from the claims of the current session token, so a Subscription change is reflected after the token refreshes. For Role, Permission, and reverification checks, see [Authorization checks](/docs/guides/secure/authorization-checks).
+
+## Plans
+
+### List Plans
+
+`getPlans()` lists your publicly visible Plans. Plans are for users by default. Pass `for: .organization` to list Organization Plans.
+
+```swift
+let plans = try await clerk.billing.getPlans(for: .organization).data
+
+for plan in plans {
+  print(plan.name, plan.fee?.amountFormatted ?? "", plan.features.map(\.name))
+}
+```
+
+`BillingPlan` includes the Plan's `fee`, `annualMonthlyFee`, `features`, and free trial settings. Amounts are `BillingMoneyAmount` values, which include a display-ready `amountFormatted` string and a `currencySymbol`.
+
+### Get a Plan
+
+```swift
+let plan = try await clerk.billing.getPlan(id: "cplan_123")
+```
+
+## Subscriptions
+
+### Get a Subscription
+
+`getSubscription()` returns the signed-in user's Subscription. Pass an Organization ID to get that Organization's Subscription instead.
+
+```swift
+let subscription = try await clerk.billing.getSubscription()
+
+let organizationSubscription = try await clerk.billing.getSubscription(orgId: organization.id)
+```
+
+A `BillingSubscription` contains one or more `subscriptionItems`, one per Plan. Each item has its own `plan`, `planPeriod`, `status`, and `nextPayment`.
+
+```swift
+for item in subscription.subscriptionItems where item.status == .active {
+  print(item.plan.name, item.planPeriod, item.nextPayment?.amount.amountFormatted ?? "")
+}
+
+if let nextPayment = subscription.nextPayment {
+  print("Next payment of \(nextPayment.amount.amountFormatted) on \(nextPayment.date)")
+}
+```
+
+## Statements
+
+### List statements
+
+```swift
+let statements = try await clerk.billing.getStatements().data
+
+for statement in statements {
+  print(statement.timestamp, statement.totals.grandTotal.amountFormatted)
+}
+```
+
+### Get a statement
+
+```swift
+let statement = try await clerk.billing.getStatement(id: "stmt_123")
+```
+
+## Payment attempts
+
+### List payment attempts
+
+```swift
+let payments = try await clerk.billing.getPaymentAttempts().data
+
+for payment in payments {
+  print(payment.amount.amountFormatted, payment.status)
+}
+```
+
+### Get a payment attempt
+
+```swift
+let payment = try await clerk.billing.getPaymentAttempt(id: "payment_123")
+```
+
+## Payment methods
+
+Payment methods are listed from the payer: `User` for the signed-in user and `Organization` for an Organization.
+
+```swift
+guard let user = clerk.user else { return }
+let paymentMethods = try await user.getPaymentMethods().data
+
+for paymentMethod in paymentMethods {
+  print(paymentMethod.cardType ?? "", paymentMethod.last4 ?? "", paymentMethod.isDefault == true)
+}
+
+let organizationPaymentMethods = try await organization.getPaymentMethods().data
+```
+
+## Credits
+
+### Get the credit balance
+
+```swift
+let creditBalance = try await clerk.billing.getCreditBalance()
+let balance = creditBalance.balance?.amountFormatted
+```
+
+### Get the credit history
+
+```swift
+let entries = try await clerk.billing.getCreditHistory().data
+```
+
+## Organization Billing
+
+Every method that reads a payer's Billing data accepts an optional `orgId`. Omit it to read the signed-in user's data, or pass an Organization ID to read that Organization's data. The user needs the `org:sys_billing:read` Permission in that Organization. Check it with [`organizationMembership.canReadBilling`](/docs/reference/native-mobile/organizations#check-membership-permissions).
+
+```swift
+guard let organization = clerk.organization,
+      clerk.organizationMembership?.canReadBilling == true
+else { return }
+
+let statements = try await clerk.billing.getStatements(orgId: organization.id).data
+```
+
+## Pagination
+
+List methods return a `ClerkPaginatedResponse` with the page's `data` and the `totalCount` across all pages. Use `page` (starting at `1`) and `pageSize` to request a page. The defaults are `page: 1` and `pageSize: 20`.
+
+```swift
+let response = try await clerk.billing.getStatements(page: 2, pageSize: 20)
+let statements = response.data
+let hasMore = 2 * 20 < response.totalCount
+```

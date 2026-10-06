@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import type { BuildConfig } from './config'
 
 // `git rev-parse --show-toplevel` always reports the canonical path, with symlinks resolved,

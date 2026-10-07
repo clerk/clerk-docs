@@ -74,6 +74,45 @@ Keep lowercase:
 
 The docs build enforces the unambiguous collocations of these terms (e.g., "organization domains", "membership requests", "role sets", "agent tasks") as a hard failure — in prose, headings, link anchors, frontmatter titles and descriptions, and manifest nav titles, while honoring the exceptions above. Standalone words like "organization" or "billing" are deliberately not flagged, because generic usage is common — those remain judgment calls for authors and reviewers.
 
+### Use American English
+
+Clerk's product, APIs, and SDKs use American spelling, so the docs do too. This applies to headings, code comments, and identifiers as well as prose.
+
+> ❌
+> Once the subscription is cancelled, customise the colour of the banner.
+
+> ✅
+> Once the subscription is canceled, customize the color of the banner.
+
+Common pairs:
+
+| British                                    | American                                 |
+| ------------------------------------------ | ---------------------------------------- |
+| behaviour, colour, favour, honour          | behavior, color, favor, honor            |
+| customise, initialise, organisation        | customize, initialize, organization      |
+| analyse, catalyse                          | analyze, catalyze                        |
+| cancelled, labelled, modelling, travelling | canceled, labeled, modeling, traveling   |
+| centre, fibre, metre                       | center, fiber, meter                     |
+| catalogue, analogue, licence (noun)        | catalog, analog, license                 |
+| acknowledgement, judgement, grey           | acknowledgment, judgment, gray           |
+| amongst, whilst, towards, afterwards       | among, while, toward, afterward          |
+| enrol, fulfil, enrolment, fulfilment       | enroll, fulfill, enrollment, fulfillment |
+
+For a word that isn't in the table, use the first spelling [Merriam-Webster](https://www.merriam-webster.com/) lists.
+
+`pnpm lint:american-spelling` flags these across the repo, and `pnpm lint:american-spelling --fix` rewrites them. Names spelled the British way by someone else, like the `aria-labelledby` HTML attribute, stay as they are.
+
+Direct quotations and published titles keep their source's spelling. Put a marker comment on the line above that names each word to allow, with an optional reason after `--`. It covers only the next non-blank line, and only the words it names:
+
+```mdx
+{/* american-spelling-ignore-next-line: Towards -- the NIST paper's published title */}
+Flat RBAC comes from "The NIST Model for Role-Based Access Control: Towards a Unified Standard".
+```
+
+Use `<!-- ... -->` in Markdown and `//` in code. The check fails on a marker that names no words, names a word its line doesn't use, or has no line after it.
+
+Write a third-party UI label the way the product shows it in US English. For example, the Google Cloud console's US English interface says **Authorized JavaScript origins**, even if a screenshot was taken in another locale.
+
 ### Use "sign in" instead of "log in"
 
 Use "sign in" and "sign out" rather than "log in" or "log out".

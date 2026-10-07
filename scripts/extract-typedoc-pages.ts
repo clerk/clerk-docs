@@ -82,7 +82,7 @@ async function main() {
         .join('\n'),
     )
   } else {
-    // Backwards-compatible: print only the effected guide paths
+    // Backward-compatible: print only the effected guide paths
     console.log(Array.from(effectedFiles.keys()).join('\n'))
   }
 }

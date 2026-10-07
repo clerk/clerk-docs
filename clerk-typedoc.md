@@ -6,7 +6,7 @@ This folder contains the auto-generated Typedoc documentation of [clerk/javascri
 
 If you want to make a change to a document, follow the instructions to [setup your local environment](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#developing-locally) and how to author [Typedoc changes](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
 
-Once you [open a PR in `clerk/javascript`](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#opening-a-pull-request), it will be merged and released. Afterwards, a GitHub action will create a PR in Clerk's internal monorepo to update the contents of this folder.
+Once you [open a PR in `clerk/javascript`](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#opening-a-pull-request), it will be merged and released. Afterward, a GitHub action will create a PR in Clerk's internal monorepo to update the contents of this folder.
 
 The contents of this folder can embedded in `clerk-docs` files with the `<Typedoc />` component. For example, if you updated Typedoc comments for the `useAuth()` hook in `clerk/javascript`, you'll need to make sure that in `clerk-docs`, in the `/hooks/use-auth.mdx` file, there's a `<Typedoc />` component linked to the `./clerk-typedoc/clerk-react/use-auth.mdx` file, like:
 

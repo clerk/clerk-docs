@@ -17,6 +17,7 @@ This repo is Clerk's documentation — MDX content in `docs/`, built by a custom
 
 - `pnpm run build:tsx` — hard-fails on invalid frontmatter `sdk`, a missing `title`, parse errors, vague link anchor text ("here", "Learn more"), or lowercase Clerk feature proper nouns in prose/headings/frontmatter/manifest nav titles (see the styleguide's "Capitalize Clerk feature proper nouns" rule — only its unambiguous collocations are enforced); warns on a missing `description`, docs not in `manifest.json`, and broken internal links or heading anchors. A clean build can still emit warnings worth reading — "no errors" is not "no warnings."
 - `pnpm run lint` — formatting and other checks.
+- `pnpm lint:american-spelling` from the repo root — flags British spellings (`--fix` rewrites them). Skips `clerk-typedoc/` and `data/api_errors.json`; fix those upstream. Quotations and published titles keep their source's spelling behind an `american-spelling-ignore-next-line` comment that names each word it allows; see the styleguide's "Use American English" rule.
 
 See `contributing/CONTRIBUTING.md` → "Validating your changes" for what each severity means and why.
 

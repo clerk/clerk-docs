@@ -126,7 +126,7 @@ const normalizeItems = (items: RawNode[], sdk: string | undefined): NormNode[] =
  * Sections carry the same presentation fields as any other node here. `buildSections` copies
  * only title/icon/sdk on to a section, so a `tag`/`wrap`/`hideTitle` on a section WOULD
  * surface as a diff — deliberately. Those fields change how a section renders, so losing them
- * is a behaviour change to report, not noise to normalize away. (No authored section carries
+ * is a behavior change to report, not noise to normalize away. (No authored section carries
  * any of them today, so this costs nothing on the real manifests.)
  *
  * `children` is nested sections first, then items, in the order the dist lists them.

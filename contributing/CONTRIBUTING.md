@@ -1,6 +1,6 @@
 # Contributing to Clerk's documentation
 
-Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](../styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
+Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](../styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content. Write in [American English](../styleguides/STYLEGUIDE.md#use-american-english), such as `color` and `canceled`.
 
 > [!IMPORTANT]
 > Clerk's documentation is maintained in Clerk's internal monorepo, and the public [`clerk/clerk-docs`](https://github.com/clerk/clerk-docs) repository is its read-only mirror. External contributions still start in clerk-docs — nothing merges into the mirror directly. Write your change and open a pull request as described below. Once your PR is approved, a Clerk team member brings it into the monorepo with your commits and authorship preserved, and your change deploys to [clerk.com/docs](https://clerk.com/docs). Clerk employees directly contribute to the monorepo and can run migrations themselves with `pnpm migrate:clerk` (see the [migration skill](../.agents/skills/migrate-branch-to-clerk/SKILL.md)).
@@ -821,7 +821,7 @@ This does a couple things:
 - URL's are generated for this page per specified SDK. In this case, for the `/docs/clerk-provider.mdx` file, `/docs/nextjs/clerk-provider` and `/docs/react/clerk-provider` will be generated. One for `nextjs` and one for `react`.
   - The base url `/docs/clerk-provider` will still exist, but will show a grid of the available variants.
 - The page will only show up in the sidenav if the user has one of the specified SDKs "active", which means selected in the [SDK selector](#sidenav).
-- Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
+- Links to this page will be "smart" and direct the user toward the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
 The `sdk` list is not the whole story. A page's available SDKs are the base file's `sdk` list plus one SDK for every `<page>.<sdk>.mdx` variant beside it, so the base file only needs to list the SDKs it renders itself. See [Doc variants](#doc-variants).
@@ -849,7 +849,7 @@ Headings should be written in **sentence-casing**, where only the first word of 
 
 h1's are not necessary and are considered tech-debt, as the `title` property in the [frontmatter](#file-metadata) will set the h1.
 
-`h2` and `h3` headings are automatically included in the table of contents. You can control this behaviour by using the `toc` prop:
+`h2` and `h3` headings are automatically included in the table of contents. You can control this behavior by using the `toc` prop:
 
 ```mdx
 {/* Replace the text for this heading in the table of contents */}

@@ -311,12 +311,13 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
     </Tab>
 
     <Tab>
-      First, configure Vite to allow the ngrok host in your `app.config.ts`. You only need to do this in development when tunneling your local server (e.g., `localhost:3000/api/webhooks`) to a public URL (e.g., `https://fawn-two-nominally.ngrok-free.app/api/webhooks`). In production, you won't need this configuration because your webhook endpoint will be hosted on your app's production domain (e.g., `https://your-app.com/api/webhooks`).
+      First, configure Vite to allow the ngrok host in your `vite.config.ts`. You only need to do this in development when tunneling your local server (e.g., `localhost:3000/api/webhooks`) to a public URL (e.g., `https://fawn-two-nominally.ngrok-free.app/api/webhooks`). In production, you won't need this configuration because your webhook endpoint will be hosted on your app's production domain (e.g., `https://your-app.com/api/webhooks`).
 
-      ```ts {{ filename: 'app.config.ts' }}
+      ```ts {{ filename: 'vite.config.ts' }}
       import { defineConfig } from 'vite'
 
       export default defineConfig({
+        // ... other config
         server: {
           // Replace with your ngrok host
           allowedHosts: ['fawn-two-nominally.ngrok-free.app'],
@@ -326,27 +327,31 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
       Then create your webhook handler:
 
-      ```ts {{ filename: 'app/routes/api/webhooks.ts' }}
+      ```ts {{ filename: 'src/routes/api/webhooks.ts' }}
       import { verifyWebhook } from '@clerk/tanstack-react-start/webhooks'
-      import { createServerFileRoute } from '@tanstack/react-start/server'
+      import { createFileRoute } from '@tanstack/react-router'
 
-      export const ServerRoute = createServerFileRoute().methods({
-        POST: async ({ request }) => {
-          try {
-            const evt = await verifyWebhook(request)
+      export const Route = createFileRoute('/api/webhooks')({
+        server: {
+          handlers: {
+            POST: async ({ request }) => {
+              try {
+                const evt = await verifyWebhook(request)
 
-            // Do something with payload
-            // For this guide, log payload to console
-            const { id } = evt.data
-            const eventType = evt.type
-            console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
-            console.log('Webhook payload:', evt.data)
+                // Do something with payload
+                // For this guide, log payload to console
+                const { id } = evt.data
+                const eventType = evt.type
+                console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+                console.log('Webhook payload:', evt.data)
 
-            return new Response('Webhook received', { status: 200 })
-          } catch (err) {
-            console.error('Error verifying webhook:', err)
-            return new Response('Error verifying webhook', { status: 400 })
-          }
+                return new Response('Webhook received', { status: 200 })
+              } catch (err) {
+                console.error('Error verifying webhook:', err)
+                return new Response('Error verifying webhook', { status: 400 })
+              }
+            },
+          },
         },
       })
       ```

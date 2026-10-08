@@ -9033,7 +9033,7 @@ describe('API Errors Generation', () => {
             shortMessage: 'Backend error',
             longMessage: 'A Backend API error occurred.',
             code: 'backend_error',
-            meta: '{"param_name": "<paramName>"}',
+            meta: { param_name: '<paramName>' },
             usage: { bapi: true, fapi: false, plapi: false },
             file: 'backend.go',
           },

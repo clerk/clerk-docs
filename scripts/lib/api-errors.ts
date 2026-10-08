@@ -51,8 +51,7 @@ interface ApiError {
   shortMessage: string
   longMessage?: string
   code: string
-  // Not rendered: the extractor records Go field and variable names, not the JSON keys and values the API sends
-  meta?: string
+  meta?: Record<string, unknown>
   usage: {
     fapi: boolean
     bapi: boolean
@@ -123,7 +122,7 @@ ${opts.description}
           message: error.shortMessage,
           long_message: error.longMessage || error.shortMessage,
           code: error.code,
-          ...(error.meta && { meta: JSON.parse(error.meta) }),
+          ...(error.meta && { meta: error.meta }),
         },
       ],
     }

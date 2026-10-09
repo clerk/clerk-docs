@@ -1,0 +1,72 @@
+---
+title: Bot sign-up protection
+description: Learn how legacy bot sign-up protection works, and how to update your application to Challenge suspicious sign-ups.
+tag: legacy
+---
+
+{/* PROT-1113 (M1): the pre-Protect bot sign-up protection. Internal notes are in the PR description:
+    this folder is mirrored publicly. */}
+
+Legacy bot sign-up protection runs a CAPTCHA widget on every sign-up form, and the widget decides on its own whether to ask the user to interact with it. [Challenge suspicious sign-ups](/docs/guides/secure/bot-protection) replaces it: Clerk decides which sign-ups to challenge, using more signals.
+
+Applications that use legacy bot sign-up protection can keep using it, and can turn it on or off until they update. New applications use **Challenge suspicious sign-ups** instead. To check which one your application uses, open the [**Protections**](https://dashboard.clerk.com/~/protect/rules) page in the Clerk Dashboard. An application on the legacy version has a **Bot sign-up protection** row there.
+
+<Include src="_partials/bot-protection-callout" />
+
+## Update to Challenge suspicious sign-ups
+
+When the update is available for your application, the [**Protections**](https://dashboard.clerk.com/~/protect/rules) page in the Clerk Dashboard shows an **Update available** banner.
+
+### Why update
+
+- **It looks at more signals.** Besides checking whether a sign-up looks automated, it treats sign-ups through VPNs, Tor, and residential or datacenter proxies as suspicious.
+- **It keeps improving.** Clerk improves how it spots bots on its side, without you changing anything.
+
+### Before you update
+
+- **Check the requirements.** See [Requirements](/docs/guides/secure/bot-protection#requirements).
+- **Find out what your application uses for sign-ups.** The Dashboard can't tell whether your application uses Clerk's prebuilt sign-up form or a custom one, so it asks you. If you're not sure, ask the developer who built your sign-up form:
+  - Clerk's [`<SignUp />`](/docs/reference/components/authentication/sign-up) component is prebuilt, even if you've changed its appearance. So are the [Account Portal](/docs/guides/account-portal/overview) pages.
+  - A form built with Clerk's hooks or APIs is a [custom flow](!custom-flow).
+  - If your application uses both, treat it as custom.
+- **If it's custom, check your flow.** With **Challenge suspicious sign-ups**, ClerkJS shows the challenge itself, and only custom flows that meet [the custom flow requirements](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection#requirements) can show it. In a flow that doesn't meet them, users can't finish a sign-up that is challenged. Don't update until your flow meets them: the update can't be undone.
+- **Native applications aren't affected.** Neither version challenges sign-ups from native applications while the [Native API](/docs/guides/secure/bot-protection#native-api-and-captcha) is enabled, so the update doesn't change how those sign-ups are handled.
+
+### Test in your development instance first
+
+Update your [development instance](/docs/guides/development/managing-environments#development-instance) before your production instance, especially if your application has a custom sign-up flow. Each instance updates separately, so updating development changes nothing in production, and you can watch your flow handle a challenged sign-up before your users meet one.
+
+1. In the Clerk Dashboard, open your development instance and follow the steps in [How to update](#how-to-update).
+   - The Dashboard's check can't load an application that runs on your machine, such as `http://localhost:3000`. If the check doesn't pass for that reason, confirm the [requirements](/docs/guides/secure/bot-protection#requirements) yourself, then select **Bypass checks**. This applies to your development instance only.
+1. Run your application against your development instance, and sign up in a way that gets challenged, such as while connected to a commercial VPN. See [What it challenges](/docs/guides/secure/bot-protection#what-it-challenges). If your application supports OAuth or enterprise SSO, sign up through it, so the challenge runs on your SSO callback route.
+   - Sign up by hand for this step. A sign-up that carries a [Testing Token](/docs/guides/development/testing/overview#testing-tokens) isn't challenged, so end-to-end tests that use Testing Tokens keep passing after you update, but they can't show you the challenge.
+1. Confirm that the challenge appears, and that the sign-up completes once it passes. If it doesn't, your flow misses one of [the custom flow requirements](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection#requirements), which also say how each missing one shows up.
+1. Update your production instance.
+
+### How to update
+
+The update has two steps. First the Dashboard checks your application, then you tell it what your application uses for sign-ups.
+
+1. In the Clerk Dashboard, navigate to the [**Protections**](https://dashboard.clerk.com/~/protect/rules) page under **Protect**.
+1. In the **Update available** banner, select **Check your application**. If the banner shows **Update** instead, your application has already passed this check: select **Update** and skip the next step.
+1. Select **Verify**. Clerk loads your application and checks it against the [requirements](/docs/guides/secure/bot-protection#requirements). If a requirement fails, fix it in your application, then select **Verify** again. When the requirements pass, select **Continue update**.
+1. Under **What does your application use for sign-ups?**, select the option that applies:
+   - **Clerk's prebuilt sign-up form**: you don't need to do anything else.
+   - **A custom sign-up form**: check your flow against [the custom flow requirements](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection#requirements), then select **I've checked that my custom sign-up flow meets the requirements.**
+   - **I'm not sure**: the Dashboard doesn't update your application. Select **Close for now**, [find out what your application uses](#before-you-update), then start again. Your current protection stays as it is in the meantime.
+1. Select **Update protection**.
+
+The update replaces legacy bot sign-up protection with **Challenge suspicious sign-ups**, on its default settings, and keeps the state you had. If legacy bot sign-up protection was on, **Challenge suspicious sign-ups** is on. If it was off, **Challenge suspicious sign-ups** stays off until you [turn it on](/docs/guides/secure/bot-protection#turn-on-the-protection). You can't switch back to legacy bot sign-up protection in the Dashboard.
+
+## Manage legacy bot sign-up protection
+
+Until you update, you can turn legacy bot sign-up protection on or off:
+
+1. In the Clerk Dashboard, navigate to the [**Protections**](https://dashboard.clerk.com/~/protect/rules) page under **Protect**.
+1. In the **Bot sign-up protection** row, check the **Status**. The row is tagged **Legacy** when the update is available for your application.
+   - If **Disabled**, select **Enable**. In the dialog, toggle on **Enable**, then select **Save**.
+   - If **Enabled**, legacy bot sign-up protection is already active. To turn it off, select **Manage**, toggle off **Enable**, then select **Save**.
+
+## Custom sign-up flows
+
+With legacy bot sign-up protection, a custom sign-up flow needs to provide an element for the CAPTCHA widget. See [Legacy bot sign-up protection in a custom flow](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection#legacy-bot-sign-up-protection).

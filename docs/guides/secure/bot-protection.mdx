@@ -1,27 +1,67 @@
 ---
-title: Bot protection
-description: Protect your sign-ups from bots.
+title: Challenge suspicious sign-ups
+description: Protect your application from bots by challenging sign-ups that look automated or come through VPNs, Tor, or proxies.
 ---
 
-To protect your sign-ups from bots, Clerk leverages data from our CDN to determine whether a user attempting to sign up might be a bot or not.
+{/* PROT-1113 (M1): the Protect-powered replacement for legacy bot sign-up protection. Internal notes are
+    in the PR description: this folder is mirrored publicly. */}
 
-## Enable bot sign-up protection
+Bots create fake accounts at scale to abuse free trials, send spam, or inflate sign-up numbers. **Challenge suspicious sign-ups** makes sign-ups that look automated, or that come through VPNs, Tor, or proxies, pass a challenge before the account is created. Sign-ups that don't match are never challenged.
 
-1. In the Clerk Dashboard, navigate to the [**Rules**](https://dashboard.clerk.com/~/protect/rules) page under **Protect**.
-1. In the **Bot sign-up protection** row, check the **Status**.
+> [!NOTE]
+> **Challenge suspicious sign-ups** replaces legacy bot sign-up protection. To check which one your application uses, open the [**Protections**](https://dashboard.clerk.com/~/protect/rules) page in the Clerk Dashboard. An application on the legacy version has a **Bot sign-up protection** row there. If yours does, see [Legacy bot sign-up protection](/docs/guides/secure/legacy-bot-protection) to update.
+
+## What it challenges
+
+A sign-up is challenged when either of these is true:
+
+- Clerk's automated-traffic detection flags it as likely coming from a bot.
+- It comes through a VPN, Tor, or a residential or datacenter proxy. iCloud Private Relay and corporate VPNs aren't treated as suspicious.
+
+**Challenge suspicious sign-ups** applies to sign-ups only. It never challenges a sign-in.
+
+A sign-up that carries a valid [Testing Token](/docs/guides/development/testing/overview#testing-tokens) isn't challenged, so end-to-end tests that use Testing Tokens keep running.
+
+{/* The "All sign-ups" option and its settings are documented with M1.5, when every plan can change them. */}
+
+## What happens when a sign-up is challenged
+
+Clerk runs a Cloudflare Turnstile check in the user's browser. Most people pass it without doing anything, and some are asked to complete a CAPTCHA. When the check passes, the sign-up continues. If it doesn't pass, the account isn't created.
+
+- Clerk's prebuilt [`<SignUp />`](/docs/reference/components/authentication/sign-up) component shows the challenge inside the sign-up form.
+- In a [custom sign-up flow](!custom-flow), ClerkJS shows the challenge in a dialog over your page. See [Handle sign-up challenges in your custom flow](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection).
+
+Each challenged sign-up appears as a `protect.sign_up.challenged` event in your [application logs](/docs/guides/dashboard/logs/application-logs#protect-events).
+
+## Requirements
+
+- **ClerkJS 6.25.0 or later.** Clerk's Core 3 SDKs, such as `@clerk/nextjs` 7 and `@clerk/react` 6, load the latest ClerkJS 6 automatically, so applications that use them already meet this. Applications on older SDKs load ClerkJS 5 and need to [upgrade to Core 3](/docs/guides/development/upgrading/upgrade-guides/core-3). If your application loads a ClerkJS version too old to show the challenge, users can't complete a challenged sign-up.
+- **A Content Security Policy that allows the challenge.** If your application sets a Content Security Policy, allow the resources Clerk needs to show a challenge, as described in [Configure Clerk Content-Security-Policy headers](/docs/guides/secure/best-practices/csp-headers).
+- **If you have a custom sign-up flow, a flow that can show the challenge.** Custom flows have stricter requirements than Clerk's prebuilt components, including ClerkJS 6.36.0 or later. See [the custom flow requirements](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection#requirements).
+
+Before you turn on **Challenge suspicious sign-ups**, the Clerk Dashboard checks your application for these requirements:
+
+- Select **Verify** to have Clerk load your application's home URL and check its ClerkJS version and Content Security Policy.
+- If the check can't reach your application, and you've confirmed the requirements yourself, select **Bypass checks**. This can't be undone.
+
+> [!IMPORTANT]
+> The Dashboard's check can't tell whether your application uses a custom sign-up flow. If it does, confirm that your flow meets [the custom flow requirements](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection#requirements) before you turn on **Challenge suspicious sign-ups**, even if the check passes. When you [update from legacy bot sign-up protection](/docs/guides/secure/legacy-bot-protection#update-to-challenge-suspicious-sign-ups), the Dashboard asks you what your application uses.
+
+## Turn on the protection
+
+**Challenge suspicious sign-ups** is on by default for new applications. To turn it on or off:
+
+1. In the Clerk Dashboard, navigate to the [**Protections**](https://dashboard.clerk.com/~/protect/rules) page under **Protect**.
+1. In the **Challenge suspicious sign-ups** row, check the **Status**.
    - If **Disabled**, select **Enable**. In the dialog, toggle on **Enable**, then select **Save**.
-   - If **Enabled**, bot sign-up protection is already active and no action is required. To disable it, select **Manage**, toggle off **Enable**, then select **Save**.
+   - If **Enabled**, the protection is already active. To turn it off, select **Manage**, toggle off **Enable**, then select **Save**.
+   - If **Setup required**, select **Manage** and complete the setup. See [Requirements](#requirements).
 
-<Include src="_partials/bot-protection-callout" />
+> [!NOTE]
+> If your application doesn't have a **Challenge suspicious sign-ups** row, it uses legacy bot sign-up protection. [Update to Challenge suspicious sign-ups](/docs/guides/secure/legacy-bot-protection#update-to-challenge-suspicious-sign-ups) first.
 
-## Limitations
+## Native API and CAPTCHA
 
-### Native API and CAPTCHA
-
-The [**Native API**](https://dashboard.clerk.com/~/native-applications) setting allows native applications and browser extensions to make requests to Clerk in environments that cannot always complete a browser-based CAPTCHA challenge. It enables a public request pathway through which CAPTCHA challenges are bypassed, even when **Bot sign-up protection** is enabled. Clerk's standard browser-based authentication flows continue to use CAPTCHA when a challenge is required.
+The [**Native API**](https://dashboard.clerk.com/~/native-applications) setting allows native applications and browser extensions to make requests to Clerk in environments that cannot always complete a browser-based CAPTCHA challenge. It enables a public request pathway through which CAPTCHA challenges are bypassed, even when legacy bot sign-up protection is on. **Challenge suspicious sign-ups** also doesn't challenge sign-ups from native applications while the Native API is enabled. While it's disabled, Clerk rejects every request from a native application with a `native_api_disabled` error, so a native sign-up fails instead of being challenged. Clerk's standard browser-based authentication flows continue to use CAPTCHA when a challenge is required.
 
 Only enable the Native API when your native application or browser extension requires it. Because the pathway is public, it must not be treated as a secret or used as the only boundary protecting your application from automated traffic. Registering an application's bundle identifier or package name allows Clerk to validate callbacks for supported native authentication flows, but does not make the Native API pathway private.
-
-### Custom sign-up flows
-
-If you're building a custom sign-up flow using the Clerk API instead of using Clerk components, and you have enabled **Bot sign-up protection**, then you need to ensure you have added a DOM node to render the CAPTCHA widget. Refer to the [Add bot protection to your custom sign-up flow](/docs/guides/development/custom-flows/authentication/bot-sign-up-protection) guide for more information.

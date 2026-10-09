@@ -1,30 +1,155 @@
 ---
-title: Add bot protection to your custom sign-up flow
-description: Learn how to add Clerk's bot protection to your custom sign-up flow.
+title: Handle sign-up challenges in your custom flow
+description: Learn how to ensure your custom sign-up flow works with Challenge suspicious sign-ups.
 sdk: nextjs, astro, chrome-extension, electron, expo, expressjs, js-frontend, fastify, go, nuxt, react, react-router, ruby, tanstack-react-start, vue
 ---
 
-{/* DOCS NOTE: Not needed for native as fraud protection comes from the device attestation on iOS and android */}
+{/* DOCS NOTE: Not needed for iOS and Android: sign-ups from native applications aren't challenged while the Native API is enabled */}
 
 <Include src="_partials/custom-flows-callout" />
 
-Clerk provides the ability to add a CAPTCHA widget to your sign-up flows to protect against bot sign-ups. The [`<SignUp />`](/docs/reference/components/authentication/sign-up) component handles this flow out-of-the-box. However, if you're building a custom user interface, this guide will show you how to add the CAPTCHA widget to your custom sign-up flow.
+[Challenge suspicious sign-ups](/docs/guides/secure/bot-protection) makes sign-ups that look automated, or that come through VPNs, Tor, or proxies, pass a Cloudflare Turnstile check. Most people pass it without doing anything, and some are asked to complete a CAPTCHA. In a custom sign-up flow, ClerkJS runs that challenge for you, in a dialog over your page, so you don't render anything for it. Your flow does need to meet the [requirements](#requirements): a flow that can't show the challenge can't complete a challenged sign-up. Check them before you turn on **Challenge suspicious sign-ups**, or before you update from legacy bot sign-up protection.
+
+If your application uses [legacy bot sign-up protection](/docs/guides/secure/legacy-bot-protection), see [Legacy bot sign-up protection](#legacy-bot-sign-up-protection).
+
+## Requirements
+
+Your custom sign-up flow can show the challenge when all of the following are true:
+
+- **It's built with the [`useSignUp()`](/docs/reference/hooks/use-sign-up) hook** from `@clerk/nextjs` 7 or later, `@clerk/react` 6 or later, `@clerk/react-router` 3 or later, or `@clerk/tanstack-react-start` 1 or later. Flows built with the [legacy API](/docs/guides/development/custom-flows/authentication/legacy/email-password), such as the hooks imported from `@clerk/nextjs/legacy` or `clerk.client.signUp`, and flows built with other SDKs, aren't supported yet.
+- **It loads ClerkJS 6.36.0 or later and `@clerk/ui` 1.38.0 or later.** By default, Clerk's SDKs load the latest versions, so you don't need to do anything. If your application bundles `@clerk/ui` with the `ui` prop, or pins a ClerkJS or `@clerk/ui` version, update it.
+- **It loads Clerk's UI.** ClerkJS uses Clerk's UI to show the challenge. If you've turned off UI prefetching with `prefetchUI={false}` or `NEXT_PUBLIC_CLERK_PREFETCH_UI=false`, turn it back on.
+- **Its Content Security Policy allows the challenge**, the same as for Clerk's prebuilt components. See [Configure Clerk Content-Security-Policy headers](/docs/guides/secure/best-practices/csp-headers).
+- **If it supports OAuth or enterprise SSO, its SSO callback route handles the challenge.** See [OAuth and enterprise SSO sign-ups](#oauth-and-enterprise-sso-sign-ups).
+
+A flow that doesn't meet these requirements can't complete a challenged sign-up. How it fails depends on which requirement it misses:
+
+- **The flow can't show the challenge**, because it misses one of the first three requirements. The `signUp` method returns without an error, but the sign-up stays incomplete, with `protect_check` in `signUp.missingFields`.
+- **The challenge can't load**, because the Content Security Policy blocks it. The dialog closes and the `signUp` method returns an `error` with the code `protect_check_script_load_failed`. See [If the challenge isn't completed](#if-the-challenge-isnt-completed).
+- **The SSO callback route can't handle the challenge.** See [OAuth and enterprise SSO sign-ups](#oauth-and-enterprise-sso-sign-ups).
+
+What to do depends on which protection your application uses:
+
+- If your application uses [legacy bot sign-up protection](/docs/guides/secure/legacy-bot-protection), don't update until your flow meets these requirements. When you update, the Clerk Dashboard asks you to confirm that you've checked them, and you can't switch back afterward. To see your flow handle a challenge before your users do, [update your development instance first](/docs/guides/secure/legacy-bot-protection#test-in-your-development-instance-first).
+- If **Challenge suspicious sign-ups** is already on and your flow doesn't meet these requirements, update your flow, or turn off the protection until you do.
+
+> [!IMPORTANT]
+> Before you turn on **Challenge suspicious sign-ups**, the Clerk Dashboard checks your application's ClerkJS version and Content Security Policy. That check can't see how your custom flow is built, so confirm the other requirements yourself.
+
+<If sdk="expo">
+  > [!NOTE]
+  > When your Expo app runs as a native application, it makes requests through the [Native API](/docs/guides/secure/bot-protection#native-api-and-captcha). **Challenge suspicious sign-ups** doesn't challenge those sign-ups while the Native API is enabled.
+</If>
+
+## How the challenge appears in your flow
+
+When a sign-up is challenged, the `signUp` method you called doesn't return right away. ClerkJS shows the challenge in a dialog over your page, and the method returns once the challenge passes. By then, the `signUp` object is already updated, so your flow continues as it would without the challenge. You don't need to change your code.
+
+Most `signUp` methods that send a request to Clerk can show the challenge, such as [`signUp.password()`](/docs/reference/objects/sign-up-future#password), [`signUp.create()`](/docs/reference/objects/sign-up-future#create), or [`signUp.verifications.sendEmailCode()`](/docs/reference/objects/sign-up-future#verifications-sendemailcode). A user who passes the challenge usually isn't challenged again during the same sign-up.
+
+While the dialog is open, `fetchStatus` is `'fetching'`, so any loading state you show based on it stays visible. Users can't close the dialog.
+
+<If sdk={["react", "react-router", "tanstack-react-start"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
+
+The following example shows where the challenge can appear in an email and password sign-up. It's the same code as in the [email and password custom flow](/docs/guides/development/custom-flows/authentication/email-password), with no changes for **Challenge suspicious sign-ups**.
+
+```tsx {{ mark: [[5, 10]] }}
+const handleSubmit = async (formData: FormData) => {
+  const emailAddress = formData.get('email') as string
+  const password = formData.get('password') as string
+
+  // If this sign-up is challenged, ClerkJS shows the challenge in a dialog,
+  // and `signUp.password()` returns once the challenge passes
+  const { error } = await signUp.password({
+    emailAddress,
+    password,
+  })
+  if (error) {
+    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+    // for more info on error handling
+    console.error(JSON.stringify(error, null, 2))
+    return
+  }
+
+  await signUp.verifications.sendEmailCode()
+}
+```
+
+### If the challenge isn't completed
+
+If the challenge can't load or expires before it's completed, or Clerk blocks the sign-up, the dialog closes and the method returns an `error`. The error is also available in `errors.global`. Show the user a message, as described in [Error handling](/docs/guides/development/custom-flows/error-handling).
+
+If the error's code is `protect_check_script_load_failed`, the challenge couldn't load. Check that your Content Security Policy allows it.
+
+## OAuth and enterprise SSO sign-ups
+
+A sign-up through OAuth or enterprise SSO can be challenged after the user returns from the identity provider, on your SSO callback route. To show the challenge there, handle the callback with the `<HandleSSOCallback />` component, which requires `@clerk/react` 6.17.7 or later (`@clerk/nextjs` 7.9.13 or later).
+
+```tsx {{ filename: 'app/sso-callback/page.tsx' }}
+'use client'
+
+import { HandleSSOCallback } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+
+export default function Page() {
+  const router = useRouter()
+
+  return (
+    <HandleSSOCallback
+      navigateToApp={({ session, decorateUrl }) => {
+        // Handle session tasks
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+        if (session?.currentTask) {
+          console.log(session?.currentTask)
+          return
+        }
+
+        // If no session tasks, navigate the signed-in user to the home page
+        const url = decorateUrl('/')
+        if (url.startsWith('http')) {
+          window.location.href = url
+        } else {
+          router.push(url)
+        }
+      }}
+      navigateToSignIn={() => router.push('/sign-in')}
+      navigateToSignUp={() => router.push('/sign-up')}
+    />
+  )
+}
+```
+
+If the challenge isn't completed, `<HandleSSOCallback />` calls `navigateToSignUp`, and the error is available in `errors.global` from `useSignUp()`. Show the user a message on your sign-up page, as described in [If the challenge isn't completed](#if-the-challenge-isnt-completed). If your application pins a ClerkJS version, the error is only reported with ClerkJS 6.38.1 or later.
+
+If your callback route uses [`<AuthenticateWithRedirectCallback />`](/docs/reference/components/control/authenticate-with-redirect-callback) instead, a challenged sign-up is sent to your sign-up URL to complete the challenge. That works only if the page at your sign-up URL renders the [`<SignUp />`](/docs/reference/components/authentication/sign-up) component.
+
+The [OAuth connections](/docs/guides/development/custom-flows/authentication/oauth-connections) and [enterprise connections](/docs/guides/development/custom-flows/authentication/enterprise-connections) custom flow guides build their callback route with `<HandleSSOCallback />`.
+
+## Remove the legacy CAPTCHA element
+
+**Challenge suspicious sign-ups** doesn't use the `<div id="clerk-captcha" />` element that legacy bot sign-up protection needs. After you [update](/docs/guides/secure/legacy-bot-protection#update-to-challenge-suspicious-sign-ups), you can remove it from your sign-up form.
+
+## Legacy bot sign-up protection
+
+Legacy bot sign-up protection renders a CAPTCHA widget in your sign-up form, so your custom flow needs to provide an element for the widget.
 
 <Steps>
-  ## Enable bot sign-up protection
+  ### Enable legacy bot sign-up protection
 
-  1. In the Clerk Dashboard, navigate to the [**Rules**](https://dashboard.clerk.com/~/protect/rules) page under **Protect**.
-  1. In the **Bot sign-up protection** row, check the **Status**.
+  1. In the Clerk Dashboard, navigate to the [**Protections**](https://dashboard.clerk.com/~/protect/rules) page under **Protect**.
+  1. In the **Bot sign-up protection** row, check the **Status**. The row is tagged **Legacy** when the [update](/docs/guides/secure/legacy-bot-protection#update-to-challenge-suspicious-sign-ups) is available for your application.
      - If **Disabled**, select **Enable**. In the dialog, toggle on **Enable**, then select **Save**.
-     - If **Enabled**, bot sign-up protection is already active and no action is required. To disable it, select **Manage**, toggle off **Enable**, then select **Save**.
+     - If **Enabled**, legacy bot sign-up protection is already active and no action is required. To disable it, select **Manage**, toggle off **Enable**, then select **Save**.
 
   <If is="llm">
-    **For AI agents:** Run `npx clerk@latest config patch --json '{"auth_attack_protection":{"bot_protection":{"captcha_enabled":true}}}'` to enable bot sign-up protection instead of using the **Bot sign-up protection** dialog on the **Rules** page in the Dashboard. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+    **For AI agents:** Run `npx clerk@latest config patch --json '{"auth_attack_protection":{"bot_protection":{"captcha_enabled":true}}}'` to enable legacy bot sign-up protection instead of using the **Bot sign-up protection** row on the **Protections** page in the Dashboard. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
   </If>
 
   <Include src="_partials/bot-protection-callout" />
 
-  ## Add the CAPTCHA widget to your custom sign-up form
+  ### Add the CAPTCHA widget to your custom sign-up form
 
   <If sdk="expo">
     > [!NOTE]
@@ -112,7 +237,7 @@ Clerk provides the ability to add a CAPTCHA widget to your sign-up flows to prot
     ```
   </If>
 
-  ## Customize the appearance of the CAPTCHA widget
+  ### Customize the appearance of the CAPTCHA widget
 
   <If sdk="expo">
     For custom flows on Expo web, customize the CAPTCHA widget by passing `dataSet` to the `<View nativeID="clerk-captcha" />` element. React Native Web renders these values as `data-cl-*` attributes.

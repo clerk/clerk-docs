@@ -12163,6 +12163,72 @@ description: Test page
     expect(await readFile('./dist/simple-test.mdx')).toContain('_prompts/test-prompt.md')
   })
 
+  test('Fails the build when a <Prompt /> names a framework clerk init does not accept', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Prompt variant="card" src="prompts/test-prompt.md" title="Test" output="replace" framework="tanstack-react-start" />`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: promptsConfig,
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('<Prompt /> prop "framework" has invalid value "tanstack-react-start"')
+  })
+
+  test('A <Prompt /> with a framework clerk init accepts builds', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        }),
+      },
+      { path: './prompts/test-prompt.md', content: '# Test Prompt' },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: Test page
+---
+
+<Prompt variant="card" src="prompts/test-prompt.md" title="Test" output="replace" framework="tanstack-start" />`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        prompts: promptsConfig,
+      }),
+    )
+
+    expect(await readFile('./dist/simple-test.mdx')).toContain('framework="tanstack-start"')
+  })
+
   test('Fails the build when a page declares more than one output="replace" prompt', async () => {
     const { tempDir } = await createTempFiles([
       {

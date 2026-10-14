@@ -122,15 +122,15 @@ Clerk CLI documentation is maintained manually and must be verified against the 
 
 ### Working with `clerk/skills`
 
-The public agent skills served from `/.well-known/skills` and `/.well-known/agent-skills` originate in [`clerk/skills`](https://github.com/clerk/skills). Skill names, descriptions, licenses, and files must be changed there first. The registry in `src/app/(website)/.well-known/skills/skills.ts` is generated metadata and should not be edited by hand.
+The public agent skills served from `/.well-known/skills` and `/.well-known/agent-skills` originate in [`clerk/skills`](https://github.com/clerk/skills). Skill names, descriptions, licenses, and files must be changed there first. The generator builds the registry in `src/app/(website)/.well-known/skills/skills.ts` and the Docs setup prompt in `clerk-docs/prompts/cli-setup.md` from the same `clerk/skills` revision, so don't edit either by hand. The setup prompt is the canonical `clerk-setup` skill without its frontmatter.
 
-After a change is merged in `clerk/skills`, either wait for the weekday Check skills registry workflow (`.github/workflows/check-skills-registry.yml`) to open or update a refresh pull request, or run the following from the root of `clerk/clerk` to refresh the registry locally:
+When a change merges in `clerk/skills`, it dispatches the Check skills registry workflow (`.github/workflows/check-skills-registry.yml`), which opens or updates an auto-merging refresh pull request. To refresh both files locally instead, run the following from the root of `clerk/clerk`:
 
 ```sh
 pnpm skills:refresh
 ```
 
-Pull requests that affect the registry, its generator, or the workflow run `pnpm skills:check`. The check regenerates the registry at the `clerk/skills` revision already recorded in `skills.ts` and fails if the committed registry does not match, leaving a pull request comment with what differs and the exact `skills:refresh` command to run. New upstream changes are handled separately by the weekday refresh workflow.
+Pull requests that affect either generated file, the generator, or the workflow run `pnpm skills:check`. The check regenerates both files at the `clerk/skills` revision already recorded in `skills.ts` and fails if either committed file doesn't match, leaving a pull request comment with what differs and the exact `skills:refresh` command to run. The dispatched refresh handles new upstream changes separately. To catch up after a missed dispatch, run the workflow manually from the Actions tab.
 
 ### Working with `clerk_go`
 

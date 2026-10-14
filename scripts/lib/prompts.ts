@@ -12,6 +12,7 @@ import { safeFail, safeMessage, type WarningsSection } from './error-messages'
 import type { DocsFile } from './io'
 import { extractComponentPropValueFromNode } from './utils/extractComponentPropValueFromNode'
 import { z } from 'zod'
+import { PROMPT_FRAMEWORKS, isPromptFramework } from '../../../src/lib/prompt-framework'
 
 export interface Prompt {
   filePath: string
@@ -19,6 +20,8 @@ export interface Prompt {
   content: string
 }
 
+// The generated cli-setup.md is byte-checked against clerk/skills by skills:check;
+// keep the setup-order check here too so every served setup prompt gets it.
 const setupPromptNames = new Set(['cli-setup.md', 'nextjs-quickstart.md'])
 
 const packageRunnerPattern = String.raw`(?:npx(?:\s+-y)?|pnpm\s+dlx|bunx|yarn\s+dlx)`
@@ -378,6 +381,33 @@ export const checkPrompts =
         )
         if (title === undefined || title.trim() === '') {
           safeFail(config, vfile, file.filePath, section, 'prompt-missing-prop', ['title', null], node.position)
+        }
+
+        // Optional. The app appends a paragraph naming this framework and its
+        // `clerk init --framework` command, so only ids init accepts may ship.
+        const framework = asString(
+          extractComponentPropValueFromNode(
+            config,
+            node,
+            vfile,
+            'Prompt',
+            'framework',
+            false,
+            section,
+            file.filePath,
+            stringOrBooleanSchema,
+          ),
+        )
+        if (framework !== undefined && !isPromptFramework(framework)) {
+          safeFail(
+            config,
+            vfile,
+            file.filePath,
+            section,
+            'prompt-invalid-prop',
+            ['framework', framework, Object.keys(PROMPT_FRAMEWORKS)],
+            node.position,
+          )
         }
       }
 

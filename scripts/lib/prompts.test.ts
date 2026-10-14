@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PROMPT_FRAMEWORKS, withFrameworkHint } from '../../../src/lib/prompt-framework'
 import { checkPromptInvariants, validatePromptInvariants, type Prompt } from './prompts'
 
 const routableDocsHrefs = ['/docs/nextjs/getting-started/quickstart']
@@ -19,7 +20,7 @@ describe('validatePromptInvariants', () => {
         [
           prompt(
             'Supported frameworks default to accountless setup.\n```bash\nnpx clerk@latest init\n```\nThen `npx clerk@latest auth login`.\nhttps://clerk.com/docs/nextjs/getting-started/quickstart.md',
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         routableDocsHrefs,
@@ -99,7 +100,7 @@ describe('validatePromptInvariants', () => {
         [
           prompt(
             '## Step 1: Sign in (optional)\n```bash\nnpx clerk@latest auth login\n```\n## Step 2: Initialize\n```bash\nnpx clerk@latest init --app app_123\n```',
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         [],
@@ -113,7 +114,7 @@ describe('validatePromptInvariants', () => {
         [
           prompt(
             '## Step 1: Sign in (optional)\n### Run the login\n```bash\nnpx clerk@latest auth login\n```\n## Step 2: Initialize\n```bash\nnpx clerk@latest init\n```',
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         [],
@@ -127,7 +128,7 @@ describe('validatePromptInvariants', () => {
         [
           prompt(
             '## Step 1: Sign in\n> ## Example (optional)\n\n```bash\nnpx clerk@latest auth login\n```\n## Step 2: Initialize\n```bash\nnpx clerk@latest init\n```',
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         [],
@@ -141,7 +142,7 @@ describe('validatePromptInvariants', () => {
         [
           prompt(
             '## Step 1: Sign in\nOnly sign in if the user wants an existing application. This is optional.\n```bash\nnpx clerk@latest auth login\n```\n## Step 2: Initialize\n```bash\nnpx clerk@latest init\n```',
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         [],
@@ -155,7 +156,7 @@ describe('validatePromptInvariants', () => {
         [
           prompt(
             '# Set up Clerk\n## Authenticate\n```bash\nnpx clerk@latest auth login\n```\n## Step 1: Initialize\n```bash\nnpx clerk@latest init\n```',
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         [],
@@ -169,7 +170,7 @@ describe('validatePromptInvariants', () => {
         [
           prompt(
             `## Authenticate\n${codeFence(`npx clerk@latest auth login ${separator} npx clerk@latest init`)}`,
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         [],
@@ -179,13 +180,55 @@ describe('validatePromptInvariants', () => {
 
   it('requires setup prompts to include an initialization fence', () => {
     expect(() =>
-      validatePromptInvariants([prompt('Run `npx clerk@latest init` to set up Clerk.', 'cli-setup.md')], []),
+      validatePromptInvariants([prompt('Run `npx clerk@latest init` to set up Clerk.', 'nextjs-quickstart.md')], []),
     ).toThrow('include Clerk initialization')
+  })
+
+  it('requires generated cli-setup to include an initialization fence', () => {
+    expect(() => validatePromptInvariants([prompt('# Generated setup prompt', 'cli-setup.md')], [])).toThrow(
+      'include Clerk initialization',
+    )
+  })
+
+  it('rejects required login before init in generated cli-setup', () => {
+    expect(() =>
+      validatePromptInvariants(
+        [
+          prompt(
+            '## Sign in\n```bash\nnpx -y clerk@latest auth login\n```\n## Initialize\n```bash\nnpx -y clerk@latest init\n```',
+            'cli-setup.md',
+          ),
+        ],
+        [],
+      ),
+    ).toThrow('do not require Clerk authentication before initialization')
+  })
+
+  it('accepts optional login before init in generated cli-setup', () => {
+    expect(() =>
+      validatePromptInvariants(
+        [
+          prompt(
+            '## Use an existing app (optional)\n```bash\nnpx -y clerk@latest auth login\n```\n## Initialize\n```bash\nnpx -y clerk@latest init\n```',
+            'cli-setup.md',
+          ),
+        ],
+        [],
+      ),
+    ).not.toThrow()
+  })
+
+  // The app appends this paragraph to cli-setup.md on framework quickstarts, so its
+  // command has to pass the same checks as the file it's appended to.
+  it.each(Object.keys(PROMPT_FRAMEWORKS))('accepts the %s framework paragraph', (framework) => {
+    const content = withFrameworkHint(`## Initialize\n${codeFence('npx -y clerk@latest init')}`, framework)
+    expect(content).toContain(`clerk@latest init --framework ${framework}`)
+    expect(() => validatePromptInvariants([prompt(content, 'cli-setup.md')], [])).not.toThrow()
   })
 
   it.each(['initialize', 'init-extra'])('does not treat %s as the init command', (subcommand) => {
     expect(() =>
-      validatePromptInvariants([prompt(codeFence(`npx clerk@latest ${subcommand}`), 'cli-setup.md')], []),
+      validatePromptInvariants([prompt(codeFence(`npx clerk@latest ${subcommand}`), 'nextjs-quickstart.md')], []),
     ).toThrow('include Clerk initialization')
   })
 
@@ -199,7 +242,7 @@ describe('validatePromptInvariants', () => {
               '## Step 1: Initialize',
               codeFence('npx clerk@latest init'),
             ].join('\n'),
-            'cli-setup.md',
+            'nextjs-quickstart.md',
           ),
         ],
         [],

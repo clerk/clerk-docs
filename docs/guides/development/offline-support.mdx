@@ -63,46 +63,104 @@ To enable offline support in your Expo app, follow these steps:
 
 ## How to handle network errors
 
-When there is no internet connection, Clerk's [custom flows](!custom-flow) (e.g., `signIn.create()`) will throw a network error.
+When there is no internet connection, Clerk's [custom flows](!custom-flow) (e.g., `signIn.password()`) return a network error in their `error` result instead of throwing it.
 
-To handle network errors in your Expo app, you can use the `isClerkRuntimeError()` function to check if the error is a Clerk-related error. Clerk-related errors are returned as an array of [`ClerkAPIError`](/docs/reference/types/clerk-api-error) objects. These errors contain a `code` property that you can use to identify the specific error. See the following example.
+To handle network errors in your Expo app, use `isClerkRuntimeError()` to check whether the returned error is a Clerk runtime error, then check its `code` property for `network_error`. See the following example.
 
-```tsx {{ mark: [1, [22, 30]] }}
-import { useSignIn, isClerkRuntimeError } from '@clerk/expo'
-import { Link, useRouter } from 'expo-router'
-import { Text, TextInput, Button, View } from 'react-native'
+```tsx {{ mark: [1, [24, 28], [54, 58]] }}
+import { isClerkRuntimeError, useAuth, useSignIn } from '@clerk/expo'
+import { type Href, useRouter } from 'expo-router'
+import { Button, Text, TextInput, View } from 'react-native'
 import React from 'react'
 
 export default function SignInPage() {
-  const { signIn, setActive, isLoaded } = useSignIn()
+  const { signIn, fetchStatus } = useSignIn()
+  const { isLoaded } = useAuth()
   const router = useRouter()
 
   const [emailAddress, setEmailAddress] = React.useState('')
   const [password, setPassword] = React.useState('')
+  const [error, setError] = React.useState<string | null>(null)
 
-  const onSignInPress = React.useCallback(async () => {
+  const onSignInPress = async () => {
     if (!isLoaded) return
+    setError(null)
+
     try {
-      const signInAttempt = await signIn.create({
-        identifier: emailAddress,
+      const { error: signInError } = await signIn.password({
+        emailAddress,
         password,
       })
+      if (signInError) {
+        if (isClerkRuntimeError(signInError) && signInError.code === 'network_error') {
+          setError('Network error. Check your connection and try again.')
+          return
+        }
 
-      // The rest of your custom flow logic
+        setError('Unable to sign in. Please try again.')
+        console.error(JSON.stringify(signInError, null, 2))
+        return
+      }
+
+      if (signIn.status === 'complete') {
+        const { error: finalizeError } = await signIn.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            // Handle session tasks
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+            if (session?.currentTask) {
+              console.log(session?.currentTask)
+              return
+            }
+
+            // If no session tasks, navigate the signed-in user to the home page
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.replace(url as Href)
+            }
+          },
+        })
+        if (finalizeError) {
+          if (isClerkRuntimeError(finalizeError) && finalizeError.code === 'network_error') {
+            setError('Network error. Check your connection and try again.')
+            return
+          }
+
+          setError('Unable to sign in. Please try again.')
+          console.error(JSON.stringify(finalizeError, null, 2))
+        }
+      } else {
+        setError('Sign-in is not complete. Additional verification may be required.')
+      }
     } catch (err) {
       // See https://clerk.com/docs/guides/development/custom-flows/error-handling
       // for more info on error handling
-      if (isClerkRuntimeError(err) && err.code === 'network_error') {
-        console.error('Network error occurred!')
-      }
-
+      setError('Unable to sign in. Please try again.')
       console.error(JSON.stringify(err, null, 2))
     }
-  }, [isLoaded, emailAddress, password])
+  }
 
   return (
     <View>
-      <Button title="Sign in" onPress={onSignInPress} />
+      <TextInput
+        autoCapitalize="none"
+        value={emailAddress}
+        placeholder="Email address"
+        onChangeText={setEmailAddress}
+      />
+      <TextInput
+        value={password}
+        placeholder="Password"
+        secureTextEntry
+        onChangeText={setPassword}
+      />
+      <Button
+        title="Sign in"
+        onPress={onSignInPress}
+        disabled={!isLoaded || fetchStatus === 'fetching'}
+      />
+      {error && <Text>{error}</Text>}
     </View>
   )
 }

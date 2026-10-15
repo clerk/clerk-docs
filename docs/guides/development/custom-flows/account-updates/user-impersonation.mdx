@@ -100,9 +100,9 @@ This guide will walk you through how to build a custom flow that handles user im
     }
 
     export default function ImpersonateUsers({ users }: { users: ParsedUser[] }) {
-      const { isLoaded, signIn, setActive } = useSignIn()
+      const { signIn } = useSignIn()
       const router = useRouter()
-      const { isSignedIn, user } = useUser()
+      const { isLoaded, isSignedIn, user } = useUser()
 
       if (!isSignedIn) {
         // Handle signed out state
@@ -118,14 +118,39 @@ This guide will walk you through how to build a custom flow that handles user im
         // Sign in as the impersonated user
         if (actorToken) {
           try {
-            const { createdSessionId } = await signIn.create({
-              strategy: 'ticket',
-              ticket: actorToken,
+            const { error } = await signIn.ticket({ ticket: actorToken })
+            if (error) {
+              console.error(JSON.stringify(error, null, 2))
+              return
+            }
+
+            if (signIn.status !== 'complete') {
+              // Check why the sign-in is not complete
+              console.error('Sign-in attempt not complete:', signIn)
+              return
+            }
+
+            const { error: finalizeError } = await signIn.finalize({
+              navigate: ({ session, decorateUrl }) => {
+                // Handle session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                if (session?.currentTask) {
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                // If no session tasks, navigate the signed-in user to the home page
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
             })
-
-            await setActive({ session: createdSessionId })
-
-            router.push('/')
+            if (finalizeError) {
+              console.error(JSON.stringify(finalizeError, null, 2))
+            }
           } catch (err) {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
@@ -337,15 +362,15 @@ This guide will walk you through how to build a custom flow that handles user im
     ```tsx {{ filename: 'app/dashboard/index.tsx', collapsible: true }}
     import React, { useState } from 'react'
     import { Button, Text, View } from 'react-native'
-    import { useRouter } from 'expo-router'
+    import { type Href, useRouter } from 'expo-router'
     import { useUser, useSignIn } from '@clerk/expo'
     import useUsers from '../hooks/useUsers'
 
     export default function Dashboard() {
       const [error, setError] = useState<string | null>(null)
 
-      const { isLoaded, signIn, setActive } = useSignIn()
-      const { isSignedIn, user } = useUser()
+      const { signIn } = useSignIn()
+      const { isLoaded, isSignedIn, user } = useUser()
       const router = useRouter()
       const { users, isLoading } = useUsers()
 
@@ -392,14 +417,40 @@ This guide will walk you through how to build a custom flow that handles user im
         // Sign in as the impersonated user
         if (actorToken) {
           try {
-            const { createdSessionId } = await signIn.create({
-              strategy: 'ticket',
-              ticket: actorToken,
+            const { error } = await signIn.ticket({ ticket: actorToken })
+            if (error) {
+              setError('Failed to impersonate user')
+              console.error(JSON.stringify(error, null, 2))
+              return
+            }
+
+            if (signIn.status !== 'complete') {
+              setError('Sign-in is not complete')
+              return
+            }
+
+            const { error: finalizeError } = await signIn.finalize({
+              navigate: ({ session, decorateUrl }) => {
+                // Handle session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                if (session?.currentTask) {
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                // If no session tasks, navigate the signed-in user to the home page
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url as Href)
+                }
+              },
             })
-
-            await setActive({ session: createdSessionId })
-
-            router.push('/')
+            if (finalizeError) {
+              setError('Failed to impersonate user')
+              console.error(JSON.stringify(finalizeError, null, 2))
+            }
           } catch (err) {
             setError('Failed to impersonate user')
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling

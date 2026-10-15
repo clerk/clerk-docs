@@ -1,49 +1,40 @@
 ---
 title: Use Clerk's MCP server
-description: Connect AI agents to Clerk's MCP server to access SDK snippets and implementation patterns.
-tag: beta
+description: Connect AI agents to Clerk's MCP server to manage your Clerk applications, users, and production setup, and to get Clerk SDK snippets.
 ---
 
-> [!BETA]
-
-Clerk provides a remote [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that allows AI agents like Claude, Cursor, and Github Copilot to access Clerk SDK snippets and implementation patterns. This provides AI agents with up-to-date code examples when developing with Clerk.
+Clerk provides a remote [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that allows AI agents like Claude, Cursor, and GitHub Copilot to work with your Clerk account and access Clerk SDK snippets.
 
 The Clerk MCP server provides:
 
-- **SDK snippets**: Ready-to-use code patterns for common Clerk features.
-- **Implementation guides**: Best practices for authentication flows, Organizations, and more.
-- **Framework-specific examples**: Patterns optimized for Next.js, React, and other supported frameworks.
+- **Account tools**: Create and configure applications, manage users, and set up production instances in your Clerk workspace.
+- **SDK snippet tools**: Ready-to-use code patterns for common Clerk features.
 
-## Set up with the Clerk CLI
+All tools require you to [sign in](#sign-in-with-your-clerk-account) with your Clerk account.
 
-The fastest way to connect is with the [Clerk CLI](/docs/cli). Run the following command to detect supported AI clients installed on your machine and register Clerk's MCP server:
+## Sign in with your Clerk account
 
-```sh {{ filename: 'terminal' }}
-clerk mcp install
-```
+The server requires you to sign in with the Clerk account you use for the Clerk Dashboard. Your AI client starts sign-in when it connects to the server, as shown in the [setup instructions](#set-up-your-ai-client) for each client. Sign-in opens your browser so you can:
 
-The server is added to each selected client's user-global configuration, so it's available in every project. Reload or restart the client after installing to activate the connection.
+1. Sign in to Clerk.
+1. Select the workspace your agent can access.
+1. Review the requested permissions and select **Allow**.
 
-Useful variations and related commands:
+Your client stores this access, so you don't need to sign in each time it connects. The server acts as you in the selected workspace, so it can only do what your [workspace Role](/docs/guides/dashboard/manage-team-access) allows. It requests the following permissions:
 
-```sh {{ filename: 'terminal' }}
-# Register in specific clients, or every detected client, without prompting
-clerk mcp install --client claude --client cursor
-clerk mcp install --all
+| Scope | Allows the server to |
+| - | - |
+| `user:org:read` | Identify the workspace you selected |
+| `applications:read` | Read the applications in that workspace |
+| `applications:manage` | Create applications and production instances, and read and change instance configuration, such as OAuth credentials |
+| `users:read` | List the users of an instance |
+| `users:manage` | Create users |
+| `application_domains:read` | Read domains, the DNS records they need, and their verification status |
+| `application_domains:manage` | Start a DNS check for a domain |
 
-# Show every Clerk MCP entry the CLI has registered
-clerk mcp list
+## Set up your AI client
 
-# Remove the entry
-clerk mcp uninstall
-
-# Verify the server is reachable
-clerk doctor
-```
-
-## Manual setup instructions
-
-If you prefer to configure a client manually, or use a client the CLI doesn't support, select the appropriate tab below to see the specific setup instructions.
+Select your AI client below to see its setup instructions.
 
 <Tabs items={["Claude", "Codex", "Cursor", "fx", "VSCode", "Windsurf", "Zed", "Other clients"]}>
   <Tab>
@@ -55,16 +46,18 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
            ```sh {{ filename: 'terminal' }}
            claude mcp add clerk --transport http https://mcp.clerk.com/mcp
            ```
-        1. Run `/mcp` once you've opened a Claude Code session to verify the connection.
+        1. In a Claude Code session, run `/mcp`, select **clerk**, and choose **Authenticate**. Your browser opens so you can sign in.
       </Tab>
 
       <Tab>
-        1. Navigate to **Settings** in the sidebar on web or desktop.
-        1. Scroll to **Integrations** at the bottom and select **Add more**.
-        1. In the prompt, enter the following:
-           - **Integration name**: Clerk
-           - **Integration URL**: `https://mcp.clerk.com/mcp`
-        1. Make sure to enable the tools in any new chat.
+        1. Navigate to **Customize** → **Connectors**.
+        1. Select **+ Add**, then **Add custom connector**.
+        1. Enter **Clerk** as the name and `https://mcp.clerk.com/mcp` as the URL, then select **Continue**.
+        1. Under **Authentication**, make sure **Sign in now** is selected. Under **OAuth client**, make sure **Use Claude's published identity** is selected.
+        1. Select **Add**, then sign in.
+        1. To use the connector in a chat, select **+** → **Connectors** and enable it.
+
+        On Team and Enterprise plans, an Owner must first add the connector in **Organization settings** → **Connectors**. Members then select **Connect** on it in **Customize** → **Connectors**.
       </Tab>
 
       <Tab>
@@ -80,6 +73,7 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
              }
            }
            ```
+        1. When the client connects, `mcp-remote` opens your browser so you can sign in.
       </Tab>
     </Tabs>
   </Tab>
@@ -92,16 +86,10 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
         Run the following command in the terminal:
 
         ```sh {{ filename: 'terminal' }}
-        codex mcp add clerk https://mcp.clerk.com/mcp
+        codex mcp add clerk --url https://mcp.clerk.com/mcp
         ```
 
-        > [!NOTE]
-        > If this is the first time you are using an MCP in Codex, you may need to enable the `rmcp` feature. To do so, add the following into your `~/.codex/config.toml` file:
-        >
-        > ```toml
-        > [beta]
-        > rmcp = true
-        > ```
+        Codex starts sign-in right away and prints a sign-in URL. If your browser doesn't open, open the URL yourself. To sign in again later, run `codex mcp login clerk`.
       </Tab>
 
       <Tab>
@@ -109,9 +97,9 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
         1. Add the following configuration:
            ```toml
            [mcp_servers.clerk]
-           type = "url"
            url = "https://mcp.clerk.com/mcp"
            ```
+        1. Run `codex mcp login clerk` to sign in.
       </Tab>
     </Tabs>
   </Tab>
@@ -125,9 +113,8 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
 
     Alternatively, you can manually configure it:
 
-    1. Navigate to **Cursor Settings**. To find this, open the **Command Palette** (`Cmd/Ctrl + Shift + P`) and search for **Cursor Settings**, or select the gear icon in the top right corner of the app.
-    1. In the sidenav, select **Tools & MCP**.
-    1. Select the **New MCP Server** option, which will open up a new tab with the MCP configuration JSON file.
+    1. Open **Customize**, then select **MCPs**. To find it, select **Customize** in the Agents window sidebar, or select the gear icon in the top right corner of the app and choose **Customize**.
+    1. Select **New MCP Server**, which opens the MCP configuration JSON file.
     1. Add the following configuration to the JSON file:
 
     ```json
@@ -140,7 +127,7 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
     }
     ```
 
-    5. Once added, you should see a green active status.
+    4. Under **Needs attention**, select **Authenticate** next to **clerk** and sign in through your browser. Once connected, the server moves to **Connected**.
   </Tab>
 
   <Tab>
@@ -155,6 +142,7 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
            fx mcp add --transport http clerk https://mcp.clerk.com/mcp
            ```
            This saves the server to `~/.fx/mcp.json`. The same command is available inside an fx session as `/mcp add`.
+        1. Run `fx mcp auth clerk` to sign in through your browser.
         1. Run `fx mcp list --connect` to verify the connection.
       </Tab>
 
@@ -172,6 +160,7 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
            }
            ```
         1. Run `/mcp reload` in an fx session to apply the change without restarting fx.
+        1. Run `fx mcp auth clerk` to sign in through your browser.
       </Tab>
     </Tabs>
   </Tab>
@@ -196,6 +185,7 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
          </Tab>
        </Tabs>
     1. Enter the name **Clerk** and hit enter.
+    1. When VS Code asks you to authenticate the server, allow it and sign in through your browser.
   </Tab>
 
   <Tab>
@@ -216,6 +206,7 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
          }
        }
        ```
+    1. When the client connects, `mcp-remote` opens your browser so you can sign in.
   </Tab>
 
   <Tab>
@@ -236,51 +227,80 @@ If you prefer to configure a client manually, or use a client the CLI doesn't su
          }
        }
        ```
+    1. When the client connects, `mcp-remote` opens your browser so you can sign in.
   </Tab>
 
   <Tab>
     ### Connecting other clients to Clerk's MCP server
 
-    Many other tools now support MCP servers. The easiest way is to use the streamable HTTP endpoint: `https://mcp.clerk.com/mcp`.
+    Many other tools now support MCP servers. The easiest way is to use the streamable HTTP endpoint: `https://mcp.clerk.com/mcp`. Your client must support OAuth sign-in for MCP servers. If it doesn't, connect through `mcp-remote`, which signs in for it: `npx -y mcp-remote https://mcp.clerk.com/mcp`.
   </Tab>
 </Tabs>
 
 ## Available tools
 
-Clerk's MCP server provides the following tools:
+### Account tools
+
+Tools that make changes are marked as such, so your AI client can ask you before it runs them.
+
+| Tools | Description |
+| - | - |
+| `whoami` | Show the connected user, workspace, and granted permissions. |
+| `list_applications`, `get_application`, `create_application` | List, inspect, and create applications. Results include each instance's publishable key. |
+| `get_instance_config`, `get_instance_config_schema`, `patch_instance_config`, `put_instance_config` | Read, update, or replace instance configuration, and read its schema. Preview changes with a dry run. |
+| `list_users`, `create_user` | Find users with filters and create users in an instance. |
+| `list_domains`, `get_domain_status`, `check_domain_dns` | Get the DNS records a domain needs, check its verification status, and request a new DNS check. |
+| `get_deploy_oauth_providers`, `create_production_instance`, `set_oauth_provider_credentials` | Create a production instance from development and configure production OAuth credentials. Creating a production instance can't be undone, so the tool requires `confirm: true`. |
+| `submit_feedback` | Report problems and missing documentation to the Clerk team. |
+| `get_more_tools` | Tell the Clerk team about a task none of the other tools can do. |
+
+### SDK snippet tools
 
 | Tool | Description |
 | - | - |
-| `clerk_sdk_snippet` | Access SDK code snippets and patterns for specific features |
-| `list_clerk_sdk_snippets` | List all available snippets and bundles |
+| `clerk_sdk_snippet` | Get a code snippet for a Clerk feature, or a bundle of snippets for a common setup, such as `b2b-saas` or `organizations`. |
+| `list_clerk_sdk_snippets` | List the available snippets and bundles, optionally filtered by tag. |
 
 ### Example usage
 
 Once connected, you can ask your AI assistant questions such as:
 
+- "Which Clerk applications do I have?"
+- "Show the authentication settings for my development instance"
+- "List the five most recent sign-ups"
+- "Check which DNS records are required for production"
 - "How do I use the useUser hook in Clerk?"
 - "Show me how to set up B2B SaaS with Clerk Organizations"
-- "How do I implement a waitlist with Clerk?"
-- "What's the best way to protect routes in Next.js with Clerk?"
-
-The MCP server will provide accurate, up-to-date code snippets and implementation patterns.
-
-### Available snippet bundles
-
-For comprehensive implementations, you can request these bundles:
-
-- **b2b-saas**: Complete B2B SaaS setup with Organizations, Billing, and role-based access
-- **waitlist**: Waitlist and early access setup
-- **auth-basics**: Core authentication hooks
-- **custom-flows**: Build custom sign-in/sign-up flows
-- **organizations**: Organization management for multi-tenant apps
-- **server-side**: Server-side authentication patterns
 
 ## Frequently asked questions (FAQ)
 
 ### When or why should I use the Clerk MCP server?
 
 We recommend that all developers building with Clerk use the MCP server to get the best experience out of their agents.
+
+### Why do I need to sign in?
+
+The server works with your Clerk account, so it needs to know who you are and which workspace to use. Sign-in uses OAuth, so your AI client never handles your Clerk password.
+
+### How do I switch workspaces?
+
+Sign out of the Clerk MCP server in your AI client, then connect again and select a different workspace. If your client connects through `mcp-remote`, sign out by deleting the `~/.mcp-auth` folder and restarting the client. This signs you out of every server you connect to through `mcp-remote`.
+
+### Can the MCP server give my agent my secret keys?
+
+No. The MCP server never returns your instances' secret keys, including when it creates an application or a production instance. It also redacts sensitive values when it reads instance configuration. To add your keys to a project, copy them from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard or run [`clerk env pull`](/docs/cli).
+
+### Why does a tool return a permission error?
+
+Your [workspace Role](/docs/guides/dashboard/manage-team-access) doesn't allow the request, or your connection is missing a permission the tool needs. To grant a missing permission, sign out of the Clerk MCP server in your AI client and connect again. If the error persists, ask a workspace Owner or Admin to check your Role.
+
+### What does `submit_feedback` send to Clerk?
+
+Your agent can call `submit_feedback` when a Clerk task fails or needs a workaround, or when you ask it to report a problem. The report describes what your agent tried and what went wrong, and includes your user and workspace IDs. The server redacts recognizable credentials, such as API keys and tokens, before it stores the report.
+
+### What does the MCP server send to Clerk about tool calls?
+
+Every tool asks your agent for a one-sentence `context` that describes what you're trying to do. Your agent writes this summary and is told to leave out names, email addresses, IDs, and secrets. When your agent calls a tool, the server sends the summary to Clerk for product analytics. The server also adds which tool your agent called, whether the call succeeded, your Clerk user ID, and your AI client's name, version, and OAuth client ID. It doesn't send the tool's inputs or results. When your agent calls `get_more_tools`, the server records the task it couldn't complete, so the Clerk team can see which tools to add next.
 
 ### Why am I seeing an internal server error when trying to connect?
 

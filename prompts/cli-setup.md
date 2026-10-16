@@ -3,6 +3,8 @@
 
 Use the [Clerk CLI](https://clerk.com/docs/cli) to add authentication. In agent environments, supported frameworks default to accountless setup: `npx -y clerk@latest init` provisions a claimable application and writes temporary development keys without requiring a Clerk account.
 
+For a native iOS or macOS app in Xcode, follow the [iOS setup prompt](https://clerk.com/docs/ios/getting-started/quickstart.md) instead of the steps below. It chooses a Clerk application, runs `init` on the Xcode project, and finishes the Swift integration. If there's no Xcode project yet, ask the user to create and save one in Xcode (File > New > Project > App, with SwiftUI and Swift), then continue from its project directory.
+
 ## Before you start
 
 Show the user this checklist and wait for a yes:
@@ -102,7 +104,7 @@ If `init` reports the framework is unsupported or undetected, follow the quickst
 
 For an existing Clerk project with missing integration files, use that quickstart to add only the missing pieces without running `init`.
 
-`init` configures Next.js, React, React Router, Nuxt, TanStack Start, Astro, Vue, JavaScript/Vite, Expo, Express, and Fastify projects. For iOS and Android, it only prints setup steps, so follow the quickstart.
+`init` configures Next.js, React, React Router, Nuxt, TanStack Start, Astro, Vue, JavaScript/Vite, Expo, Express, and Fastify projects, and existing iOS and macOS Xcode projects (see the iOS setup prompt above). For Android, it only prints setup steps, so follow the quickstart.
 
 Use the matching direct quickstart:
 

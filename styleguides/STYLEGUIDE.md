@@ -530,15 +530,19 @@ Be sure to use the correct term with components vs functions.
 
 ## Page navigation
 
+### Match Clerk Dashboard labels exactly
+
+Check the current Clerk Dashboard when writing or updating instructions. Copy visible labels exactly, including capitalization and punctuation, for pages, tabs, sections, fields, toggles, menu items, and buttons. Keep sentence case when that's what the Dashboard shows: **Native applications**, not **Native Applications**.
+
 ### Provide users with clear instructions and a direct link when navigating the Clerk Dashboard
 
 When instructing learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard" and end with a link to the page you're directing them to using this URL syntax: **`https://dashboard.clerk.com/~/PAGE`**
 
 > ❌
-> Go to **User & Authentication** in your dashboard.
+> Go to **User & authentication** in your dashboard.
 
 > ✅
-> In the Clerk Dashboard, navigate to the [**User & Authentication**](https://dashboard.clerk.com/~/user-authentication) page.
+> In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
 
 > ❌
 > Find fallback redirects in the Redirect tab on the Account Portal in the Clerk Dashboard.

@@ -1,0 +1,45 @@
+---
+title: Upgrade to API version 2026-08-20
+description: Learn how to upgrade to version 2026-08-20 of Clerk's API.
+---
+
+With **version 2026-08-20** of Clerk's Frontend API, Clerk can offer a passkey as a second factor during sign-in and session reverification, and native apps can use biometric credentials for session reverification. The Backend API is the same as in 2026-05-12.
+
+This version doesn't remove or rename any request or response fields. Instead, new strategies can appear in the existing factor lists. Clerk SDKs built before this version reject second-factor strategies they don't recognize, so Clerk only returns the new strategies to requests on 2026-08-20 or later.
+
+To use this new API version, refer to the [versioning guide](/docs/guides/development/upgrading/versioning). This guide documents all updates at the API level. Since implementation details may differ between SDKs, it will help you identify which parts of your SDK usage may require additional review in the documentation, and assist consumers using unofficial or custom API clients in managing the upgrade.
+
+## If you use Clerk's prebuilt components
+
+Upgrade your Clerk SDKs to the versions listed in the [versioning guide](/docs/guides/development/upgrading/versioning#2026-08-20). For web apps, `@clerk/clerk-js` v6.40.0 and `@clerk/ui` v1.41.0 render the passkey second-factor flow. If you pin `@clerk/ui` to a specific version instead of loading it from Clerk's CDN, update that pin as well. An older `@clerk/ui` can't render the passkey second factor.
+
+## Frontend endpoint changes
+
+### Passkeys as a second factor
+
+When a sign-in has a status of `needs_second_factor` or `needs_client_trust`, or a session reverification has a status of `needs_second_factor`, its `supported_second_factors` list can now include an entry with `strategy: "passkey"`. This applies to the following endpoints:
+
+- Sign-in responses, such as `POST /v1/client/sign_ins` and `POST /v1/client/sign_ins/{sign_in_id}/attempt_first_factor`.
+- Session reverification responses, such as `POST /v1/client/sessions/{session_id}/verify` and `POST /v1/client/sessions/{session_id}/verify/attempt_first_factor`.
+
+Clerk offers a passkey as a second factor only when all of the following are true:
+
+- [**Passkeys satisfy multi-factor authentication**](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#passkeys-and-multi-factor-authentication) is on for your instance.
+- The user has a verified passkey.
+- The first factor wasn't a passkey. A passkey first factor already satisfies the second factor.
+- The request comes from a native app, or your instance has opted in to offering passkeys as a second factor to web apps. Existing instances can't turn on this opt-in in the Clerk Dashboard yet.
+
+To complete the second factor with a passkey, call the prepare and attempt second-factor endpoints with `strategy=passkey`. The attempt request takes the WebAuthn credential in `public_key_credential` and requires the `Origin` header.
+
+| Flow | Prepare | Attempt |
+| - | - | - |
+| Sign-in | `POST /v1/client/sign_ins/{sign_in_id}/prepare_second_factor` | `POST /v1/client/sign_ins/{sign_in_id}/attempt_second_factor` |
+| Session reverification | `POST /v1/client/sessions/{session_id}/verify/prepare_second_factor` | `POST /v1/client/sessions/{session_id}/verify/attempt_second_factor` |
+
+If you build custom flows with Clerk's JavaScript SDK, [`signIn.authenticateWithPasskey()`](/docs/reference/objects/sign-in#authenticatewithpasskey) completes the second factor when the sign-in is at `needs_second_factor` or `needs_client_trust`, and `session.verifyWithPasskey({ level: 'second_factor' })` completes the second factor of a session reverification.
+
+If you call the Frontend API directly, ensure any code that branches on second-factor strategies handles `passkey`, or skips strategies it doesn't recognize.
+
+### Biometric credentials for session reverification
+
+For requests from native apps that have [biometric sign-in](/docs/guides/development/custom-flows/authentication/biometric-sign-in) enabled, a session reverification's `supported_first_factors` and `supported_second_factors` lists can now include an entry with `strategy: "trusted_device"` for each biometric credential the user enrolled on that device. Web requests are unaffected.

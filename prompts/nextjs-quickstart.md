@@ -146,7 +146,7 @@ Add to global CSS:
 - Name the middleware file by the `next` version in `package.json`: `proxy.ts` on Next.js 16+, `middleware.ts` on 15 and below. The contents are identical; `npx -y clerk@latest init` creates it
 - `auth()` from `@clerk/nextjs/server` is async. Always `await auth()`
 - `ClerkProvider` goes inside `<body>`, not wrapping `<html>`
-- When `next.config` sets `cacheComponents: true` (the `create-next-app` default), `next build` fails on request data read outside `<Suspense>`. Wrap `<Show>` and any Server Component that calls `auth()` or `currentUser()` in `<Suspense>`, as close to the auth-dependent UI as possible
+- When `next.config` sets `cacheComponents: true` (the `create-next-app` default), `next build` fails on request data read outside `<Suspense>`. Wrap `<Show>` in a Server Component and any Server Component that calls `auth()` or `currentUser()` in `<Suspense>`, as close to the auth-dependent UI as possible
 - Never expose `CLERK_SECRET_KEY` in client code
 - Use `@clerk/nextjs`, not `@clerk/clerk-react`
 - Do not read or print existing environment variable files; ask the user for any missing non-sensitive configuration

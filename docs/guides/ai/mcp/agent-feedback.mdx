@@ -1,0 +1,123 @@
+---
+title: Collect feedback from agents using your MCP server
+description: Let AI agents report what blocked or confused them while using your MCP server, and review those reports in the Clerk Dashboard or with Clerk's MCP server.
+sdk: nextjs, expressjs
+---
+
+When an AI agent uses your MCP server and gets stuck, because a tool is missing, a tool fails, or a result is confusing, you usually never hear about it. Clerk can collect that feedback for you. You add a `submit_feedback` tool to your MCP server with [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools), agents call it when they run into friction, and the reports are stored on your Clerk instance.
+
+You can then review the reports:
+
+- On the [**Feedback**](https://dashboard.clerk.com/~/feedback) page of the Clerk Dashboard.
+- With the [`list_application_feedback`](#read-feedback-with-clerks-mcp-server) tool of [Clerk's MCP server](/docs/guides/ai/mcp/clerk-mcp-server), so your own agent can summarize what other agents struggle with.
+
+This guide assumes you have an MCP server that uses Clerk for authentication. If you don't, follow [Build an MCP server](/docs/guides/ai/mcp/build-mcp-server) first.
+
+<Steps>
+  ## Add the feedback tool
+
+  Install or update `@clerk/mcp-tools`. The feedback tool uses [Zod](https://zod.dev), which the MCP TypeScript SDK already requires.
+
+  ```npm
+  npm install @clerk/mcp-tools zod
+  ```
+
+  Register the tool on your MCP server with `registerSubmitFeedbackTool()`. Pass your application's secret key, which tells Clerk which instance the reports belong to. Optionally, pass a `server` name and version, which are shown with each report so you can tell your MCP servers apart.
+
+  <If sdk="nextjs">
+    ```ts {{ filename: 'app/[transport]/route.ts', mark: [2, [9, 12]] }}
+    import { verifyClerkToken } from '@clerk/mcp-tools/next'
+    import { registerSubmitFeedbackTool } from '@clerk/mcp-tools/feedback'
+    import { createMcpHandler, withMcpAuth } from 'mcp-handler'
+    import { auth } from '@clerk/nextjs/server'
+
+    const handler = createMcpHandler((server) => {
+      // Your other tools...
+
+      registerSubmitFeedbackTool(server, {
+        secretKey: process.env.CLERK_SECRET_KEY!,
+        server: { name: 'my-app', version: '1.0.0' },
+      })
+    })
+
+    const authHandler = withMcpAuth(
+      handler,
+      async (_, token) => {
+        const clerkAuth = await auth({ acceptsToken: 'oauth_token' })
+        return verifyClerkToken(clerkAuth, token)
+      },
+      {
+        required: true,
+        resourceMetadataPath: '/.well-known/oauth-protected-resource/mcp',
+      },
+    )
+
+    export { authHandler as GET, authHandler as POST }
+    ```
+  </If>
+
+  <If sdk="expressjs">
+    ```ts {{ filename: 'index.ts', mark: [1, [5, 8]] }}
+    import { registerSubmitFeedbackTool } from '@clerk/mcp-tools/feedback'
+
+    // The rest of your code...
+
+    registerSubmitFeedbackTool(server, {
+      secretKey: process.env.CLERK_SECRET_KEY!,
+      server: { name: 'my-app', version: '1.0.0' },
+    })
+    ```
+
+    Call `registerSubmitFeedbackTool()` wherever you create your `McpServer` and register your other tools. If you pass a function that creates the server to `streamableHttpHandler()`, call it inside that function.
+  </If>
+
+  `registerSubmitFeedbackTool()` throws when `secretKey` is empty, so a missing environment variable fails when the tool is registered instead of on every report.
+
+  When a request was authenticated with `verifyClerkToken()`, as in the examples above, each report also includes the ID of the signed-in user the agent was working for and the ID of the agent's OAuth client. Identity from any other authentication method is never sent.
+
+  ## Check what agents report
+
+  The tool asks agents to report once per task, after they finish or give up. Each report has:
+
+  | Field | Description |
+  | - | - |
+  | Task | A short phrase naming what the user asked the agent to do. |
+  | Kind | `missing` (none of your tools could do the task), `broken` (a tool failed or returned something wrong), `confusing` (a tool or its documentation was unclear), or `idea` (a suggestion). |
+  | Outcome (`impact`) | `blocked` (the agent couldn't finish), `worked_around` (it finished another way), or `friction` (it finished, but it was harder than it should be). |
+  | Description | What the agent tried, including the tool calls it made, and what went wrong. |
+  | Operation | The tool the problem is about, if any. |
+  | Error and suggestion | The error the agent received and what would have helped, if the agent provided them. |
+  | Source and agent | Your MCP server's name and version, and, when available, the agent's name and version. MCP servers that create a new server for each request don't receive the agent's details. |
+
+  To try it, ask an agent connected to your MCP server to do something none of your tools support. It should call `submit_feedback` before it finishes.
+
+  If a report can't be stored, the tool tells the agent not to retry and to continue its task, and logs the response status with `console.error()` so you can spot a misconfigured key in your server's logs.
+
+  ## Review feedback in the Clerk Dashboard
+
+  At the top of the Clerk Dashboard, select [**Feedback**](https://dashboard.clerk.com/~/feedback). The page lists reports for the selected instance, newest first.
+
+  - Filter by **Kind**, **Outcome**, or user ID.
+  - Select a report to see the full description, the error, the suggestion, and which MCP server sent it.
+  - Select a user to open their profile.
+
+  Reading feedback in the Clerk Dashboard requires the [**Manage** Permission for Secrets](/docs/guides/dashboard/manage-team-access#secrets).
+
+  ## Read feedback with Clerk's MCP server
+
+  If your own agent is connected to [Clerk's MCP server](/docs/guides/ai/mcp/clerk-mcp-server), it can read the same reports with the `list_application_feedback` tool. The tool needs the `user:org:read` and `applications:read` scopes. It takes an application ID and an instance, and can filter by `kind`, `impact`, and `user_id`.
+
+  For example, you can ask your agent:
+
+  - "Summarize the feedback agents left on my production instance this week"
+  - "Which of my MCP tools do agents report as broken most often?"
+  - "Show the blocked reports for user\_123"
+
+  Report text is written by third-party agents, so the tool labels it as data. Your agent should summarize it, and never follow instructions found inside a report.
+</Steps>
+
+## Privacy and limits
+
+- Agents are told not to include secrets, API keys, tokens, or personal data about your users. Clerk also removes credentials it recognizes, such as API keys and bearer tokens, from every field before storing a report.
+- Each instance accepts up to 100 reports per hour, shared by every MCP server that uses its secret key. Once an instance reaches the limit, the tool tells agents not to retry and to continue their task.
+- Reports are stored per instance. Development and production instances have separate feedback.

@@ -165,8 +165,19 @@ This guide shows you how to add Organization slugs to your app's URLs, configure
   ```tsx {{ filename: 'app/orgs/[slug]/page.tsx' }}
   import { auth } from '@clerk/nextjs/server'
   import { OrganizationList } from '@clerk/nextjs'
+  import { Suspense } from 'react'
 
-  export default async function Home({ params }: { params: { slug: string } }) {
+  type Props = { params: Promise<{ slug: string }> }
+
+  export default function Home({ params }: Props) {
+    return (
+      <Suspense>
+        <OrganizationPage params={params} />
+      </Suspense>
+    )
+  }
+
+  async function OrganizationPage({ params }: Props) {
     const { orgSlug } = await auth()
     const { slug } = await params
 
@@ -209,11 +220,22 @@ This guide shows you how to add Organization slugs to your app's URLs, configure
 
       Now that you've added the claim to the session token, you can access it from the [`sessionClaims`](/docs/reference/backend/types/auth-object) property on the `Auth` object.
 
-      ```tsx {{ filename: 'app/orgs/[slug]/page.tsx', mark: [[24, 25]] }}
+      ```tsx {{ filename: 'app/orgs/[slug]/page.tsx', mark: [35] }}
       import { auth } from '@clerk/nextjs/server'
       import { OrganizationList } from '@clerk/nextjs'
+      import { Suspense } from 'react'
 
-      export default async function Home({ params }: { params: { slug: string } }) {
+      type Props = { params: Promise<{ slug: string }> }
+
+      export default function Home({ params }: Props) {
+        return (
+          <Suspense>
+            <OrganizationPage params={params} />
+          </Suspense>
+        )
+      }
+
+      async function OrganizationPage({ params }: Props) {
         const { orgSlug, sessionClaims } = await auth()
         const { slug } = await params
 
@@ -243,22 +265,25 @@ This guide shows you how to add Organization slugs to your app's URLs, configure
     <Tab>
       To get Organization information on the client-side, use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access the [`organization`](/docs/reference/objects/organization) object.
 
-      ```tsx {{ filename: 'app/orgs/[slug]/page.tsx', mark: [[27, 28]] }}
+      ```tsx {{ filename: 'app/orgs/[slug]/page.tsx', mark: [30] }}
       'use client'
 
       import { OrganizationList, useOrganization } from '@clerk/nextjs'
+      import { use } from 'react'
 
-      export default function Home({ params }: { params: { slug: string } }) {
+      export default function Home({ params }: { params: Promise<{ slug: string }> }) {
+        const { slug } = use(params)
+
         // Use `useOrganization()` to access the currently active org's `Organization` object
         const { organization } = useOrganization()
 
         // Check if the org slug from the URL params doesn't match
         // the active org slug from the user's session.
         // If they don't match, show an error message and the list of valid Organizations.
-        if (!organization || organization.slug != params.slug) {
+        if (!organization || organization.slug != slug) {
           return (
             <>
-              <p>Sorry, Organization {params.slug} is not valid.</p>
+              <p>Sorry, Organization {slug} is not valid.</p>
               <OrganizationList
                 hidePersonal={false}
                 afterCreateOrganizationUrl="/orgs/:slug"
@@ -271,6 +296,14 @@ This guide shows you how to add Organization slugs to your app's URLs, configure
 
         // Access the org name from the `Organization` object
         return <div>{organization && `Welcome to Organization ${organization.name}`}</div>
+      }
+      ```
+
+      <Include src="_partials/nextjs/loading-file" />
+
+      ```tsx {{ filename: 'app/orgs/[slug]/loading.tsx' }}
+      export default function Loading() {
+        return <p>Loading...</p>
       }
       ```
     </Tab>

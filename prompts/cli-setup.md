@@ -3,8 +3,6 @@
 
 Use the [Clerk CLI](https://clerk.com/docs/cli) to add authentication. In agent environments, supported frameworks default to accountless setup: `npx -y clerk@latest init` provisions a claimable application and writes temporary development keys without requiring a Clerk account.
 
-For a native iOS or macOS app in Xcode, follow the [iOS setup prompt](https://clerk.com/docs/ios/getting-started/quickstart.md) instead of the steps below. It chooses a Clerk application, runs `init` on the Xcode project, and finishes the Swift integration. If there's no Xcode project yet, ask the user to create and save one in Xcode (File > New > Project > App, with SwiftUI and Swift), then continue from its project directory.
-
 ## Before you start
 
 Show the user this checklist and wait for a yes:
@@ -31,6 +29,8 @@ Do not modify or remove existing auth without approval.
 See the [migration guide](https://clerk.com/docs/guides/development/migrating/overview).
 
 ## Existing Clerk projects
+
+For a native iOS or macOS app, follow the [iOS setup prompt](https://clerk.com/docs/ios/getting-started/quickstart.md) instead. It reuses the linked application and keeps existing configuration.
 
 If the project already uses Clerk, skip `init` in Steps 1a and 1b: a signed-out agent run could create another application and replace the project's Clerk keys. If Clerk already works and the user asked for setup, report that no setup is needed. If the user reports missing keys, restore them through the existing-application branch below. If inspection finds missing provider, middleware, or auth routes, add only those pieces from the matching quickstart in Step 2. Never create a replacement application.
 
@@ -72,6 +72,8 @@ Only when the user needs production keys, use `npx -y clerk@latest env pull --in
 
 ## Step 1a: Existing project without Clerk
 
+For a native iOS or macOS app in Xcode, follow the [iOS setup prompt](https://clerk.com/docs/ios/getting-started/quickstart.md) instead of the remaining steps.
+
 For a project that does not already use Clerk, run from the project root:
 
 ```bash
@@ -82,6 +84,8 @@ npx -y clerk@latest init
 
 ## Step 1b: Empty directory
 
+For a native iOS or macOS app, follow the [iOS setup prompt](https://clerk.com/docs/ios/getting-started/quickstart.md) instead of the remaining steps. It covers creating the Xcode project.
+
 Ask which framework and package manager to use, defaulting to Next.js and npm:
 
 ```bash
@@ -90,7 +94,7 @@ npx -y clerk@latest init --framework <framework> --pm <package-manager>
 
 `init` creates the app in a new subdirectory, such as `my-clerk-next-app`, not in the current directory. Run the remaining steps from that subdirectory. As in Step 1a, add `--no-skills` if Clerk's skills are already available to you or the user declined them.
 
-`init` can create Next.js, React Router, Astro, Nuxt, TanStack Start, React, Vue, JavaScript/Vite, and Expo apps. For Express, Fastify, iOS, or Android, create the project with that platform's own tooling first, then follow Step 1a.
+`init` can create Next.js, React Router, Astro, Nuxt, TanStack Start, React, Vue, JavaScript/Vite, and Expo apps. For Express, Fastify, or Android, create the project with that platform's own tooling first, then follow Step 1a.
 
 ## Step 1c: Accountless development keys
 
@@ -104,7 +108,7 @@ If `init` reports the framework is unsupported or undetected, follow the quickst
 
 For an existing Clerk project with missing integration files, use that quickstart to add only the missing pieces without running `init`.
 
-`init` configures Next.js, React, React Router, Nuxt, TanStack Start, Astro, Vue, JavaScript/Vite, Expo, Express, and Fastify projects, and existing iOS and macOS Xcode projects (see the iOS setup prompt above). For Android, it only prints setup steps, so follow the quickstart.
+`init` configures Next.js, React, React Router, Nuxt, TanStack Start, Astro, Vue, JavaScript/Vite, Expo, Express, and Fastify projects, and existing iOS and macOS Xcode projects (see the [iOS setup prompt](https://clerk.com/docs/ios/getting-started/quickstart.md)). For Android, it only prints setup steps, so follow the quickstart.
 
 Use the matching direct quickstart:
 

@@ -79,10 +79,26 @@ export default clerkMiddleware({
 > [!IMPORTANT]
 > You must pass the [`dynamic` prop](/docs/reference/components/clerk-provider#properties) to `<ClerkProvider>` for `strict` CSP configuration to work correctly. This is because the nonce value is generated on the server and passed to the client, which requires dynamic rendering.
 
+A nonce is new on every request, so every page must render at request time. Next.js adds the nonce to its own scripts only when it renders a page for a request. HTML prerendered at build time has no nonce, so the CSP blocks its scripts and the page never becomes interactive.
+
+New Next.js apps enable [Cache Components](/docs/guides/development/rendering-modes#cache-components), which prerenders a static shell for every page. `<ClerkProvider dynamic>` alone doesn't change that. To render every page at request time, wrap `<html>` in [`<Suspense>`](https://react.dev/reference/react/Suspense) and call [`connection()`](https://nextjs.org/docs/app/api-reference/functions/connection) in an async component inside it, as shown in the following example. The same layout works with or without Cache Components. The tradeoff is that no page gets a static shell or CDN caching. See the [Next.js CSP guide](https://nextjs.org/docs/app/guides/content-security-policy#static-vs-dynamic-rendering-with-csp) for details.
+
 ```tsx {{ filename: 'app/layout.tsx' }}
 import { ClerkProvider } from '@clerk/nextjs'
+import { connection } from 'next/server'
+import { Suspense } from 'react'
 
-export default function Layout({ children }) {
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense>
+      <Document>{children}</Document>
+    </Suspense>
+  )
+}
+
+async function Document({ children }: { children: React.ReactNode }) {
+  await connection()
+
   return (
     <html lang="en">
       <body>
@@ -96,19 +112,16 @@ export default function Layout({ children }) {
 }
 ```
 
-If you need to apply the nonce to custom scripts, you can access it through the headers:
+To apply the nonce to your own scripts, read it from the `x-nonce` request header:
 
-```tsx {{ filename: 'pages/index.tsx' }}
+```tsx {{ filename: 'app/page.tsx' }}
 import { headers } from 'next/headers'
+import Script from 'next/script'
 
-export default function Page() {
-  const nonce = headers().get('x-nonce')
+export default async function Page() {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
 
-  return (
-    <div>
-      <script nonce={nonce} src="/custom-script.js" />
-    </div>
-  )
+  return <Script src="/custom-script.js" strategy="afterInteractive" nonce={nonce} />
 }
 ```
 
@@ -197,14 +210,14 @@ If you'd like to manually implement a [strict-dynamic CSP](https://content-secur
 </If>
 
 ```ts {{ filename: 'proxy.ts' }}
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { clerkMiddleware } from '@clerk/nextjs/server'
 
 export default clerkMiddleware((auth, req) => {
   return applyCsp(req)
 })
 
-function applyCsp(req) {
+function applyCsp(req: NextRequest) {
   // create a randomly generated nonce value
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
 
@@ -217,7 +230,7 @@ function applyCsp(req) {
     connect-src 'self' https://{{fapi_url}} https://*.protect.clerk.com:*;
     img-src 'self' https://img.clerk.com;
     worker-src 'self' blob:;
-    style-src 'self';
+    style-src 'self' 'unsafe-inline';
     frame-src 'self' https://challenges.cloudflare.com https://*.protect.clerk.com;
     form-action 'self';
   `
@@ -254,13 +267,13 @@ export const config = {
 
 With this `strict-dynamic` configuration in place, **all script tags must be passed with a `nonce` value** or they will be blocked. This can be done by passing the nonce value as a `nonce` parameter to the script tag. For example, `<script src="https://example.com/script.js" nonce="<nonce_value>"></script>`. If you are using Next.js, any scripts loaded through next will automatically have the nonce value injected.
 
-With the above middleware, the nonce value is made accessible via the `x-nonce` request header. An example is provided below on how to access this value within a Next.js page.
+With the above middleware, the nonce value is made accessible via the `x-nonce` request header. An example is provided below on how to access this value within a Next.js page. The page depends on a root layout that renders every page at request time, like the one later in this section.
 
-```tsx {{ filename: 'pages/index.tsx' }}
+```tsx {{ filename: 'app/page.tsx' }}
 import { headers } from 'next/headers'
 
-export default function Page() {
-  const nonce = headers().get('x-nonce')
+export default async function Page() {
+  const nonce = (await headers()).get('x-nonce')
 
   return <p>{nonce}</p>
 }
@@ -271,16 +284,29 @@ If you're using one of Clerk's React-based SDKs, in order for Clerk to load corr
 > [!IMPORTANT]
 > You must pass the [`dynamic` prop](/docs/reference/components/clerk-provider#properties) to `<ClerkProvider>` for `strict-dynamic` CSPs to work correctly. This is because the nonce value is generated on the server and passed to the client, which requires dynamic rendering.
 
+As with the [`strict` configuration](#strict-configuration), wrap `<html>` in `<Suspense>` so that every page renders at request time. Reading `headers()` in the async component opts the page into request-time rendering the same way `connection()` does.
+
 ```tsx {{ filename: 'app/layout.tsx' }}
 import { ClerkProvider } from '@clerk/nextjs'
 import { headers } from 'next/headers'
+import { Suspense } from 'react'
 
-export default function Layout({ children }) {
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense>
+      <Document>{children}</Document>
+    </Suspense>
+  )
+}
+
+async function Document({ children }: { children: React.ReactNode }) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
+
   return (
     <html lang="en">
       <body>
         {/* Note: since this is server-rendered, you don't _need_ to pass the nonce, see note below */}
-        <ClerkProvider nonce={headers().get('x-nonce')} dynamic>
+        <ClerkProvider nonce={nonce} dynamic>
           {children}
         </ClerkProvider>
       </body>

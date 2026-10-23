@@ -135,12 +135,13 @@ Skip this step for backend-only projects, such as Express or Fastify APIs. For E
 
 A web app needs sign-in, sign-up, and signed-in user controls, worked into the existing layout or navigation. If they already exist, adapt them instead of duplicating.
 
-For Next.js App Router:
+For Next.js App Router, when `<Show>` renders in a Server Component, it reads the request, so wrap it in `<Suspense>`:
 
 ```text
 import { SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs'
+import { Suspense } from 'react'
 
-<>
+<Suspense>
   <Show when="signed-out">
     <SignInButton />
     <SignUpButton />
@@ -148,7 +149,7 @@ import { SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs'
   <Show when="signed-in">
     <UserButton />
   </Show>
-</>
+</Suspense>
 ```
 
 Astro imports from `@clerk/astro/components`. Nuxt auto-imports the components; explicit imports come from `@clerk/nuxt/components`. Other frameworks use the same names from their Clerk package, such as `@clerk/vue` or `@clerk/react`.
@@ -185,6 +186,7 @@ Add to global CSS:
 
 - Use Node.js 20.9.0 or later for current Clerk SDKs.
 - Next.js 15+: `auth()` is async. Always `await auth()`.
+- Next.js: when `next.config` sets `cacheComponents: true` (the `create-next-app` default), `next build` fails on request data read outside `<Suspense>`. Wrap `<Show>` rendered in a Server Component, and any Server Component that calls `auth()` or `currentUser()`, in `<Suspense>`, as close to the auth-dependent UI as possible. Wrap catch-all `<SignIn />`, `<SignUp />`, `<UserProfile />`, and `<OrganizationProfile />` pages in `<Suspense>` too, including the sign-in and sign-up pages the Clerk CLI creates. See [Read auth data inside Suspense](https://clerk.com/docs/guides/development/rendering-modes.md#read-auth-data-inside-suspense) and [Prebuilt components on catch-all routes](https://clerk.com/docs/guides/development/rendering-modes.md#prebuilt-components-on-catch-all-routes).
 - For current Next.js SDKs, `ClerkProvider` goes inside `<body>`, not around `<html>`.
 - Never expose `CLERK_SECRET_KEY` in client code.
 - For fresh setups, use the current framework package, such as `@clerk/nextjs`, `@clerk/react`, `@clerk/expo`, `@clerk/react-router`, or `@clerk/tanstack-react-start`.

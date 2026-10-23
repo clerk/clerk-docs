@@ -244,6 +244,17 @@ async function main() {
         'shared/o-auth-application-namespace.mdx': ['link-doc-not-found'],
         'shared/use-o-auth-device-verification-return.mdx': ['link-doc-not-found'],
         'shared/use-o-auth-device-verification.mdx': ['link-doc-not-found'],
+
+        // JSDoc in clerk/javascript still links to the pre-Protect guides/secure/* paths.
+        // Redirects keep those URLs working; remove these once the upstream JSDoc is updated (PROT-1140).
+        'backend/create-user-params.mdx': ['link-doc-not-found'],
+        'backend/user.mdx': ['link-doc-not-found'],
+        'backend/user-api/user-api.mdx': ['link-doc-not-found'],
+        'backend/user-api/methods/create-user.mdx': ['link-doc-not-found'],
+        'backend/user-api/methods/lock-user.mdx': ['link-doc-not-found'],
+        'backend/user-api/methods/unlock-user.mdx': ['link-doc-not-found'],
+        'shared/client-resource/properties.mdx': ['link-doc-not-found'],
+        'shared/sign-in-future-resource/properties.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

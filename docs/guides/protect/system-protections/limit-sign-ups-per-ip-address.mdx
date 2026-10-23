@@ -1,0 +1,47 @@
+---
+title: Limit sign-ups per IP address
+description: Cap how many sign-ups a single IP address can start in an hour, and block the rest.
+---
+
+{/* PROT-825 per-protection pass. Internal notes and open decisions are in the PR description, not
+    here: this folder is mirrored publicly once merged. */}
+
+> [!NOTE]
+> This protection requires the [Business plan](/docs/guides/protect/plans), and it's off by default.
+
+Someone creating fake accounts from one machine or connection signs up again and again from the same IP address. This protection caps how many sign-ups an IP address can start in an hour, which limits the damage from any single source. Past the limit, further sign-ups from that IP address are blocked.
+
+## What it limits
+
+Protect counts the sign-ups started from each IP address over the past hour. When an IP address reaches your limit, further sign-ups from it are blocked until its count for the past hour drops below the limit again.
+
+Each sign-up counts once, however many steps it takes. A person who enters their details, verifies their email address, and finishes signing up counts as one sign-up. A sign-up counts when it starts, whether or not it's finished.
+
+This protection applies to sign-ups only. It never affects a sign-in.
+
+## What happens when the limit is reached
+
+Further sign-ups from that IP address are stopped at their first step: the account isn't created, and the user sees a message that they can't sign up. See [What blocked users see](/docs/guides/protect/system-protections/overview#what-blocked-users-see).
+
+Each sign-up over the limit appears as a `protect.sign_up.blocked` event in [Application Logs](/docs/guides/dashboard/logs/application-logs#protect-events).
+
+## Settings
+
+| Setting | Default | Description |
+| - | - | - |
+| **Sign-ups per IP address per hour** | 15 | How many sign-ups one IP address can start in an hour. The minimum is 1. |
+
+## Choosing a limit
+
+On most applications, almost every IP address that signs up in an hour completes only one or two sign-ups. The limit also counts sign-ups that are started and never finished, so an IP address's count can be higher than the sign-ups it completes. When real people do reach the default limit from one IP address, it's usually a school or a classroom signing up together. Many people can share one IP address: everyone in an office, on a university campus, or on some mobile networks. Set the limit above the number of sign-ups you'd expect to start from your busiest shared IP address in an hour. If your customers sign up whole teams at once from an office network, set it higher. A real person who reaches the limit can't sign up until the IP address's count drops below it, so when in doubt, set the limit higher rather than lower.
+
+{/* TODO(PROT-825): how to find your busiest shared IP address, once the Dashboard shows it. */}
+
+## How it works with other protections
+
+This protection stops a single source from creating many accounts. It doesn't catch someone who spreads sign-ups across many IP addresses, one account each. [Block sign-ups from suspicious network types](/docs/guides/protect/system-protections/block-suspicious-network-types) helps when those addresses are VPNs, Tor, proxies, or hosting networks, but not when they're ordinary home or mobile connections.
+
+## Before you enable it
+
+- **Check your automated tests.** A test suite that creates many accounts from one machine reaches the limit. Tests that use a [Testing Token](/docs/guides/development/testing/overview#testing-tokens) aren't counted. On a development instance, a suite that signs up with `+clerk_test` addresses and no Testing Token reaches the limit quickly.
+- **Check that Protect sees your visitors' IP addresses.** If it sees your proxy's IP address instead, every sign-up counts against that one IP address, and the limit is reached quickly. See [If you proxy Clerk's Frontend API](/docs/guides/protect/system-protections/overview#if-you-proxy-clerks-frontend-api).

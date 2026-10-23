@@ -1,0 +1,61 @@
+---
+title: Block sign-ups from suspicious network types
+description: Block sign-ups from VPNs, Tor, proxies, and hosting networks.
+---
+
+{/* PROT-825 per-protection pass. Internal notes and open decisions are in the PR description, not
+    here: this folder is mirrored publicly once merged. */}
+
+> [!NOTE]
+> This protection requires the [Business plan](/docs/guides/protect/plans), and it's off by default.
+
+Real people usually sign up from home broadband, mobile networks, and office connections. Scripts that create fake accounts in bulk usually run on rented cloud servers, and people who abuse free trials or evade bans often hide behind VPNs, Tor, and proxies. Plenty of real people use a VPN too, for privacy or because their employer requires it, so this protection lets you choose which network types to block.
+
+## What it blocks
+
+A sign-up is blocked when it comes from a network type selected under **Blocked network types**:
+
+| Network type | What it is |
+| - | - |
+| **Hosting and data center networks** | Cloud providers and data centers, such as AWS, Google Cloud, or Microsoft Azure. |
+| **Free VPNs** | Free VPN apps and browser extensions. |
+| **Data center proxies** | Proxy servers in data centers, often sold for scraping and automation. |
+| **Open or public proxies** | Proxies that anyone can use without an account. |
+| **Tor** | The Tor network, which people usually use through Tor Browser. |
+| **iCloud Private Relay** | Apple's privacy feature for Safari and some other apps on iPhone, iPad, and Mac. |
+| **Corporate VPNs** | Networks that companies route their employees' traffic through. |
+| **Paid consumer VPNs** | Subscription VPN apps that people install on their phone or computer. |
+
+Many VPNs, iCloud Private Relay, and some proxies run on hosting and data center networks. A connection that Clerk recognizes as one of the VPN, Tor, or proxy services above counts as that service, not as a hosting network, so people can sign up through a service you don't block even though it runs in a data center. A connection from a hosting network that Clerk doesn't recognize as one of those services counts as a hosting network.
+
+Some connections match more than one network type. For example, an iCloud Private Relay connection can also look like a free VPN. A connection that matches a VPN, Tor, or proxy type you block is blocked, even if it also matches one you don't, with one exception: while you don't block iCloud Private Relay or corporate VPNs, people using them can sign up, whatever else their connection matches.
+
+This protection doesn't affect connections from anywhere else, such as home and mobile networks.
+
+This protection applies to sign-ups only. It never blocks a sign-in, so existing users keep access wherever they connect from.
+
+## What happens when a sign-up is blocked
+
+The account isn't created, and the user sees a message that they can't sign up. See [What blocked users see](/docs/guides/protect/system-protections/overview#what-blocked-users-see).
+
+Each blocked sign-up appears as a `protect.sign_up.blocked` event in [Application Logs](/docs/guides/dashboard/logs/application-logs#protect-events).
+
+## Settings
+
+| Setting | Default | Description |
+| - | - | - |
+| **Blocked network types** | Hosting and data center networks, free VPNs, data center proxies, open or public proxies, Tor | Block sign-ups from the selected network types. |
+
+Keep at least one network type selected. To stop blocking all of them, disable the protection.
+
+## How it works with other protections
+
+**Residential proxies** route traffic through other people's home connections, so they look like home broadband. They're covered by [Challenge residential proxies](/docs/guides/protect/system-protections/challenge-residential-proxies). This protection blocks one only when it's on a hosting network and you block hosting and data center networks.
+
+## Before you enable it
+
+- **Decide which VPNs to block.** Paid consumer VPNs aren't blocked by default, because many real people keep one turned on all the time. Block them only if you see fake sign-ups coming through them. If your users care about privacy, or many of them are in countries where VPNs are common, consider unblocking free VPNs too.
+- **Check that Protect sees your visitors' IP addresses.** If it sees your proxy's IP address instead, every sign-up can look like it comes from your proxy's network and be blocked. See [If you proxy Clerk's Frontend API](/docs/guides/protect/system-protections/overview#if-you-proxy-clerks-frontend-api).
+- **Check where your automated tests sign up from.** Test runners in CI services, such as GitHub Actions, run on hosting networks, so their sign-ups are blocked unless they use a [Testing Token](/docs/guides/development/testing/overview#testing-tokens). A sign-up that carries a valid Testing Token isn't checked, so end-to-end tests that use one keep running.
+- **A few real people sign up from servers.** For example, from a cloud desktop or a hosted development environment. If your users include developers, consider unblocking hosting and data center networks.
+- **Watch your logs after turning it on.** Review the `protect.sign_up.blocked` events. If real users are being blocked, check which network type they use, and consider unblocking it.

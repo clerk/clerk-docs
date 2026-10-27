@@ -59,3 +59,41 @@ Keep two browser tabs open during setup: one for the [Clerk Dashboard](https://d
 
   <Include src="_partials/authentication/social-connections/test-your-connection" />
 </Steps>
+
+## Suggest a Slack workspace in a custom flow
+
+To suggest a workspace for one sign-in or sign-up authorization attempt, pass `slackTeamIdHint` with `strategy: 'oauth_slack'`. Use a workspace ID that starts with `T`, followed by one or more uppercase letters or digits, such as `T012ABCDEF`. Clerk rejects an invalid ID, or a hint passed with any other strategy.
+
+Clerk passes the value as Slack's [`team` parameter](https://docs.slack.dev/authentication/sign-in-with-slack/#request). It's a hint only: it doesn't enforce workspace membership or restrict access to your application. Clerk doesn't save the value, so pass it on each attempt that needs it.
+
+With the Core 3 JavaScript API, use [`signIn.sso()`](/docs/reference/objects/sign-in-future#sso) or [`signUp.sso()`](/docs/reference/objects/sign-up-future#sso):
+
+```typescript
+const { error } = await signIn.sso({
+  strategy: 'oauth_slack',
+  slackTeamIdHint: 'T012ABCDEF',
+  redirectCallbackUrl: '/sso-callback',
+  redirectUrl: '/dashboard',
+})
+
+if (error) {
+  console.error(JSON.stringify(error, null, 2))
+}
+```
+
+Handle the returned `error` as described in the [custom flow error handling guide](/docs/guides/development/custom-flows/error-handling). For callback route setup, see the [Core 3 custom OAuth flow guide](/docs/guides/development/custom-flows/authentication/oauth-connections). Use `redirectCallbackUrl` for the callback route and `redirectUrl` for the destination after authentication. To use a popup, pass an open `Window` as `popup` and set `redirectCallbackUrl` to an absolute URL, such as `new URL('/sso-callback', window.location.origin).href`.
+
+With the legacy JavaScript API, use [`signIn.authenticateWithRedirect()`](/docs/reference/objects/sign-in#authenticatewithredirect) or [`signUp.authenticateWithRedirect()`](/docs/reference/objects/sign-up#authenticatewithredirect):
+
+```typescript
+await signIn.authenticateWithRedirect({
+  strategy: 'oauth_slack',
+  slackTeamIdHint: 'T012ABCDEF',
+  redirectUrl: '/sso-callback',
+  redirectUrlComplete: '/dashboard',
+})
+```
+
+Configure the callback route as described in the [legacy custom OAuth flow guide](/docs/guides/development/custom-flows/authentication/legacy/oauth-connections). The legacy `authenticateWithPopup()` methods accept the same hint. Pass an open `Window` as `popup` and set `redirectUrl` to an absolute callback URL, such as `new URL('/sso-callback', window.location.origin).href`.
+
+The Core 3 [`signIn.create()`](/docs/reference/objects/sign-in-future#create) method and the legacy low-level `signIn.create()`, `signUp.create()`, `signUp.update()`, and `signUp.prepareVerification()` methods also accept `slackTeamIdHint` to start a Slack authorization attempt.

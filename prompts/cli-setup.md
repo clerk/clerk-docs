@@ -196,9 +196,18 @@ Add to global CSS:
 
 Have the user sign up as their first test user. Congratulate them once the profile icon appears in the nav.
 
-Then ask how they want users to sign up and sign in — identifiers (email, phone, username) and social providers. Changing these needs a claimed application: have the user run `npx -y clerk@latest auth login` first, then review with `npx -y clerk@latest config pull` and change with `npx -y clerk@latest config patch` (supports `--dry-run`), or use the Clerk Dashboard. See [sign-up and sign-in options](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options.md) for details.
+Ask how users should sign up and sign in: email, phone, username, and social providers. The app must be claimed before changing these settings.
 
-Before production, have the user claim the app with `npx -y clerk@latest auth login`, then configure production with `npx -y clerk@latest deploy`. Unclaimed apps and temporary keys aren't production-ready.
+If `init` created the app in this session and no SDK claim file exists, use the `init` claim steps below. Otherwise, if `.clerk/keyless.json` (`init`) or `.clerk/.tmp/keyless.json` (SDK) exists, ask which app the project should use before anyone signs in or links it.
+
+If both claim files exist, stop before `auth login`, `open`, or `link`: `open` prefers the `init` claim, even if the user chose the SDK app. Have the user identify which claim belongs to the app whose keys the project uses, move the other file out of the project, and keep it private. Never read the claim files or keys. Continue only after the user confirms that the remaining file and the project's keys belong to the chosen app.
+
+- **`init` claim:** If this is the chosen app, have the user run `npx -y clerk@latest auth login`. On older CLIs, signing in from this folder claims the `init` app and replaces the project's keys; a signed-out `npx -y clerk@latest link` can start that sign-in. If the user chose another app, have them sign in from another folder first.
+- **SDK claim:** Have the user run `npx -y clerk@latest open` in their own terminal to open the claim page, then `npx -y clerk@latest link`. Signing in cannot claim an SDK-created app.
+
+Once the app is claimed, review settings with `npx -y clerk@latest config pull` and change them with `npx -y clerk@latest config patch` (supports `--dry-run`), or use the Clerk Dashboard. See [sign-up and sign-in options](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options.md).
+
+Before production, claim the app as described above and run `npx -y clerk@latest deploy`. If `deploy` says the project isn't linked, follow its instructions. Unclaimed apps and temporary keys aren't production-ready.
 
 Then offer Organizations — multi-tenancy, team invitations, roles and permissions, and enterprise SSO.
 

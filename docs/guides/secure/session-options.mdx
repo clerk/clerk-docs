@@ -7,65 +7,87 @@ Clerk provides session management options for fine-tuning user visits to your ap
 
 ## Session lifetime
 
-Depending on the business domain of an application, there might be different requirements for how long users should remain signed in. Criteria to base this decision upon typically revolve around user activity on the application and how long it has been since the user first signed in.
+Choosing a session lifetime is a trade-off between security and user experience. Longer sessions keep users signed in, while shorter sessions limit how long a session can be used.
 
-Ultimately, picking the ideal session lifetime is a trade-off between security and user experience. Longer sessions are generally better for UX but worse for security; and vice-versa.
-
-Fortunately, with Clerk, you have the ability to fully control the lifetime of your users' sessions. There are two settings for doing so and you can set them via your instance settings in the [Clerk Dashboard](https://dashboard.clerk.com/): Inactivity timeout and Maximum lifetime.
-
-<If is="llm">
-  **For AI agents:** The toggles on this page (Inactivity timeout, Maximum lifetime, Multi-session handling) are Dashboard-only and can't be changed via the CLI or Backend API — the CLI's `session` config key edits the session token's custom claims, not these settings. Instead of describing Dashboard navigation, run `npx clerk@latest open sessions --print` to generate a direct link to the **Sessions** page of the linked app's Dashboard and share it with the user. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
-</If>
+Configure session lifetimes on the [**Sessions**](https://dashboard.clerk.com/~/sessions) page in the Clerk Dashboard. Web browser settings apply to all sessions by default. On instances with separate native session settings, you can give [native sessions](#native-sessions) their own lifetime.
 
 > [!NOTE]
-> Note that either one or both must be enabled at all times. For security reasons, you are not allowed to disable both settings.
+> Changes to session lifetime settings only affect new sessions. See [Changes to existing sessions](#changes-to-existing-sessions) if you need to end sessions that are already active.
+
+<If is="llm">
+  **For AI agents:** The lifetime and multi-session controls on this page correspond to the Platform API's `session_settings` configuration. The separate `session` config key configures session tokens (their lifetime, allowed clock skew, and custom claims), not these settings. To direct a user to the Dashboard controls, run `npx -y clerk@latest open sessions --print` to generate a direct link to the **Sessions** page of the linked app's Dashboard and share it with the user. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+</If>
+
+## Web browser sessions
+
+Web browser sessions support **Inactivity timeout** and **Maximum lifetime**. At least one of these settings must remain enabled.
 
 ### Inactivity timeout
 
 <Include src="_partials/feature-not-free-callout" />
 
-Inactivity timeout is the duration after which a session will expire and the user will have to sign in again, if they haven't been active on your site.
+Inactivity timeout is the duration after which a session expires if the user hasn't been active on your site. A user is considered inactive when the application is closed or stops refreshing the token.
 
-A user is considered inactive when the application is closed, or when the app stops refreshing the token.
-
-By default, this setting is disabled. You can enable it and configure a custom inactivity timeout by following these steps:
+By default, this setting is disabled. To enable it and set a custom inactivity timeout:
 
 1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
 1. Toggle on **Inactivity timeout**.
 1. Set your desired duration.
-
-> [!NOTE]
-> You should be aware of [browser limitations](#browser-limitations-on-cookies), which may cause users to be signed out before the configured inactivity timeout.
 
 ### Maximum lifetime
 
 > [!NOTE]
 > If you're using an instance for [end-to-end testing](/docs/guides/development/testing/overview), it is recommended to keep maximum lifetime enabled with the default value. Otherwise, test suites that repeatedly sign in the same user can accumulate a very large number of active sessions.
 
-Maximum lifetime is the duration after which a session will expire and the user will have to sign in again, regardless of their activity on your site.
+Maximum lifetime is the duration after which a session expires regardless of the user's activity on your site.
 
-By default, this setting is enabled with a default value of 7 days for all newly created instances. Setting a custom maximum lifetime requires a [paid plan](/pricing) for production use, but it's available in development mode so that you can try out what works for you. To find this setting and change the value:
+This setting defaults to 7 days on newly created instances. Setting a custom maximum lifetime requires a [paid plan](/pricing) for production use, but it's available in development mode so that you can try out what works for you. To change it:
 
 1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
 1. Toggle on **Maximum lifetime**.
 1. Set your desired duration.
 
-> [!NOTE]
-> You should be aware of [browser limitations](#browser-limitations-on-cookies), which may cause users to be signed out before the configured maximum lifetime.
+### Browser limitations on cookies
 
-## Browser limitations on cookies
+Browser cookies can be cleared or expire before a session reaches its configured lifetime. As a result, you can't guarantee that a browser session will last for its full configured lifetime.
 
-Regardless of how [session lifetimes](#session-lifetime) are configured, there are certain browser limitations & behaviors which may clear Clerk's session cookie. This will cause users to be signed out, even if your session lifetimes are set to a longer duration. As a result, it is impossible to achieve a setup where your users are never signed out.
+#### User behaviors
 
-### User behaviors
+If a user clears their cookies, Clerk's session cookie is lost. The same happens when a user closes all incognito windows after signing in there. In either case, the user must sign in again.
 
-In the event that a user manually clears their cookies, Clerk's session cookie will be lost. Similarly, if a user signs in via an incognito window and they then close all incognito windows, Clerk's session cookie will be lost. Both of these scenarios will cause the user to have to sign in again.
+#### Google Chrome
 
-### Google Chrome
+Cookies set in Google Chrome have a `Max-Age` upper limit of [400 days](https://developer.chrome.com/blog/cookie-max-age-expires). Users who use Google Chrome will be signed out within 400 days, even if the session lifetime is set to a longer duration. There is no workaround for this.
 
-Cookies set in Google Chrome have a `Max-Age` upper limit of [400 days](https://developer.chrome.com/blog/cookie-max-age-expires). Users who are using Google Chrome will be signed out within 400 days, even if session lifetime is set to a longer duration. There is no workaround for this.
+This is per the [HTTP Working Group Specification](https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html#section-5.5) which is likely to be implemented by other browsers in the future.
 
-This is per the [HTTP Working Group Specification](https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html#section-5.5) which is likely to get implemented by other browsers in the near future.
+## Native sessions
+
+Native sessions are sessions created by these apps:
+
+- iOS and Android apps, including Expo apps on iOS and Android.
+- Electron apps.
+- Chrome extensions on **production instances only**. In development, their sessions use the web browser settings. If a Chrome extension [syncs authentication with a web app](/docs/guides/sessions/sync-host), the shared session uses the web browser settings.
+
+By default, native sessions use the web browser settings for both [**Inactivity timeout**](#inactivity-timeout) and [**Maximum lifetime**](#maximum-lifetime). If your instance has separate native session settings, you can choose a different policy for new native sessions.
+
+### Configure a separate native lifetime
+
+On a [paid plan](/pricing), you can set a custom maximum lifetime for native sessions between 5 minutes and 10 years in production. It's also available in development mode. When native sessions have their own maximum lifetime, web browser settings, including inactivity timeout, don't apply to them. A long native lifetime doesn't extend the lifetime of session tokens. SDKs continue refreshing these short-lived tokens.
+
+To set a maximum lifetime for new native sessions:
+
+1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+1. Under **Native sessions**, select **Custom maximum lifetime** and set a duration.
+1. Select **Save**.
+
+To make native sessions follow the web browser settings again, select **Same as web**, then select **Save**. Changing either the web or native settings preserves the other platform's settings. If your plan is downgraded, native sessions return to following the web browser settings, and the web maximum lifetime returns to 7 days.
+
+## Changes to existing sessions
+
+Changing a web or native session lifetime setting only affects sessions created after you save the change. Existing sessions keep the maximum lifetime and inactivity timeout they were created with, so lowering a duration doesn't shorten or end sessions that are already active. This also applies to settings that are reset when your plan is downgraded.
+
+To end existing sessions, revoke them. In the Clerk Dashboard, open a user from the [**Users**](https://dashboard.clerk.com/~/users) page and select **Revoke device** or **Revoke all devices** in the **Devices** section. To revoke sessions programmatically, use the Backend SDK's [`revokeSession()`](/docs/reference/backend/sessions/revoke-session) method.
 
 ## Multi-session applications
 

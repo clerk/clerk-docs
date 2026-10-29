@@ -97,7 +97,7 @@ A passkey is a type of sign-in credential that requires one user action, but use
 
 #### Passkey limitations
 
-- Passkeys can't be enrolled as a dedicated [multi-factor authentication](#multi-factor-authentication) method, but they can be configured to [satisfy the multi-factor requirement](#passkeys-and-multi-factor-authentication) when a user signs in with one.
+- Passkeys can't be enrolled as a dedicated [multi-factor authentication](#multi-factor-authentication) method, but they can be configured to [satisfy the multi-factor requirement](#passkeys-and-multi-factor-authentication).
 - Not all devices and browsers are compatible with passkeys. Passkeys are built on WebAuthn technology and you should check [the Browser Compatibility docs](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API#browser_compatibility) for an up-to-date list.
 - Your users can have a max of 10 passkeys per account.
 
@@ -175,15 +175,35 @@ If you're building a custom user interface instead of using the [Account Portal]
 
 ### Passkeys and multi-factor authentication
 
-A [passkey](#passkeys) is itself a multi-factor credential — a single sign-in combines two authentication factors (a physical device and a PIN or biometric) — so a passkey sign-in can satisfy your application's multi-factor requirement on its own. When this behavior is in effect, a user who signs in with a passkey isn't prompted to complete a second factor.
+A [passkey](#passkeys) is itself a multi-factor credential. One passkey sign-in combines two authentication factors (a physical device and a PIN or biometric), so a passkey can satisfy your application's multi-factor requirement on its own. When this behavior is in effect, a user who signs in with a passkey skips the second factor. A user who signs in another way, such as with a password or a social connection, can use their passkey as their second factor instead of an SMS code or authenticator app, including during [reverification](/docs/guides/secure/reverification). On the web, older instances need an [update](#passkeys-as-a-second-factor-on-the-web) for this.
 
-For instances created on or after **July 8, 2026**, this is the default behavior and can't be disabled.
+A passkey doesn't turn on MFA for a user. Clerk doesn't prompt users who haven't set up MFA for a separate second factor, unless [Device Trust](/docs/guides/secure/device-trust) asks for one because they signed in with a password on a new device. If you [require MFA](#multi-factor-authentication), those users must set up a second factor before sign-in finishes, including when they sign in with a passkey.
 
-For instances created before **July 8, 2026**, this behavior is off by default, but you can opt in:
+Two settings control this behavior:
+
+- **Passkeys satisfy multi-factor authentication** lets passkey sign-in skip the second factor, and lets native apps offer a passkey as a second factor. It's on for applications created on or after July 8, 2026, and you can't turn it off. For older applications, turn it on with the following steps.
+- **Passkeys as a second factor on the web** lets web apps offer a passkey as a second factor too. It's on for instances created on or after October 19, 2026, and only takes effect once **Passkeys satisfy multi-factor authentication** is on. For older instances, [opt in to the web update](#passkeys-as-a-second-factor-on-the-web). Web apps also need the [minimum SDK versions](#passkeys-as-a-second-factor-on-the-web).
+
+If you created your production instance with [**Clone development instance**](/docs/guides/development/deployment/production), it takes both settings from your development instance, not from these dates. For example, if your development instance predates October 19, 2026 and didn't opt in to the web update, your production instance doesn't have it either, even if you created it later. If an instance's [**Updates**](https://dashboard.clerk.com/~/updates) page offers to opt in to **Passkeys as a second factor on the web**, that instance doesn't have it yet.
+
+To turn on **Passkeys satisfy multi-factor authentication** in an application created before July 8, 2026:
 
 1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
 1. Enable **Sign-in with passkey**, if it isn't already — the following setting only appears once passkey sign-in is on.
 1. Toggle on **Passkeys satisfy multi-factor authentication**.
+
+#### Passkeys as a second factor on the web
+
+Web apps need a separate update, **Passkeys as a second factor on the web**, because older versions of `@clerk/ui` can't render the passkey second factor. `@clerk/ui` is the package that renders Clerk's prebuilt components. Native apps, including Expo native apps, don't need the update. They offer a passkey as a second factor with clerk-ios 1.5.0, clerk-android 1.1.4, `@clerk/expo` 4.13.1, or later.
+
+Web apps, including Expo web apps, need `@clerk/clerk-js` 6.40.0 and `@clerk/ui` 1.41.0 or later. First, upgrade your SDK to the minimum version listed in the [versioning guide](/docs/guides/development/upgrading/versioning#2026-08-20) or later. Apps on a supported SDK version that load both packages from Clerk's CDN, which is the default, then get compatible versions. If you pin either package or bundle `@clerk/ui`, upgrade it too.
+
+Instances created on or after October 19, 2026 already have the update, except production instances cloned from a development instance without it. To opt in on an instance that doesn't have it:
+
+1. In the Clerk Dashboard, navigate to the [**Updates**](https://dashboard.clerk.com/~/updates) page.
+1. Opt in to **Passkeys as a second factor on the web**. The page lists it only after **Passkeys satisfy multi-factor authentication** is on.
+
+For 24 hours after you opt in, you can opt out on the same page.
 
 ### Reset a user's MFA
 

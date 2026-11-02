@@ -1,15 +1,17 @@
 ---
 title: Clerk Telemetry
-description: Clerk collects telemetry data from its SDKs about general product and feature usage.
+description: Clerk collects telemetry data from its SDKs and the Clerk CLI about general product and feature usage.
 ---
 
-Clerk collects telemetry data from its SDKs about general product and feature usage. Participation in telemetry collection is optional and users of the product can opt out at any time.
+Clerk collects telemetry data from its SDKs and the Clerk CLI about general product and feature usage. Participation in telemetry collection is optional and users of the product can opt out at any time.
 
 ## How you are notified
 
 Server-side SDKs (e.g., `@clerk/nextjs`, `@clerk/tanstack-react-start`, `@clerk/react-router`, `@clerk/express`, `@clerk/astro`, `@clerk/fastify`) print a notice in your terminal once each time you start your development server. The notice is skipped in continuous integration (CI) environments and when using a production instance.
 
 Browser-only SDKs do not print a runtime notice. This includes `@clerk/clerk-js` loaded directly, Vite SPAs using `@clerk/react` without a server runtime, and the browser-facing surfaces of a Chrome extension (content scripts, popups, options pages). For those setups, this page is the disclosure.
+
+The [Clerk CLI](/docs/cli) prints a notice the first time it runs on a machine and sends nothing during that run. `clerk feedback` is the exception: it shows the notice, then sends your report and that run's command event. In CI environments, where the `CI` environment variable is set, the CLI skips the notice and sends from the first run. Shell completion (`clerk completion` and the helper behind the Tab key) never sends anything.
 
 ## Why is Clerk collecting telemetry data?
 
@@ -19,7 +21,7 @@ Collecting telemetry data gives us a clearer picture into how our SDKs, componen
 
 ## What data is being collected?
 
-We track general usage information about our SDKs, components, and authentication helpers from **development instances only**. While we collect identifiers that allows us to associate events with specific Clerk instances, **we do not collect any information from your users**.
+We track general usage information about our SDKs, components, and authentication helpers from **development instances only**. While we collect identifiers that allow us to associate events with specific Clerk instances, **we do not collect any information from your users**. When telemetry is on, the Clerk CLI sends an event for each command it runs, whichever instance the command acts on, and `clerk feedback` sends the report you write. See [Clerk CLI](#clerk-cli).
 
 Examples of data we are interested in:
 
@@ -31,7 +33,7 @@ Examples of data we are interested in:
 - Usage of new features
 
 > [!NOTE]
-> We regularly audit this list to ensure it is an accurate representation of the data we are collecting. To audit telemetry data sent from our SDKs yourself, you can set a `CLERK_TELEMETRY_DEBUG=1` environment variable in your application. In this mode, telemetry events are only logged to the console and not sent to Clerk.
+> We regularly audit this list to ensure it is an accurate representation of the data we are collecting. To audit telemetry data sent from our SDKs yourself, you can set a `CLERK_TELEMETRY_DEBUG=1` environment variable in your application. In this mode, telemetry events are only logged to the console and not sent to Clerk. The Clerk CLI doesn't read this variable. Run a CLI command with `--verbose` instead, and the CLI prints each event before it sends it.
 
 An example event looks like this:
 
@@ -53,9 +55,73 @@ An example event looks like this:
 - `pk` — Publishable Key. The instance's [Publishable Key](!publishable-key).
 - `payload` — Each unique event can provide custom data as part of the payload. As seen above, for the `COMPONENT_MOUNTED` event we track the component name and additional data about prop usage.
 
+### Clerk CLI
+
+While telemetry is on, the [Clerk CLI](/docs/cli) sends one `CLI_COMMAND_EXECUTED` event each time a command runs, apart from the runs listed in [How you are notified](#how-you-are-notified). The event records how you use the CLI. It doesn't include command arguments, option values, file paths, secret keys, or data about your users.
+
+| Field | Description |
+| - | - |
+| `command` | The command path, such as `users list`. Arguments aren't included. |
+| `flags` | The names of the flags you set. Their values aren't included. |
+| `outcome`, `exit_code`, `error_code` | How the command ended. |
+| `stage` | How far a multi-step command got. Set by `clerk init`, `clerk auth login`, `clerk deploy`, and `clerk deploy status`. Other commands send `null`. |
+| `pause_step`, `components` | The step a deploy paused on, and which of DNS, SSL, email DNS, and OAuth credentials were verified. Set by `clerk deploy` and `clerk deploy status`. Other commands send `null` values. |
+| `duration_ms` | How long the command ran. |
+| `machine_uuid` | A random ID the CLI generates and stores on your machine. |
+| `install_method`, `ai_agent`, `terminal_program`, `mode`, `os`, `arch`, `ci`, `in_tmux`, `in_screen` | The environment the CLI ran in, such as how you installed it and whether an AI agent ran the command. |
+| `env` | The Clerk API environment the CLI talks to. |
+| `workspace_id`, `app_id` | The application ID of the project the current directory is linked to, and its workspace ID when the CLI has one. |
+
+An example event looks like this:
+
+```json {{ prettier: false }}
+{
+  "sdk": "clerk-cli",
+  "sdkv": "4.1.0",
+  "event": "CLI_COMMAND_EXECUTED",
+  "payload": {
+    "command": "users list",
+    "flags": "limit",
+    "outcome": "success",
+    "exit_code": 0,
+    "error_code": null,
+    "stage": null,
+    "pause_step": null,
+    "components": { "dns": null, "ssl": null, "mail": null, "oauth": null },
+    "duration_ms": 412,
+    "machine_uuid": "00000000-0000-0000-0000-000000000000",
+    "install_method": "homebrew",
+    "ai_agent": "",
+    "terminal_program": "ghostty",
+    "mode": "human",
+    "os": "darwin",
+    "arch": "arm64",
+    "ci": false,
+    "in_tmux": false,
+    "in_screen": false,
+    "env": "production",
+    "workspace_id": "",
+    "app_id": "app_123abc"
+  }
+}
+```
+
+#### Feedback reports
+
+While telemetry is on, `clerk feedback` sends a `CLI_FEEDBACK` event with:
+
+- The report you write: what you tried to do (`goal`), what you ran (`attempted`), what went wrong (`issue`), and how it ended (`outcome`)
+- If you add them, the command involved (`command`), the error text and code (`error_text`, `error_code`), and a suggestion (`suggestion`)
+- A report ID, `source: "cli"`, and the number of replacements the scrubbing made
+- The same machine and environment fields as a command event, from `machine_uuid` to `app_id` in the [field table](#clerk-cli)
+
+Before the report leaves your machine, the CLI replaces common secret formats with `[REDACTED]`, home directory paths with `~`, and email addresses with `[EMAIL]`, on a best-effort basis. Run `clerk feedback --dry-run` to see the exact report without sending it. The CLI still sends the run's command event, except on a first run outside CI.
+
+Clerk staff with access to the telemetry warehouse can read feedback reports. To have a report deleted, [contact Clerk support](/contact/support) with the report ID the CLI prints after it sends the report.
+
 ## What about sensitive data?
 
-We will not collect sensitive data from your application or development environment that is not directly related to your implementation of Clerk's SDKs. Notably, we will not collect: environment variables unrelated to Clerk, any information about your users, file paths, contents of files, logs, git remote information, or raw JavaScript errors.
+We will not collect sensitive data from your application or development environment that is not directly related to your implementation of Clerk's SDKs. Notably, we will not collect: environment variables unrelated to Clerk, any information about your users, file paths, contents of files, logs, git remote information, or raw JavaScript errors. This covers the SDKs and the Clerk CLI's command events. A `clerk feedback` report holds the text you write in it, after the scrubbing described in [Feedback reports](#feedback-reports).
 
 ## How is my data protected?
 
@@ -122,3 +188,15 @@ If you are using `@clerk/react` directly, or using an SDK that doesn't have envi
   VITE_CLERK_TELEMETRY_DISABLED=1
   ```
 </CodeBlockTabs>
+
+### For the Clerk CLI
+
+To opt out of Clerk CLI telemetry on your machine, run:
+
+```sh {{ filename: 'terminal' }}
+clerk telemetry disable
+```
+
+`clerk telemetry status` shows whether telemetry is on and, when it's off, why. `clerk telemetry enable` removes the opt-out.
+
+To opt out with an environment variable instead, export `CLERK_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1` in your shell. The CLI doesn't read them from a `.env` file. Any value other than an empty string, `0`, or `false` (case-insensitive) opts out, and either variable opts out even after you run `clerk telemetry enable`. Opting out also removes the `AIAgent/<name>` part of the User-Agent header the CLI sends with its HTTP requests, and turns off `clerk feedback`, which prints the GitHub issues URL instead.

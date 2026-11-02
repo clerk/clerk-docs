@@ -79,6 +79,61 @@ To include dynamic values in your tokens, you can use shortcodes. Shortcodes are
 > [!NOTE]
 > Even though shortcodes are string values, their type in the generated token depends on the original type of the information that's included. For example, `{{user.public_metadata}}` will be substituted for a JSON object, not a string.
 
+#### Available shortcodes
+
+You can use these shortcodes in JWT templates and in [custom session claims](/docs/guides/sessions/customize-session-tokens). Timestamps are Unix timestamps in seconds.
+
+##### User
+
+| Shortcode | Type | Description |
+| - | - | - |
+| `{{user.id}}` | string | The user's ID. |
+| `{{user.external_id}}` | string \| null | The user's external ID. |
+| `{{user.first_name}}` | string \| null | The user's first name. |
+| `{{user.last_name}}` | string \| null | The user's last name. |
+| `{{user.full_name}}` | string \| null | The user's full name. |
+| `{{user.username}}` | string \| null | The user's username. |
+| `{{user.primary_email_address}}` | string \| null | The user's primary email address. |
+| `{{user.primary_phone_number}}` | string \| null | The user's primary phone number. |
+| `{{user.primary_web3_wallet}}` | string \| null | The user's primary Web3 wallet address. |
+| `{{user.email_verified}}` | boolean | Whether the user has a verified email address. |
+| `{{user.phone_number_verified}}` | boolean | Whether the user has a verified phone number. |
+| `{{user.two_factor_enabled}}` | boolean | Whether the user has two-factor authentication enabled. |
+| `{{user.image_url}}` | string | The user's image URL. |
+| `{{user.has_image}}` | boolean | Whether the user has uploaded an image. |
+| `{{user.created_at}}` | number | When the user was created. |
+| `{{user.updated_at}}` | number | When the user was last updated. |
+| `{{user.last_sign_in_at}}` | number | When the user last signed in. |
+| `{{user.organizations}}` | object | The user's Organizations, as a map of Organization ID to Role key. Can grow large enough to push a session token past browser cookie limits. |
+| `{{user.public_metadata}}` | object | The user's public metadata. Supports dot notation. |
+| `{{user.unsafe_metadata}}` | object | The user's unsafe metadata. Supports dot notation. |
+
+##### Session
+
+| Shortcode | Type | Description |
+| - | - | - |
+| `{{session.created_at}}` | number | When the session was created. Doesn't change for the life of the session. Use it to enforce your own maximum session age. |
+| `{{session.expire_at}}` | number | When the session reaches its maximum lifetime. If maximum lifetime is turned off, this is a date far in the future. A session can end sooner, such as after an inactivity timeout. Not the same as the token's `exp`. |
+| `{{session.reverification_id}}` | string \| null | The ID of the session's latest reverification. Its presence means one was started, not that it completed. See [how to correlate a reverification with a specific action](/docs/guides/secure/reverification#correlate-a-reverification-with-a-specific-action). |
+| `{{session.actor}}` | object \| null | The session's actor, present on impersonation and Agent Task sessions. Use dot notation to read a single field, such as `{{session.actor.sub}}` for the actor's ID. |
+| `{{source.platform}}` | string | The platform the session was created on: `web` or `native`. Experimental. Clerk may change or remove it without notice. |
+
+##### Active Organization
+
+When the session has no active Organization, these resolve to `null`, except `{{org.public_metadata}}` and `{{org_membership.public_metadata}}`, which resolve to an empty object.
+
+| Shortcode | Type | Description |
+| - | - | - |
+| `{{org.id}}` | string \| null | The Organization's ID. |
+| `{{org.name}}` | string \| null | The Organization's name. |
+| `{{org.slug}}` | string \| null | The Organization's slug. |
+| `{{org.role}}` | string \| null | The user's Role key in the Organization, such as `org:admin`. |
+| `{{org.image_url}}` | string \| null | The Organization's image URL. |
+| `{{org.has_image}}` | boolean \| null | Whether the Organization has an uploaded image. |
+| `{{org.public_metadata}}` | object | The Organization's public metadata. Supports dot notation. |
+| `{{org_membership.permissions}}` | string\[] \| null | The user's custom Permissions. System Permissions aren't included. |
+| `{{org_membership.public_metadata}}` | object | The membership's public metadata. Supports dot notation. |
+
 #### Metadata in shortcodes
 
 While you can use the `{{user.public_metadata}}` or `{{user.unsafe_metadata}}` shortcodes to include the complete metadata object in the final token, there might be cases where you only need a specific piece of information.
@@ -228,7 +283,7 @@ And given the following JWT template:
   "avatar": "{{user.image_url}}",
   "full_name": "{{user.last_name}} {{user.first_name}} ",
   "email": "{{user.primary_email_address}}",
-  "phone": "{{user.primary_phone_address}}",
+  "phone": "{{user.primary_phone_number}}",
   "registration_date": "{{user.created_at}}",
   "likes_to_do": "{{user.public_metadata.profile.interests}}",
   "unsafe_meta": "{{user.unsafe_metadata}}",
@@ -255,7 +310,7 @@ The generated token would look like this:
       "bar": 42
     }
   },
-  "invalid_shortcode": null,
+  "invalid_shortcode": "{{user.i_dont_exist}}",
 
   // default claims, included automatically
   "azp": "http://localhost:3000",

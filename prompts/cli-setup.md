@@ -3,6 +3,8 @@
 
 Use the [Clerk CLI](https://clerk.com/docs/cli) to add authentication. In agent environments, supported frameworks default to accountless setup: `npx -y clerk@latest init` provisions a claimable application and writes temporary development keys without requiring a Clerk account.
 
+The commands below use `npx -y clerk@latest`. In a project that uses pnpm, Bun, or Yarn 2+, run them with `pnpm dlx clerk@latest`, `bunx clerk@latest`, or `yarn dlx clerk@latest` instead. Do not install the CLI globally.
+
 ## Before you start
 
 Show the user this checklist and wait for a yes:
@@ -86,7 +88,7 @@ npx -y clerk@latest init
 
 For a native iOS or macOS app, follow the [iOS setup prompt](https://clerk.com/docs/ios/getting-started/quickstart.md) instead of the remaining steps. It covers creating the Xcode project.
 
-Ask which framework and package manager to use, defaulting to Next.js and npm:
+Ask which framework to use, defaulting to Next.js. If a lockfile remains in the directory, use its package manager instead of asking: `pnpm-lock.yaml` → `pnpm`, `yarn.lock` → `yarn`, `bun.lock` or `bun.lockb` → `bun`, and `package-lock.json` → `npm`. If there's no lockfile, ask which package manager to use, defaulting to npm:
 
 ```bash
 npx -y clerk@latest init --framework <framework> --pm <package-manager>
@@ -186,6 +188,7 @@ Add to global CSS:
 
 - Use Node.js 20.9.0 or later for current Clerk SDKs.
 - Next.js 15+: `auth()` is async. Always `await auth()`.
+- For Next.js manual setup, name the middleware file from the installed `next` version: `proxy.ts` on Next.js 16+, `middleware.ts` on 15 and below. `init` creates the file when it handles setup.
 - Next.js: when `next.config` sets `cacheComponents: true` (the `create-next-app` default), `next build` fails on request data read outside `<Suspense>`. Wrap `<Show>` rendered in a Server Component, and any Server Component that calls `auth()` or `currentUser()`, in `<Suspense>`, as close to the auth-dependent UI as possible. Wrap catch-all `<SignIn />`, `<SignUp />`, `<UserProfile />`, and `<OrganizationProfile />` pages in `<Suspense>` too, including the sign-in and sign-up pages the Clerk CLI creates. See [Read auth data inside Suspense](https://clerk.com/docs/guides/development/rendering-modes.md#read-auth-data-inside-suspense) and [Prebuilt components on catch-all routes](https://clerk.com/docs/guides/development/rendering-modes.md#prebuilt-components-on-catch-all-routes).
 - For current Next.js SDKs, `ClerkProvider` goes inside `<body>`, not around `<html>`.
 - Never expose `CLERK_SECRET_KEY` in client code.

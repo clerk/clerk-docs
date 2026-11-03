@@ -1,0 +1,136 @@
+---
+title: Require a minimum app version
+description: Require users to update their native app when its version is older than the minimum you set in the Clerk Dashboard.
+sdk: ios
+---
+
+You can set a minimum version for each native app in the Clerk Dashboard, for example, when you release a security fix or change an API that older builds depend on. When a user opens a build below that minimum, Clerk rejects most of the app's requests and the SDK covers it with an update screen. The screen has a button that opens your app's page on the App Store. The user stays signed in and can continue where they left off after updating.
+
+## Requirements
+
+The update screen requires Clerk iOS SDK `1.7.0` or later and `ClerkKitUI`. For more information, see [Install the SDK](/docs/reference/native-mobile/installation).
+
+## How minimum versions work
+
+The Clerk SDK sends your app's version and bundle ID with each request. Clerk compares that version with the minimum set for the app.
+
+The version is the app's `CFBundleShortVersionString`, which users see in the App Store, such as `4.2.1`. For iOS minimums, Clerk treats missing numbers as zero, so `4.2` is equivalent to `4.2.0`.
+
+The minimum applies to every iOS application with the same bundle ID, including macOS builds.
+
+<Include src="_partials/minimum-app-version/unsupported-version-requests" />
+
+## Set a minimum version
+
+Minimum versions are set per [instance](/docs/guides/development/managing-environments), so set them separately for your development and production instances.
+
+1. In the Clerk Dashboard, navigate to the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page.
+1. Select the **iOS** tab.
+1. To add an app, select **Add iOS app**. To change an existing app, on the right side of the app's row, select the menu icon (**...**) and select **Edit**.
+1. Enable **Minimum app version**.
+1. Enter the oldest version that users can keep, with up to three dot-separated numbers, such as `4.2.1`.
+1. Enter the **App Store URL** that users open to update the app.
+1. Select **Add application** or **Update application**.
+
+When the app returns to the foreground, the SDK checks whether its version still meets the minimum. If the version is too old, the update screen appears.
+
+<Include src="_partials/minimum-app-version/remove-minimum" />
+
+## What users see
+
+`ClerkKitUI` shows an update screen over your app automatically. On iOS, it covers every scene in its own window. On macOS, it opens as a sheet on each of your app's main windows. Users can't dismiss it until they update.
+
+The update screen shows your app's name, installed version, minimum version, and a **Go to App Store** button. It uses the logo from your application's [**Settings**](https://dashboard.clerk.com/~/settings) and the theme set for Clerk views. If you've set a **Support email** there, it includes a **Can't update? Get Help** email link.
+
+The screen is available on iOS and macOS. On watchOS, tvOS, and visionOS, [show your own update screen](#show-your-own-update-screen). On macOS, the screen doesn't cover panels or windows opened from a menu bar item. If your app runs from the menu bar, show your own update screen.
+
+The SDK applies the minimum it saved from the last environment it loaded, so an outdated app shows the update screen at launch, even when it's offline.
+
+## Show your own update screen
+
+To show your own screen instead of Clerk's update screen, set [`updateRequiredViewEnabled`](/docs/reference/native-mobile/configuration#clerk-options) to `false` when you configure the SDK:
+
+```swift
+Clerk.configure(
+  publishableKey: "{{pub_key}}",
+  options: .init(updateRequiredViewEnabled: false)
+)
+```
+
+Then read `clerk.appVersionSupportStatus`, which updates when the app's status changes. The following example shows an update screen while the app's version is unsupported:
+
+```swift
+import ClerkKit
+import SwiftUI
+
+struct ContentView: View {
+  @Environment(Clerk.self) private var clerk
+  @Environment(\.openURL) private var openURL
+
+  var body: some View {
+    if clerk.appVersionSupportStatus.isSupported {
+      HomeView()
+    } else {
+      VStack(spacing: 16) {
+        Text("Update required")
+        if let updateURL = clerk.appVersionSupportStatus.updateURL {
+          Button("Update") {
+            openURL(updateURL)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### `AppVersionSupportStatus`
+
+<Properties>
+  - `currentVersion`
+  - `String`
+
+  This build's version, its `CFBundleShortVersionString`.
+
+  ---
+
+  - `isSupported`
+  - `Bool`
+
+  Whether this version of the app is supported.
+
+  ---
+
+  - `minimumVersion`
+  - `String?`
+
+  The oldest supported version, when a minimum is set for this app.
+
+  ---
+
+  - `updateURL`
+  - `URL?`
+
+  The App Store page that users open to update the app.
+</Properties>
+
+## Test a minimum version
+
+<Include src="_partials/minimum-app-version/test-update-screen" />
+
+## Troubleshooting
+
+### The update screen doesn't appear
+
+Verify that:
+
+- [ ] Your app's bundle ID matches an iOS application on the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page of the instance your app uses.
+- [ ] Your app's version is older than the minimum.
+- [ ] Your app uses Clerk iOS SDK `1.7.0` or later and links `ClerkKitUI`. SDK versions before 1.0.0 don't send the app's version, so a minimum doesn't block them.
+- [ ] If you use Clerk's update screen, your app doesn't set `updateRequiredViewEnabled` to `false`.
+
+### Users see an error message instead of the update screen
+
+Clerk iOS SDK versions `1.0.0` through `1.6.x` send the app's version but don't show an update screen. When the app is below the minimum, their requests fail with the message "This version of the app is no longer supported. Update the app to continue."
+
+Release a version of your app that uses Clerk iOS SDK `1.7.0` or later, so that users who later fall below a minimum see the update screen.

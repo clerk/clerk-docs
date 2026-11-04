@@ -13,3 +13,14 @@ If you're **not** using satellite domains:
   - Create a passkey directly through the Account Portal instead of your local application to keep it tied to the Account Portal's domain. Passkeys created on your Account Portal (e.g., `your-app.accounts.dev`) will only work on that domain, which can cause issues if you switch between `localhost` and the Account Portal during development. If you choose this approach, ensure all testing happens on the same domain where the passkey was created.
 
 - **In production,** your Account Portal is usually hosted on a subdomain of your main domain (e.g., `accounts.your-domain.com`), enabling passkeys to work seamlessly across your app. However, as stated above, if you use **satellite domains**, passkeys will not work as intended.
+
+**If you have native apps** (iOS, Android, or Expo) as well as a web app, passkeys aren't shared between them by default: web passkeys are bound to your primary domain (e.g., `your-domain.com`), and native passkeys are bound to your Frontend API host (e.g., `clerk.your-domain.com`). To let one passkey work on both web and native, change the passkey RP ID:
+
+1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+1. Select the **Passkeys** tab.
+1. Under **Passkey RP ID**, select one of the following options:
+   - **Platform specific** (default): Web passkeys use your primary domain, and native passkeys use your Frontend API host. A passkey created on one platform won't work on the other.
+   - **Primary domain**: Web and native passkeys both use your primary domain. You must permanently forward `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` from your primary domain to your Frontend API host (e.g., from `your-domain.com/.well-known/assetlinks.json` to `clerk.your-domain.com/.well-known/assetlinks.json`). Clerk checks that the forwarded files list your registered native apps before it saves this option, and removing the forward later will break native passkeys.
+   - **Clerk managed**: Web and native passkeys both use your Frontend API host. Clerk serves a `/.well-known/webauthn` file on your Frontend API host so that your web app can use passkeys through [Related Origin Requests](https://passkeys.dev/docs/advanced/related-origins/). This only works for web domains Clerk already knows about, and in browsers that support Related Origin Requests.
+
+Changing this setting changes the RP ID of new passkeys. Passkeys that users already created under the old RP ID stop working and must be registered again. This setting is only available on production instances.

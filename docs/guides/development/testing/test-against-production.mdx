@@ -1,0 +1,211 @@
+---
+title: Test against a production instance
+description: Run end-to-end tests against your production instance without Test mode, with Backend API test users, sign-in tokens, and Testing Tokens.
+---
+
+To test your application's signed-in features against your production instance, sign test users in with sign-in tokens instead of enabling [**Test mode**](/docs/guides/development/testing/test-emails-and-phones#set-up-test-mode). Clerk doesn't send these users a verification email. Use three features that already work in production:
+
+- **Test users created with the [Backend API](/docs/reference/backend-api){{ target: '_blank' }}**, whose email addresses start out verified.
+- **[Sign-in tokens](/docs/reference/backend/sign-in-tokens/create-sign-in-token)**, which the `@clerk/testing` helpers use to sign in from the browser. Only your server can create one, because it takes your [Secret Key](!secret-key). The sign-in skips first-factor verification, but not [multi-factor authentication (MFA)](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication) or [session tasks](/docs/guides/configure/session-tasks).
+- **[Testing Tokens](/docs/guides/development/testing/overview#testing-tokens)**, which let your test browser through bot protection.
+
+To test Clerk's own sign-up and sign-in flows, such as entering a verification code, use a development instance with **Test mode** enabled instead. See [Test emails and phones](/docs/guides/development/testing/test-emails-and-phones).
+
+## Why you shouldn't enable Test mode in production
+
+Every development instance has **Test mode** enabled by default. You can enable it on a production instance, but this is highly discouraged. On a production instance, it works for anyone who can reach your app, not only your test suite:
+
+- If your instance offers sign-in with an email or SMS code, anyone can sign in as a user whose email address contains `+clerk_test`, or whose phone number is a [fictional test number](/docs/guides/development/testing/test-emails-and-phones#phone-numbers), by entering the code `424242`.
+- Anyone can sign up with a `+clerk_test` subaddress of your company's domain, such as `jane+clerk_test@example.com`, and verify it with `424242`. That gives them an account with a verified email address on that domain, without access to its inbox. If your app grants access based on a user's email domain, that's a way in.
+
+## Before you start
+
+- Set up `@clerk/testing` for [Cypress](/docs/guides/development/testing/cypress/overview) or [Playwright](/docs/guides/development/testing/playwright/overview), including the `clerkSetup()` call. For Cypress, also register the [custom commands](/docs/guides/development/testing/cypress/custom-commands) with `addClerkCommands()`. The examples in this guide need `@clerk/testing` 1.11.0 or later.
+- Run your tests against a deployment of your app on your production domain or one of its subdomains, such as `https://staging.yourdomain.com`. Production keys work only on your production domain, so your app can't load Clerk from `localhost` with them. There's a workaround for [using production keys in local development](/docs/guides/development/troubleshooting/using-production-keys-in-development), but it isn't officially supported. If you deploy to a subdomain:
+  - If [**Allowed subdomains**](/docs/guides/dashboard/dns-domains/subdomain-allowlist) is enabled, add the subdomain to the list.
+  - If your app sets [`authorizedParties`](/docs/reference/backend/authenticate-request#authenticaterequestoptions), add the subdomain's origin to it.
+- In the environment that runs your tests, set:
+  - `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to your production instance's [Publishable Key](!publishable-key) and [Secret Key](!secret-key).
+  - `E2E_CLERK_USER_EMAIL` to your test user's email address. The next step explains which address to choose.
+- Install `@clerk/backend`, which the examples in this guide use to manage test users:
+
+  <CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+    ```sh {{ filename: 'terminal' }}
+    npm i @clerk/backend --save-dev
+    ```
+
+    ```sh {{ filename: 'terminal' }}
+    yarn add -D @clerk/backend
+    ```
+
+    ```sh {{ filename: 'terminal' }}
+    pnpm add @clerk/backend -D
+    ```
+  </CodeBlockTabs>
+
+> [!WARNING]
+> Your production Secret Key gives full access to your production users. Store it as a secret in your continuous integration (CI) provider, expose it only to the jobs that run these tests, and never commit it or load it in browser code. For example, if you're using GitHub Actions, see [Using secrets in GitHub Actions](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions).
+
+<Steps>
+  ## Choose email addresses for your test users
+
+  Even when your tests never open an inbox, Clerk can send email to a test user. For example, it can send a new device sign-in notification when a test signs in from a fresh browser. Give each test user an address that won't bounce:
+
+  - **An address at `example.com`**, such as `e2e-checkout@example.com`. [RFC 2606](https://www.rfc-editor.org/rfc/rfc2606) reserves `example.com`, `example.net`, and `example.org` for documentation and testing, so they can't receive mail. Clerk doesn't send production email to these domains or their subdomains, so nothing bounces.
+  - **An address at a domain you control**, such as a subdomain you set aside for testing, if your tests need to read an email (for example, an invitation your app sends). Ensure the domain accepts mail for the address, for example, with a catch-all mailbox.
+
+  Don't use a made-up mailbox on a real domain, such as a random address at a public email provider, and don't use `+clerk_test` subaddresses of real domains. With **Test mode** disabled, Clerk treats them as ordinary addresses and sends them email, which bounces or reaches someone else's inbox.
+
+  ## Create your test users
+
+  Create test users with the [Backend API](/docs/reference/backend-api){{ target: '_blank' }} rather than through your sign-up form. Email addresses that you add with [`createUser()`](/docs/reference/backend/user/create-user) start out verified, so Clerk sends no verification email.
+
+  Keep a small, fixed set of test users and reuse them across runs, rather than creating new users on every run. The following example creates the test user only if it doesn't exist yet, and both sign-in examples later in this guide call `ensureTestUser()`. It sets [private metadata](/docs/guides/users/extending#private-metadata) on the user so your backend can tell test users apart from real ones, for example, in webhook handlers.
+
+  The example also refuses to use an existing user that doesn't have that metadata. Your tests sign in as whichever user has the address, so this check stops them from signing in as a real user if the address is ever wrong.
+
+  ```ts {{ filename: 'e2e/test-users.ts' }}
+  import { createClerkClient } from '@clerk/backend'
+
+  export async function ensureTestUser(emailAddress: string) {
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+
+    const { data } = await clerkClient.users.getUserList({ emailAddress: [emailAddress] })
+    if (data.length > 0) {
+      if (data[0].privateMetadata.e2eTestUser !== true) {
+        throw new Error(`${emailAddress} belongs to a user that isn't a test user`)
+      }
+      return data[0]
+    }
+
+    return clerkClient.users.createUser({
+      emailAddress: [emailAddress],
+      // The tests sign in with a sign-in token, so the user doesn't need a password.
+      // If password is the only sign-in method on your instance, pass a `password` instead.
+      skipPasswordRequirement: true,
+      privateMetadata: { e2eTestUser: true },
+    })
+  }
+  ```
+
+  If your instance requires other fields to sign up, such as a username or a phone number, pass them to `createUser()` as well. If several CI jobs can start before the test users exist, create the test users beforehand (for example, from a script) so two jobs don't create the same user.
+
+  ## Sign in your test users
+
+  Sign the test user in with a sign-in token rather than with a password or a verification code. A sign-in token completes the sign-in regardless of your instance's verification or [Device Trust](/docs/guides/protect/device-trust) settings, as long as the test user doesn't have MFA enabled. It doesn't complete session tasks, so see [Limitations](#limitations) if your instance requires MFA setup or an Organization. The `@clerk/testing` helpers also apply your Testing Token to Clerk's requests, so bot protection doesn't block the test browser.
+
+  <Tabs items={["Cypress", "Playwright"]}>
+    <Tab>
+      The [`cy.clerkSignIn()`](/docs/guides/development/testing/cypress/custom-commands) command accepts a sign-in token through the `ticket` strategy. Creating a sign-in token takes your Secret Key, so do it in a [Cypress task](https://docs.cypress.io/api/commands/task), which runs in Node.js rather than in the browser.
+
+      The following example registers a `createSignInToken` task in your Cypress config. The task gets the test user with the `ensureTestUser()` helper from the previous step, which creates it if needed, and returns a sign-in token that expires in five minutes.
+
+      ```ts {{ filename: 'cypress.config.ts' }}
+      import { createClerkClient } from '@clerk/backend'
+      import { clerkSetup } from '@clerk/testing/cypress'
+      import { defineConfig } from 'cypress'
+      import { ensureTestUser } from './e2e/test-users'
+
+      export default defineConfig({
+        e2e: {
+          async setupNodeEvents(on, config) {
+            on('task', {
+              async createSignInToken(emailAddress: string) {
+                const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+                const user = await ensureTestUser(emailAddress)
+
+                const signInToken = await clerkClient.signInTokens.createSignInToken({
+                  userId: user.id,
+                  expiresInSeconds: 300,
+                })
+                return signInToken.token
+              },
+            })
+
+            // clerkSetup() loads your .env files, so read the email address after it
+            const clerkConfig = await clerkSetup({ config })
+            clerkConfig.env.E2E_CLERK_USER_EMAIL = process.env.E2E_CLERK_USER_EMAIL
+
+            return clerkConfig
+          },
+          baseUrl: 'https://staging.yourdomain.com', // Your app, on your production domain
+        },
+      })
+      ```
+
+      The following example signs the test user in with the token, waits for Clerk to load the user, and then checks that a protected page loads. As with every `cy.clerkSignIn()` call, first visit an unprotected page that loads Clerk.
+
+      ```ts {{ filename: 'cypress/e2e/app.cy.ts' }}
+      it('signed-in user can open the dashboard', () => {
+        // Navigate to an unprotected page that loads Clerk
+        cy.visit('/')
+
+        cy.task<string>('createSignInToken', Cypress.env('E2E_CLERK_USER_EMAIL')).then((ticket) => {
+          cy.clerkSignIn({ strategy: 'ticket', ticket })
+        })
+        cy.window().its('Clerk.user').should('not.be.null')
+
+        // Ensure the user can access a protected page
+        cy.visit('/dashboard')
+        cy.contains('h1', 'Dashboard')
+
+        // Test your app's features here
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      Pass the test user's email address to [`clerk.signIn()`](/docs/guides/development/testing/playwright/test-helpers#clerk-signin) with the `emailAddress` parameter. The helper finds the user, creates a sign-in token with your Secret Key, and signs in with it.
+
+      The following example extends the global setup from [Reuse auth state across tests](/docs/guides/development/testing/playwright/test-authenticated-flows). It creates the test user if needed, signs in once, and saves the auth state for your other tests to reuse.
+
+      ```ts {{ filename: 'e2e/global.setup.ts' }}
+      import { clerk, clerkSetup } from '@clerk/testing/playwright'
+      import { test as setup } from '@playwright/test'
+      import path from 'path'
+      import { ensureTestUser } from './test-users'
+
+      // Setup must be run serially
+      setup.describe.configure({ mode: 'serial' })
+
+      const authFile = path.join(__dirname, '../playwright/.clerk/user.json')
+
+      setup('global setup', async ({}) => {
+        await clerkSetup()
+        await ensureTestUser(process.env.E2E_CLERK_USER_EMAIL!)
+      })
+
+      setup('authenticate and save state to storage', async ({ page }) => {
+        // Navigate to an unprotected page that loads Clerk
+        await page.goto('/')
+
+        await clerk.signIn({
+          page,
+          emailAddress: process.env.E2E_CLERK_USER_EMAIL!,
+        })
+
+        // Ensure the user can access a protected page
+        await page.goto('/dashboard')
+        await page.waitForSelector("h1:has-text('Dashboard')")
+
+        await page.context().storageState({ path: authFile })
+      })
+      ```
+
+      To load the saved auth state in your tests, see [Load the stored auth state in your tests](/docs/guides/development/testing/playwright/test-authenticated-flows#load-the-stored-auth-state-in-your-tests).
+    </Tab>
+  </Tabs>
+
+  ## Clean up test users
+
+  If your tests create extra users, for example, to test what a brand-new account sees, delete them when the run finishes with [`deleteUser()`](/docs/reference/backend/user/delete-user). Give these users a recognizable address, such as `e2e-run-1234-new@example.com`, so a cleanup script can find any that a failed run left behind. Have the script check for the `e2eTestUser` private metadata before it deletes a user, so it never deletes a real one.
+</Steps>
+
+## Limitations
+
+- **The helpers' code strategies need Test mode.** The `email_code` and `phone_code` strategies of the sign-in helpers require `+clerk_test` email addresses or fictional phone numbers and the `424242` code, which work only in **Test mode**.
+- **Password sign-in can be interrupted by Device Trust.** The `password` strategy signs in from a fresh browser on every run. If [Device Trust](/docs/guides/protect/device-trust) is enabled, Clerk asks for a second factor on a new device, which the helpers can't complete.
+- **Sign-in tokens don't satisfy MFA.** If a test user has MFA enabled, a sign-in token completes only the first factor, and the helpers can't complete the second. Don't enable MFA on test users.
+- **Sign-in tokens don't complete session tasks.** If your instance requires a [session task](/docs/guides/configure/session-tasks), such as setting up MFA or choosing an Organization, the test user's session stays pending after sign-in, and by default your app treats a pending session as signed out.
+
+For more information, feedback, or issues, visit the [`@clerk/testing`](https://github.com/clerk/javascript/tree/main/packages/testing) package.

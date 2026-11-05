@@ -15,30 +15,15 @@ description: Learn how to connect MCP-compatible clients, like Cursor, to your M
 
 This guide demonstrates how to connect an MCP-compatible client (**LLM app**), like Cursor, to an MCP server. It assumes that you have already built an MCP server in your application with Clerk by following the guide on [building an MCP server](/docs/guides/ai/mcp/build-mcp-server).
 
-## Connect your client LLM to your MCP server
+This guide connects clients to your own endpoint. To let a coding agent manage your Clerk account instead, use [Clerk's MCP server](/docs/guides/ai/mcp/clerk-mcp-server).
 
-To complete the integration, you'll need to connect an MCP-compatible client to your MCP server. Each client has a different way of connecting to MCP servers, and given that the MCP spec is still in development, you may need to refer to the client's documentation for the most up-to-date instructions.
+## Connect an MCP client to your server
 
-<Include src="_partials/mcp-cimd-registration-callout" />
-
-<If is="llm">
-  **For AI agents:** Prefer CIMD over Dynamic Client Registration. Check the current settings with `npx clerk@latest api instance/oauth_application_settings`, then advertise CIMD support and restrict admission to pre-registered and previously connected clients in a single request with `npx clerk@latest api instance/oauth_application_settings -X PATCH -d '{"client_id_metadata_documents_advertised": true, "client_id_metadata_documents_only_allow_pre_registered_clients": true}'`. This payload publishes CIMD support and requires pre-registration for new clients. Previously connected clients remain allowed unless already blocked. **Client admission** settings in the Clerk Dashboard let you further customize CIMD client behavior. Pre-registering a client is only available in the Clerk Dashboard. Enable Dynamic Client Registration and require PKCE with `-d '{"dynamic_oauth_client_registration": true, "pkce_required": true}'` only when the client doesn't support CIMD. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
-</If>
-
-Some clients may omit `scope` when they connect. You can configure the default scopes Clerk applies in either of these ways:
-
-- In the Clerk Dashboard, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page and select the **Settings** tab. Under **Client onboarding**, configure **Default scopes for dynamic clients**. This setting is available when **Publish CIMD support** or **Publish DCR support** is enabled.
-- Use the Backend API through the CLI:
-
-  ```sh {{ filename: 'terminal' }}
-  npx clerk@latest api instance/oauth_application_settings -X PATCH -d '{"default_scopes":["openid","profile","email"]}'
-  ```
-
-See [Configure default scopes](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#configure-default-scopes) for details.
+Use the server URL you configured in the [build and authenticate guide](/docs/guides/ai/mcp/build-mcp-server). Use `http://localhost:3000/mcp` for a local server on the same machine, or replace it with your deployed HTTPS endpoint. Select your client, then complete sign-in and consent.
 
 ### Development vs. Production Setup
 
-- **Development**: Start your MCP server by running `npm run dev` and use `http://localhost:3000/mcp` as your server URL.
+- **Development**: In the Clerk Dashboard, add `http://localhost:3000/mcp` to a development instance on the [**MCP servers**](https://dashboard.clerk.com/~/agents/mcp-servers) page. Then start your server with the command in the build guide, and connect a client on the same machine.
 - **Production**: Use your deployed URL (e.g., `https://your-domain.com/mcp`) for security and proper functionality.
   > [!WARNING]
   > Always use HTTPS URLs in production environments. HTTP connections are not secure and may not work with all MCP clients.
@@ -47,22 +32,21 @@ See [Configure default scopes](/docs/guides/configure/auth-strategies/oauth/how-
   <Tab>
     ### Connecting Cursor to your MCP server
 
-    1. Navigate to **Cursor Settings**. To find this, open the **Command Palette** (`Cmd/Ctrl + Shift + P`) and search for **Cursor Settings**, or select the gear icon in the top right corner of the app.
-    1. In the sidenav, select **Tools & MCP**. If you don't see this, you may need to update Cursor to the latest version.
-    1. Select the **New MCP Server** option, which will open up a new tab with the MCP configuration JSON file.
+    1. Open **Customize** → **MCPs**, then select **New MCP Server**. You can also edit your project's `.cursor/mcp.json`.
+
     1. Add the following configuration to the JSON file:
 
-    ```json
-    { "mcpServers": { "clerk-mcp-server": { "url": "http://localhost:3000/mcp" } } }
-    ```
+       ```json
+       { "mcpServers": { "my-mcp-server": { "url": "http://localhost:3000/mcp" } } }
+       ```
 
-    > [!IMPORTANT]
-    > Replace `http://localhost:3000/mcp` with your production URL if you've deployed your MCP server.
+    1. When Cursor prompts you, select **Authenticate** for the server. Cursor opens a Clerk OAuth consent screen where you authorize it to access your user data.
 
-    5. Select the **Needs login** option when it loads. You'll be redirected to a Clerk OAuth consent screen to authorize Cursor to access your user data.
-    5. Select **Allow**. Once authorized, your tool(s) should be listed as enabled and you should see a green active status.
-    5. Start a new chat in [**Agent Mode**](https://docs.cursor.com/chat/agent) and prompt it to fetch your Clerk user data (e.g., "What is my Clerk user data?").
-    5. Select the **Run tool** option once it becomes available.
+    1. Select **Allow**. Cursor lists your tools as connected.
+
+    1. Start a new chat in [**Agent Mode**](https://docs.cursor.com/chat/agent) and prompt it to fetch your Clerk user data (e.g., "What is my Clerk user data?").
+
+    1. Select the **Run tool** option once it becomes available.
 
     You've now successfully connected **Cursor** to your MCP server and authenticated it using Clerk.
   </Tab>
@@ -70,19 +54,24 @@ See [Configure default scopes](/docs/guides/configure/auth-strategies/oauth/how-
   <Tab>
     ### Connecting VSCode to your MCP server
 
-    1. Navigate to **Settings**. To find this, use the app menu to select **Settings** or press `Cmd/Ctrl + ,`.
-    1. In the settings searchbar, search for "MCP" and select the **Edit in settings.json** option.
-    1. Add the following configuration to the JSON file:
+    1. Open the Command Palette (`Cmd/Ctrl + Shift + P`) and run **MCP: Add Server**.
+
+    1. Select **HTTP**, enter your configured MCP endpoint, give the server a name, and choose a configuration destination.
+
+    1. Complete the trust and OAuth sign-in prompts. Alternatively, create `.vscode/mcp.json` in your project with this configuration:
+
        ```json
        {
-         "mcp": { "inputs": [], "servers": { "clerk-mcp-server": { "url": "http://localhost:3000/mcp" } } }
+         "servers": {
+           "my-mcp-server": { "type": "http", "url": "http://localhost:3000/mcp" }
+         }
        }
        ```
-       > [!IMPORTANT]
-       > Replace `http://localhost:3000/mcp` with your production URL if you've deployed your MCP server.
-    1. Select **Start** above the server URL to start the MCP server. This will open up a modal asking you to open a browser to authenticate.
-    1. Select **Allow**. Once authorized, your tool(s) should be listed as enabled and you should see **✔️ Running** above the server URL.
+
+    1. Use **MCP: List Servers** to start the server and complete sign-in if it hasn't started yet.
+
     1. Start a new Copilot chat (`Cmd/Ctrl + Shift + I`) and prompt it to fetch your Clerk user data (e.g., "What is my Clerk user data?").
+
     1. Select the **Run tool** option once it becomes available.
 
     You've now successfully connected **VSCode** to your MCP server and authenticated it using Clerk.
@@ -93,10 +82,8 @@ See [Configure default scopes](/docs/guides/configure/auth-strategies/oauth/how-
 
     1. Run the following command from your command line:
        ```bash
-       claude mcp add --transport http clerk-mcp-server http://localhost:3000/mcp
+       claude mcp add --transport http my-mcp-server http://localhost:3000/mcp
        ```
-       > [!IMPORTANT]
-       > Replace `http://localhost:3000/mcp` with your production URL if you've deployed your MCP server.
     1. Run `claude` to enter the Claude Code interface.
     1. Execute the `/mcp` command to see available tools. From there, you can go through the authentication process to connect your MCP server.
     1. Once connected, you can prompt Claude Code to execute the tool with something like "What is my Clerk user data?".
@@ -107,42 +94,14 @@ See [Configure default scopes](/docs/guides/configure/auth-strategies/oauth/how-
   <Tab>
     ### Connecting Claude Desktop to your MCP server
 
-    Claude Desktop offers two ways to connect to MCP servers:
+    Use a remote connector with Claude's published Client ID Metadata Documents (CIMD) identity:
 
-    - Using the **Search and Tools** menu in the main UI.
-    - Using the **Developer Settings**.
+    1. Open **Customize** → **Connectors**, select **+ Add**, then **Add custom connector**.
+    1. Enter a name and your public HTTPS MCP URL, then select **Continue**.
+    1. Select **Sign in now** and **Use Claude's published identity** for a CIMD-enabled Clerk instance, then finish adding the connector and sign in.
+    1. Enable the connector from **+** → **Connectors** in your chat, then ask for your Clerk user profile.
 
-    <Tabs items={["Using the Search and Tools menu", "Using the Developer Settings"]}>
-      <Tab>
-        1. In the main chat UI, navigate to the **Search and Tools** menu (icon with two horizontal lines and dots), then select **Manage Connectors**.
-        1. Scroll to the bottom and select **Add Custom Connector**.
-        1. Add your MCP server name and URL, then select **Add**.
-        1. Once added, your server will appear in the connectors list. Select the **Connect** option to establish the connection.
-        1. Once connected, you can open a new chat and prompt it to fetch your Clerk user data (e.g., "What is my Clerk user data?").
-      </Tab>
-
-      <Tab>
-        1. Navigate to **Settings**. To find this, use the app menu to select **Settings** or press `Cmd/Ctrl + ,`.
-        1. In the settings sidebar, select **Developer**, then **Edit config**. Open the revealed file in your editor of choice.
-        1. Add the following configuration to the JSON file:
-           ```json
-           {
-             "mcpServers": {
-               "clerk-mcp-server": {
-                 "command": "npx",
-                 "args": ["mcp-remote", "http://localhost:3000/mcp", "--allow-http"]
-               }
-             }
-           }
-           ```
-           > [!IMPORTANT]
-           >
-           > - Replace `http://localhost:3000/mcp` with your production URL and remove `--allow-http` if you've deployed your MCP server.
-           > - [mcp-remote](https://github.com/geelen/mcp-remote) is required since this connection mode does not support remote MCP servers with authentication natively.
-        1. Restart Claude Desktop. It should now prompt you to authenticate with your Clerk account.
-        1. Once authenticated, you can open a new chat and prompt it to fetch your Clerk user data (e.g., "What is my Clerk user data?").
-      </Tab>
-    </Tabs>
+    On Team and Enterprise plans, an authorized owner adds the connector from **Organization settings** → **Connectors** instead of steps 1–3. Each member then opens **Customize** → **Connectors**, selects **Connect** on the connector to sign in, and enables it as in step 4. See [Claude's current connector instructions](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) for plan-specific permissions. Remote connectors connect from Claude's servers and can't reach localhost. Use your deployed HTTPS endpoint for this connection.
 
     You've now successfully connected **Claude Desktop** to your MCP server and authenticated it using Clerk.
   </Tab>
@@ -150,25 +109,21 @@ See [Configure default scopes](/docs/guides/configure/auth-strategies/oauth/how-
   <Tab>
     ### Connecting Windsurf to your MCP server
 
-    1. Navigate to **Settings**. To find this, use the app menu to select **Settings** or press `Cmd/Ctrl + ,`.
-    1. In the settings searchbar, search for "MCP" and select **Manage plugins** under the **Plugins (MCP Servers)** section. Select **View raw config** to open the config file.
-    1. Add the following configuration to the JSON file:
+    These steps configure the legacy Cascade agent. The Devin Local agent, the default for new tabs, reads MCP servers from the [Devin CLI configuration](https://docs.devin.ai/cli/extensibility/mcp/configuration) instead.
+
+    1. In the Cascade panel, open the **...** (Actions) menu and select **Open MCP config file** in the MCPs section. On current releases, the file is `~/.config/devin/mcp_config.json` (or `$XDG_CONFIG_HOME/devin/mcp_config.json`) on macOS and Linux, and `%APPDATA%\devin\mcp_config.json` on Windows. Add your MCP server:
+
        ```json
        {
          "mcpServers": {
-           "clerk-mcp-server": {
-             "command": "npx",
-             "args": ["mcp-remote", "http://localhost:3000/mcp", "--allow-http"]
-           }
+           "my-mcp-server": { "serverUrl": "http://localhost:3000/mcp" }
          }
        }
        ```
-       > [!IMPORTANT]
-       >
-       > - Replace `http://localhost:3000/mcp` with your production URL and remove `--allow-http` if you've deployed your MCP server.
-       > - [mcp-remote](https://github.com/geelen/mcp-remote) is required since Windsurf does not support remote MCP servers with authentication natively.
-    1. Save the file. It should now prompt you to authenticate with your Clerk account.
-    1. Once authenticated, you can open a new chat and prompt it to fetch your Clerk user data (e.g., "What is my Clerk user data?").
+
+    1. Save the file, turn on the server's toggle in the MCPs section, and follow the OAuth sign-in prompt.
+
+    1. Ask the client to call `get_clerk_user_data` and inspect the result. See the [current client documentation](https://docs.devin.ai/desktop/cascade/mcp) for configuration controls.
 
     You've now successfully connected **Windsurf** to your MCP server and authenticated it using Clerk.
   </Tab>
@@ -178,23 +133,17 @@ See [Configure default scopes](/docs/guides/configure/auth-strategies/oauth/how-
 
 When you successfully connect and authenticate your MCP client, prompting for your Clerk user data should return information similar to:
 
-```yaml
-User ID: <user-id>
-Username: <username>
-First Name: <first-name>
-Last Name: <last-name>
-Primary Email: <primary-email>
-Secondary Email: <secondary-email>
-2FA Enabled: No
-Account Banned: No
-Account Locked: No
-Profile Image: <profile-image>
-External Accounts: <external-account>
-Organization Creation Enabled: Yes
-Delete Self Enabled: Yes
+```json
+{
+  "id": "user_example",
+  "firstName": "Alex",
+  "lastName": "Example",
+  "imageUrl": "https://example.com/avatar.png",
+  "email": "alex@example.com"
+}
 ```
 
-The exact response will vary based on your specific Clerk user profile and the prompt you use with your LLM client.
+The example server from the build guide requires `profile` and `email` and returns only profile fields and the primary email address. It excludes private metadata and other Backend API user fields. Your client may format the response differently.
 
 ## Not Currently Supported
 
@@ -206,7 +155,8 @@ The MCP protocol and spec are still in development, and as a result, implementat
 
 If you encounter issues connecting your MCP client:
 
-1. **Authentication fails**: On the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard, check the client's status and metadata on the **Applications** tab. Refresh metadata if the fetch failed. If the client doesn't support [CIMD](!client-id-metadata-document), ensure **Publish DCR support** is enabled under **Client onboarding** on the **Settings** tab.
+1. **Authentication fails**: On the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page in the Clerk Dashboard, check the client's status and metadata on the **Applications** tab. Refresh metadata if the fetch failed. Use a [CIMD](!client-id-metadata-document)-compatible client and review [client admission](/docs/guides/configure/auth-strategies/oauth/client-id-metadata-documents) if Clerk blocks the connection. If the client only supports Dynamic Client Registration, enable **Publish DCR support** under **Client onboarding** on the **Settings** tab.
+1. **Public discovery fails or is stale**: For a hosted URL, review the saved findings in the [setup verification steps](/docs/guides/ai/mcp/build-mcp-server#verify-authentication-and-authorization). Correct the metadata, endpoint reachability, or issuer configuration, and deploy the fix. Then select **Re-test connection** on the server's page in the Clerk Dashboard, or call `check_mcp_server` with `force_recheck: true`. A check failure doesn't undo the saved URL.
 1. **Connection refused**: Verify your MCP server is running and accessible at the specified URL.
 1. **HTTPS errors**: Make sure you're using HTTPS URLs in production environments.
 1. **Tool not available**: Confirm your client displays the tool in the list of available tools, and that the tool has been properly implemented.

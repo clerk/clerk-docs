@@ -17,13 +17,10 @@ import { readMarkdownFile } from './io'
 import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
 import { getPartialsCache, markDocumentDirty, type Store } from './store'
 import { extractComponentPropValueFromNode } from './utils/extractComponentPropValueFromNode'
-import { removeMdxSuffix } from './utils/removeMdxSuffix'
+import { resolvePartialPath } from './utils/resolvePartialPath'
 import { z } from 'zod'
 
 const stringSchema = z.string()
-
-// Matches backslashes so Windows-style path separators can be normalized to '/'.
-const backslashRegex = /\\/g
 
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   // Read all partials from the docs directory, including:
@@ -121,19 +118,8 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
 
         if (!partialSrc) return
 
-        // Resolve the nested partial path
-        let nestedPath: string
-
-        if (partialSrc.startsWith('./') || partialSrc.startsWith('../')) {
-          const parentDir = path.dirname(filePath)
-          nestedPath = path
-            .normalize(path.join(parentDir, `${removeMdxSuffix(partialSrc)}.mdx`))
-            .replace(backslashRegex, '/')
-        } else if (partialSrc.startsWith('_partials/')) {
-          nestedPath = `${removeMdxSuffix(partialSrc)}.mdx`
-        } else {
-          return
-        }
+        const nestedPath = resolvePartialPath(filePath, partialSrc)
+        if (nestedPath === undefined) return
 
         // Check for circular dependency
         if (nestedPath === filePath) {

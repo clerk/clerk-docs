@@ -110,6 +110,7 @@ Build an MCP server that lets clients access your application's data with Clerk 
 
   ```ts {{ filename: 'lib/mcp-auth.ts', collapsible: true }}
   import { createClerkClient } from '@clerk/backend'
+  import { verifyClerkToken } from '@clerk/mcp-tools/server'
 
   export const MCP_RESOURCE_URL = 'http://localhost:3000/mcp'
   export const REQUIRED_SCOPES = ['profile', 'email']
@@ -133,15 +134,9 @@ Build an MCP server that lets clients access your application's data with Clerk 
       })
       if (!requestState.isAuthenticated) return undefined
 
-      const { clientId, scopes, userId } = requestState.toAuth()
-      return {
-        token: requestState.token,
-        clientId,
-        scopes,
-        // MCP SDK 2 sends this as resource_metadata in its WWW-Authenticate scope challenges
-        resourceMetadataUrl: RESOURCE_METADATA_URL,
-        extra: { userId },
-      }
+      const authInfo = verifyClerkToken(requestState.toAuth(), requestState.token)
+      // MCP SDK 2 sends this as resource_metadata in its WWW-Authenticate scope challenges
+      return authInfo && { ...authInfo, resourceMetadataUrl: RESOURCE_METADATA_URL }
     } catch (error) {
       console.error('MCP access token verification failed', error)
       return undefined
@@ -161,6 +156,8 @@ Build an MCP server that lets clients access your application's data with Clerk 
     }
   }
   ```
+
+  `verifyClerkToken()` returns the token's `clientId`, `scopes`, and the user ID in `extra.userId`. It also marks the result as verified by Clerk, which the [`create_browser_session` tool](/docs/guides/ai/mcp/browser-sessions) requires.
 
   Return only the fields the granted scopes allow. Add your application's permission checks before accessing other protected data. To ask for more scopes only when a tool needs them, see [Request more scopes with step-up authorization](/docs/guides/ai/mcp/step-up-scopes).
 

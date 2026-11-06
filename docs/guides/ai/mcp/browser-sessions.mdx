@@ -1,0 +1,229 @@
+---
+title: Sign agents in to your app with a one-time link
+description: Let AI agents that use a browser open your app signed in as the user, with a one-time link from your MCP server.
+sdk: nextjs, expressjs
+tag: beta
+---
+
+> [!BETA]
+
+When an agent uses a browser for your user and reaches your app's sign-in page, it usually stops there, or asks the user for a password. A `create_browser_session` tool on your MCP server lets the agent get a one-time link instead. The link opens your app already signed in as the user that the MCP access token belongs to.
+
+You add the tool with [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools). It creates the link with [Agent Tasks](/docs/guides/development/testing/agent-tasks) and takes the user from the verified access token, never from the tool's input. The agent can set only the path in your app and a short task description.
+
+This guide adds the tool to the MCP server from [Build an MCP server](/docs/guides/ai/mcp/build-mcp-server). Follow that guide first. The tool relies on its `verifyMcpToken()`, which checks the token's audience and returns the result of `verifyClerkToken()`. Without the audience check, any OAuth access token your instance issued, to any OAuth application, could create a link.
+
+<Steps>
+  ## Install dependencies
+
+  <If sdk="nextjs">
+    The tool requires `@clerk/mcp-tools` 0.9.0 or later. [Step-up authorization](/docs/guides/ai/mcp/step-up-scopes) requires `@modelcontextprotocol/server` 2.1 or later.
+
+    ```npm
+    npm install @clerk/mcp-tools@latest @modelcontextprotocol/server@latest
+    ```
+  </If>
+
+  <If sdk="expressjs">
+    The tool requires `@clerk/mcp-tools` 0.9.0 or later. The Express server runs MCP SDK 1.x, which has no [step-up authorization](/docs/guides/ai/mcp/step-up-scopes). When the access token lacks the tool's scope, the tool returns an error that tells the agent to ask the user to reconnect your MCP server and approve the scope.
+
+    ```npm
+    npm install @clerk/mcp-tools@latest
+    ```
+  </If>
+
+  ## Create a scope for the tool
+
+  The link signs a browser in to your app as the user, so require a scope that the user approves for each MCP client. Use a scope for this tool only, not one that nearly every client gets, such as `profile` or `email`. With a common scope, every MCP client the user connects can open your app as them.
+
+  1. In the Clerk Dashboard, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page.
+  1. Select the **Scopes** tab and create a [custom scope](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#custom-scopes) named `browser_session`.
+  1. Assign the scope to the OAuth applications that may use the tool.
+  1. If MCP clients register themselves through [Client ID Metadata Documents (CIMD)](/docs/guides/configure/auth-strategies/oauth/client-id-metadata-documents) or dynamic client registration, select the **Settings** tab and add the scope to **Allowed scopes for dynamic clients**. The list limits what those clients can request, so also include every default scope and any other scope they need.
+
+  Don't add the scope to the default scopes, so a client gets it only after the user approves it.
+
+  In `lib/mcp-auth.ts`, export the scope next to `REQUIRED_SCOPES`:
+
+  ```ts {{ filename: 'lib/mcp-auth.ts' }}
+  export const BROWSER_SESSION_SCOPES = ['browser_session']
+  ```
+
+  Keep it out of `REQUIRED_SCOPES`. Those scopes are required for every request to your MCP server, while `BROWSER_SESSION_SCOPES` is required only by this tool.
+
+  ## Advertise the scope
+
+  Add the scope to `scopes_supported` in your protected resource metadata. Some MCP clients request this list when they first connect, and for clients without step-up authorization, it's the only way to ask for the scope. If that list includes a scope a client can't request, Clerk rejects the whole request with `invalid_scope`, and the client can't connect to your MCP server. Complete the previous step first.
+
+  <If sdk="nextjs">
+    ```ts {{ filename: 'app/.well-known/oauth-protected-resource/mcp/route.ts', mark: [5, 9] }}
+    import {
+      metadataCorsOptionsRequestHandler,
+      protectedResourceHandlerClerk,
+    } from '@clerk/mcp-tools/next'
+    import { BROWSER_SESSION_SCOPES, MCP_RESOURCE_URL, REQUIRED_SCOPES } from '../../../../lib/mcp-auth'
+
+    const handler = protectedResourceHandlerClerk({
+      resource: MCP_RESOURCE_URL,
+      scopes_supported: [...REQUIRED_SCOPES, ...BROWSER_SESSION_SCOPES],
+    })
+    const corsHandler = metadataCorsOptionsRequestHandler()
+
+    export { handler as GET, corsHandler as OPTIONS }
+    ```
+  </If>
+
+  <If sdk="expressjs">
+    ```ts {{ filename: 'index.ts', mark: [2, 16] }}
+    import {
+      BROWSER_SESSION_SCOPES,
+      getUserProfile,
+      MCP_RESOURCE_URL,
+      REQUIRED_SCOPES,
+      RESOURCE_METADATA_URL,
+      verifyMcpToken,
+    } from './lib/mcp-auth.ts'
+
+    // The rest of your code...
+
+    app.get(
+      '/.well-known/oauth-protected-resource/mcp',
+      protectedResourceHandlerClerk({
+        resource: MCP_RESOURCE_URL,
+        scopes_supported: [...REQUIRED_SCOPES, ...BROWSER_SESSION_SCOPES],
+      }),
+    )
+    ```
+  </If>
+
+  ## Register the tool
+
+  Create the tool with `createBrowserSessionTool()` and pass the result to `server.registerTool()`. Set `destinationUrl` to the page of your app the link opens. It must be on a domain of the same Clerk instance as your MCP server. Keep the localhost value during local development and replace `APP_URL` with your HTTPS URL when you deploy.
+
+  <If sdk="nextjs">
+    ```ts {{ filename: 'app/[transport]/route.ts', mark: [[2, 5], 7, [14, 21], 25, 29] }}
+    import { createMcpHandler, withMcpAuth } from 'mcp-handler'
+    import {
+      browserSessionInstructions,
+      createBrowserSessionTool,
+    } from '@clerk/mcp-tools/create-browser-session'
+    import {
+      BROWSER_SESSION_SCOPES,
+      getUserProfile,
+      MCP_RESOURCE_URL,
+      REQUIRED_SCOPES,
+      verifyMcpToken,
+    } from '../../lib/mcp-auth'
+
+    const APP_URL = 'http://localhost:3000/'
+
+    // Created once, so a bad configuration fails at startup instead of on every request
+    const browserSessionTool = createBrowserSessionTool({
+      secretKey: process.env.CLERK_SECRET_KEY!,
+      destinationUrl: APP_URL,
+      requiredScopes: BROWSER_SESSION_SCOPES,
+    })
+
+    const handler = createMcpHandler(
+      (server) => {
+        server.registerTool(...browserSessionTool)
+
+        // Your other tools...
+      },
+      { instructions: browserSessionInstructions(APP_URL) },
+    )
+
+    const authHandler = withMcpAuth(handler, (request) => verifyMcpToken(request), {
+      required: true,
+      requiredScopes: REQUIRED_SCOPES,
+      resourceUrl: new URL(MCP_RESOURCE_URL).origin,
+      resourceMetadataPath: '/.well-known/oauth-protected-resource/mcp',
+    })
+
+    export { authHandler as GET, authHandler as POST }
+    ```
+  </If>
+
+  <If sdk="expressjs">
+    ```ts {{ filename: 'index.ts', mark: [[6, 9], 12, [20, 27], 32, 34] }}
+    import {
+      authServerMetadataHandlerClerk,
+      protectedResourceHandlerClerk,
+      streamableHttpHandler,
+    } from '@clerk/mcp-tools/express'
+    import {
+      browserSessionInstructions,
+      createBrowserSessionTool,
+    } from '@clerk/mcp-tools/create-browser-session'
+    import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+    import {
+      BROWSER_SESSION_SCOPES,
+      getUserProfile,
+      MCP_RESOURCE_URL,
+      REQUIRED_SCOPES,
+      RESOURCE_METADATA_URL,
+      verifyMcpToken,
+    } from './lib/mcp-auth.ts'
+
+    const APP_URL = 'http://localhost:3000/'
+
+    // Created once, so a bad configuration fails at startup instead of on every request
+    const browserSessionTool = createBrowserSessionTool({
+      secretKey: process.env.CLERK_SECRET_KEY!,
+      destinationUrl: APP_URL,
+      requiredScopes: BROWSER_SESSION_SCOPES,
+    })
+
+    function createServer() {
+      const server = new McpServer(
+        { name: 'profile-server', version: '1.0.0' },
+        { instructions: browserSessionInstructions(APP_URL) },
+      )
+      server.registerTool(...browserSessionTool)
+
+      // Your other tools...
+
+      return server
+    }
+
+    // The rest of your code...
+    ```
+
+    `createServer()` runs for each request, so create the tool outside it.
+  </If>
+
+  `browserSessionInstructions()` tells agents about the tool in your server's instructions. Some MCP clients show agents only the server instructions until the agent searches for a tool, so without them an agent may open your app and stop at the sign-in page.
+
+  ## Try it
+
+  Start your app and [connect an MCP client](/docs/guides/ai/mcp/connect-mcp-client) that can use a browser. Ensure the agent's browser profile isn't signed in to your app. If Clerk detects another session in that browser, it refuses the link, and the link stays valid.
+
+  Ask the agent to open your app. It should call `create_browser_session`, either first or when it reaches the sign-in page, and open the link it gets back. If your MCP client asks, approve the `browser_session` scope.
+</Steps>
+
+## What the session can do
+
+By default, the link starts a restricted session. The session can read data and refresh its own session token. Clerk's Frontend API refuses every other write from it, including:
+
+- Session touch requests, which update the session's last active time
+- Sign-in, sign-up, and sign-out
+- A switch to another session or Organization
+- Changes to the user's own profile and Organizations
+- Reverification, and OAuth consent and approval
+
+The agent controls the browser, so these limits keep it from approving its own OAuth grant or changing the user's credentials.
+
+Clerk also refuses JWT template and Firebase tokens, so `getToken({ template })` fails in a restricted session.
+
+Your app's backend sees an ordinary signed-in session, and Clerk doesn't limit what your own API lets it do. To treat agent sessions differently in your backend, check for the `agt` claim in the session's `sessionClaims`.
+
+If Clerk doesn't confirm the restriction, the tool tries to revoke the link, returns no link, and fails with the `restricted_not_applied` error code.
+
+To start an ordinary session instead, pass `restricted: false` to `createBrowserSessionTool()`.
+
+## Security and limits
+
+- The link is a credential: anyone who has it before it's used or expires can sign in as the user. The tool never includes it in errors or logs, but the tool result contains it so that the agent can open it. Don't log tool results, and treat MCP client and gateway logs of tool results as credentials.
+- Each link works once and expires after 1 hour. The session it starts lasts up to 30 minutes by default. Set `sessionMaxDurationInSeconds` to change that.
+- The agent can pass a `path`, such as `/settings`, with an optional query and hash. It replaces the path of `destinationUrl`, and the tool refuses any path that would leave your app.
+- The session starts in the user's last active Organization if they're still a member, and otherwise in their personal workspace. A restricted session can't start in the personal workspace when your instance has **Membership required** turned on. In that case, the tool fails with the `organization_rejected` error code. A restricted session can't switch to another Organization.

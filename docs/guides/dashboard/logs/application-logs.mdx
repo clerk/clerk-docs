@@ -7,6 +7,38 @@ The [**Application Logs**](https://dashboard.clerk.com/~/application-logs) page 
 
 To learn how to filter entries, inspect event details, and understand retention, see the [Logs overview](/docs/guides/dashboard/logs/overview).
 
+## Log groups
+
+Application Logs collect the events of each sign-in and sign-up into a single **log group**. A group shows the type of flow, how many events it recorded, and, once the flow concludes, whether it **completed** or **failed**. A flow that hasn't concluded has no status.
+
+In the Clerk Dashboard, the logs page opens on the **Group** view, where each group is one row that expands to its events, oldest first. Use the **Group | List** switch next to the refresh button to show one row per event instead. The Group view adds two filters:
+
+- **Group**: Show only sign-ins or only sign-ups.
+- **Status**: Show only flows that completed or failed.
+
+The other filters keep the groups that have at least one matching event, and the row shows how many of its events matched. **Date range** is the exception: it selects groups by when they started. When a group has more events than its row shows, select **Load more**.
+
+In the Backend API, `GET /v1/logs` returns the grouped view by default (`view=grouped`). Events outside any group appear next to the groups, and `object` tells them apart. Each group has its `group_type`, `status`, `event_count`, its first `events`, its `first_event`, and a `subject`. Filter groups with `group_type` and `status`, and load more of a group's events with `GET /v1/logs/groups/{group_id}/events`. That request takes the group's `started_at`, and its `events_cursor` as `starting_after` for the first page; for later pages, pass the `starting_after` cursor the previous response returned.
+
+The grouped view only pages forward. It rejects `ending_before`, takes only cursors from a grouped page, and accepts a `limit` of at most 100. Pass `view=flat` to get one item per event and the flat list's pagination, which takes a `limit` of up to 500. You need it if your code pages with `ending_before`, reuses a cursor from the flat list, or asks for more than 100 items.
+
+Each event in a group carries the group's ID in `group_id`, so you can follow a flow from start to finish even when its events have different subjects.
+
+## Event subjects
+
+The **subject** of an event is the ID of the user, Organization, or instance the event is about:
+
+- An event about a user, such as a sign-in once the account is known, or a change to the user's email address, phone number, or password, uses the user's ID.
+- An event about an Organization, such as a change to one of its memberships, invitations, or domains, uses the Organization's ID.
+- An event that affects several resources uses their closest common parent, and an event with side effects uses the resource it mainly changed.
+- The instance ID is used only when nothing more specific applies, such as a sign-up before its user exists or a sign-in for an identifier that doesn't belong to any user.
+
+A sign-in is about the user once its identifier matches an account, so its events use that user's ID, even when the sign-in fails. A sign-up uses the instance ID until it completes, and the new user's ID on `sign_up.completed`. Use the log group, not the subject, to follow a single sign-in or sign-up.
+
+The **actor** is whoever triggered the event: a user, a Dashboard user, a [Secret Key](!secret-key), an API key, an integration, or Clerk itself. To find every event involving a user, whether they were the actor or the subject, filter by **User ID**.
+
+Older events keep the subject they were recorded with, so filtering by subject can miss them.
+
 ## Access Application Logs with the Backend API
 
 You can also access Application Logs through the [Backend API](/docs/reference/backend-api/tag/logs){{ target: '_blank' }} using the `GET /v1/logs` endpoint. Use it to investigate specific events and debug issues, whether you call the endpoint directly or through an AI agent.

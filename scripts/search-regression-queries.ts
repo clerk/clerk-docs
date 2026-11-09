@@ -187,14 +187,14 @@ export const REGRESSION_CASES: RegressionCase[] = [
   {
     query: 'multi-tenant',
     boost: 'nextjs',
-    urls: ['/docs/guides/how-clerk-works/multi-tenant-architecture'],
+    urls: ['/docs/guides/organizations/multi-tenant-architecture'],
     topN: 1,
     source: 'clerk/clerk#2979',
   },
   {
     query: 'multi-tenancy',
     boost: 'nextjs',
-    urls: ['/docs/guides/how-clerk-works/multi-tenant-architecture'],
+    urls: ['/docs/guides/organizations/multi-tenant-architecture'],
     topN: 1,
     source: 'clerk/clerk#2979',
   },

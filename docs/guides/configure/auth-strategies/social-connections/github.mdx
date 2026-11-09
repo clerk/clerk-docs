@@ -28,6 +28,9 @@ For _development instances_, Clerk uses preconfigured shared OAuth credentials a
 1. Select **Add connection** and select **For all users**.
 1. Select **GitHub** from the provider list.
 
+> [!IMPORTANT]
+> The shared credentials belong to a **GitHub OAuth App**. To test a **GitHub App** in development, toggle on **Use custom credentials** and follow the [production instance steps](#configure-for-your-production-instance).
+
 ## Configure for your production instance
 
 For _production instances_, you must provide custom credentials.
@@ -41,14 +44,35 @@ Keep two browser tabs open during setup: one for the [Clerk Dashboard](https://d
   1. Select **Add connection** and select **For all users**.
   1. Select **GitHub** from the provider list.
   1. Ensure that both **Enable for sign-up and sign-in** and **Use custom credentials** are toggled on.
+  1. In the **App type** dropdown, select **GitHub OAuth App** or **GitHub App**, depending on which type of app you'll create in GitHub.
   1. Save the **Authorization Callback URL** somewhere secure. Keep this page open.
 
-  ### Create a GitHub app
+  ### Create your GitHub app
 
-  1. In your GitHub's Developer Settings, navigate to the [**Register a new OAuth app**](https://github.com/settings/applications/new) page.
-  1. Complete the required fields. In **Authorization Callback URL**, paste the **Authorization Callback URL** you saved from the Clerk Dashboard.
-  1. Select **Register application**. You'll be redirected to your app's **General** page.
-  1. Select **Generate a new client secret**. Save the **Client ID** and **Client Secret** somewhere secure.
+  Follow the steps for the **App type** you selected in the Clerk Dashboard.
+
+  <Tabs items={["GitHub OAuth App", "GitHub App"]}>
+    <Tab>
+      1. In your GitHub's Developer Settings, navigate to the [**Register a new OAuth app**](https://github.com/settings/applications/new) page.
+      1. Complete the required fields (**Application name** and **Homepage URL**).
+      1. Under **Redirect URIs**, in **Redirect URI**, paste the **Authorization Callback URL** you saved from the Clerk Dashboard.
+      1. Select **Register application**. You'll be redirected to your app's **General** page.
+      1. Select **Generate a new client secret**. Save the **Client ID** and **Client Secret** somewhere secure.
+    </Tab>
+
+    <Tab>
+      1. In your GitHub's Developer Settings, navigate to the [**Create GitHub App**](https://github.com/settings/apps/new) page.
+      1. Complete the required fields (**GitHub App name** and **Homepage URL**).
+      1. Under **Identifying and authorizing users**, in **Redirect URI**, paste the **Authorization Callback URL** you saved from the Clerk Dashboard.
+      1. Keep **Expire user authorization tokens** selected. Clerk uses the refresh token to renew expired tokens. See [GitHub App access tokens](#github-app-access-tokens) for details.
+      1. Leave **Request user authorization (OAuth) during installation** unchecked. Clerk can't complete a sign-in that starts from an app installation.
+      1. Under **Webhook**, uncheck **Active**. Clerk doesn't use GitHub App webhooks.
+      1. Under **Permissions**, expand **Account permissions** and set **Email addresses** to **Read-only**. Without this permission, users who keep their email address private on GitHub can't sign in, and Clerk returns an error that names the missing permission.
+      1. Under **Where can this GitHub App be installed?**, select **Any account**. A GitHub App that can only be installed on your account can only be authorized by you or your organization's members.
+      1. Select **Create GitHub App**. You'll be redirected to your app's **General** page.
+      1. Select **Generate a new client secret**. Save the **Client ID** and **Client Secret** somewhere secure. Use the **Client ID**, not the **App ID**.
+    </Tab>
+  </Tabs>
 
   ### Set the Client ID and Client Secret in the Clerk Dashboard
 
@@ -58,3 +82,11 @@ Keep two browser tabs open during setup: one for the [Clerk Dashboard](https://d
 
   <Include src="_partials/authentication/social-connections/test-your-connection" />
 </Steps>
+
+## GitHub App access tokens
+
+If you use a GitHub App, its user access tokens differ from GitHub OAuth App tokens:
+
+- **Permissions instead of scopes**: GitHub Apps ignore OAuth scopes, so the Clerk Dashboard doesn't show **Scopes** for them. A token can only access what both the user and your app's permissions allow. Account permissions, such as **Email addresses**, apply once the user authorizes your app, so users don't need to install it to sign in. You can read public resources without installing the app. Accessing non-public repository or organization resources, or writing to public repositories, requires installation on the relevant account.
+- **Expiring tokens**: With **Expire user authorization tokens** selected, user access tokens expire after 8 hours. [`getUserOauthAccessToken()`](/docs/reference/backend/user/get-user-oauth-access-token) returns a renewed token when the current one has expired. If GitHub rejects the refresh token, for example because it expired after 6 months, the call returns an `oauth_token_retrieval_error` error, and the user needs to sign in with GitHub again.
+- **Sign-in only**: Clerk uses your GitHub App to sign users in. It doesn't install your app or create installation access tokens. If your app needs to act as itself rather than on behalf of a user, use [GitHub's installation authentication](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation).

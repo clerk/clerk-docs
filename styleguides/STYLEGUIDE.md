@@ -20,6 +20,12 @@ When mentioning a documented component, function, etc, multiple times on a page,
 
 This same rule applies to tooltips.
 
+A broad term like **Backend API** is an exception to the first-mention rule:
+
+- If the reader needs to perform a specific operation and the section doesn't already link to it, link to that operation or its guide.
+- If the sentence explains what the Backend API is, such as what a Secret Key accesses or what `clerkClient` wraps, link **Backend API** to the [Backend API overview](https://clerk.com/docs/reference/backend-api).
+- Otherwise, leave **Backend API** plain.
+
 ### Use sentence-case for titles
 
 > ❌

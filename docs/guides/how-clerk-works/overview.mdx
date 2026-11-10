@@ -7,7 +7,7 @@ This guide provides a deep dive into Clerk's architecture and internal workings.
 
 ## The frontend API
 
-When you create a new application through the [Clerk Dashboard](https://dashboard.clerk.com/), Clerk provisions a dedicated frontend API (FAPI) instance for your application. It is hosted at `https://<slug>.clerk.accounts.dev` in development environments, where `<slug>` is a unique identifier generated for your application. You can find your application's [FAPI URL](!frontend-api-url) in the [**Domains**](https://dashboard.clerk.com/~/domains) page of the Clerk Dashboard.
+When you create a new application through the [Clerk Dashboard](https://dashboard.clerk.com/), Clerk provisions a dedicated Frontend API (FAPI) instance for your application. It's hosted at `https://<slug>.clerk.accounts.dev` in development environments, where `<slug>` is a unique identifier generated for your application. Find your application's [FAPI URL](!frontend-api-url) in the [**Domains**](https://dashboard.clerk.com/~/domains) page of the Clerk Dashboard.
 
 When configuring your Clerk app, you must provide a [Publishable Key](!publishable-key). The Publishable Key tells your app what your FAPI URL is, enabling your app to locate and communicate with your dedicated FAPI instance.
 
@@ -21,7 +21,7 @@ atob(keyWithoutPrefix) // => example.accounts.dev$
 ```
 
 > [!NOTE]
-> In previous versions of Clerk, the [FAPI URL](!frontend-api-url) was exposed directly rather than being encoded within a Publishable Key. This was a source of confusion for users, so we transitioned to encoding it as base64 and making it a key.
+> In previous versions of Clerk, the FAPI URL was exposed directly rather than being encoded within a Publishable Key. This was a source of confusion for users, so Clerk transitioned to encoding it as base64 and making it a key.
 
 FAPI manages authentication flows on a per-user basis. For instance, it handles flows for signing up a user, retrieving a user's active sessions, creating an Organization on behalf of a user, or fetching a user's Organization invites. You can find the [complete FAPI documentation](/docs/reference/frontend-api){{ target: '_blank' }}.
 
@@ -100,7 +100,7 @@ An alternative approach is "stateless" authentication, which addresses the scala
 The stateless authentication flow operates as follows. This example assumes that the user already signed up and their credentials are stored in a database.
 
 1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g., username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
-1. The server validates the credentials against a database. Upon successful validation, it generates a [cryptographically signed token](/docs/guides/how-clerk-works/tokens-and-signatures) containing essential user data like the user ID and any relevant [claims](/glossary#claim). [JSON Web Tokens (JWTs)](!jwt-token) are by far the most common form of signed tokens in the modern web.
+1. The server validates the credentials against a database. Upon successful validation, it generates a [cryptographically signed token](/docs/guides/how-clerk-works/tokens-and-signatures) containing essential user data like the user ID and any relevant [claims](/glossary#claim). JSON Web Tokens ([JWTs](!jwt-token)) are by far the most common form of signed tokens in the modern web.
 1. The server responds to the browser's request by sending the token in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response. This token serves as a self-contained proof of authentication, and will be included in future requests from the browser in order to authenticate the user.
    <Video
      src="/docs/images/how-clerk-works/stateless-auth.mp4"
@@ -238,7 +238,7 @@ Clerk's authentication model relies on two distinct tokens - a "client token" an
 The client token is a long-lived token that is stored in the `__client` cookie, which is set on your FAPI domain.
 
 - **Cookie name:** `__client`
-- **Contents:** A Clerk-signed JWT containing:
+- **Contents:** A Clerk-signed [JWT](!jwt-token) containing:
   - `id`: Unique client identifier
   - `rotating_token`: [Anti-session-fixation](/docs/guides/secure/best-practices/fixation-protection) token that rotates on each sign-in across any device
 - **Domain:** Set on your FAPI domain (`clerk.example.com`), rather than on your app domain (`example.com`). It's set on the FAPI domain as a security measure - for example, if your app logs are leaked, they wouldn't contain client token values, since it's scoped to a different domain.
@@ -264,7 +264,7 @@ For more information on the differences between development and production envir
 The session token is a short-lived token that is stored in the `__session` cookie, which is set on your app's domain.
 
 - **Cookie name:** `__session`
-- **Contents:** A Clerk-signed JWT containing [a set of default claims](/docs/guides/sessions/session-tokens#default-claims). Can be customized in the Clerk Dashboard to include additional claims.
+- **Contents:** A Clerk-signed [JWT](!jwt-token) containing [a set of default claims](/docs/guides/sessions/session-tokens#default-claims). Can be customized in the Clerk Dashboard to include additional claims.
 - **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done to prevent a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries, such as from `example.com` to `api.example.com`, you can [put the token in a `request` header instead](/docs/guides/development/making-requests).
 - **Expiration:** 60 seconds
 - **HttpOnly:** No - must be able to be accessed by client-side SDKs
@@ -328,7 +328,7 @@ This server → browser → FAPI request includes the client token, so FAPI is a
 >    - If the session is inactive, the `__session` cookie is wiped and the request will be treated as signed out.
 > 1. The handshake endpoint redirects back to the host application along with the handshake payload, encoded either in the URL (development) or as a cookie (production).
 > 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response by the Clerk SDK.
-> 1. If an updated `__session` cookie is returned, the JWT is verified. If verification is successful, the request is treated as signed in.
+> 1. If an updated `__session` cookie is returned, the [JWT](!jwt-token) is verified. If verification is successful, the request is treated as signed in.
 > 1. If an updated `__session` cookie is not returned, the request is treated as signed out.
 >
 > This makes it such that you can't provide proof of authentication via an API call - the proof comes from the **`__client` cookie** on FAPI which can't be tampered with by attackers since it's not set on the application domain and is `HttpOnly`.

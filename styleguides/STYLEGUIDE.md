@@ -18,7 +18,7 @@ When mentioning a documented component, function, etc, multiple times on a page,
 > ✅
 > The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user) object of the currently active user. The following example uses the `currentUser()` helper to access the `User` object for the authenticated user.
 
-This same rule applies to tooltips.
+For tooltips, a first mention under a parent heading covers its child sections. Sibling heading sections have separate first-mention scopes. See [Tooltips across sections and components](../contributing/CONTRIBUTING.md#tooltips-across-sections-and-components) for the full rule.
 
 A broad term like **Backend API** is an exception to the first-mention rule:
 

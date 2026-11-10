@@ -1295,6 +1295,16 @@ The ID of the [Active Organization](!active-organization) that the user belongs 
 
 Tooltips should follow the same styleguide as links - only add them on the first mention of a term and only in the highest heading section. So if a term is mentioned in an H2 section and again in its H3 section, it doesn't need to be added in the H3 section.
 
+#### Tooltips across sections and components
+
+Sibling heading sections have separate first-mention scopes. If a term first appears under two sibling H3 headings, add a tooltip to its first mention in each H3. A mention in their parent H2 covers both H3 sections.
+
+Readers may view tabs, conditional `<If>` branches, and accordion panels independently. If a term is first introduced inside them, add a tooltip to its first mention in each tab, branch, or panel that uses it.
+
+A `<Properties>` block and its `---`-separated property rows don't create new heading sections, so apply the first-mention rule across all property descriptions under the surrounding heading.
+
+#### Acronyms and glossary
+
 When the term is an acronym, put the tooltip ref on the acronym itself - `[OTP](!otp)` is the dominant pattern in the docs. If a first mention should also spell the term out, keep the ref on the acronym: `one-time password ([OTP](!otp))`.
 
 Acronym tooltips also feed the docs search: the indexer derives an acronym ⇄ expansion synonym from the first bold text that pairs a recognized acronym (3–8 alphanumeric characters, starting with a capital letter) with its expansion (e.g., `**one-time password (OTP)**`). Two things follow:

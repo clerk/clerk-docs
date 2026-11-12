@@ -1,13 +1,13 @@
 ---
 title: Use Clerk's MCP server
-description: Connect AI agents to Clerk's MCP server to manage your Clerk applications, users, and production setup, and to get Clerk SDK snippets.
+description: Connect AI agents to Clerk's MCP server to manage your Clerk applications, users, Organizations, and production setup, and to get Clerk SDK snippets.
 ---
 
 Clerk provides a remote [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that allows AI agents like Claude, Cursor, and GitHub Copilot to work with your Clerk account and access Clerk SDK snippets.
 
 The Clerk MCP server provides:
 
-- **Account tools**: Create and configure applications, manage users, and set up production instances in your Clerk workspace.
+- **Account tools**: Create and configure applications, manage users, inspect Organizations and memberships, and set up production instances in your Clerk workspace.
 - **SDK snippet tools**: Ready-to-use code patterns for common Clerk features.
 
 All tools require you to [sign in](#sign-in-with-your-clerk-account) with your Clerk account.
@@ -28,7 +28,8 @@ Your client stores this access, so you don't need to sign in each time it connec
 | `applications:read` | Read the applications in that workspace |
 | `applications:manage` | Create applications and production instances, and read and change instance configuration, such as OAuth credentials |
 | `users:read` | List the users of an instance |
-| `users:manage` | Create users |
+| `users:manage` | Create users, update their profiles and metadata, and set whether they bypass [Device Trust](/docs/guides/protect/device-trust) (`bypass_client_trust`) |
+| `organizations:read` | List Organizations, and list memberships when `users:read` is also granted |
 | `application_domains:read` | Read domains, the DNS records they need, and their verification status |
 | `application_domains:manage` | Start a DNS check for a domain |
 
@@ -249,12 +250,13 @@ Tools that make changes are marked as such, so your AI client can ask you before
 | `list_applications`, `get_application`, `create_application` | List, inspect, and create applications. Results include each instance's publishable key. |
 | `get_instance_config`, `get_instance_config_schema`, `patch_instance_config`, `put_instance_config` | Read, update, or replace instance configuration, and read its schema. Preview changes with a dry run. |
 | `list_users`, `create_user` | Find users with filters and create users in an instance. |
+| `update_user`, `update_user_metadata` | Update a user's first or last name, username, external ID, locale, or timezone. You can also change their public, private, or unsafe metadata and set whether they bypass [Device Trust](/docs/guides/protect/device-trust) (`bypass_client_trust`). |
+| `list_organizations`, `list_organization_memberships`, `list_user_organization_memberships` | List or search Organizations, an Organization's members, and a user's Organizations. |
 | `list_domains`, `get_domain_status`, `check_domain_dns` | Get the DNS records a domain needs, check its verification status, and request a new DNS check. |
 | `get_deploy_oauth_providers`, `create_production_instance`, `set_oauth_provider_credentials` | Create a production instance from development and configure production OAuth credentials. Creating a production instance can't be undone, so the tool requires `confirm: true`. |
 | `configure_mcp_server`, `check_mcp_server` | Register your own MCP server's URL as an OAuth resource on an instance, and check its public discovery. Preview changes with a dry run. See [Configure authentication for your own MCP server](#configure-authentication-for-your-own-mcp-server). |
 | `list_application_feedback` | Read the feedback AI agents reported through your own MCP server, filtered by kind, impact, or user. To collect it, see [Collect feedback from agents using your MCP server](/docs/guides/ai/mcp/agent-feedback). |
 | `submit_feedback` | Report problems and missing documentation to the Clerk team. |
-| `get_more_tools` | Tell the Clerk team about a task none of the other tools can do. |
 
 ### SDK snippet tools
 
@@ -270,6 +272,8 @@ Once connected, you can ask your AI assistant questions such as:
 - "Which Clerk applications do I have?"
 - "Show the authentication settings for my development instance"
 - "List the five most recent sign-ups"
+- "Show the admins of the Example Team Organization in my production instance"
+- "Add `onboarding_complete: true` to the public metadata for `alex@example.com` in development"
 - "Check which DNS records are required for production"
 - "Summarize the feedback agents left on my production instance"
 - "How do I use the useUser hook in Clerk?"
@@ -309,7 +313,7 @@ Your agent can call `submit_feedback` when a Clerk task fails or needs a workaro
 
 ### What does the MCP server send to Clerk about tool calls?
 
-Every tool asks your agent for a one-sentence `context` that describes what you're trying to do. Your agent writes this summary and is told to leave out names, email addresses, IDs, and secrets. When your agent calls a tool, the server sends the summary to Clerk for product analytics. The server also adds which tool your agent called, whether the call succeeded, your Clerk user ID, and your AI client's name, version, and OAuth client ID. It doesn't send the tool's inputs or results. When your agent calls `get_more_tools`, the server records the task it couldn't complete, so the Clerk team can see which tools to add next.
+The MCP server sends Clerk a product analytics event for each tool call. The event includes the tool name, whether the call succeeded, the error type if it failed, your Clerk user ID, and your AI client's name, version, and OAuth client ID. When applicable, it also includes the application ID and whether the call was a dry run. It doesn't include any other tool inputs or results.
 
 ### Why am I seeing an internal server error when trying to connect?
 

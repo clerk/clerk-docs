@@ -62,6 +62,46 @@ const { data, totalCount } = await clerkClient.users.getUserList({
 })
 ```
 
+### Retrieve every user
+
+To export, sync, or read all of your users with `getUserList()`, paginate with `startingAfter`. Deep `offset` pages become slower as the list grows because the database must skip the earlier users on every request. `offset` is still useful for shallow, numbered pages.
+
+Request the first page without `startingAfter`. For each following page, set it to the ID of the last user in the previous page. Set `limit` to an integer from 1 to 500. Keep `limit` and every other parameter the same across requests. Stop when a page contains fewer users than `limit`.
+
+> [!NOTE]
+> `startingAfter` moves forward only and works with `created_at`, `+created_at`, or `-created_at` ordering. The default is `-created_at`. Omit `offset` or set it to `0`. If the cursor user is deleted before the next request, that request fails with a `422` error. To resume, restart without `startingAfter` and skip the IDs you've already processed, so keep a record of them.
+
+The following server-side example yields users one at a time, so you can process them without holding the entire list in memory:
+
+```tsx
+async function* listAllUsers() {
+  const limit = 500
+  let startingAfter: string | undefined
+
+  while (true) {
+    const { data } = await clerkClient.users.getUserList({
+      limit,
+      orderBy: '+created_at',
+      ...(startingAfter ? { startingAfter } : {}),
+    })
+    yield* data
+
+    if (data.length < limit) return
+    startingAfter = data[data.length - 1].id
+  }
+}
+
+for await (const user of listAllUsers()) {
+  // Replace this with your export or sync logic.
+  console.log(user.id)
+}
+```
+
+This example can miss users who sign up after it fetches the last page. If your export must include them, pause sign-ups during the export or run a follow-up pass for new users.
+
+> [!IMPORTANT]
+> `getUserList()` also fetches `totalCount` on every page. For large exports that don't need a count, call [`GET /v1/users`](/docs/reference/backend-api/tag/users/GET/users){{ target: '_blank' }} directly to avoid the extra request.
+
 ## Backend API (BAPI) endpoint
 
 This method in the SDK is a wrapper around the BAPI endpoint `GET/users`. See the [BAPI reference](/docs/reference/backend-api/tag/users/GET/users){{ target: '_blank' }} for more information.

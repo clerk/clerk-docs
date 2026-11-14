@@ -1,0 +1,50 @@
+---
+title: Personal Agent Protocol
+description: Let personal agents open a browser session that's signed in as one of your users, with the Personal Agent Protocol (Poppy).
+---
+
+The [Personal Agent Protocol (Poppy)](https://personalagentprotocol.org) is an open protocol that lets companies decide what agents can do, and lets people decide what their agent can do for them. Clerk supports one part of it so far: giving a person's agent a browser session that's signed in as them, so the agent can use your application. Clerk will support more of the protocol over time.
+
+To turn it on, enable Clerk's browser session endpoint, then serve a `poppy.json` file so agents can find it.
+
+> [!IMPORTANT]
+> Before you enable browser sessions, [restrict what agent sessions can do in your app](/docs/guides/ai/restrict-agent-sessions).
+
+<Steps>
+  ## Enable the browser session endpoint
+
+  Agents connect as OAuth clients, and your users approve them on Clerk's OAuth consent screen. Before you enable the endpoint, keep the [Account Portal](/docs/guides/account-portal/overview) enabled, since it hosts that screen by default, or [set up a custom OAuth consent page](/docs/guides/configure/auth-strategies/oauth/custom-consent-page).
+
+  In the Clerk Dashboard, navigate to the [**Personal Agent Protocol**](https://dashboard.clerk.com/~/agents/personal-agent-protocol) page. Toggle on **Enable Browser Session Endpoint**. If the Dashboard says your application needs to migrate to the new OAuth provider, [contact support](/contact/support).
+
+  ## Serve `poppy.json`
+
+  Agents look for your browser session endpoint in a `poppy.json` file at `/.well-known/poppy.json` on your app's root domain.
+
+  <If sdk="nextjs">
+    In `@clerk/nextjs` 7.10.0 or later, `clerkMiddleware()` serves the file for you when you set the `poppy` option:
+
+    ```ts {{ filename: 'proxy.ts' }}
+    import { clerkMiddleware } from '@clerk/nextjs/server'
+
+    export default clerkMiddleware({
+      poppy: true,
+    })
+    ```
+
+    If you're using Next.js ≤15, the file is `middleware.ts` instead of `proxy.ts`.
+  </If>
+
+  <If notSdk="nextjs">
+    Clerk doesn't have a helper that serves the file for your framework yet. Get its contents from Clerk's Backend API, and serve the `data` field of the response at `/.well-known/poppy.json`. Cache the response for at least 10 minutes.
+
+    The following request gets the file's contents:
+
+    ```bash {{ filename: 'terminal' }}
+    curl https://api.clerk.com/v1/artifacts/well-known-poppy \
+      -H "Authorization: Bearer {{secret}}"
+    ```
+
+    In JavaScript, `clerkClient.artifacts.getPoppyJson()` from `@clerk/backend` 3.29.0 or later returns the `data` field for you.
+  </If>
+</Steps>

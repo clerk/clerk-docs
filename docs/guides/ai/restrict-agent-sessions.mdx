@@ -1,0 +1,41 @@
+---
+title: Restrict agent sessions
+description: Detect when an AI agent is using a user's session in your app, and restrict what it can do for that user.
+---
+
+There are two ways Clerk can give an AI agent a browser session that's signed in as one of your users:
+
+- A [`create_browser_session` tool](/docs/guides/ai/mcp/browser-sessions) on your MCP server, which gives the agent a one-time link to your application
+- A `browser_session_endpoint` in the [Personal Agent Protocol (Poppy)](/docs/guides/ai/personal-agent-protocol)
+
+Clerk restricts what an agent session can do with Clerk itself. A session from the `create_browser_session` tool, for instance, [can't change the user's profile or sign out](/docs/guides/ai/mcp/browser-sessions#what-the-session-can-do). Your app's backend still sees an ordinary signed-in session, so what agents can do with your own features is up to you.
+
+Before you enable either, update your app to restrict what agents can do when they act for your users. For example, you might block payments or account deletion during an agent session.
+
+## Check for an agent session
+
+The [`Auth` object](/docs/reference/backend/types/auth-object) has an `agent` property. It's `undefined` for an ordinary session, and holds details about the agent when an agent is using the session. It requires `@clerk/nextjs` 7.10.0 or later, `@clerk/express` 2.1.90 or later, or `@clerk/backend` 3.29.0 or later.
+
+The following example blocks agents from a billing route:
+
+```ts {{ filename: 'app/api/billing/route.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+export async function POST() {
+  const { userId, agent } = await auth()
+
+  if (!userId) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  if (agent) {
+    return new Response('Agents cannot change billing', { status: 403 })
+  }
+
+  // Update billing for the user
+}
+```
+
+The example uses Next.js's `auth()` helper. The `Auth` object from other Clerk SDKs has the same `agent` property, such as the one `getAuth(req)` returns in Express.
+
+If your backend [verifies session tokens without a Clerk SDK](/docs/guides/sessions/manual-jwt-verification), check the [session token](/docs/guides/sessions/session-tokens) for the `agt` claim instead. Clerk adds it only when an agent is using the session.

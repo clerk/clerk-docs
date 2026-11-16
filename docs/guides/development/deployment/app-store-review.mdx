@@ -1,0 +1,103 @@
+---
+title: Prepare a sign-in for App Store and Google Play review
+description: Give Apple App Review and Google Play reviewers a password sign-in that always works, even when your app signs users in with one-time codes.
+sdk: expo, ios, android
+---
+
+Apple and Google sign in to your app before they approve it. If your app signs users in with an email or SMS code, the reviewer can't read that code, and Apple or Google can reject the app. To give reviewers a sign-in that works, create a dedicated user with a password and turn on **App review account** for that user. That user then signs in with the password alone, even if your instance doesn't offer password sign-in to anyone else.
+
+## What the stores require
+
+- Apple's [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) (guideline 2.1) ask for demo account details if your app includes a sign-in.
+- Google Play's [requirements for sign-in details](https://support.google.com/googleplay/android-developer/answer/15748846) ask for credentials that are reusable, available at all times, and that bypass 2-step verification or one-time passwords.
+
+## Before you start
+
+**App review account** has the following requirements. If one isn't met, Clerk doesn't turn the setting on.
+
+- The Native API is enabled for your production instance. To check, in the Clerk Dashboard, navigate to the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page.
+- Your instance doesn't [require multi-factor authentication (MFA)](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication). A reviewer can't set up or complete a second factor.
+- The user has a password. You can set it in the same request that turns on the setting.
+
+<Steps>
+  ## Choose an email address for the review account
+
+  Create a new user for reviewers rather than reuse a real user's account. Give it an email address at a domain you control, such as `app-review@yourdomain.com`. Clerk can still send email to this address, for example, a new sign-in notification, so the address must accept mail.
+
+  Keep the address out of public places. Clerk's normal [account lockout](/docs/guides/protect/user-lockout) applies to the review account, so anyone who knows the address can lock it by entering wrong passwords. If a reviewer reports that the account is locked, [unlock it](/docs/guides/protect/user-lockout#unlock-user-accounts).
+
+  ## Create the user and turn on the setting
+
+  Generate a long, random password for the user, for example, with a password manager. Reviewers share this password, and it's the only thing that protects the account.
+
+  The following example uses the [Backend API](/docs/reference/backend-api){{ target: '_blank' }} to create the user, set its password, and turn on **App review account** in one request. This works even if your instance has password sign-in turned off.
+
+  <SignedOut>
+    Replace `YOUR_SECRET_KEY` with your production instance's [Secret Key](!secret-key).
+  </SignedOut>
+
+  ```bash {{ filename: 'curl.sh' }}
+  curl -X POST 'https://api.clerk.com/v1/users' \
+    -H 'Authorization: Bearer {{secret}}' \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "email_address": ["app-review@yourdomain.com"],
+      "password": "<generated_password>",
+      "app_review_account": true
+    }'
+  ```
+
+  If your instance requires other fields to sign up, such as a username or a phone number, include them in the request.
+
+  To turn on the setting for a user that already exists, send `"app_review_account": true` to `PATCH https://api.clerk.com/v1/users/<user_id>`. If the user doesn't have a password yet, include `"password"` in the same request.
+
+  To turn on the setting in the Clerk Dashboard for a user that already has a password:
+
+  1. At the top of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/~/users).
+  1. Select the user, then select the **Settings** tab.
+  1. In the **User permissions** section, toggle on **App review account**. This toggle shows only when the Native API is enabled.
+  1. Select **Save**.
+
+  ## Add the credentials to your submission
+
+  Test the sign-in in a production build of your app on a fresh install before you submit it. Then give the reviewers the email address and password:
+
+  - In App Store Connect, enter them in the app version's **App Review Information** section.
+  - In Play Console, enter them in the **App access** declaration.
+
+  Keep the review account and its password unchanged after approval. Apple reviews every update, and Google asks for credentials that work at all times.
+</Steps>
+
+## How the review account signs in
+
+**App review account** changes how Clerk treats this one user:
+
+- Password is the user's only sign-in method, even if your instance has password sign-in turned off. Clerk's prebuilt sign-in screens ask for the password and don't send a code.
+- Clerk skips the [Device Trust](/docs/guides/protect/device-trust) check, so a reviewer on a new device isn't asked for a code after the password.
+- The password also works in your web app, if it uses the same Clerk instance.
+
+Every other user signs in as before.
+
+Anyone who enters the review account's email address can see that it signs in with a password only. This holds even with [user enumeration protection](/docs/guides/protect/user-enumeration-protection) turned on. It reveals nothing about other users.
+
+## Where the reviewer can still get stuck
+
+The setting covers sign-in only. Check the following before you submit:
+
+- **Reverification asks for a code.** [Reverification](/docs/guides/secure/reverification) doesn't accept the review account's password, so sensitive actions such as deleting the account ask for a code sent to the user's email address or phone number. Apple reviewers often test account deletion. If your app asks for reverification before it deletes an account, explain in your review notes what the reviewer will see.
+- **Protect still applies.** [Protect](/docs/guides/protect/overview) evaluates the reviewer's sign-in like any other. A protection that blocks, such as a country restriction, can block the reviewer.
+- **MFA still applies.** If the review account has MFA enabled, Clerk still asks for the second factor. Don't enable MFA on the review account.
+
+## If you can't use an app review account
+
+If your instance doesn't meet the [requirements](#before-you-start), use one of the following options instead.
+
+### Use Bypass Device Trust on a password-enabled instance
+
+If your instance offers password sign-in to all users, give the review account a strong password and turn on **Bypass Device Trust** for it. This toggle is next to **App review account** on the user's **Settings** tab. Without **App review account**, Clerk offers this user every sign-in method your instance allows. If your sign-in screen opens on a code, tell the reviewer in your review notes to choose the password.
+
+### Enable Test mode during review
+
+With [**Test mode**](/docs/guides/development/testing/test-emails-and-phones#set-up-test-mode) enabled, Clerk accepts the code `424242` for any email address that contains `+clerk_test` and for any phone number from `+1 (XXX) 555-0100` to `+1 (XXX) 555-0199`. If your instance offers sign-in with an email or SMS code, create the review account with one of these, and give the reviewer the email address or phone number and the code.
+
+Enabling **Test mode** on a production instance is highly discouraged. It applies to your whole instance, not to one user, so anyone can use `+clerk_test` addresses and test phone numbers while it's on. Both stores review every update, so you'd have to leave it on. See [why you shouldn't enable Test mode in production](/docs/guides/development/testing/test-against-production#why-you-shouldnt-enable-test-mode-in-production).

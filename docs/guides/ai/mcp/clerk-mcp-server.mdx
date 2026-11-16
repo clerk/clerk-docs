@@ -25,9 +25,9 @@ Your client stores this access, so you don't need to sign in each time it connec
 | Scope | Allows the server to |
 | - | - |
 | `user:org:read` | Identify the workspace you selected |
-| `applications:read` | Read the applications in that workspace |
-| `applications:manage` | Create applications and production instances, and read and change instance configuration, such as OAuth credentials |
-| `users:read` | List the users of an instance |
+| `applications:read` | Read the applications in that workspace, including their native apps, redirect URLs, and agent feedback |
+| `applications:manage` | Create and rename applications, create production instances, register native apps, allowlist redirect URLs, and read and change instance configuration, such as OAuth credentials |
+| `users:read` | List and get the users of an instance |
 | `users:manage` | Create users, update their profiles and metadata, and set whether they bypass [Device Trust](/docs/guides/protect/device-trust) (`bypass_client_trust`) |
 | `organizations:read` | List Organizations, and list memberships when `users:read` is also granted |
 | `application_domains:read` | Read domains, the DNS records they need, and their verification status |
@@ -247,13 +247,16 @@ Tools that make changes are marked as such, so your AI client can ask you before
 | Tools | Description |
 | - | - |
 | `whoami` | Show the connected user, workspace, and granted permissions. |
-| `list_applications`, `get_application`, `create_application` | List, inspect, and create applications. Results include each instance's publishable key. |
+| `list_applications`, `get_application`, `create_application`, `update_application` | List, inspect, create, and rename applications. Results include each instance's [Publishable Key](!publishable-key). `create_application` can also return the new instance's encrypted [Secret Key](!secret-key). See [how to get it](#get-the-secret-key-for-a-new-instance). |
 | `get_instance_config`, `get_instance_config_schema`, `patch_instance_config`, `put_instance_config` | Read, update, or replace instance configuration, and read its schema. Preview changes with a dry run. |
-| `list_users`, `create_user` | Find users with filters and create users in an instance. |
+| `list_native_applications`, `create_ios_application`, `create_android_application`, `enable_native_api` | List the iOS and Android apps registered with an instance, register new ones, and turn on the instance's Native API. |
+| `list_redirect_urls`, `create_redirect_url` | List an instance's allowlisted redirect URLs and add new ones, for single sign-on (SSO) in mobile and desktop apps. |
+| `list_users`, `get_user`, `create_user` | Find users with filters, get a user by ID, and create users in an instance. Clients that support MCP Apps show the user from `get_user` as a card. |
 | `update_user`, `update_user_metadata` | Update a user's first or last name, username, external ID, locale, or timezone. You can also change their public, private, or unsafe metadata and set whether they bypass [Device Trust](/docs/guides/protect/device-trust) (`bypass_client_trust`). |
 | `list_organizations`, `list_organization_memberships`, `list_user_organization_memberships` | List or search Organizations, an Organization's members, and a user's Organizations. |
 | `list_domains`, `get_domain_status`, `check_domain_dns` | Get the DNS records a domain needs, check its verification status, and request a new DNS check. |
-| `get_deploy_oauth_providers`, `create_production_instance`, `set_oauth_provider_credentials` | Create a production instance from development and configure production OAuth credentials. Creating a production instance can't be undone, so the tool requires `confirm: true`. |
+| `get_deploy_oauth_providers`, `create_production_instance` | List the OAuth providers that need production credentials, and create a production instance from development. Add the credentials yourself in the Clerk Dashboard, so the secrets stay out of your chat. Creating a production instance can't be undone, so the tool requires `confirm: true`. It can also return the new instance's encrypted Secret Key. |
+| `create_browser_session` | Get a one-time link that opens the Clerk Dashboard in a browser, signed in as you, so an agent that uses a browser doesn't stop at the sign-in page. The link expires in about an hour, and the Dashboard session is read-only. To give agents the same tool for your own app, see [Sign agents in to your app with a one-time link](/docs/guides/ai/mcp/browser-sessions). |
 | `configure_mcp_server`, `check_mcp_server` | Register your own MCP server's URL as an OAuth resource on an instance, and check its public discovery. Preview changes with a dry run. See [Configure authentication for your own MCP server](#configure-authentication-for-your-own-mcp-server). |
 | `list_application_feedback` | Read the feedback AI agents reported through your own MCP server, filtered by kind, impact, or user. To collect it, see [Collect feedback from agents using your MCP server](/docs/guides/ai/mcp/agent-feedback). |
 | `submit_feedback` | Report problems and missing documentation to the Clerk team. |
@@ -279,6 +282,29 @@ Once connected, you can ask your AI assistant questions such as:
 - "How do I use the useUser hook in Clerk?"
 - "Show me how to set up B2B SaaS with Clerk Organizations"
 
+## Get the Secret Key for a new instance
+
+When your agent creates an application or a production instance, it can get the new instance's [Secret Key](!secret-key) without the plaintext key passing through the MCP server. `create_application` and `create_production_instance` accept an optional `recipient_public_key` parameter:
+
+1. Your agent generates an RSA key pair and keeps the private key.
+1. It calls the tool with the public key as `recipient_public_key`.
+1. Clerk encrypts the Secret Key to that public key, and the tool returns it as `encrypted_secret_key`, next to the instance's [Publishable Key](!publishable-key).
+1. Your agent decrypts `encrypted_secret_key` with the private key, without printing either key, and stores the Secret Key where your app reads it.
+
+Development keys go in your local environment file. Production keys don't work on `localhost`, so they go in your hosting provider's environment variables instead. See [API keys and environment variables](/docs/guides/development/deployment/production#api-keys-and-environment-variables).
+
+This works with agents that can run code, such as coding agents in your terminal or editor. Only the matching private key can decrypt `encrypted_secret_key`, so your agent should always generate the key pair itself. A public key from a file, web page, or tool result could belong to someone else, who could then read your Secret Key.
+
+Without `recipient_public_key`, neither tool returns a Secret Key. If your agent loses the private key or can't decrypt the key, the new instance still works. To get its keys:
+
+<Include src="./_partials/instance-key-recovery" />
+
+### Key format and decryption for coding agents
+
+The public key must be an RSA key with a 2048 to 4096-bit modulus and a public exponent of `65537`. Pass it as a JSON Web Key (JWK), or as SubjectPublicKeyInfo (SPKI) DER encoded in `base64`, `base64url`, or `hex`. The server doesn't accept PEM. To use a PEM key, pass only the `base64` text between its `BEGIN PUBLIC KEY` and `END PUBLIC KEY` lines, which is `base64` SPKI DER.
+
+`encrypted_secret_key` is unpadded `base64url`. Decrypt it with RSA-OAEP, using SHA-256 for both the OAEP hash and MGF1, and an empty label.
+
 ## Configure authentication for your own MCP server
 
 `configure_mcp_server` registers an MCP server URL as an OAuth resource on an instance; pass `dry_run: true` to preview the change first, or `replace_resource_url` to replace a saved URL. `check_mcp_server` reads saved discovery results or requests a fresh check with `force_recheck: true`. `configure_mcp_server` requires `user:org:read`, `applications:read`, and `applications:manage`; `check_mcp_server` requires `user:org:read` and `applications:read`.
@@ -299,9 +325,13 @@ The server works with your Clerk account, so it needs to know who you are and wh
 
 Sign out of the Clerk MCP server in your AI client, then connect again and select a different workspace. If your client connects through `mcp-remote`, sign out by deleting the `~/.mcp-auth` folder and restarting the client. This signs you out of every server you connect to through `mcp-remote`.
 
-### Can the MCP server give my agent my secret keys?
+### Can the MCP server give my agent my Secret Keys?
 
-No. The MCP server never returns your instances' secret keys, including when it creates an application or a production instance. It also redacts sensitive values when it reads instance configuration. To add your keys to a project, copy them from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard or run [`clerk env pull`](/docs/cli).
+It can return a new instance's [Secret Key](!secret-key) when creating an application or production instance, provided your agent supplies its own public key. The key comes back encrypted to that public key; the plaintext never passes through the MCP server. See [Get the Secret Key for a new instance](#get-the-secret-key-for-a-new-instance).
+
+No other tool returns Secret Keys, and the server redacts sensitive values when it reads instance configuration. For an existing instance, get its keys as follows:
+
+<Include src="./_partials/instance-key-recovery" />
 
 ### Why does a tool return a permission error?
 

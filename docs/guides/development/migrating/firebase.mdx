@@ -1,147 +1,143 @@
 ---
 title: Migrate from Firebase
-description: Migrating your user base from Firebase to Clerk is a 2-part process that can be accomplished with just a few steps.
+description: Move your Firebase Authentication users into Clerk with two Clerk CLI commands, keeping their existing passwords.
 ---
 
-Migrating your user base from Firebase to Clerk is a 2-part process that can be accomplished with just a few steps.
+The [Clerk CLI](/docs/cli) exports your users from Firebase Authentication with `clerk migrate export firebase`, then creates them in Clerk with `clerk migrate import`. Firebase's password hashes come across intact, so your users keep the passwords they already have.
+
+## Migrate with an AI agent
+
+<Include src="./_partials/use-skills" />
+
+## What you need
+
+<Include src="./_partials/cli-prerequisites" />
+
+### A Firebase service account key
+
+The export talks to Firebase's Identity Toolkit directly, so it needs a service account key rather than a `firebase login` session.
+
+1. In the [Firebase console](https://console.firebase.google.com), open your project, go to **Project settings**, and select the **Service accounts** tab.
+1. Select **Generate new private key**, then confirm. A JSON file downloads.
+1. Save it next to where you'll run the migration, as `service-account.json`.
+
+The service account needs to list users and read the project's password hash parameters. The **Firebase Authentication Admin** role covers both. For read-only access, grant **Firebase Authentication Viewer** plus a custom role with the `firebaseauth.configs.getHashConfig` permission. Without that permission, Firebase redacts the password hashes. If the CLI warns about redacted hashes, grant the permission and export again. If it receives hashes but can't read the hash parameters, [supply the parameters manually](#if-the-export-couldnt-read-the-hash-parameters).
+
+> [!WARNING]
+> A service account key is a credential for your whole Firebase project. Keep it out of version control and delete it once the migration is done.
+>
+> Pass `--service-account` the key file's path, not its JSON. If you pass the JSON, it shows up in `ps`, even when it comes from `"$VAR"` or `"$(cat key.json)"`. If you type it, it also lands in your shell history. In CI, write the key to a file only the job can read and pass its path.
+
+## What migrates
+
+- **Passwords:** The import needs both a hash and a salt. For a user with only one of the two, the import drops both and creates the user without a password.
+- **Disabled accounts:** The import bans a Firebase user with `disabled: true`.
+- **Unverified emails:** They stay unverified by default. Firebase's `emailVerified` decides where an address lands. Clerk creates primary identifiers as verified, so the import keeps an address Firebase never confirmed off the primary fields and attaches it as unverified. The checks reject a user whose only email is unverified when your instance requires an email. To reserve those unverified addresses instead, see [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones).
+- **Phone numbers:** The import adds them as verified. Firebase has no phone-verified field, since users confirm a number by SMS.
+- **Display names:** `displayName` becomes a first name, from the first word, and a last name, from the rest. The source omits a one-word `displayName` that matches the user's own email.
+- **Signup dates:** The import keeps the date from Firebase's `createdAt`.
+- **Firebase IDs:** Each user's `localId` becomes the Clerk user's `external_id`, which is how a re-run recognizes the users it already created. To keep referencing it in your app, see [foreign keys](/docs/guides/development/migrating/plan-your-migration#foreign-keys).
+
+## What doesn't migrate
+
+- **Social accounts, custom claims, and sign-in timestamps:** The export omits these, along with Firebase's provider records. A user who only ever signed in with Google arrives with their email address and no password. Enable the same providers on the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page in the Clerk Dashboard. When a user signs in with one, Clerk links it to their imported account by verified email address. Clerk doesn't link to an address the import attached as unverified, so that sign-in creates a separate user. To link those users, import with `--reserve-unverified`. If you reserve the address and the provider doesn't confirm it, Clerk asks the user to verify it before linking. See [account linking](/docs/guides/configure/auth-strategies/social-connections/account-linking).
+- **Multi-factor authentication (MFA) enrollments:** Users must enroll again in Clerk.
 
 <Steps>
-  ## Export your Firebase users
+  ## Export your users from Firebase
 
-  ### Install the Firebase CLI
+  Run the export with your service account key:
 
-  If you haven't already, install the Firebase CLI:
-
-  ```bash {{ filename: 'terminal' }}
-  npm install -g firebase-tools
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate export firebase --service-account ./service-account.json
   ```
 
-  ### Log in to Firebase
+  If you leave off `--service-account`, the CLI asks for the key. Enter the file's path or paste the key's JSON, which lets you use a key from a password manager without saving it to disk. The CLI checks the key before it sends anything to Google. If you pass a web app config to `--service-account`, the CLI reports the missing field and exits. At the interactive prompt, it reports the error and asks again. If Google rejects the key, an interactive run asks for it again. With `--yes`, `--json`, in an agent run, or without a terminal, pass `--service-account` the key file's path, because the export doesn't prompt. The CLI never reads `GOOGLE_APPLICATION_CREDENTIALS`.
 
-  Login to your Firebase account via the CLI.
+  If `FIREBASE_AUTH_EMULATOR_HOST` is set in your shell, the export reads the Firebase emulator instead of your project, and the target line says so. Unset it before you export your real users.
 
-  ```bash {{ filename: 'terminal' }}
-  firebase login
+  The export saves your users as `export.json` in a new run, and prints the run ID and a field coverage table, so you see what the data contains before importing it:
+
+  ```text
+  Field coverage
+    ✓ 412/412 have an email address
+    ! 388/412 have a verified email
+    ! 341/412 have a password hash
+    ! 120/412 have a display name
+    ✗ 0/412 have a phone number
   ```
 
-  ### Find your Firebase project ID
+  Pass `-o <path>` to write the file somewhere else. The path has to end in `.json`.
 
-  Use the firebase CLI to list your projects and find the project ID you want to export.
+  Firebase uses a modified scrypt, so Clerk can't verify a digest without the project's four hash parameters. The export reads them from the project and saves them in the export file, so the import needs no extra flags:
 
-  ```bash {{ filename: 'terminal' }}
-  firebase projects:list
+  ```text
+  Password hash parameters
+  Read from the project and saved in the export file, so the import needs nothing more.
   ```
 
-  ### Export your Firebase users using the CLI
+  The export file sits in the run folder, which the CLI adds to `.gitignore`, because the signer key is a Firebase secret. If you pass `-o` or keep runs somewhere else, keep that file out of git yourself. An export with no password hashes needs no parameters and says so instead.
 
-  Use the firebase CLI to export your users to a JSON file.
+  Either of these warnings means some users will import without a password and need to reset it:
 
-  ```bash {{ filename: 'terminal' }}
-  firebase auth:export firebase-users.json --format=json --project <YOUR_PROJECT_ID>
+  - A password hash came back redacted. The service account can't read hashes. Grant it `firebaseauth.configs.getHashConfig` and export again.
+  - A user has a password Firebase didn't return. Firebase returns only hashes it made itself, so users you imported into Firebase with bcrypt, HMAC, or another hasher come back without one.
+
+  ### If the export couldn't read the hash parameters
+
+  When the service account can't read the parameters, or the project's parameters are ones Clerk can't use, the export still succeeds without them and says so. Get them from the console:
+
+  1. In the [Firebase console](https://console.firebase.google.com), navigate to **Authentication** and select the **Users** tab.
+  1. Select the three vertical dots above the user list, then select **Password hash parameters**.
+  1. Copy `base64_signer_key`, `base64_salt_separator`, `rounds`, and `mem_cost`, and enter them when the import asks.
+
+  All four are required as a set. Supplying some but not all is a usage error naming what's missing. The import also refuses parameters Clerk can't use, such as a key that isn't base64, or `rounds` or `mem_cost` outside 1 to 16. The flags override parameters saved in the export file, so you can pass a rotated key without exporting again. Continuing a run with different parameters is refused, so pass `--new-run` to change them partway through.
+
+  In a terminal, the import asks for each parameter, with the signer key masked. A `--yes` run never asks, so for the real import either leave off `--yes` and confirm at the prompt, or set `CLERK_FIREBASE_SIGNER_KEY`, `CLERK_FIREBASE_SALT_SEPARATOR`, `CLERK_FIREBASE_ROUNDS`, and `CLERK_FIREBASE_MEM_COST`. The same applies with `--json`, in an agent run, or without a terminal. The `--firebase-signer-key`, `--firebase-salt-separator`, `--firebase-rounds`, and `--firebase-mem-cost` flags still work, but they put the signer key in your shell history. The variables apply only when the export file doesn't include the parameters.
+
+  ### If you already have a `firebase auth:export` file
+
+  The `firebase` source reads what the Firebase CLI produces, in either format, so an existing export file can skip `clerk migrate export` entirely:
+
+  ```sh {{ filename: 'terminal' }}
+  firebase auth:export firebase-users.json --format=json --project <firebase_project_id>
   ```
 
-  Here's what this command is doing:
+  `--format=csv` works too. The CSV Firebase writes has no header row, and the source supplies the column names. Either way, the file doesn't name its source, so pass `--source firebase`, and get the hash parameters from the console, since only `clerk migrate export firebase` reads them from the project:
 
-  1. `firebase auth:export`: it tells Firebase you're trying to export the user base.
-
-  1. `firebase-users.json`: the name of the file you're about to create.
-
-  1. `--format=json`: make it a JSON file.
-
-  1. `--project <YOUR_PROJECT_ID>`: it tells Firebase which project you're trying to export from. Don't forget to replace `<YOUR_PROJECT_ID>` with the Project ID you found in the previous step.
-
-  You should now have a JSON file called `firebase-users.json` that contains all your Firebase users.
-
-  ## Retrieve your password hash parameters
-
-  In your Firebase project’s dashboard, navigate to **Authentication** and select the 3 vertical dots at the top of the user's list, then select **Password hash parameters**.
-
-  On the new window that opens, you'll find the following values: `base64_signer_key`, `base64_salt_separator`, `rounds` and `mem_cost`.
-
-  You can find more information about this page and the values above on [Firebase's documentation](https://firebaseopensource.com/projects/firebase/scrypt/).
-
-  ## Create a Node.js script
-
-  Now you have all the information you need to import your Firebase users into Clerk. This example uses Node.js, but you can use any other language or method if you so wish.
-
-  ### init npm
-
-  ```bash {{ filename: 'terminal' }}
-  npm init -y
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate import firebase-users.json --source firebase --dry-run
   ```
 
-  ### Install dependencies
+  ## Import your users into Clerk
 
-  ```bash {{ filename: 'terminal' }}
-  npm i node-fetch@2
-  ```
+  The source skips users with neither email nor phone, including anonymous users. The import records them as `skipped` and continues without requiring `--allow-partial`.
 
-  ### Create a script
+  <Include src="./_partials/import" />
 
-  ```js {{ filename: 'migrate-to-clerk.js' }}
-  const fetch = require('node-fetch')
-  const firebaseUsers = require('./firebase-users.json')
+  An export from `clerk migrate export firebase` also includes the hash parameters, so you don't pass any `--firebase-*` flags.
 
-  async function migrateToClerk() {
-    // You can find these values on your Firebase project's authentication settings
-    const signerKey = ''
-    const saltSeparator = ''
-    const rounds = ''
-    const memoryCost = ''
+  ## Verify the migration
 
-    // You can find this value on your Clerk application's dashboard
-    const clerkBackendApiKey = ''
+  1. Read what the run did. It lists the users that failed or were skipped, and why:
 
-    for (let user of firebaseUsers.users) {
-      const { email, localId, passwordHash, salt } = user
+     ```sh {{ filename: 'terminal' }}
+     clerk migrate runs <import_run_id>
+     ```
 
-      const body = passwordHash
-        ? {
-            email_address: [email],
-            external_id: localId,
-            password_hasher: 'scrypt_firebase',
-            password_digest: `${passwordHash}$${salt}$${signerKey}$${saltSeparator}$${rounds}$${memoryCost}`,
-          }
-        : {
-            email_address: [email],
-            external_id: localId,
-            skip_password_requirement: true,
-          }
+  1. Confirm the users exist in Clerk:
 
-      try {
-        const result = await fetch('https://api.clerk.com/v1/users', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${clerkBackendApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        })
+     ```sh {{ filename: 'terminal' }}
+     clerk users list
+     ```
 
-        if (!result.ok) {
-          throw Error(result.statusText)
-        } else {
-          console.log(`${email} added successfully`)
-        }
-      } catch (error) {
-        console.error(`Error migrating ${email}: ${error}`)
-      }
-    }
-  }
-
-  migrateToClerk()
-  ```
-
-  Here, body will either hold the necessary information to migrate a password-based user or in the case of an OAuth-based user, it'll skip the password check. It will also have the previous user ID as `external_id`, so you can link the newly created users with their existing data.
-
-  ## Run the script
-
-  ```bash {{ filename: 'terminal' }}
-  node migrate-to-clerk.js
-  ```
-
-  > [!WARNING]
-  > This implementation does not take rate limiting into account. If you have a large user base, you may want to implement a retry mechanism. Clerk will return a `429` status code if you exceed the rate limit. You can find more information in [Clerk's system limits documentation](/docs/guides/how-clerk-works/system-limits). Keep [Firebase's rate limits](https://firebase.google.com/docs/functions/quotas) in mind as well when exporting your users.
-
-  Once the script has finished running, your user base will be fully migrated to Clerk.
+  1. Sign in as one of them with their Firebase password. The import can succeed with incorrect hash parameters, and users then can't sign in. Only a sign-in confirms the parameters were right.
 </Steps>
+
+## Undo the migration
+
+<Include src="./_partials/undo" />
+
+## Next steps
+
+<Include src="./_partials/next-steps" />

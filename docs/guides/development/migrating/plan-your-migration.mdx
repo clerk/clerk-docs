@@ -1,0 +1,30 @@
+---
+title: Plan your migration
+description: Choose between importing every user at once and a trickle migration, and keep referencing users by their previous IDs.
+---
+
+Before you move any users, decide how they move: all at once, or over time while both systems run. Then decide how your app references users after the cutover, since their Clerk IDs differ from the ones your database stores today.
+
+## Export and import considerations
+
+Most migrations export every user from the current platform and import them in one pass, which is what [`clerk migrate`](/docs/guides/development/migrating/overview) does. An export is a snapshot, so your data can be out of sync by the time you import it. To narrow the gap, script the export and import to run as close together as possible, or schedule downtime or a maintenance window. Consider Clerk's [Backend API rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests) when you plan a time-sensitive migration.
+
+Clerk manages your users' sessions. Switching to Clerk will likely end sessions your previous system started, unless your architecture can carry them over.
+
+## Trickle migration considerations
+
+In a trickle migration, both systems run side by side while users move to Clerk. When the move is done, Clerk becomes your system of record for users and sessions. Spreading the move out gives you more control than a single coordinated cutover. You build the trickle yourself: create each user with the [`CreateUser`](/docs/reference/backend-api/tag/users/POST/users){{ target: '_blank' }} Backend API endpoint as they move, and pass each password digest with the `password_hasher` that generated it. For some hashing algorithms, Clerk upgrades the hash to bcrypt on the user's first password sign-in. `CreateUser` counts toward the [Backend API rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests).
+
+Running both systems costs more while the migration lasts. You may pay for your current platform and Clerk at the same time, and you keep the two systems in sync. Clerk charges by Monthly Retained Users ([MRUs](!mru)), not by the total number of users in your user table. The Hobby plan has a limit of 50,000 MRUs per application. Past that, you'll need the Pro plan. See [pricing](/pricing) for how Clerk charges.
+
+Some applications run a trickle migration for a few weeks, and others for months. Base the length on those costs, your app's complexity, and the number of active users you expect during the window. Users who don't sign in during that window still need to be imported, typically by [exporting and importing](/docs/guides/development/migrating/overview) them with `clerk migrate`. The import rejects users who already exist in the instance, so pass `--allow-partial` to skip the ones the trickle moved. `clerk migrate runs <run_id>` lists them. By then fewer users remain, so that import carries less coordination and less risk of data drifting out of sync.
+
+## Foreign keys
+
+To keep referencing users by their previous IDs, store those IDs in `external_id`. `clerk migrate` does this for you. Customize the session token so its `userId` claim is the `external_id` when one exists, and falls back to the Clerk user ID for new users who don't have one. In the Clerk Dashboard, open the [**Sessions**](https://dashboard.clerk.com/~/sessions) page. Under **Customize session token**, in the **Claims** editor, enter the following JSON and select **Save**. If you've already customized your session token, merge this with your existing claims.
+
+```json
+{
+  "userId": "{{user.external_id || user.id}}"
+}
+```

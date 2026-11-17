@@ -1,0 +1,128 @@
+---
+title: Migrate from Auth0
+description: Move your Auth0 tenant's users into Clerk with the Clerk CLI.
+---
+
+The [Clerk CLI](/docs/cli) exports your users from Auth0's Management API with `clerk migrate export auth0`, then creates them in Clerk with `clerk migrate import`.
+
+Two Auth0 limits affect this migration:
+
+- **Password hashes:** The Management API doesn't return them. Auth0 releases them only through a [support request](#get-the-password-hashes). Without them, your users arrive with no password and have to reset.
+- **Tenants over 1,000 users:** The users endpoint stops paging at 1,000. Past that, Auth0's [bulk user export job](#if-your-tenant-has-more-than-1-000-users) is the only way to get the rest.
+
+## Migrate with an AI agent
+
+<Include src="./_partials/use-skills" />
+
+## What you need
+
+<Include src="./_partials/cli-prerequisites" />
+
+### An Auth0 machine-to-machine application
+
+The export authenticates as an application, not as your own Auth0 account.
+
+1. In the [Auth0 dashboard](https://manage.auth0.com), navigate to **Applications**, open **APIs**, select **Auth0 Management API**, and select the **Machine to Machine Applications** tab.
+1. Authorize an application (create one if you don't have a suitable one) and grant it the **`read:users`** scope.
+1. Copy the application's **Domain**, **Client ID**, and **Client Secret**. Use the tenant's `*.auth0.com` domain, not a custom domain. The Management API only answers on the tenant domain.
+
+## What migrates
+
+- **Passwords, if you obtain hashes from Auth0:** The import uses each `passwordHash` you add to the export as bcrypt. Without one, the user has no password.
+- **Auth0 IDs:** `user_id` is a `provider|id` string such as `auth0|abc123` or `github|12345`, and the import copies it unchanged into the Clerk user's `external_id`. To keep referencing it in your app, see [foreign keys](/docs/guides/development/migrating/plan-your-migration#foreign-keys).
+- **Unverified emails and phones:** They stay unverified by default. `email_verified` and `phone_verified` decide where an address lands, and a missing value counts as unverified. The import keeps an address Auth0 never confirmed off the primary fields and attaches it as unverified. The checks reject a user whose only email is unverified when your instance requires an email. To reserve those unverified addresses instead, see [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones).
+- **Names:** `given_name` and `family_name` take priority and become the first and last name. If either is present, the source ignores `name`. Without them, it splits `name`, unless it's the user's own email address, which Auth0 writes there for database users.
+- **Blocked users:** The import bans a user with `blocked: true`.
+- **Metadata:** `user_metadata`, which your users could edit in Auth0, becomes Clerk's `unsafeMetadata`, which they can still edit. `app_metadata` becomes `privateMetadata`, which is server-side only.
+- **Signup dates:** The import keeps the date from Auth0's `created_at`.
+
+## What doesn't migrate
+
+- **Social accounts:** Enable the same providers on the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page in the Clerk Dashboard. When a user signs in with one, Clerk links it to their imported account by verified email address. Clerk doesn't link to an address the import attached as unverified, so that sign-in creates a separate user. To link those users, import with `--reserve-unverified`. If you reserve the address and the provider doesn't confirm it, Clerk asks the user to verify it before linking. See [account linking](/docs/guides/configure/auth-strategies/social-connections/account-linking).
+- **Multi-factor authentication (MFA) enrollments:** Auth0 doesn't export them, so users enroll again in Clerk.
+- **Identities, session counts, and tenant internals:** The import omits these fields. They have no Clerk equivalent.
+
+<Steps>
+  ## Export your users from Auth0
+
+  Run the export with your application's domain and client ID. The CLI reads the client secret from `AUTH0_CLIENT_SECRET`, or prompts for it:
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate export auth0 --domain <auth0_tenant_domain> --client-id <client_id>
+  ```
+
+  The domain works with or without a scheme, so both `my-tenant.us.auth0.com` and `https://my-tenant.us.auth0.com/` are accepted. Leave the credentials off and the CLI reads `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, and `AUTH0_CLIENT_SECRET`, then prompts for them. The prompt masks the secret, and a value entered at a prompt stays out of your shell history. If Auth0 rejects the credentials, or issues a token without `read:users`, an interactive run asks for all three again. With `--yes`, `--json`, in an agent run, or without a terminal, the export doesn't prompt. It fails and names the missing values.
+
+  The export saves your users as `export.json` in a new run, and prints the run ID and a field coverage table:
+
+  ```text
+  Field coverage
+    ✓ 412/412 have an email address
+    ✗ 0/412 have a phone number
+    ! 96/412 have a username
+    ! 300/412 have a first name
+    ! 288/412 have a last name
+  ```
+
+  Pass `-o <path>` to write the file somewhere else. The path has to end in `.json`.
+
+  ### If your tenant has more than 1,000 users
+
+  The export stops at Auth0's ceiling and says so, naming the total your tenant reports:
+
+  ```text
+  Auth0 only pages through the first 1000 users on this endpoint, and this tenant
+  reports 4318. Exported what is reachable; use Auth0's bulk user export job for
+  the rest.
+  ```
+
+  Auth0 can also report a larger tenant's total as 1,000. Then the warning says the endpoint "counts no higher, so there may be more" instead of naming a total. If Auth0 returns fewer users than it reported, the export warns about that too.
+
+  The export still writes the users it got, but exits with code `1`, and `--json` output includes `truncated: true`, so a script can tell.
+
+  Run Auth0's [bulk user export job](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports) for the full tenant. Auth0 delivers it gzip-compressed, so decompress it, then import that file with `clerk migrate import <path> --source auth0` instead of the CLI's own export. A file Auth0 wrote doesn't name its source, so it needs `--source`.
+
+  ### Get the password hashes
+
+  Auth0's Management API returns no `password_hash` field at any tier, so the export can't include one, and warns whenever it exports users. To keep your users' passwords:
+
+  1. Open a support request with Auth0 asking for a password hash export for your tenant.
+  1. Add the digest to each user in the run's `export.json` as a `passwordHash` field. By default, the path is `.clerk/migrate/<export_run_id>/export.json`.
+  1. Use the edited file's path instead of `<export_run_id>` when you import. Importing by run ID rejects a file changed after export. The file still names its source, so it needs no `--source`:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk migrate import .clerk/migrate/<export_run_id>/export.json --dry-run
+     ```
+
+     Auth0's digests are bcrypt, which is what the `auth0` source assumes. The checks reject a user whose `passwordHash` isn't a well-formed bcrypt digest.
+
+  If you skip this, those users arrive without a password and sign in through a reset or an enabled [social connection](/docs/guides/configure/auth-strategies/social-connections/overview).
+
+  ## Import your users into Clerk
+
+  <Include src="./_partials/import" />
+
+  ## Verify the migration
+
+  1. Read what the run did. It lists the users that failed or were skipped, and why:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk migrate runs <import_run_id>
+     ```
+
+  1. Confirm the users exist in Clerk:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk users list
+     ```
+
+  1. Compare the `created` count from `clerk migrate runs` against your tenant's total in Auth0. If exactly 1,000 users came across and your tenant has more, you hit the pagination ceiling.
+</Steps>
+
+## Undo the migration
+
+<Include src="./_partials/undo" />
+
+## Next steps
+
+<Include src="./_partials/next-steps" />

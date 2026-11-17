@@ -1,0 +1,146 @@
+---
+title: Migrate from Better Auth
+description: Move your Better Auth users into Clerk with the Clerk CLI, keeping their password hashes.
+---
+
+The [Clerk CLI](/docs/cli) exports your users from your Better Auth database with `clerk migrate export betterauth`, then creates them in Clerk with `clerk migrate import`.
+
+Better Auth has no fixed schema. The columns on the `user` table depend on which plugins you enabled, so the export checks which columns exist before it queries the table.
+
+## Migrate with an AI agent
+
+<Include src="./_partials/use-skills" />
+
+## What you need
+
+<Include src="./_partials/cli-prerequisites" />
+
+### A connection string for your Better Auth database
+
+The export reads two tables: `user` and `account`, or `users` and `accounts` if you set Better Auth's `usePlural` option. It detects camelCase and snake\_case column names. The database role needs `SELECT` on both tables.
+
+## What migrates
+
+- **Supported password hashes:** Better Auth hashes with its own scrypt by default, and lets an app swap in bcrypt or argon2, so one database can hold more than one kind. The import detects the hasher per user:
+
+  | Stored value | Imported as |
+  | - | - |
+  | `<32 hex>:<128 hex>`, Better Auth's scrypt | `scrypt_werkzeug` |
+  | A well-formed `$2a$`, `$2b$`, or `$2y$` digest, with a cost from 4 to 15 | `bcrypt` |
+  | A well-formed `$argon2id$v=19$…` or `$argon2i$v=19$…` digest, within Clerk's argon2 cost limits | `argon2id` or `argon2i` |
+  | Anything else | The import omits the hash and creates the user without a password |
+
+  Better Auth normalizes a password to Unicode Normalization Form KC (NFKC) before hashing it, and Clerk doesn't. A password containing characters that NFKC changes, such as some accented or full-width characters, won't verify in Clerk, and that user has to reset it.
+- **OAuth-only users:** The import creates these users without credentials.
+- **Unverified emails and phones:** They stay unverified by default. `emailVerified` is a boolean here. The import keeps an address Better Auth never confirmed off the primary fields and attaches it as unverified. The checks reject a user whose only email is unverified when your instance requires an email. The same applies to `phoneNumberVerified`. To reserve those unverified addresses instead, see [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones).
+- **Active bans:** The import applies the admin plugin's `banned` flag when it's `true` and `banExpires` hasn't passed. Clerk's bans have no end date, so a temporary ban stays until you lift it in Clerk, and the checks warn you about it.
+- **Names:** The source splits `name` into `firstName` and `lastName` at the first whitespace. It uses a one-word name as the first name, and leaves out a one-word name that matches the user's own email address.
+- **Better Auth IDs:** Each user's `id` becomes the Clerk user's `external_id`, which is how a re-run recognizes the users it already created. To keep referencing it in your app, see [foreign keys](/docs/guides/development/migrating/plan-your-migration#foreign-keys).
+
+## What doesn't migrate
+
+- **Social accounts:** Enable the same providers on the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page in the Clerk Dashboard. When a user signs in with one, Clerk links it to their imported account by verified email address. Clerk doesn't link to an address the import attached as unverified, so that sign-in creates a separate user. To link those users, import with `--reserve-unverified`. If you reserve the address and the provider doesn't confirm it, Clerk asks the user to verify it before linking. See [account linking](/docs/guides/configure/auth-strategies/social-connections/account-linking).
+- **Plugin columns without Clerk equivalents:** The export reads `displayUsername`, `role`, `banReason`, and `twoFactorEnabled`, but the import omits them, and the checks list them under `Clerk won't store`, with `displayUsername` as `display_username`. If you need them, put them in metadata with a [custom source](/docs/guides/development/migrating/custom-source). A custom source replaces the built-in mapping, so it also has to handle the password hashers, verification, bans, and anonymous users itself.
+- **Multi-factor authentication (MFA) enrollments:** Users must enroll again in Clerk.
+
+<Steps>
+  ## Export your users from Better Auth
+
+  <Tabs items={['MySQL', 'Postgres', 'SQLite', 'Turso']}>
+    <Tab>
+      Run the export, and enter your MySQL connection string, `mysql://<user>:<password>@<host>:3306/<database>`, when the CLI asks:
+
+      ```sh {{ filename: 'terminal' }}
+      clerk migrate export betterauth
+      ```
+
+      The database role also needs to read `information_schema.columns` so the export can detect plugin columns.
+    </Tab>
+
+    <Tab>
+      Run the export, and enter your Postgres connection string, `postgres://<user>:<password>@<host>:5432/<database>`, when the CLI asks:
+
+      ```sh {{ filename: 'terminal' }}
+      clerk migrate export betterauth
+      ```
+    </Tab>
+
+    <Tab>
+      Pass a SQLite file path. It must start with `file:` or `./`, or end in `.sqlite`, `.sqlite3`, or `.db`. The connection needs `PRAGMA` access so the export can detect plugin columns:
+
+      ```sh {{ filename: 'terminal' }}
+      clerk migrate export betterauth --db-url "./db.sqlite"
+      ```
+    </Tab>
+
+    <Tab>
+      Pass your Turso database's `libsql://` URL. Supply its token through `TURSO_AUTH_TOKEN` or `LIBSQL_AUTH_TOKEN`, or include it in the URL's `?authToken=` parameter:
+
+      ```sh {{ filename: 'terminal' }}
+      clerk migrate export betterauth --db-url "libsql://<database>-<org>.turso.io"
+      ```
+    </Tab>
+  </Tabs>
+
+  Without `--db-url`, the CLI reads `BETTERAUTH_DB_URL`, then prompts for it. The prompt masks what you type, and a value entered at a prompt stays out of your shell history. If the database rejects the connection string, the prompt explains why and asks again. With `--yes`, `--json`, in an agent run, or without a terminal, the export doesn't prompt, and fails if the connection string is missing or rejected.
+
+  The run reports which plugin columns it found:
+
+  ```text
+  Detected plugin columns: username, displayUsername, phoneNumber, phoneNumberVerified.
+  ```
+
+  The columns it looks for are the ones Better Auth plugins add: `username` and `displayUsername` (username plugin), `phoneNumber` and `phoneNumberVerified` (phone-number plugin), `role`, `banned`, `banReason`, and `banExpires` (admin plugin), `twoFactorEnabled` (two-factor plugin), and `isAnonymous` (anonymous plugin). The export leaves absent columns out of the query. With none of them, the run says "No plugin columns detected" and exports the core user fields.
+
+  The export saves your users as `export.json` in a new run, and prints the run ID and a field coverage table:
+
+  ```text
+  Field coverage
+    ✓ 412/412 have an email address
+    ! 388/412 have a verified email
+    ! 341/412 have a password hash
+    ! 400/412 have a name
+    ! 96/412 have a username
+    ✗ 0/412 have a phone number
+  ```
+
+  Pass `-o <path>` to write the file somewhere else. The path has to end in `.json`.
+
+  ### Password hashes
+
+  Better Auth stores the password digest on the `account` row for the `credential` provider, not on the user, so the export joins the two.
+
+  The export includes users without password accounts, such as users who sign in through OAuth, magic links, or passkeys. They don't count toward password coverage.
+
+  A user can have more than one credential account. When those accounts hold different password hashes, the export can't tell which one is current, so it exports that user without a password and warns you. To bring the password, keep one credential account per user in Better Auth and export again.
+
+  ## Import your users into Clerk
+
+  The import skips the anonymous plugin's guest accounts and records them as `skipped`. They don't require `--allow-partial`.
+
+  <Include src="./_partials/import" />
+
+  ## Verify the migration
+
+  1. Read what the run did. It lists the users that failed or were skipped, and why:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk migrate runs <import_run_id>
+     ```
+
+  1. Confirm the users exist in Clerk:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk users list
+     ```
+
+  1. Sign in as one user who had a password, and one who only ever used OAuth.
+</Steps>
+
+## Undo the migration
+
+<Include src="./_partials/undo" />
+
+## Next steps
+
+<Include src="./_partials/next-steps" />

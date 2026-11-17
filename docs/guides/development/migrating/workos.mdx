@@ -1,0 +1,121 @@
+---
+title: Migrate from WorkOS
+description: Move your WorkOS User Management users into Clerk with the Clerk CLI.
+---
+
+The [Clerk CLI](/docs/cli) exports your users from the WorkOS User Management API with `clerk migrate export workos`, then creates them in Clerk with `clerk migrate import`.
+
+WorkOS doesn't export password hashes and returns time-based one-time password (TOTP) secrets only at enrollment. Users who signed in with a password must reset it in Clerk or use single sign-on (SSO) or a social connection.
+
+## Migrate with an AI agent
+
+<Include src="./_partials/use-skills" />
+
+## What you need
+
+<Include src="./_partials/cli-prerequisites" />
+
+### A WorkOS API key
+
+The export authenticates with your WorkOS secret API key, the one starting with `sk_`.
+
+1. In the [WorkOS dashboard](https://dashboard.workos.com), switch to the environment whose users you're migrating.
+1. Navigate to **API Keys** and copy the secret key.
+
+WorkOS is API-only, so there's no database connection to set up. If your app mirrors WorkOS users into its own database through webhooks, that copy holds no credentials either. The export reads from the User Management API directly.
+
+## What migrates
+
+- **Unverified emails:** They stay unverified by default. WorkOS's `email_verified` decides where an address lands. Clerk creates primary identifiers as verified, so the import keeps an address WorkOS never confirmed off the primary fields and attaches it as unverified. The checks reject a user whose only email is unverified when your instance requires an email. To reserve those unverified addresses instead, see [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones).
+- **Names:** `first_name` and `last_name` become the Clerk user's first and last name.
+- **Metadata:** WorkOS `metadata` becomes `privateMetadata`, which only your backend can read or write. If your app exposed metadata keys through a WorkOS JWT template, move those keys to `publicMetadata` after the import.
+- **Signup dates:** The import keeps the date from WorkOS's `created_at`.
+- **WorkOS IDs:** Each user's `id` (a `user_…` string) becomes the Clerk user's `external_id`, which is how a re-run recognizes the users it already created. To keep referencing it in your app, see [foreign keys](/docs/guides/development/migrating/plan-your-migration#foreign-keys).
+- **Your own WorkOS `external_id`:** If you set an `external_id` on WorkOS users, the import stores it as `workosExternalId` in that same `privateMetadata`, because the Clerk `external_id` holds the WorkOS user ID.
+
+## What doesn't migrate
+
+- **Passwords and TOTP secrets:** Plan how you'll tell users about the password reset before you switch over.
+- **Organizations, SSO connections, sessions, and profile pictures:** The import omits these. WorkOS has no phone numbers or usernames on users, so there's nothing to import for those.
+
+<Steps>
+  ## Export your users from WorkOS
+
+  Run the export, and enter your WorkOS secret key when the CLI asks:
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate export workos
+  ```
+
+  Without `--api-key`, the CLI reads `WORKOS_API_KEY`, then prompts for it. The prompt masks what you type, and a value entered at a prompt stays out of your shell history. If WorkOS rejects the key, an interactive run asks again. With `--yes`, `--json`, in an agent run, or without a terminal, the export doesn't prompt, and fails if the key is missing or rejected.
+
+  The export saves your users as `export.json` in a new run, and prints the run ID and a field coverage table:
+
+  ```text
+  Field coverage
+    ✓ 412/412 have an email address
+    ! 300/412 have a first name
+    ! 288/412 have a last name
+    ! 57/412 have metadata
+    ✗ 0/412 have a password (WorkOS returns none)
+  ```
+
+  Pass `-o <path>` to write the file somewhere else. The path has to end in `.json`.
+
+  ### Record which OAuth providers your users have
+
+  To see which social providers your users sign in with, add `--with-identities`:
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate export workos --with-identities
+  ```
+
+  The export omits identities by default. WorkOS has no bulk identities endpoint, so `--with-identities` adds one request per user. For 1,000 users, that's about 1,010 requests instead of 10.
+
+  In a terminal, the export asks whether you want identities once it knows how many users there are. The default answer is no. Pass `--no-with-identities` to skip the question. With `--yes`, `--json`, in an agent run, or without a terminal, the export doesn't ask, and skips identities unless you pass `--with-identities`.
+
+  With identities, the export adds an **OAuth providers** block under the coverage table, and keeps an `identities` array on each user who has at least one provider:
+
+  ```text
+  OAuth providers
+    GoogleOAuth        2 users
+    MicrosoftOAuth     1 user
+    no OAuth provider  2 users
+    not readable       1 user
+    Those users have no `identities` field in the export, rather than an empty one.
+  ```
+
+  A user with two providers is counted under both, so the counts can add up to more than your user count. `not readable` means the lookup for that user failed, so their providers are unknown. If WorkOS rejects the key partway through, the whole export stops instead.
+
+  Clerk can't import identities: the endpoint that creates users has no field for social accounts. Use the breakdown to decide which [social connections](/docs/guides/configure/auth-strategies/social-connections/overview) to enable in Clerk before you import. When a user signs in with one, Clerk links it to their imported account by verified email address. Clerk doesn't link to an address the import attached as unverified, so that sign-in creates a separate user. To link those users, import with `--reserve-unverified`. If you reserve the address and the provider doesn't confirm it, Clerk asks the user to verify it before linking. See [account linking](/docs/guides/configure/auth-strategies/social-connections/account-linking).
+
+  ## Import your users into Clerk
+
+  Your WorkOS users have no password to bring. If your Clerk instance requires one, the checks warn that these users will be created without a password and have to sign in another way, such as a code or a social connection. They also print the `clerk config patch` command that makes password optional. If password is your instance's only sign-in method, the checks reject these users instead: enable a code, link, social, or SSO sign-in method first.
+
+  <Include src="./_partials/import" />
+
+  ## Verify the migration
+
+  1. Read what the run did. It lists the users that failed or were skipped, and why:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk migrate runs <import_run_id>
+     ```
+
+  1. Confirm the users exist in Clerk:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk users list
+     ```
+
+  1. Sign in as a migrated user through a password reset or an enabled SSO or social connection. If you use a password reset, confirm the email reaches the imported address.
+</Steps>
+
+## Undo the migration
+
+<Include src="./_partials/undo" />
+
+## Next steps
+
+<Include src="./_partials/next-steps" />

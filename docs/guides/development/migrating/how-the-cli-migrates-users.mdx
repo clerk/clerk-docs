@@ -1,0 +1,125 @@
+---
+title: How the CLI migrates users
+description: How the Clerk CLI checks users, handles unverified addresses, continues and undoes runs, and which exit codes and environment variables it uses.
+---
+
+`clerk migrate` checks every user before it writes, records each run, and can continue or undo an import. `clerk migrate <command> --help` lists the flags, and the sections below explain the behavior behind them. For the steps of a migration, start with the [overview](/docs/guides/development/migrating/overview) or your platform's guide.
+
+## Command behavior
+
+These rules cover when each `clerk migrate` command writes and where it stores its runs.
+
+- `import` and `undo` write only after you answer yes at the prompt or pass `--yes`. In agent, non-interactive, or `--json` runs without `--yes`, they print a preview and the exact command to run, then exit with code `2`.
+- `--dry-run` checks against the real instance and writes nothing. It exits with code `2` when the checks would refuse the import it previews. It doesn't ask the import's consent, legal acceptance, or reservation questions, so pass any answer you'd give as a flag, such as `--skip-legal-checks` or `--reserve-unverified`. A Firebase import without its hash parameters still asks for them in a terminal.
+- Each export, import, and undo is a run, stored in `.clerk/migrate/<run_id>/` at your project root. The CLI adds `.clerk/` to `.gitignore` for you, and `clerk migrate runs` lists the runs. Runs hold your users' data. To store them elsewhere, pass `--runs-dir <path>` or set `CLERK_MIGRATE_DIR`. Pass the same location to later commands and exclude it from Git. A dry run, or a command that stops for your consent, writes no run.
+- `import` and `undo` print their target instance, and where the key came from, before they check or write anything.
+- Every command accepts `--json`, which also turns off prompts.
+
+Once the import starts creating users, a failed creation request doesn't stop it unless Clerk reports that the instance hit its user limit. The CLI records each user's outcome and exits with code `1` if any user failed.
+
+## Choose the destination instance
+
+With `--app` or a linked project, `import` and `undo` target development by default. Pass `--instance prod` or a full instance ID to choose another instance.
+
+`clerk migrate import` and `clerk migrate undo` resolve their [Secret Key](!secret-key) in this order:
+
+1. `--secret-key <secret_key>`
+1. `--app <application_id>`
+1. `CLERK_SECRET_KEY` in the environment
+1. In a directory that isn't linked, a Secret Key in the project's `.env` or `.env.local`, or an accountless application's key file
+1. The linked project
+
+With `--secret-key` or `CLERK_SECRET_KEY`, `--instance` must match the key's instance. With a key read from a file, omit `--instance`.
+
+In a terminal, the import signs you in and links the directory if you haven't yet. An agent, non-interactive, or `--json` run gets an error naming the missing step instead.
+
+## Check before you import
+
+Before it writes anything, the import checks every user against the destination instance's live settings. It rejects users that:
+
+- Fail validation, or repeat an earlier user in the file
+- Lack an identifier, a name, or a legal acceptance the instance requires
+- Have a username the instance's username rules refuse
+- Have only emails Clerk refuses, such as a malformed address or a `.local` domain, and no other identifier the instance accepts
+- Have a malformed password hash, or a time-based one-time password (TOTP) secret or backup codes the instance has turned off
+- Have no way to sign in, such as a user with no password when password is the instance's only sign-in method, or a Supabase user whose only social providers aren't enabled in Clerk
+- Already exist in the instance, or would take it past its [user limit](#instance-user-limits)
+
+Any rejected user stops the import. Fix the file or the instance and run it again, or pass `--allow-partial` to import the users that pass and record the rest as `skipped`. The import doesn't create skipped users. `clerk migrate runs <run_id>` lists each one and why. When an instance setting is the problem, the checks print the `clerk config patch` command that changes it.
+
+The source can also mark users to skip: soft-deleted or anonymous Supabase users, anonymous Better Auth users, and Firebase users with neither email nor phone, including anonymous users. The import records them as `skipped` and continues without requiring `--allow-partial`.
+
+By default, the import creates a user without a password when the export has none, and the user resets their password or signs in another way. Pass `--require-password` to leave them out instead. The import records them as `skipped`. To import them later, run the same import without the flag.
+
+## Instance user limits
+
+Development instances have a limit of 100 users, which Clerk can raise. Production instances have no user limit. Before it creates anyone, the import reads the instance's limit from Clerk's API and checks your file against it. If the API doesn't report a limit, a development import falls back to `CLERK_MIGRATE_DEV_USER_LIMIT`, or 100 if it isn't set, and a production import skips the check.
+
+The checks reject the users past the limit, so a larger import into development stops unless you pass `--allow-partial`. With it, the import creates the users that pass the checks, up to the limit, and records the rest as `skipped`. To rehearse a migration this way, check the result with `clerk migrate runs <import_run_id>`, undo it with `clerk migrate undo <import_run_id> --yes`, then run the import again into production: with `--instance prod` if you signed in and linked your project, or with the production instance's Secret Key (`CLERK_SECRET_KEY` or `--secret-key`) if you're using a key.
+
+## Legal acceptance
+
+Pass `--skip-legal-checks` to import users with no legal acceptance on record into an instance that requires it. An interactive import without `--yes` asks instead, and the default answer is no. Clerk doesn't ask users imported without legal acceptance to accept your legal documents when they sign in. Their `legal_accepted_at` stays empty until you set it, so collect consent in your own app if you need it.
+
+## Unverified emails and phones
+
+Clerk creates a user's primary email and phone as verified, so an address the platform never confirmed doesn't go on the user as primary. By default, the import attaches it as unverified after it creates the user. The user can't sign in with an unverified address, and another user can claim it by verifying it first. Clerk doesn't link a social sign-in to an unverified address either, so that sign-in creates a separate user. Because the import attaches it afterward, an unverified email doesn't satisfy an instance that requires an email, and the checks reject a user whose only email is unverified. The same applies to phones.
+
+Pass `--reserve-unverified` to reserve those addresses instead. A reserved address is still unverified, but the user can sign in with it, it's locked to that user, and it becomes verified the first time they sign in with a code or link sent to it. Reserved addresses satisfy a required email or phone, and a social sign-in can link to them. The CLI includes reserved addresses in the user creation request, so if another user already holds one, Clerk rejects that request. Without the flag, if another user holds an unverified address, only that address fails to attach, after Clerk creates the user. It's opt-in because it lets a user sign in with an address nobody proved they own.
+
+An interactive import without `--yes` asks whether to reserve them when the file has any. The default answer is no. `--yes`, `--dry-run`, `--json`, agent, and non-interactive runs never ask, and keep addresses unverified unless you pass the flag. A run remembers its choice: continuing it creates the remaining users the same way without asking, and refuses `--reserve-unverified` if the run kept addresses unverified. Pass `--new-run` to change it.
+
+## Continue an interrupted import
+
+To continue an interrupted import, run the same import again with the same file, source, and destination instance. For a partial or interrupted run, the CLI retries users it hasn't imported. For a completed run, it reports that the file is already imported. If you undid the run, the CLI starts a new import. Pass `--new-run` to start a new run regardless. A new run still rejects users already in the instance, including users an earlier run created, so undo that run to import them again.
+
+The import refuses with code `2`, and imports nothing, when:
+
+- An undo of the earlier run never finished.
+- You previously imported the same file into this instance with a different source or an earlier version of your custom source, and haven't undone that import.
+- Another process is importing the same file into the same instance.
+
+Every user the import creates has a `clerkMigrateRun` key in its `privateMetadata`, set to the run ID, and an `external_id` set to the user's ID on the platform. A creation request that's interrupted, or that ends in a network or server error, leaves the CLI unsure whether Clerk created the user. The CLI then uses that key to find the user when you continue or undo the run. Leave it in place until you're sure you won't continue or undo the import.
+
+## Undo an import
+
+`clerk migrate undo` deletes the users one import run created: every Clerk ID the run recorded, plus any user with the run's `clerkMigrateRun` key whose creation the CLI couldn't confirm. The undo touches nothing else in the instance.
+
+Preview the deletions with the import run's ID. The preview counts the users it would delete, and how many of them have signed in since the import:
+
+```sh {{ filename: 'terminal' }}
+clerk migrate undo <import_run_id> --dry-run
+```
+
+Then delete them:
+
+```sh {{ filename: 'terminal' }}
+clerk migrate undo <import_run_id> --yes
+```
+
+`--yes` doesn't delete users who have signed in since the import. If the preview counts any, the command exits with code `2` and deletes nothing. Add `--include-signed-in` to delete them too. Confirming at the interactive prompt also authorizes those deletions.
+
+Pass the same `--instance`, `--app`, or `--secret-key` you gave the import. The undo refuses, and deletes nothing, when:
+
+- Your key belongs to a different instance from the one the run imported into, or Clerk can't confirm which instance it belongs to.
+- The run isn't an import, or it's already undone.
+- The import is still running in another process.
+- The run, or an undo of it, changed while the command waited for your answer.
+- Someone signed in after the preview, and you didn't pass `--include-signed-in`.
+
+If some deletions fail, the command exits with code `1`. Run it again to retry them, or to finish an interrupted undo.
+
+## Tune the request rate
+
+The import sends requests at your instance's [Backend API rate limit](/docs/guides/how-clerk-works/system-limits#backend-api-requests): 100 per second for a production instance and 10 for a development instance. If Clerk has raised your instance's limit, set `CLERK_MIGRATE_RATE_LIMIT` to the new limit in requests per second. For example, if your production instance's limit is 2,000 requests per 10 seconds, set it to `200`. The import keeps enough requests in flight to use about 95% of the rate limit: 9 at the production default, and 19 at `200`. Set `CLERK_MIGRATE_CONCURRENCY_LIMIT` only if the import runs slower than your rate limit allows, and raise it in small steps. When Clerk rate limits a request, the import waits and retries it up to 5 times. A `CLERK_MIGRATE_CONCURRENCY_LIMIT` set too high slows the import down, and a request still rate limited after the fifth retry fails, so the import records that user as failed.
+
+## Exit codes
+
+Every `clerk migrate` command exits with one of these codes:
+
+| Code | Meaning |
+| - | - |
+| `0` | Success, including skipped users and a prompt you declined |
+| `1` | Some users failed or the command hit an error |
+| `2` | The command refuses to go ahead, for example because of invalid flags, rejected users without `--allow-partial`, missing consent, or a `--dry-run` that previews a refused import |
+| `130` | You pressed `Ctrl + C` during an import or undo, leaving the run interrupted |

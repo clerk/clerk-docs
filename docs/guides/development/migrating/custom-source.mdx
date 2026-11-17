@@ -1,0 +1,240 @@
+---
+title: Migrate from another platform
+description: Migrate from a platform the Clerk CLI has no built-in source for, by writing one file in your own project.
+---
+
+A source maps one platform's export onto Clerk's import schema, and says what it brings across. The [Clerk CLI](/docs/cli) ships seven: `clerk`, `auth0`, `authjs`, `betterauth`, `firebase`, `supabase`, and `workos`. For anything else, write your own and pass it with `--source ./my-platform.ts`. The CLI loads your source file at runtime, without a rebuild.
+
+## Write a source with an AI agent
+
+Clerk's [`clerk-migrate` skill](/docs/guides/ai/skills) can write the source for you. Install Clerk's skills:
+
+```sh {{ filename: 'terminal' }}
+npx skills add clerk/skills
+```
+
+Then give your agent the export file and ask it to write a Clerk migration source for it. The skill asks about the details below, writes the file, and loads it with `clerk migrate sources ./my-platform.ts` to check it.
+
+## Before you write a source
+
+1. **How the platform records verification:** A boolean (`email_verified: true`), a nullable timestamp (`confirmed_at: "2024-06-29T…"`), or not at all. Clerk creates primary identifiers as verified, so route any address the platform never confirmed to `unverifiedEmailAddresses` instead of `email`. See [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones) for how the import creates them.
+1. **The password hash algorithm:** Clerk verifies each hash as-is, so `passwordHasher` must match that algorithm. Get the accepted values from `password_hasher` in the [`CreateUser` Backend API reference](/docs/reference/backend-api/tag/users/POST/users){{ target: '_blank' }}. The CLI rejects unsupported `passwordHasher` values before importing users and lists the accepted values in the error. It also rejects a password whose shape doesn't match its hasher, such as a bcrypt digest with a cost above 15.
+1. **The export's shape:** If the export nests the user array or omits CSV headers, use `preTransform` to extract arrays such as `{ "records": [...] }` or supply the headers.
+
+## Write the file
+
+Create the source file in your project and export a source definition. It can import your project's files, but it can't import from the CLI.
+
+The CLI reads `--source` as a path when it starts with `./`, `../`, or `/`, or ends in `.ts`, `.js`, or `.mjs`, and resolves it from the current directory.
+
+```ts {{ filename: 'my-platform.ts' }}
+export default {
+  key: 'myplatform',
+  label: 'My Platform',
+  description: "Exports from My Platform's admin console.",
+  transformer: {
+    account_ref: 'userId',
+    contact_email: 'email',
+    email_ok: 'emailVerified',
+    given: 'firstName',
+    family: 'lastName',
+    pw_bcrypt: 'password',
+  },
+  carries: {
+    passwords: { level: 'yes', note: 'bcrypt hashes from the pw_bcrypt column.' },
+    mfa: { level: 'no', note: 'Not exported.' },
+    metadata: { level: 'no', note: 'Not exported.' },
+  },
+  defaults: { passwordHasher: 'bcrypt' },
+  postTransform: (user) => {
+    // This platform records verification as a boolean. An address it never
+    // confirmed must not become a verified primary identifier. A CSV writes
+    // it as a string, such as 'TRUE' or '1'.
+    const verified = ['true', '1', 'yes', 'y', 't'].includes(
+      String(user.emailVerified).trim().toLowerCase(),
+    )
+    if (!verified) {
+      user.unverifiedEmailAddresses = user.email
+      delete user.email
+    }
+    delete user.emailVerified
+  },
+}
+```
+
+TypeScript works, including `interface`, `satisfies`, and `as const`. Plain `.js` works too.
+
+| Key | Required | Description |
+| - | - | - |
+| `key` | yes | Identifies the source. Must not collide with a built-in |
+| `label` | yes | Shown by `clerk migrate sources` |
+| `description` | no | Shown alongside the label. Defaults to `Custom source` |
+| `transformer` | yes | The field map: source field name → Clerk schema field name |
+| `carries` | yes | What the source brings across: `{ passwords, mfa, metadata }`, each `{ level: 'yes' \| 'no' \| 'partial', note }` |
+| `caveats` | no | An array of strings that `clerk migrate sources` lists under the source |
+| `defaults` | no | Default values for each row before field mapping. Values in the row override these defaults |
+| `preTransform` | no | `(filePath, fileType) => { filePath, data?, csvHeaders? }`, can be async, runs before mapping |
+| `postTransform` | no | `(user, context) => void`, mutates a user after mapping. Sees unmapped columns under their original names. Must be synchronous |
+
+### Map a field to `userId`
+
+A source field must map to `userId`. It becomes the Clerk user's `external_id`, which is how a re-run of the import recognizes users it already created. Without it the import would create every user with no `external_id`, so the CLI refuses to load a source that doesn't map one.
+
+### Unwrap a nested export
+
+`preTransform` runs before field mapping and can hand back the users it found:
+
+```ts {{ filename: 'my-platform.ts' }}
+export default {
+  // …key, label and field map as above…
+  preTransform: (filePath, fileType) => {
+    if (fileType === 'application/json') {
+      const parsed = JSON.parse(require('node:fs').readFileSync(filePath, 'utf-8'))
+      return { filePath, data: Array.isArray(parsed) ? parsed : parsed.records }
+    }
+    return { filePath }
+  },
+}
+```
+
+For a CSV with no header row, return the column names as `csvHeaders`, for example `{ filePath, csvHeaders: ['id', 'email', 'name'] }`. Otherwise the parser reads your first user as the column names.
+
+`preTransform` doesn't run on a file written by `clerk migrate export`.
+
+## Schema fields
+
+The CLI validates each user against this schema before it sends any requests. It drops fields outside the schema and lists them under `Clerk won't store`. Use the field names below. Every user needs `userId` (`string`).
+
+### Identifiers
+
+At least one must be present, or the import's checks reject the user. Each email and phone field accepts a single value or an array.
+
+| Field | Type | Description |
+| - | - | - |
+| `email` | `string \| string[]` | Primary verified email address(es) |
+| `emailAddresses` | `string \| string[]` | Additional verified emails |
+| `unverifiedEmailAddresses` | `string \| string[]` | Unverified emails |
+| `phone` | `string \| string[]` | Primary verified phone number(s) |
+| `phoneNumbers` | `string \| string[]` | Additional verified phones |
+| `unverifiedPhoneNumbers` | `string \| string[]` | Unverified phones |
+| `username` | `string` | Username |
+
+### Profile, password, and two-factor authentication (2FA)
+
+| Field | Type | Description |
+| - | - | - |
+| `firstName` | `string` | First name |
+| `lastName` | `string` | Last name |
+| `password` | `string` | The hashed password from the source platform |
+| `passwordHasher` | `enum` | Required whenever `password` is set |
+| `totpSecret` | `string` | Time-based one-time password (TOTP) secret |
+| `backupCodesEnabled` | `boolean` | Whether backup codes are enabled |
+| `backupCodes` | `string[]` | Backup codes |
+
+### Metadata
+
+`unsafeMetadata` is readable _and writable_ by the client, so never put anything you trust there. `publicMetadata` is client-readable and server-writable. `privateMetadata` is server-side only.
+
+### Account state
+
+The account state fields are `createdAt`, `legalAcceptedAt`, `banned`, `bypassClientTrust`, `createOrganizationEnabled`, `createOrganizationsLimit`, `deleteSelfEnabled`, `skipLegalChecks`, `skipPasswordChecks`. Map `createdAt` if the source has an original signup date. Without it, a migrated user's creation date is the day of the import. If a ban has an end date, also set `banEndsAt` so the checks warn you that the ban won't expire in Clerk.
+
+### Leave a user out
+
+Set `skipReason` to a string in `postTransform`. The import records that user as `skipped` with your reason and continues without requiring `--allow-partial`. Built-in sources use it for soft-deleted users, anonymous users, and users with no email or phone.
+
+### Drop a password
+
+If your source drops a hash it can't use, set `passwordDropped: true` on that user, and the checks count it in their warning about passwords Clerk can't verify.
+
+## Check your source
+
+`clerk migrate sources` loads and validates your file without touching any data, and shows where each field lands:
+
+```sh {{ filename: 'terminal' }}
+clerk migrate sources ./my-platform.ts
+```
+
+```text
+myplatform  My Platform (custom — ./my-platform.ts)
+Exports from My Platform's admin console.
+
+What comes across
+  Passwords yes
+    bcrypt hashes from the pw_bcrypt column.
+  MFA       no
+    Not exported.
+  Metadata  no
+    Not exported.
+
+Where each field lands
+  account_ref    → userId
+  contact_email  → email
+  email_ok       → emailVerified  not a Clerk field: Clerk won't store it unless postTransform moves it
+  given          → firstName
+  family         → lastName
+  pw_bcrypt      → password
+  passwordHasher is always "bcrypt"
+
+Social sign-ins are not copied. Enable the same providers in Clerk, and a user
+who signs in with one is linked to their imported account by verified email. See
+https://clerk.com/docs/guides/configure/auth-strategies/social-connections/account-linking
+```
+
+The example uses `emailVerified` as an intermediate value and removes it in `postTransform`.
+
+The CLI checks your file's shape before using it, and names the specific problem. The last four messages start with `<path> is not a valid source:`.
+
+| Problem | What you're told |
+| - | - |
+| Path doesn't exist | `No source file at /abs/path.ts.` |
+| No default export, but a named one | ``has no default export. Found named export `myPlatform` — did you mean `export default`?`` |
+| Doesn't parse | `Could not load ./f.ts:` followed by the parser's error, such as `Expected identifier but found ","` |
+| Nothing maps to `userId` | ``no source field maps to `userId`. Every user needs one — it becomes the Clerk user's external_id`` |
+| No `carries` | `` `carries` must say what the source brings across: { passwords, mfa, metadata }, each { level, note } `` |
+| `key` clashes with a built-in | `` `key` is "clerk", which is already a built-in source. Choose another key `` |
+| A hook isn't a function | `` `postTransform` must be a function when present `` |
+
+## Run the migration
+
+<Include src="./_partials/cli-prerequisites" />
+
+Check the file against your Clerk instance first. `--dry-run` runs every check and writes nothing:
+
+```sh {{ filename: 'terminal' }}
+clerk migrate import users.json --source ./my-platform.ts --dry-run
+```
+
+Review the `Clerk won't store` warning for fields your mapping produces outside the import schema.
+
+Read the checks closely on a first custom migration. See [check before you import](/docs/guides/development/migrating/how-the-cli-migrates-users#check-before-you-import) for the full list.
+
+When the checks pass, rerun your dry-run command with `--yes` instead of `--dry-run`, keeping the input and all other flags.
+
+The run records your source's key and a hash of the source file. After you edit the source, the CLI refuses to continue the earlier run and identifies it. To reimport the whole export with the edited source, undo the earlier run first. `--new-run` starts a new run without undoing, but the checks reject every user the earlier run created as already in the instance, so the import stops unless you pass `--allow-partial`. The hash covers only the source file, so after you edit a helper file it imports, undo the earlier run the same way.
+
+Use the import run's ID to check its results or undo it.
+
+## Verify the migration
+
+1. Read what the run did. It lists the users that failed or were skipped, and why:
+
+   ```sh {{ filename: 'terminal' }}
+   clerk migrate runs <import_run_id>
+   ```
+
+1. Confirm the users exist, and that `external_id` is populated. The table view doesn't show `external_id`, so ask for JSON:
+
+   ```sh {{ filename: 'terminal' }}
+   clerk users list --json
+   ```
+
+1. Sign in as a migrated user. If you mapped a password, only a sign-in confirms you named the right hasher.
+
+## Undo the migration
+
+<Include src="./_partials/undo" />
+
+## Next steps
+
+<Include src="./_partials/next-steps" />

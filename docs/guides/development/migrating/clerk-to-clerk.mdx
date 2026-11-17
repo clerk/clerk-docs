@@ -1,0 +1,112 @@
+---
+title: Migrate between Clerk instances
+description: Copy users from one Clerk instance to another, such as development to production or between applications, with two Clerk CLI commands.
+---
+
+Use two [Clerk CLI](/docs/cli) commands to move users between instances, such as from development to production or between applications. Each command names its own target, so you never swap a [Secret Key](!secret-key) between steps.
+
+> [!IMPORTANT]
+> Clerk's API never returns password digests, time-based one-time password (TOTP) secrets, or backup codes, so `clerk migrate export clerk` can't copy them, and the users you migrate will have to reset their password in the destination. The CLI exports identifiers, names, metadata, and original signup dates. To keep passwords, [import a Clerk Dashboard export](#keep-passwords-with-a-clerk-dashboard-export) instead.
+
+## Migrate with an AI agent
+
+<Include src="./_partials/use-skills" />
+
+## What you need
+
+<Include src="./_partials/cli-prerequisites" />
+
+Your CLI login, or the Secret Keys you pass, needs access to both instances. If they're two instances of one linked application, `--instance dev` and `--instance prod` are enough. If they're separate applications, target each with its own `--app <application_id> --instance <instance>` or `--secret-key <secret_key>`.
+
+## What migrates
+
+- **Passwords and TOTP secrets, from a Dashboard export:** Importing a Clerk Dashboard export keeps them. `clerk migrate export clerk` can't export them, so users you migrate that way must reset their password in the destination instance. Plan how you'll tell them before you cut over.
+- **Verified primary identifiers:** The CLI exports verified and unverified emails and phones in separate fields, primary first. The import attaches them in that order. Clerk puts the first entry on the user and attaches the rest afterward, so the order decides which address a user signs in with. If the primary isn't verified, the CLI exports it as unverified, and the first verified address becomes primary instead. By default, unverified addresses stay unverified. The checks reject a user whose only email is unverified when the destination requires an email. To reserve those unverified addresses instead, see [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones).
+- **Signup dates, from either export:** The import copies `created_at`. The CLI's API export also includes `legal_accepted_at`; the Dashboard CSV doesn't.
+- **Metadata, from the CLI's API export:** `publicMetadata`, `privateMetadata`, and `unsafeMetadata` keep their trust levels. The Dashboard CSV doesn't include metadata.
+- **Account state, from the CLI's API export:** The import copies `banned`, `createOrganizationEnabled`, `createOrganizationsLimit`, and `deleteSelfEnabled`. The Dashboard CSV doesn't include these fields.
+- **Clerk user IDs:** Each user's ID in the source instance becomes `external_id`. The destination instance mints new `user_` IDs. If your app stores the old ones, read the original through a session token claim. See [foreign keys](/docs/guides/development/migrating/plan-your-migration#foreign-keys). With the CLI's API export, an existing `external_id` moves to `privateMetadata` as `clerkExternalId`.
+
+## What doesn't migrate
+
+- **Backup codes and other account data:** Neither export includes backup codes. The import omits Organizations, sessions, social accounts, passkeys, Web3 wallets, and profile images.
+
+<Steps>
+  ## Export from the source instance
+
+  Run the export, naming the source instance:
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate export clerk --instance dev
+  ```
+
+  If you pass `--secret-key` and `--instance` together, the instance has to match the key's, or the export refuses to run.
+
+  Always name the source instance. Your linked project is usually where the users are _going_, so the export won't default to it as the source instance. If you don't pass `--instance`, `--app`, `--secret-key`, or an exported `CLERK_SECRET_KEY`, the CLI lists every instance on your account and asks you to pick one. The linked application's instances come last, marked as the likely destination. Listing instances needs `clerk auth login`. Without it, the CLI offers only the instance it resolved, and asks you to confirm it. The CLI can't ask an AI agent, so in agent mode, or with `--yes` or `--json`, the export refuses to run until you name the source instance.
+
+  The export saves your users as `export.json` in a new run, and prints the run ID and a field coverage table:
+
+  ```text
+  Field coverage
+    ✓ 87/87 have an email address
+    ✗ 0/87 have a phone number
+    ! 12/87 have a username
+    ! 60/87 have a first name
+    ! 58/87 have a last name
+    ! 74/87 have a password (not exportable — see below)
+  ```
+
+  Pass `-o <path>` to write the file somewhere else. The path has to end in `.json`.
+
+  The last row counts users who _have_ a password in the source instance. None of those digests are in the file, because the API doesn't return them.
+
+  ## Import into the destination instance
+
+  Check the export against the destination first. A dry run writes nothing and skips the import's consent, legal acceptance, and reservation questions, so add `--skip-legal-checks` to preview importing users without [legal acceptance](/docs/guides/development/migrating/how-the-cli-migrates-users#legal-acceptance), or `--reserve-unverified` to preview reserving [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones):
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate import <export_run_id> --instance prod --dry-run
+  ```
+
+  Name the destination: the import refuses to write into the instance the export came from. The export recorded its source, so the import needs no `--source`.
+
+  If the checks reject a user, fix the file or instance, or pass `--allow-partial` to import the users that pass. See [check before you import](/docs/guides/development/migrating/how-the-cli-migrates-users#check-before-you-import).
+
+  After the checks pass, rerun the same command with `--yes` instead of `--dry-run`, keeping `--instance prod` and other flags. Leave off `--yes` to confirm at a prompt. Use the import run's ID to check its results or undo it. To [continue an interrupted import](/docs/guides/development/migrating/how-the-cli-migrates-users#continue-an-interrupted-import), run the same command again.
+
+  If you're going the other way, copying production into development for staging, the checks reject every user past the development instance's user limit. Pass `--allow-partial` to import up to it. The users past the limit aren't created, and the import records them as `skipped`.
+
+  ### Keep passwords with a Clerk Dashboard export
+
+  A [user export from the Clerk Dashboard](/docs/guides/development/migrating/export-from-clerk#export-from-the-clerk-dashboard) includes each user's password digest, password hasher, and TOTP secret. The `clerk` source reads that CSV, so importing it keeps your users' passwords:
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate import <path_to_csv> --source clerk --instance prod --dry-run
+  ```
+
+  A file the Dashboard wrote doesn't name its source, so it needs `--source clerk`. When the checks pass, run the same command with `--yes` instead of `--dry-run`.
+
+  ## Verify the migration
+
+  1. Read what the run did. It lists the users that failed or were skipped, and why:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk migrate runs <import_run_id>
+     ```
+
+  1. Confirm the users exist in Clerk:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk users list --instance prod
+     ```
+
+  1. Sign in to the destination as a migrated user. If their password wasn't migrated, test the password reset flow and confirm that the reset email reaches the imported address.
+</Steps>
+
+## Undo the migration
+
+<Include src="./_partials/undo" />
+
+## Next steps
+
+<Include src="./_partials/next-steps" />

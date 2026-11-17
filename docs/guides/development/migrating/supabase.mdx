@@ -1,0 +1,141 @@
+---
+title: Migrate from Supabase
+description: Move your Supabase Auth users into Clerk with the Clerk CLI, keeping their password hashes.
+---
+
+The [Clerk CLI](/docs/cli) exports your users from the `auth.users` table in your Supabase Postgres database with `clerk migrate export supabase`, then creates them in Clerk with `clerk migrate import`.
+
+The export reads the database, not Supabase's Admin API, because `encrypted_password` exists only in the table. The password digests come across, so your users keep the passwords they already have.
+
+## Migrate with an AI agent
+
+<Include src="./_partials/use-skills" />
+
+## What you need
+
+<Include src="./_partials/cli-prerequisites" />
+
+### A connection string for your Supabase database
+
+1. In the [Supabase dashboard](https://supabase.com/dashboard), open your project and select **Connect**.
+1. Copy the **Session pooler** connection string.
+1. Substitute your database password into it.
+
+> [!IMPORTANT]
+> Use the pooler string. Supabase's direct connections are IPv6-only unless you've bought the IPv4 add-on, so a direct string typically fails to connect from a laptop or a build server.
+
+Connect as the `postgres` role. An application role usually can't read the `auth` schema, and the export needs to.
+
+## What migrates
+
+- **Supported password hashes:** Supabase hashes with bcrypt by default, and accepts argon2 hashes from its own imports, so the `supabase` source detects the hasher per user: `bcrypt`, `argon2id`, or `argon2i`. The source omits a hash Clerk can't verify, such as one from another hasher or a bcrypt hash with a cost above 15, and the checks warn that the user will import without a password.
+- **Unverified emails and phones:** They stay unverified by default. Supabase records verification as a timestamp that stays null until the user confirms. The import attaches an email with no `email_confirmed_at` as unverified and keeps it off the primary fields. The same applies to `phone_confirmed_at`. The checks reject a user whose only email is unverified when your instance requires an email. To reserve those unverified addresses instead, see [unverified emails and phones](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones).
+- **Names from metadata:** `auth.users` has no name columns. The name lives in `raw_user_meta_data` under whichever key the provider used. The source uses `first_name` and `last_name` as they are. When there's no first name, the `supabase` source splits `display_name`, `full_name`, or `name`, in that order, into first and last name.
+- **Discord names:** The source removes a trailing `#` and digits from names such as `name#0` because Clerk interprets that suffix as a URL.
+- **Phone numbers:** Supabase stores phone numbers in [E.164](https://www.itu.int/rec/T-REC-E.164/en), the international telephone numbering standard, without the leading `+`. The source adds the `+` Clerk requires.
+- **Active bans:** The import bans a user whose `banned_until` is still in the future. Clerk's bans have no end date, so a temporary ban stays until you lift it in Clerk, and the checks warn you about it.
+- **Supabase IDs:** Each user's `id` becomes the Clerk user's `external_id`, which is how a re-run recognizes the users it already created. To keep referencing it in your app, see [foreign keys](/docs/guides/development/migrating/plan-your-migration#foreign-keys).
+- **User metadata:** `raw_user_meta_data` becomes `unsafeMetadata`. Your users could edit it in Supabase, and they can still edit it in Clerk. Don't trust it on the server.
+- **Signup dates:** The import keeps the date from `created_at`.
+
+## What doesn't migrate
+
+- **Multi-factor authentication (MFA) enrollments:** Users must enroll again in Clerk.
+- **App metadata:** The import omits `raw_app_meta_data`.
+- **Social accounts:** Enable the same providers on the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page in the Clerk Dashboard. When a user signs in with one, Clerk links it to their imported account by verified email address. Clerk doesn't link to an address the import attached as unverified, so that sign-in creates a separate user. To link those users, import with `--reserve-unverified`. If you reserve the address and the provider doesn't confirm it, Clerk asks the user to verify it before linking. See [account linking](/docs/guides/configure/auth-strategies/social-connections/account-linking).
+
+<Steps>
+  ## Export your users from Supabase
+
+  Run the export, and enter your connection string, `postgresql://postgres.<project_ref>:<password>@<pooler_host>:5432/postgres`, when the CLI asks:
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate export supabase
+  ```
+
+  Without `--db-url`, the CLI reads `SUPABASE_DB_URL`, then prompts for it. The prompt masks what you type, and a value entered at a prompt stays out of your shell history. If the database rejects the connection string, the prompt explains why and asks again. With `--yes`, `--json`, in an agent run, or without a terminal, the export doesn't prompt, and fails if the connection string is missing or rejected.
+
+  The export saves your users as `export.json` in a new run, and prints the run ID and a field coverage table:
+
+  ```text
+  Field coverage
+    ✓ 412/412 have an email address
+    ! 388/412 have a confirmed email
+    ! 341/412 have a password hash
+    ✗ 0/412 have a phone number
+    ! 260/412 have a first name
+    ! 120/412 have a last name
+  ```
+
+  Pass `-o <path>` to write the file somewhere else. The path has to end in `.json`.
+
+  If the password hash row is far below the user count, most of your users signed up through a social provider rather than with a password. Before importing, review the [social provider requirements](#users-whose-only-social-provider-is-disabled-in-clerk).
+
+  ### If the connection fails
+
+  The CLI adds troubleshooting guidance below the database error:
+
+  | What you see | What to check |
+  | - | - |
+  | Could not reach the database | The host and port. Use the pooler connection string, or enable the IPv4 add-on under **Settings** > **Add-Ons** |
+  | The database rejected those credentials | The user and password in the connection string |
+  | The `auth.users` table was not readable | That Supabase Auth is enabled, and that you're connecting as `postgres` rather than an application role |
+
+  A password containing characters such as `@`, `#`, or `/` usually doesn't need URL-encoding: the CLI encodes a password it can't otherwise parse. If the connection still fails, URL-encode the password. Connection strings are redacted in every error message, including when the password itself contains an unencoded `@`.
+
+  ### Import an `auth.users` file you already have
+
+  The `supabase` source also reads a JSON or CSV export of `auth.users` that you made yourself, such as from the SQL editor. A file you wrote doesn't name its source, so pass `--source supabase`:
+
+  ```sh {{ filename: 'terminal' }}
+  clerk migrate import <path> --source supabase --dry-run
+  ```
+
+  Include `encrypted_password` to keep passwords, and `raw_app_meta_data` for the [social provider check](#users-whose-only-social-provider-is-disabled-in-clerk). Without `raw_app_meta_data`, that check doesn't run.
+
+  ## Import your users into Clerk
+
+  ### Soft-deleted and anonymous users
+
+  The source skips soft-deleted (`deleted_at`) and anonymous (`is_anonymous`) users. The import records them as `skipped` and continues without requiring `--allow-partial`.
+
+  ### Users whose only social provider is disabled in Clerk
+
+  If Discord is disabled in Clerk, a user who signed in only with Discord needs another enabled sign-in method. The checks reject users who have none.
+
+  The checks read each user's `raw_app_meta_data.providers` and compare it against the social providers your destination instance has enabled. A user passes if any of these is true:
+
+  - One of their providers is enabled in Clerk, or is Supabase's own `email` or `phone` provider.
+  - They have a verified email and the instance signs in by email code or email link, or a verified phone and the instance signs in by SMS code. An unverified email or phone counts only if you [reserve it](/docs/guides/development/migrating/how-the-cli-migrates-users#unverified-emails-and-phones) with `--reserve-unverified` or answer yes to the reservation prompt. A dry run doesn't ask, so it counts them only when you pass the flag. An email Clerk refuses, such as one with a `.local` domain, doesn't count.
+  - Supabase recorded no providers for them.
+
+  The checks reject everyone else, naming each provider as either "not enabled in Clerk" or "not offered by Clerk". Enable the missing [social connections](/docs/guides/configure/auth-strategies/social-connections/overview) in Clerk and run the checks again. Providers Clerk doesn't offer can't be enabled, so to leave those users behind, pass `--allow-partial`. The import records them as `skipped`.
+
+  The CLI still warns about providers that are disabled or unavailable in Clerk, even when their users have another valid sign-in method.
+
+  <Include src="./_partials/import" />
+
+  ## Verify the migration
+
+  1. Read what the run did. It lists the users that failed or were skipped, and why:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk migrate runs <import_run_id>
+     ```
+
+  1. Confirm the users exist in Clerk:
+
+     ```sh {{ filename: 'terminal' }}
+     clerk users list
+     ```
+
+  1. Sign in as one of them with their Supabase password. Only a sign-in confirms the digests came across intact.
+</Steps>
+
+## Undo the migration
+
+<Include src="./_partials/undo" />
+
+## Next steps
+
+<Include src="./_partials/next-steps" />

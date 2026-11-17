@@ -57,27 +57,29 @@ An example event looks like this:
 
 ### Clerk CLI
 
-While telemetry is on, the [Clerk CLI](/docs/cli) sends one `CLI_COMMAND_EXECUTED` event each time a command runs, apart from the runs listed in [How you are notified](#how-you-are-notified). The event records how you use the CLI. It doesn't include command arguments, option values, file paths, secret keys, or data about your users.
+While telemetry is on, the [Clerk CLI](/docs/cli) sends one `CLI_COMMAND_EXECUTED` event each time a command runs, apart from the runs listed in [How you are notified](#how-you-are-notified). The event records how you use the CLI. It doesn't include command arguments, option values, file paths, secret keys, or data about your users. `clerk migrate` makes three exceptions. It sends the name of the built-in source or platform the users come from, or `custom`. It also sends the ID of the instance it acts on, whether you name it with flags or the CLI finds it from your linked project or secret key. An application you pass with `--app` goes out as `app_id`.
 
 | Field | Description |
 | - | - |
 | `command` | The command path, such as `users list`. Arguments aren't included. |
 | `flags` | The names of the flags you set. Their values aren't included. |
 | `outcome`, `exit_code`, `error_code` | How the command ended. |
-| `stage` | How far a multi-step command got. Set by `clerk init`, `clerk auth login`, `clerk deploy`, and `clerk deploy status`. `clerk link` and `clerk doctor --fix` also set it when they need to sign you in. Other commands send `null`. |
+| `stage` | How far a multi-step command got. Set by `clerk init`, `clerk auth login`, `clerk deploy`, `clerk deploy status`, `clerk migrate import`, `clerk migrate export`, and `clerk migrate undo`. `clerk link` and `clerk doctor --fix` also set it when they need to sign you in. Other commands send `null`. |
 | `pause_step`, `components` | The step a deploy paused on, and which of DNS, SSL, email DNS, and OAuth credentials were verified. `clerk deploy` sets both, and `clerk deploy status` sets `components`. Other commands send `null` values. |
 | `duration_ms` | How long the command ran. |
+| `instance_id` | The ID of the Clerk instance a `clerk migrate` command acted on. Other commands send `null`, and so does a `clerk migrate` run that never reaches an instance: `sources`, `runs` without a run ID, or an export from a platform other than Clerk. A run that stops before it finds its target sends `null` only when it has no `--instance` ID. When Clerk can't name the instance behind a secret key, the CLI labels it on your machine with a hash of the key and sends `null`. The CLI doesn't send the hash. |
+| `migrate_source` | The built-in source or export platform a migration's users come from, such as `auth0` or `supabase`. A source you wrote sends `custom`, never its path or name. Other commands send `null`, and so do `sources`, `runs` without a run ID, and a run that stops before it knows the source. |
 | `machine_uuid` | A random ID the CLI generates and stores on your machine. |
 | `install_method`, `ai_agent`, `terminal_program`, `mode`, `os`, `arch`, `ci`, `in_tmux`, `in_screen` | The environment the CLI ran in, such as how you installed it and whether an AI agent ran the command. |
 | `env` | The Clerk API environment the CLI talks to. |
-| `workspace_id`, `app_id` | The application ID of the project the current directory is linked to, and its workspace ID when the CLI has one. |
+| `workspace_id`, `app_id` | The ID of the application the command acted on, such as one you pass to `clerk migrate` with `--app`. A command that doesn't name an application sends the linked project's. When `clerk migrate` has no application ID, a run on an instance the CLI can't tie to the linked project sends `null`. The CLI sends a workspace ID only for the linked project's application. |
 
 An example event looks like this:
 
 ```json {{ prettier: false }}
 {
   "sdk": "clerk-cli",
-  "sdkv": "4.1.0",
+  "sdkv": "4.2.0",
   "event": "CLI_COMMAND_EXECUTED",
   "payload": {
     "command": "users list",
@@ -89,6 +91,8 @@ An example event looks like this:
     "pause_step": null,
     "components": { "dns": null, "ssl": null, "mail": null, "oauth": null },
     "duration_ms": 412,
+    "instance_id": null,
+    "migrate_source": null,
     "machine_uuid": "00000000-0000-0000-0000-000000000000",
     "install_method": "homebrew",
     "ai_agent": "",
@@ -199,4 +203,4 @@ clerk telemetry disable
 
 `clerk telemetry status` shows whether telemetry is on and, when it's off, why. `clerk telemetry enable` removes the opt-out.
 
-To opt out with an environment variable instead, export `CLERK_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1` in your shell. The CLI doesn't read them from a `.env` file. Any value other than an empty string, `0`, or `false` (case-insensitive) opts out, and either variable opts out even after you run `clerk telemetry enable`. Opting out also removes the `AIAgent/<name>` part of the User-Agent header the CLI sends with its HTTP requests, and turns off `clerk feedback`, which prints the GitHub issues URL instead.
+To opt out with an environment variable instead, export `CLERK_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1` in your shell. The CLI doesn't read them from a `.env` file. Any value other than an empty string, `0`, or `false` (case-insensitive) opts out, and either variable opts out even after you run `clerk telemetry enable`. Opting out also removes the `AIAgent/<name>` and `migrate` parts of the User-Agent header the CLI sends with its HTTP requests, and turns off `clerk feedback`, which prints the GitHub issues URL instead. The CLI adds `migrate` to the Backend API requests `clerk migrate` sends, except on a first run outside CI.

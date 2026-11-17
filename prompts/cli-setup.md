@@ -28,7 +28,7 @@ Before `init`, inspect auth dependencies, routes, middleware, sessions, and user
 
 Do not modify or remove existing auth without approval.
 
-See the [migration guide](https://clerk.com/docs/guides/development/migrating/overview).
+See the [migration guide](https://clerk.com/docs/guides/development/migrating/overview). If Clerk's skills are available to you, move the users themselves with the `clerk-migrate` skill instead of hand-rolling a Backend API import script.
 
 ## Existing Clerk projects
 

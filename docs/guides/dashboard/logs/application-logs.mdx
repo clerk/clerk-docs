@@ -1,6 +1,6 @@
 ---
 title: Application Logs
-description: Learn how to use Application Logs in the Clerk Dashboard and Backend API to monitor authentication events, track user activity, and debug issues across your instance.
+description: Learn how to use Application Logs in the Clerk Dashboard, Backend API, and Clerk CLI to monitor authentication events, track user activity, and debug issues across your instance.
 ---
 
 The [**Application Logs**](https://dashboard.clerk.com/~/application-logs) page of the Clerk Dashboard provides a detailed audit trail of events that occur within your instance. Application Logs track actions such as sign-ins, sign-ups, user updates, Organization changes, and more — enabling debugging, compliance, and observability.
@@ -50,6 +50,89 @@ You can also access Application Logs through the [Backend API](/docs/reference/b
 ### Export logs
 
 Syncing or exporting logs through the Backend API isn't allowed. For continuous delivery to a storage bucket you own, use log drains, available on the [Enterprise plan](/pricing).
+
+## Query logs from the CLI
+
+The [Clerk CLI](/docs/cli) reads Application Logs from the terminal with `clerk logs`, which calls the [Backend API](/docs/reference/backend-api/tag/logs){{ target: '_blank' }} `GET /v1/logs` endpoint for you. Use it to look into a user's activity, check failed sign-ins, or watch events as they happen.
+
+### Before you start
+
+- [Install the Clerk CLI](/docs/cli#installation).
+- Sign in with `clerk auth login` and run `clerk logs` from a project linked to your application, or pass a [Secret Key](!secret-key) with `--secret-key` or the `CLERK_SECRET_KEY` environment variable.
+- To target an application outside a linked project, pass `--app <application_id>`. To choose its instance, pass `--instance` with `dev`, `prod`, or a full instance ID.
+
+### Common queries
+
+`clerk logs` lists the newest logs first and returns up to 50 logs by default, even with a time filter. Use `--limit` for more per run, or repeat with the printed `--cursor` until no cursor remains.
+
+Expand a query to see its command.
+
+<Accordion>
+  <AccordionPanel title="Logs from the last hour">
+    To limit the results to the past hour, run:
+
+    ```sh {{ filename: 'terminal' }}
+    clerk logs --since 1h
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel title="Activity for a user">
+    To see a user's activity over the last week, filter by their email address, phone number, username, or Web3 wallet with `--identifier`. To filter by user ID instead, use `--user <user_id>`.
+
+    ```sh {{ filename: 'terminal' }}
+    clerk logs --identifier user@example.com --since 7d
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel title="Failed sign-ins">
+    Use the grouped view, which shows one row per [log group](#log-groups) with its events below it:
+
+    ```sh {{ filename: 'terminal' }}
+    clerk logs --grouped --group-type sign_in --status failed
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel title="Filter by a payload field">
+    Find the field's path with `clerk logs schema <event_type>`, then pass it to `--payload-filter` along with `--type`. Run `clerk logs schema` without an argument to list every event type your instance can read.
+
+    ```sh {{ filename: 'terminal' }}
+    clerk logs schema <event_type>
+    clerk logs --type <event_type> --payload-filter <field_path>=<value>
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel title="Watch new logs">
+    `--follow` first prints up to 50 recent logs by default, then streams new ones as they arrive. It runs until you press Ctrl+C. It's for live debugging; to export logs, see [Export logs](#export-logs).
+
+    ```sh {{ filename: 'terminal' }}
+    clerk logs --follow
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel title="Logs for one sign-in or sign-up">
+    To see the logs of a single sign-in or sign-up, oldest first, pass its ID, which is also its log group ID:
+
+    ```sh {{ filename: 'terminal' }}
+    clerk logs get <sign_in_or_sign_up_id>
+    ```
+
+    `clerk logs get` returns up to 50 logs by default, or up to 500 with `--limit`. If more remain, rerun with the printed `--cursor` to get later logs in the group; repeat until no cursor remains.
+  </AccordionPanel>
+</Accordion>
+
+Run `clerk logs --help` to see every option.
+
+### JSON output
+
+Pass `--json` for machine-readable output. [Agent mode](/docs/cli#ai-agent-integration) uses JSON by default.
+
+- `clerk logs` and `clerk logs get` return `{ data, cursor }`. `data` contains the logs as the Backend API returns them. Pass `cursor.next` to `--cursor` for the next page; `null` means there are no more pages.
+- The next page has older logs for `clerk logs` and later logs from the same group for `clerk logs get`.
+- `clerk logs --follow` outputs NDJSON instead: one log object per line, starting with recent logs and then new arrivals.
+
+### Retention
+
+Results only go back as far as your plan's [log retention](/docs/guides/dashboard/logs/overview#plans-and-retention). When a search reaches the retention limit, the CLI says how far back results go. For list searches, `cursor.retention_limit_reached` is `true` in JSON output.
 
 ## Supported events
 

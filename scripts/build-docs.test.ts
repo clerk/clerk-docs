@@ -10116,6 +10116,88 @@ sourceFile: /docs/api-doc.mdx
 `)
   })
 
+  test('Should fail when an embedded tooltip makes the built doc invalid MDX', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+---
+
+- **[Term](!ABC):** Description
+`,
+      },
+      {
+        path: './docs/_tooltips/ABC.mdx',
+        content: `**[Term](https://example.com)** is a thing`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        tooltips: {
+          inputPath: '../docs/_tooltips',
+          outputPath: './_tooltips',
+        },
+      }),
+    )
+
+    await expect(promise).rejects.toThrow('Built api-doc.mdx is not valid MDX')
+  })
+
+  test('Should embed a tooltip that opens with a bold link when the bold is inside the trigger', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+---
+
+- [**Term**](!ABC): Description
+`,
+      },
+      {
+        path: './docs/_tooltips/ABC.mdx',
+        content: `**[Term](https://example.com)** is a thing`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        tooltips: {
+          inputPath: '../docs/_tooltips',
+          outputPath: './_tooltips',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/api-doc.mdx')).toContain(
+      '<Tooltip><TooltipTrigger>**Term**</TooltipTrigger><TooltipContent>**[Term](https://example.com)** is a thing</TooltipContent></Tooltip>: Description',
+    )
+  })
+
   test('Should validate links in tooltips', async () => {
     const { tempDir } = await createTempFiles([
       {

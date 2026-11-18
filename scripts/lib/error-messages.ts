@@ -161,6 +161,10 @@ export const errorMessages = {
   'typedoc-read-error': (filePath: string): string => `Failed to read in ${filePath} from typedoc file`,
   'typedoc-parse-error': (filePath: string): string => `Failed to parse ${filePath} from typedoc file`,
   'typedoc-not-found': (filePath: string): string => `Typedoc ${filePath} not found`,
+
+  // Output errors
+  'dist-mdx-parse-error': (filePath: string, error: unknown): string =>
+    `Built ${filePath} is not valid MDX, so the page would fail to render: ${error instanceof Error ? error.message : String(error)}. Embedding a partial, typedoc, or tooltip produced markup that no longer parses. A common cause is a tooltip inside bold text whose content opens with a bold link; move the bold inside the trigger, as in [**Term**](!tooltip).`,
 } as const
 
 type WarningCode = keyof typeof errorMessages

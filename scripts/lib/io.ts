@@ -4,6 +4,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { BuildConfig } from './config'
 import readdirp from 'readdirp'
+import { remark } from 'remark'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkGfm from 'remark-gfm'
+import remarkMdx from 'remark-mdx'
 import type { SDK } from './schemas'
 import { Store } from './store'
 
@@ -64,8 +68,23 @@ export const ensureDirectory = async (dirPath: string): Promise<void> => {
   }
 }
 
+const distMdxParser = remark().use(remarkFrontmatter).use(remarkMdx).use(remarkGfm)
+
+// The build validates each source file, then embeds partials, typedocs, and tooltips and
+// writes the tree back out as MDX. That output can stop parsing even when every source is
+// valid (a tooltip whose content opens with a bold link, embedded inside bold text), and
+// clerk/clerk only compiles most docs pages on first request, so a bad page would ship as a 500.
+const assertDistMdxParses = (filePath: string, contents: string) => {
+  try {
+    distMdxParser.parse(contents)
+  } catch (error) {
+    throw new Error(errorMessages['dist-mdx-parse-error'](filePath, error), { cause: error })
+  }
+}
+
 // write a file to the dist (output) folder
 export const writeDistFile = (config: BuildConfig, store: Store) => async (filePath: string, contents: string) => {
+  if (filePath.endsWith('.mdx')) assertDistMdxParses(filePath, contents)
   const fullPath = path.join(config.distTempPath, filePath)
   await ensureDirectory(path.dirname(fullPath))
   await fs.writeFile(fullPath, contents, { encoding: 'utf-8' })

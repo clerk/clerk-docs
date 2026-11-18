@@ -143,6 +143,7 @@ The "Supported events" tables on the [Admin Logs](/docs/guides/dashboard/logs/ad
 
 - To change an event's description or group, update its `docs_description`, `docs_group`, or `docs_subgroup` in `clerk_go`.
 - To list or hide an event, set its `docs_public` in `clerk_go`. Only events with `docs_public: true` appear.
+- To change the payload fields an Application Logs event expands to, change its payload message in `payloads.proto`. The generator lists the same fields the Backend API accepts in `payload_filter` and `payload_fields`.
 - To pull in new events immediately, run the workflow manually (Actions → Refresh log event docs → Run workflow).
 
 ## Creating an issue

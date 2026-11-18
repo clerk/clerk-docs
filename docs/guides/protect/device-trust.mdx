@@ -88,6 +88,52 @@ For a complete implementation example, see the [email/password custom flow guide
 > [!TIP]
 > If your application supports both Device Trust and user-enabled MFA, make sure to handle both the `needs_client_trust` and `needs_second_factor` statuses. The `needs_client_trust` status is returned when Device Trust triggers on a new device, while `needs_second_factor` is returned when the user has MFA enabled on their account.
 
+### Check whether a device is trusted
+
+> [!IMPORTANT]
+> To read `clientTrustState` from the `signIn` object returned by [`useSignIn()`](/docs/reference/hooks/use-sign-in), use one of the following Clerk SDK versions:
+>
+> - `@clerk/nextjs` v7.10.3 or higher
+> - `@clerk/react` v6.19.0 or higher
+> - `@clerk/expo` v4.17.0 or higher
+> - `@clerk/tanstack-react-start` v1.7.15 or higher
+> - `@clerk/react-router` v3.7.4 or higher
+> - `@clerk/chrome-extension` v3.1.109 or higher
+> - `@clerk/electron` v0.1.14 or higher
+>
+> On older versions, `clientTrustState` is missing from the types and can read `undefined` even when Device Trust is on.
+
+After the user enters their password, the sign-in's `clientTrustState` property reports whether Clerk trusts the device for the user. Use it to record Device Trust outcomes in your analytics. It's one of the following values:
+
+- `'new'`: Clerk doesn't trust the device for the user yet, or can't confirm that it does. While the status is `needs_client_trust`, the value is `'new'`.
+- `'known'`: Clerk trusts the device for the user because the user signed up or completed a sign-in on it before, with or without a second factor.
+- `'pending'`: Clerk has no identifier or account to check the device against. A password sign-in never returns this value once the password is verified.
+
+With the **Device Trust Status** update and an SDK that supports the `needs_client_trust` status, Clerk returns the value only after the first factor, such as the password, is verified, so entering an identifier doesn't reveal whether that account has signed in on the device. Before then, the value is `undefined`. Otherwise, Clerk returns the value on every response. When Device Trust is off, the value is `undefined`.
+
+The following example uses the `signIn` object returned by [`useSignIn()`](/docs/reference/hooks/use-sign-in). It demonstrates how to read the value after the user submits their password:
+
+```ts
+const { error } = await signIn.password({ emailAddress, password })
+if (error) {
+  console.error(JSON.stringify(error, null, 2))
+  return
+}
+
+// Read the value after the password
+const clientTrustState = signIn.clientTrustState
+```
+
+Use the value together with the sign-in's status:
+
+- If the status is `needs_client_trust`, the value is `'new'`, and Clerk asks for a second factor to verify the device before the sign-in completes.
+- If the status is `needs_second_factor`, the user has MFA, or your application hasn't opted in to the **Device Trust Status** update. `'known'` means Clerk trusted the device before this sign-in, and `'new'` means it didn't or couldn't confirm that it did.
+- If the status is `needs_new_password`, the user must set a new password before the sign-in completes. `'known'` means Clerk trusted the device before this sign-in, and `'new'` means it didn't or couldn't confirm that it did.
+- If the status is `complete`, the value is usually `'known'`, because Clerk either already trusted the device or trusted it when the sign-in completed. Clerk trusts the device on completion even when it couldn't verify it, for example for a user who has no verified email address or phone number. The value is `'new'` instead when the user signed in with an email address or phone number that isn't verified.
+- If the value is `undefined` after the first factor is verified and your SDK meets the minimum version, Device Trust is off.
+
+If you use the legacy [`SignIn`](/docs/reference/objects/sign-in) object, read `signIn.clientTrustState` after `signIn.attemptFirstFactor({ strategy: 'password', password })`, or after `signIn.create()` when you pass the `password` with the `identifier`.
+
 ## Limitations
 
 - **Password-only**: Device Trust only applies to password-based sign-ins. Passwordless authentication methods (such as email link sign-ins, [OTPs](!otp), passkeys, and OAuth) are not affected.

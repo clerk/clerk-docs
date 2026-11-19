@@ -12,7 +12,7 @@ Ask one question at a time in plain language. Skip questions the user already an
 
 For a new Xcode project, ask for the platform (iOS or macOS), then the app name, waiting for each answer. Ask only "What would you like to name your app?" without listing naming rules. Identify the directory that will contain the app; let the CLI validate the name and destination.
 
-Let the CLI inspect existing projects before running your own Xcode commands. Ask separately about prebuilt sign-in UI and native Sign in with Apple only if undecided. Add `--prebuilt-auth-ui` and `--sign-in-with-apple` only for requested features. Preserve installed SDK products; if prebuilt UI isn't wanted and ClerkKitUI isn't installed, add `--apple-sdk core`.
+Let the CLI inspect existing projects before running your own Xcode commands. Ask separately about the prebuilt sign-in screen and native Sign in with Apple only if undecided. Add `--prebuilt-auth-ui` and `--sign-in-with-apple` only for requested features. Preserve installed SDK products. Add `--apple-sdk core` only if ClerkKitUI isn't installed and the user wants neither the prebuilt sign-in screen nor other ClerkKitUI components, such as `UserButton` or `UserProfileView`; otherwise omit `--apple-sdk` so the CLI adds ClerkKitUI.
 
 ## 2. Initialize Clerk
 

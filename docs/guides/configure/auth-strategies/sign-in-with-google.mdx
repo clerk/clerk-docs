@@ -24,12 +24,34 @@ sdk: android
   ]}
 />
 
-This guide will teach you how to add native [Sign in with Google](https://support.google.com/accounts/answer/12849458?hl=en) to your Clerk apps on Android platforms. This is different from Google OAuth - if you want to use Google OAuth, see the [dedicated guide](/docs/guides/configure/auth-strategies/social-connections/google).
+This guide teaches you how to add native [Sign in with Google](https://support.google.com/accounts/answer/12849458?hl=en) to your Clerk apps on Android platforms. This native flow differs from Google OAuth. See the [Google OAuth setup guide](/docs/guides/configure/auth-strategies/social-connections/google).
+
+## Configure with Clerk CLI (recommended)
+
+From your Android project's root directory, run the [Clerk CLI](/docs/cli) with `npx` and choose to enable native Sign in with Google:
+
+```sh {{ filename: 'terminal' }}
+npx clerk@latest init
+```
+
+The CLI registers your native app, enables Native API, and enables Google for sign-up and sign-in on the linked development instance. To add Google sign-in after an earlier setup, run `npx clerk@latest init --sign-in-with-google`.
+
+The Clerk Android SDK passes your Google connection's **Web client ID** to Credential Manager as the server client ID, so the connection needs its own Google Web client rather than Clerk's shared development credentials. When the connection doesn't have one yet, the CLI prints the Google Cloud steps with your package name, your debug certificate's SHA-1, and Clerk's redirect URI, then asks for the Web client's **Client ID** and **Client Secret**. You can also pass `--google-client-id` and `--google-client-secret-file`, which accepts a file holding the secret, the client's JSON download from the Google Cloud Console, or `-` for standard input. The secret is never accepted as a command argument. A connection that already has a Web client keeps it.
+
+The CLI can't create the Google Cloud clients for you. Create the Android client and the Web client as described in the manual steps below, using the values the CLI prints. Nothing in your app changes for Google: the SDK's own manifest handles the OAuth redirect.
+
+Afterward, run `clerk doctor` to check the Clerk side. It reports whether the Google connection is enabled for authentication and whether it has a Web client ID, and reminds you that Google Cloud needs an Android client for your package name and each signing certificate's SHA-1, which it can't verify.
+
+<If is="llm">
+  **For AI agents:** Follow the [dedicated Android setup prompt](/docs/android/getting-started/quickstart). Pass `--sign-in-with-google` when the user requests native Google setup; otherwise ask before enabling it. When the CLI returns `input-required` for Google, give the user its Google Cloud steps and pass the Web client's JSON download with `--google-client-secret-file`. Never place the secret in a command argument or repeat it in chat.
+</If>
+
+## Configure manually
 
 To make the setup process easier, it's recommended to keep two browser tabs open - one for the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections) and one for your [Google Cloud Console](https://console.cloud.google.com/).
 
 <If is="llm">
-  **For AI agents:** Instead of enabling Google and pasting the Client ID and Client Secret in the Dashboard, once you've created the Google Web client, write `{"connection_oauth_google":{"enabled":true,"client_id":"...","client_secret":"..."}}` to a `connection.json` file and run `npx clerk@latest config patch --file connection.json` — providing both credentials automatically switches the connection to custom credentials, and the secret stays out of your shell command and history. Delete `connection.json` after the patch succeeds, and never commit it. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
+  **For AI agents:** If the user chooses these manual steps instead of `clerk init --sign-in-with-google`, first have them check the selected application's Google connection in the Clerk Dashboard for a Web client ID. Keep an existing Web client and skip the credential patch unless the user explicitly asks to replace it. If no Web client exists or replacement is requested, have them create one in Google Cloud. In either case, have them verify or create an Android client in the same Google Cloud project for the app's package name and signing SHA-1, and enable Google in Clerk if needed. For a new Web client, have the user create a temporary `connection.json` outside the repository containing `{"connection_oauth_google":{"enabled":true,"client_id":"...","client_secret":"..."}}` and give you its path. Run `npx clerk@latest config patch --app <application_id> --file <path>` for the Clerk application selected for this setup. Providing both credentials switches the connection to custom credentials. Don't read, print, or commit the file, and ask the user to delete it after the patch succeeds. Install [Clerk's skills](/docs/guides/ai/skills) with `npx skills add clerk/skills` for correct CLI and SDK usage.
 </If>
 
 <Steps>
@@ -74,6 +96,12 @@ To make the setup process easier, it's recommended to keep two browser tabs open
 
   <Include src="_partials/authentication/test-connection-account-portal" />
 </Steps>
+
+## Configure your production instance
+
+`clerk init` configures only the linked development instance. Before releasing, [deploy your Clerk app to production](/docs/guides/development/deployment/production), enable the Native API on the production instance, and register your release app's package name and signing certificate's SHA-256 fingerprint on the **Native applications** page.
+
+Configure the production Google connection with a Web client authorized for that instance's redirect URI. In Google Cloud, create an Android client for the release package name and each signing certificate's SHA-1 fingerprint. Use the production [Publishable Key](!publishable-key) in your release build, then build and test native Sign in with Google.
 
 ## Usage
 

@@ -37,6 +37,59 @@ By default, the `AuthView` will automatically determine whether to sign users in
     - `.signUp`: Restricts the interface to sign-up flows only. Users can only create new accounts.
 
     Defaults to `.signInOrUp`.
+
+    ---
+
+    - `onAuthComplete`
+    - `@MainActor () -> Void`
+
+    Called once when the auth flow completes successfully and all Clerk-managed post-authentication steps finish. The current session is active when the callback runs. For a dismissible `AuthView`, it runs immediately before the view dismisses itself. It doesn't run if the user dismisses the view before the auth flow completes.
+  </Properties>
+
+  ## Modifiers
+
+  Apply the following modifiers directly to an `AuthView`. To change the logo it shows, see [Custom app logo](/docs/guides/customizing-clerk/clerk-theme#custom-app-logo).
+
+  <Properties>
+    - `initialFirstName(_:)`
+    - `String`
+
+    Prefills the first name field during sign-up.
+
+    ---
+
+    - `initialIdentifier(_:)`
+    - `String`
+
+    Prefills the identifier field on the start screen. The view detects phone numbers and routes them to the phone number field. Include the country code with a leading `+`; otherwise, the view might not detect it as a phone number.
+
+    ---
+
+    - `initialLastName(_:)`
+    - `String`
+
+    Prefills the last name field during sign-up.
+
+    ---
+
+    - `lockPrefilledFields(_:)`
+    - `Bool`
+
+    Whether non-empty values set with `initialIdentifier(_:)`, `initialFirstName(_:)`, or `initialLastName(_:)` show as read-only fields. Fields without a prefilled value stay editable. `lockPrefilledFields()` with no argument locks them. Without this modifier, prefilled fields are editable.
+
+    ---
+
+    - `persistsIdentifiers(_:)`
+    - `Bool`
+
+    Whether the view stores identifiers the user enters and restores them between sessions. `false` also clears any stored identifiers. Defaults to `true`.
+
+    ---
+
+    - `unsafeMetadata(_:)`
+    - `JSON?`
+
+    [Unsafe metadata](/docs/guides/users/extending#unsafe-metadata) to attach to users this `AuthView` creates. `AuthView` sends it only when the flow creates a sign-up, including a sign-in that transfers to sign-up.
   </Properties>
 </If>
 
@@ -146,6 +199,8 @@ By default, the `AuthView` will automatically determine whether to sign users in
 
   ### Fullscreen authentication (non-dismissible)
 
+  When a non-dismissible `AuthView` is your app's root authentication view, check `clerk.isAuthFlowComplete` instead of `clerk.user` before replacing the `AuthView` with authenticated content. Clerk sets `clerk.user` as soon as the user authenticates, while `isAuthFlowComplete` stays `false` until the session is active and the `AuthView` finishes its post-authentication steps, such as session tasks or biometric enrollment.
+
   ```swift
   import SwiftUI
   import ClerkKit
@@ -155,10 +210,40 @@ By default, the `AuthView` will automatically determine whether to sign users in
     @Environment(Clerk.self) private var clerk
 
     var body: some View {
-      if clerk.user != nil {
+      if clerk.isAuthFlowComplete {
         UserProfileView(isDismissible: false)
       } else {
         AuthView(isDismissible: false)
+      }
+    }
+  }
+  ```
+
+  ### Prefill fields and handle completion
+
+  The following example prefills the user's email address and name, locks the prefilled fields, attaches unsafe metadata to new users, and runs code when authentication completes.
+
+  ```swift
+  import SwiftUI
+  import ClerkKit
+  import ClerkKitUI
+
+  struct PrefilledSignUpView: View {
+    @State private var authIsPresented = false
+
+    var body: some View {
+      Button("Sign up") {
+        authIsPresented = true
+      }
+      .sheet(isPresented: $authIsPresented) {
+        AuthView(mode: .signUp) {
+          print("Authentication complete")
+        }
+        .initialIdentifier("jane@example.com")
+        .initialFirstName("Jane")
+        .initialLastName("Doe")
+        .lockPrefilledFields()
+        .unsafeMetadata(["referralSource": "newsletter"])
       }
     }
   }

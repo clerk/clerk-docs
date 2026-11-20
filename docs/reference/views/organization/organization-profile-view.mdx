@@ -32,6 +32,12 @@ The `OrganizationProfileView` renders the [Active Organization's](!active-organi
 
     An optional parent navigation path for embedded usage. Pass a parent path when the view is hosted inside your own `NavigationStack`.
   </Properties>
+
+  ## Modifiers
+
+  Apply the following modifiers to an `OrganizationProfileView` to add your own rows to its root screen.
+
+  <Include src="_partials/views/organization-profile-modifiers" />
 </If>
 
 <If sdk="android">
@@ -86,35 +92,31 @@ The profile view shows Organization controls based on the active membership's Pe
   - **Update profile** appears when the user has `canManageProfile`.
   - **Members** appears when the user has `canReadMemberships` or `canManageMemberships`.
   - **Verified domains** appears when Organization domains are enabled and the user has `canReadDomains` or `canManageDomains`.
-  - **Leave Organization** appears when there is an [Active Organization](!active-organization) membership.
-  - **Delete Organization** appears when dashboard admin delete is enabled, `organization.adminDeleteEnabled` is `true`, and the user has `canDeleteOrganization`.
+  - **Leave organization** appears when there is an [Active Organization](!active-organization) membership.
+  - **Delete organization** appears when `organization.adminDeleteEnabled` is `true` and the user has `canDeleteOrganization`.
 </If>
 
 <If sdk="android">
   - **Update profile** appears when the user has `canManageProfile`.
   - **Members** appears when the user has `canReadMemberships` or `canManageMemberships`.
   - **Verified domains** appears when Organization domains are enabled and the user has `canReadDomains` or `canManageDomains`.
-  - **Leave Organization** appears when there is an [Active Organization](!active-organization) membership.
-  - **Delete Organization** appears when dashboard admin delete is enabled, `organization.adminDeleteEnabled` is `true`, and the user has `canDeleteOrganization`.
-</If>
-
-## Custom rows
-
-<If sdk="ios">
-  Use `OrganizationProfileCustomRow` with `.organizationProfileRows()` to insert custom rows relative to built-in rows or sections. When `OrganizationProfileView` manages its own `NavigationStack`, use `.organizationProfileDestination()` to provide destination views for those custom routes.
+  - **Leave organization** appears when there is an [Active Organization](!active-organization) membership.
+  - **Delete organization** appears when dashboard admin delete is enabled, `organization.adminDeleteEnabled` is `true`, and the user has `canDeleteOrganization`.
 </If>
 
 <If sdk="android">
+  ## Custom rows
+
   Use `OrganizationProfileCustomRow` to insert custom rows relative to built-in rows or sections.
+
+  Related types:
+
+  - `OrganizationProfileCustomRow`
+  - `OrganizationProfileRowIcon`
+  - `OrganizationProfileCustomRowPlacement`
+  - `OrganizationProfileRow`
+  - `OrganizationProfileSection`
 </If>
-
-Related types:
-
-- `OrganizationProfileCustomRow`
-- `OrganizationProfileRowIcon`
-- `OrganizationProfileCustomRowPlacement`
-- `OrganizationProfileRow`
-- `OrganizationProfileSection`
 
 ## Usage
 
@@ -154,7 +156,7 @@ The following examples show how to use the `OrganizationProfileView` in your app
   }
   ```
 
-  ### Embedded navigation
+  ### Embed in your own navigation stack
 
   ```swift
   import ClerkKitUI
@@ -193,9 +195,11 @@ The following examples show how to use the `OrganizationProfileView` in your app
   ```
 </If>
 
-### Custom rows and destinations
+### Add custom rows and destinations
 
 <If sdk="ios">
+  The following example adds a **Settings** row after the built-in **Members** row and a **Support** row at the end of the actions section. When the user selects a row, the view pushes what `organizationProfileDestination(_:)` returns for its route.
+
   ```swift
   import ClerkKitUI
   import SwiftUI
@@ -205,32 +209,52 @@ The following examples show how to use the `OrganizationProfileView` in your app
     case support
   }
 
-  OrganizationProfileView()
-    .organizationProfileRows([
-      .init(
-        route: .settings,
-        title: "Settings",
-        icon: .system(name: "gear"),
-        placement: .after(.members)
-      ),
-      .init(
-        route: .support,
-        title: "Support",
-        icon: .system(name: "questionmark.circle"),
-        placement: .sectionEnd(.actions)
-      ),
-    ])
-    .organizationProfileDestination { (route: OrganizationRoute) in
-      switch route {
-      case .settings:
-        // Replace this placeholder with the custom view for your Settings row.
-        OrganizationSettingsContent()
-      case .support:
-        // Replace this placeholder with the custom view for your Support row.
-        OrganizationSupportContent()
+  struct OrganizationSettingsScreen: View {
+    var body: some View {
+      OrganizationProfileView()
+        .organizationProfileRows([
+          .init(
+            route: OrganizationRoute.settings,
+            title: "Settings",
+            icon: .system(name: "gear"),
+            placement: .after(.members)
+          ),
+          .init(
+            route: OrganizationRoute.support,
+            title: "Support",
+            icon: .system(name: "questionmark.circle"),
+            placement: .sectionEnd(.actions)
+          ),
+        ])
+        .organizationProfileDestination { (route: OrganizationRoute) in
+          switch route {
+          case .settings:
+            // Replace this placeholder with the custom view for your Settings row.
+            OrganizationSettingsContent()
+          case .support:
+            // Replace this placeholder with the custom view for your Support row.
+            Text("Support")
+          }
+        }
+    }
+  }
+  ```
+
+  A custom destination can navigate programmatically with `OrganizationProfileNavigator`, which `OrganizationProfileView` adds to the environment when it manages its own `NavigationStack`. Call `push(_:)` to push another route, or `popToRoot()` to return to the root Organization profile screen.
+
+  ```swift
+  struct OrganizationSettingsContent: View {
+    @Environment(OrganizationProfileNavigator<OrganizationRoute>.self) private var navigator
+
+    var body: some View {
+      Button("Done") {
+        navigator.popToRoot()
       }
     }
+  }
   ```
+
+  The navigator's route type must match your custom rows, such as `OrganizationProfileNavigator<OrganizationRoute>`, or reading it crashes. If you pass a `navigationPath`, `OrganizationProfileView` doesn't use `organizationProfileDestination(_:)`. Register `.navigationDestination(for:)` on your own `NavigationStack` and push routes onto your path instead. Those destinations have no navigator, so don't read one in them.
 </If>
 
 <If sdk="android">

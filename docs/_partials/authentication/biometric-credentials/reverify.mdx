@@ -1,61 +1,123 @@
-```tsx {{ filename: 'components/transfer-button.tsx', collapsible: true }}
-import { useAuth, useReverification } from '@clerk/expo'
-import { isBiometricCredentialError, useBiometricCredentials } from '@clerk/expo/biometrics'
-import { Button } from 'react-native'
+<If sdk="expo">
+  ```tsx {{ filename: 'components/transfer-button.tsx', collapsible: true }}
+  import { useAuth, useReverification } from '@clerk/expo'
+  import { isBiometricCredentialError, useBiometricCredentials } from '@clerk/expo/biometrics'
+  import { Button } from 'react-native'
 
-export function TransferButton() {
-  const { getToken } = useAuth()
-  const { reverify } = useBiometricCredentials()
+  export function TransferButton() {
+    const { getToken } = useAuth()
+    const { reverify } = useBiometricCredentials()
 
-  const transferMoney = useReverification(
-    async () => {
-      const token = await getToken()
-      const res = await fetch('https://example.com/api/reverification-example', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      })
+    const transferMoney = useReverification(
+      async () => {
+        const token = await getToken()
+        const res = await fetch('https://example.com/api/reverification-example', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
 
-      return res.json()
-    },
-    {
-      onNeedsReverification: async ({ level, complete, cancel }) => {
-        try {
-          const result = await reverify({
-            level,
-            reason: 'Verify your identity to continue.',
-          })
-
-          if (result.status !== 'complete') {
-            console.error(
-              'Biometric verification is incomplete. Offer another verification method.',
-            )
-            cancel()
-            return
-          }
-
-          complete()
-        } catch (err) {
-          if (
-            isBiometricCredentialError(err) &&
-            err.code === 'biometric_credential_policy_incompatible'
-          ) {
-            console.error('Choose another verification method for this credential.')
-          }
-
-          cancel()
-        }
+        return res.json()
       },
-    },
-  )
+      {
+        onNeedsReverification: async ({ level, complete, cancel }) => {
+          try {
+            const result = await reverify({
+              level,
+              reason: 'Verify your identity to continue.',
+            })
 
-  const handlePress = async () => {
-    try {
-      await transferMoney()
-    } catch (err) {
-      console.error(JSON.stringify(err, null, 2))
+            if (result.status !== 'complete') {
+              console.error(
+                'Biometric verification is incomplete. Offer another verification method.',
+              )
+              cancel()
+              return
+            }
+
+            complete()
+          } catch (err) {
+            if (
+              isBiometricCredentialError(err) &&
+              err.code === 'biometric_credential_policy_incompatible'
+            ) {
+              console.error('Choose another verification method for this credential.')
+            }
+
+            cancel()
+          }
+        },
+      },
+    )
+
+    const handlePress = async () => {
+      try {
+        await transferMoney()
+      } catch (err) {
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    return <Button title="Transfer" onPress={handlePress} />
+  }
+  ```
+</If>
+
+<If sdk="ios">
+  ```swift {{ filename: 'TransferButton.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct TransferButton: View {
+    @Environment(Clerk.self) private var clerk
+
+    var body: some View {
+      Button("Transfer money") {
+        Task { await transfer() }
+      }
     }
   }
 
-  return <Button title="Transfer" onPress={handlePress} />
-}
-```
+  extension TransferButton {
+    func transfer() async {
+      let requirement = ReverificationConfig.custom(level: .firstFactor, afterMinutes: 10)
+
+      if !clerk.has(reverification: requirement) {
+        guard await reverifyWithBiometrics() else { return }
+      }
+
+      do {
+        // Reverification clears cached tokens, so this token carries the updated verification age.
+        guard let token = try await clerk.auth.getToken() else { return }
+
+        var request = URLRequest(url: URL(string: "https://api.example.com/transfer")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        _ = try await URLSession.shared.data(for: request)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func reverifyWithBiometrics() async -> Bool {
+      guard let session = clerk.session else { return false }
+
+      do {
+        try await session.startVerification(level: .firstFactor)
+        let verification = try await session.verifyWithBiometrics(
+          reason: "Verify your identity to continue."
+        )
+        return verification.status == .complete
+      } catch BiometricCredentialError.policyIncompatible {
+        // The credential wasn't enrolled with .biometryCurrentSet. Offer another verification method.
+        return false
+      } catch {
+        // Offer another verification method when biometric verification fails.
+        dump(error)
+        return false
+      }
+    }
+  }
+  ```
+</If>

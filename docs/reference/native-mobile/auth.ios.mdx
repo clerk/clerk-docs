@@ -74,6 +74,21 @@ Sign in using a passkey:
 var signIn = try await clerk.auth.signInWithPasskey()
 ```
 
+To control how iOS presents the passkey request, create the passkey sign-in first and then authenticate it. The following example tries a modal passkey request and falls back to AutoFill-assisted passkey suggestions:
+
+```swift
+var signIn = try await clerk.auth.createPasskeySignIn()
+
+do {
+  signIn = try await signIn.authenticateWithPasskey()
+} catch let error as ASAuthorizationError where error.code == .canceled {
+  // No passkey was available on this device, or the user dismissed the sheet.
+  signIn = try await signIn.authenticateWithPasskey(autofill: true)
+}
+```
+
+iOS shows AutoFill suggestions when the user focuses a text field with `.textContentType(.username)`. `authenticateWithPasskey(autofill: true)` doesn't return until the user selects a suggestion, so run it in a task and cancel the task if the user leaves the screen or picks another sign-in method.
+
 ### Sign in with biometrics
 
 Sign in using a biometric credential that was enrolled on the current app installation:
@@ -91,6 +106,25 @@ Sign in using [Enterprise SSO](/docs/guides/configure/auth-strategies/enterprise
 ```swift
 var result = try await clerk.auth.signInWithEnterpriseSSO(emailAddress: "user@company.com")
 ```
+
+To control how the identity provider (IdP) page opens, such as in the user's default browser, start Enterprise SSO yourself and complete it when your app receives the callback URL:
+
+```swift
+let signIn = try await clerk.auth.startEnterpriseSSO(emailAddress: "user@company.com")
+
+guard let url = signIn.firstFactorVerification?.externalVerificationRedirectUrl.flatMap(URL.init(string:)),
+      await UIApplication.shared.open(url) else {
+  // Show an error and let the user try again.
+  return
+}
+
+// Later, when your app receives the callback URL:
+let result = try await signIn.completeEnterpriseSSO(callbackURL: callbackURL)
+```
+
+`completeEnterpriseSSO(callbackURL:)` returns a `TransferFlowResult`, which is `.signIn` or `.signUp` depending on whether the user already has an account. To skip sign-up creation, pass `transferable: false` to `completeEnterpriseSSO(callbackURL:transferable:)`, which then always returns `.signIn`.
+
+When you open the URL yourself, register your callback URL's scheme under `CFBundleURLTypes` in your app's `Info.plist` so the callback can reach your app. The callback URL is the `redirectUrl` you pass to `startEnterpriseSSO(emailAddress:)`, or `redirectUrl` in [`RedirectConfig`](/docs/reference/native-mobile/configuration#redirectconfig), which defaults to `{bundleIdentifier}://callback`.
 
 ### Sign in with ticket
 
@@ -206,7 +240,7 @@ signIn = try await signIn.authenticateWithPasskey()
 
 ### Multi-factor authentication
 
-After completing [first factor verification](!first-factor-verification), if multi-factor authentication (MFA) is required, use these methods to complete the [second factor verification](!second-factor-verification). The examples assume you already have a `SignIn` from a sign-in flow.
+After completing [first factor verification](!first-factor-verification), if multi-factor authentication (MFA) or [Device Trust](/docs/guides/protect/device-trust) requires a second factor, use these methods to complete the [second factor verification](!second-factor-verification). The examples assume you already have a `SignIn` from a sign-in flow.
 
 #### MFA with phone code
 
@@ -232,6 +266,15 @@ signIn = try await signIn.verifyMfaCode(
 )
 ```
 
+#### MFA with email link
+
+Device Trust can verify a new device with an email link. When a sign-in has a status of `.needsClientTrust` and its `supportedSecondFactors` has an `.emailLink` factor, send the link. After the user opens the link, handle the callback with [`clerk.handle(url)`](#deep-linking).
+
+```swift
+signIn = try await signIn.sendMfaEmailLink()
+// Show a message that tells the user to check their email.
+```
+
 #### MFA with TOTP (authenticator app)
 
 Verify using a TOTP code from an authenticator app:
@@ -243,7 +286,7 @@ signIn = try await signIn.verifyMfaCode(
 )
 ```
 
-### MFA with backup code
+#### MFA with backup code
 
 Verify using a backup code:
 
@@ -295,11 +338,11 @@ Create a new account:
 ```swift
 var signUp = try await clerk.auth.signUp(
   emailAddress: "newuser@email.com",
-  phoneNumber: "+1234567890",
   password: "secretpassword",
   firstName: "John",
   lastName: "Doe",
   username: "johndoe",
+  phoneNumber: "+1234567890",
   legalAccepted: true
 )
 ```
@@ -311,11 +354,11 @@ Update sign-up information:
 ```swift
 signUp = try await signUp.update(
   emailAddress: "newuser@email.com",
-  phoneNumber: "+1234567890",
   password: "secretpassword",
   firstName: "John",
   lastName: "Doe",
   username: "johndoe",
+  phoneNumber: "+1234567890",
   legalAccepted: true
 )
 ```
@@ -481,6 +524,94 @@ let hasWidgets = session.checkAuthorization(feature: "widgets")
 
 It returns `false` when the session has no user, and for Role and Permission checks when there is no Active Organization. To check the current session, use `clerk.has()` instead. See [Authorization checks](/docs/guides/secure/authorization-checks) for every condition and the reverification presets.
 
+### Reverify a session
+
+[Reverification](/docs/guides/secure/reverification) asks a signed-in user to verify their identity again before a sensitive action. Check whether the user verified recently with `clerk.has(reverification:)`, or rely on your backend's response, and then start a reverification on the current session:
+
+```swift
+guard let session = clerk.session else { return }
+
+var verification = try await session.startVerification(level: .firstFactor)
+```
+
+Pass `.secondFactor` to verify only a second factor, or `.multiFactor` to verify both a first and a second factor. Use the level your backend requires. The returned `SessionVerification` has a `status` of `.needsFirstFactor`, `.needsSecondFactor`, or `.complete`, and lists the factors the user can use in `supportedFirstFactors` and `supportedSecondFactors`.
+
+#### Verify a first factor
+
+When the status is `.needsFirstFactor`, verify one of the factors in `supportedFirstFactors`. Each of the following is a separate option, so call only the one for the factor the user chooses:
+
+```swift
+// Password
+verification = try await session.verifyWithPassword("secretpassword")
+
+// Email code
+if let emailAddressId = verification.supportedFirstFactors?.first(where: { $0.strategy == .emailCode })?.emailAddressId {
+  verification = try await session.sendEmailCode(emailAddressId: emailAddressId)
+  verification = try await session.verifyWithEmailCode(code: "123456")
+}
+
+// Phone code
+if let phoneNumberId = verification.supportedFirstFactors?.first(where: { $0.strategy == .phoneCode })?.phoneNumberId {
+  verification = try await session.sendPhoneCode(phoneNumberId: phoneNumberId)
+  verification = try await session.verifyWithPhoneCode(code: "123456")
+}
+
+// Passkey
+verification = try await session.verifyWithPasskey()
+
+// Biometric credential enrolled on this app installation
+verification = try await session.verifyWithBiometrics(reason: "Verify your identity to continue.")
+```
+
+A user-verified passkey or a biometric credential can also satisfy a second-factor requirement, depending on your instance configuration. Biometric reverification requires a credential enrolled with the default `.biometryCurrentSet` policy. See the [biometric sign-in guide](/docs/guides/development/custom-flows/authentication/biometric-sign-in#reverify-an-active-session) for details.
+
+#### Reset the password during reverification
+
+If the user can't verify with their password, for example because `verifyWithPassword(_:)` failed when Clerk found the password in a data breach, verify with a reset password code and set a new password. Offer this when `supportedFirstFactors` includes a `.resetPasswordEmailCode` or `.resetPasswordPhoneCode` factor.
+
+```swift
+if let emailAddressId = verification.supportedFirstFactors?.first(where: { $0.strategy == .resetPasswordEmailCode })?.emailAddressId {
+  verification = try await session.sendResetPasswordEmailCode(emailAddressId: emailAddressId)
+  verification = try await session.verifyWithResetPasswordEmailCode(
+    code: "123456",
+    newPassword: "newsecretpassword",
+    signOutOfOtherSessions: true
+  )
+}
+```
+
+For a phone number, use `sendResetPasswordPhoneCode(phoneNumberId:)` and `verifyWithResetPasswordPhoneCode(code:newPassword:signOutOfOtherSessions:)`. If the verification still needs a second factor, Clerk sets the new password once the user verifies that factor.
+
+#### Verify a second factor
+
+When the status is `.needsSecondFactor`, verify one of the factors in `supportedSecondFactors`. Each of the following is a separate option, so call only the one for the factor the user chooses:
+
+```swift
+// Authenticator app
+verification = try await session.verifyWithTOTP(code: "123456")
+
+// SMS code
+if let phoneNumberId = verification.supportedSecondFactors?.first(where: { $0.strategy == .phoneCode })?.phoneNumberId {
+  verification = try await session.sendMfaPhoneCode(phoneNumberId: phoneNumberId)
+  verification = try await session.verifyWithMfaPhoneCode(code: "123456")
+}
+
+// Backup code
+verification = try await session.verifyWithBackupCode(code: "backup123")
+
+// Passkey or biometric credential
+verification = try await session.verifyWithPasskey(level: .secondFactor)
+verification = try await session.verifyWithBiometrics(level: .secondFactor)
+```
+
+#### Refresh the session token
+
+When the status is `.complete`, request a new session token before calling your backend, so the token carries the updated verification age. Biometric reverification clears cached tokens for you.
+
+```swift
+let token = try await session.getToken(.init(skipCache: true))
+```
+
 ### Set current session
 
 Set the current session and optionally the [Active Organization](!active-organization):
@@ -512,14 +643,77 @@ try await clerk.auth.signOut()
 try await clerk.auth.signOut(sessionId: sessionId)
 ```
 
+## Observe auth events
+
+`clerk.auth.events` is an `AsyncStream` of `AuthEvent` values that reports authentication changes as they happen, including changes from Clerk's prebuilt views.
+
+```swift
+.task {
+  for await event in clerk.auth.events {
+    switch event {
+    case .signInCompleted(let signIn):
+      print("Sign-in completed: \(signIn.id)")
+    case .signUpCompleted(let signUp):
+      print("Sign-up completed: \(signUp.id)")
+    case .signInNeedsContinuation(let signIn):
+      print("A callback returned a sign-in that needs more steps: \(signIn.id)")
+    case .signUpNeedsContinuation(let signUp):
+      print("A callback returned a sign-up that needs more steps: \(signUp.id)")
+    case .signedOut(let session):
+      print("Signed out of session \(session.id)")
+    case .accountDeleted:
+      print("Account deleted")
+    case .sessionChanged(let oldValue, let newValue):
+      print("Session changed from \(oldValue?.id ?? "nil") to \(newValue?.id ?? "nil")")
+    case .tokenRefreshed:
+      print("Session token refreshed")
+    }
+  }
+}
+```
+
+The events are:
+
+- `.signInCompleted(signIn:)` and `.signUpCompleted(signUp:)`: Clerk accepted a completed sign-in or sign-up. The new session might still be pending, for example while the user has [session tasks](/docs/guides/configure/session-tasks) to complete. [Hosted authentication](#hosted-authentication) doesn't send these events, so observe `.sessionChanged(oldValue:newValue:)` instead.
+- `.signInNeedsContinuation(signIn:)` and `.signUpNeedsContinuation(signUp:)`: A Clerk callback, such as an email link, returned a sign-in or sign-up that needs more steps. Continue the flow with the attached object.
+- `.signedOut(session:)`: A session ended. Signing out of all sessions sends one event per session.
+- `.accountDeleted`: The current user deleted their account.
+- `.sessionChanged(oldValue:newValue:)`: The current session changed, including when a user signs in, signs out, or switches sessions, and when Clerk updates the current session.
+- `.tokenRefreshed(token:)`: Clerk refreshed the session token.
+
 ## Deep linking
 
-Handle OAuth, SSO, and email link deep link callbacks in your SwiftUI app:
+Handle email link callbacks in your SwiftUI app:
 
 ```swift
 .onOpenURL { url in
   Task {
-    try? await clerk.handle(url)
+    do {
+      try await clerk.handle(url)
+    } catch {
+      // Show an error and let the user request a new link.
+    }
   }
 }
 ```
+
+Email links open your app from the Mail app or a browser, so register your callback URL's scheme under `CFBundleURLTypes` in your app's `Info.plist`. The callback URL is `redirectUrl` in [`RedirectConfig`](/docs/reference/native-mobile/configuration#redirectconfig), which defaults to `{bundleIdentifier}://callback`. If you pass a `redirectUri` to `sendEmailLink()` or `sendMfaEmailLink()`, register that URL's scheme instead and [complete the link yourself](#complete-an-email-link-yourself), because `clerk.handle(url)` only recognizes `redirectUrl`.
+
+`clerk.handle(url)` returns `false` for any other URL, so you can route it yourself. That includes the callback from [`startEnterpriseSSO(emailAddress:)`](#sign-in-with-enterprise-sso), which you complete with `completeEnterpriseSSO(callbackURL:)`.
+
+### Complete an email link yourself
+
+If your app routes deep links itself, complete a pending email link flow with `completeMagicLink()`. Pass the callback URL, or its `flow_id` and `approval_token` query values:
+
+```swift
+let result = try await clerk.auth.completeMagicLink(callbackURL: url)
+
+switch result {
+case .signIn(let signIn):
+  print("Sign-in status: \(signIn.status)")
+case .signUp(let signUp):
+  print("Sign-up status: \(signUp.status)")
+}
+```
+
+Send the email link from the same app installation that completes it, because the SDK stores the flow's verifier locally when it sends the link. The SDK keeps the verifier for 10 minutes, and only for the most recent link, so it can't complete an older or expired link. If completion fails, send a new link.

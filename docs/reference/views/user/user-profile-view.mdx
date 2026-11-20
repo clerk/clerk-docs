@@ -25,7 +25,20 @@ The `UserProfileView` renders a comprehensive user profile interface that displa
     - `Bool`
 
     Whether the view can be dismissed by the user. When `true`, a dismiss button appears in the navigation bar and the view can be used in sheets or other dismissible contexts. When `false`, no dismiss button is shown, making it suitable for fullscreen usage. Defaults to `true`.
+
+    ---
+
+    - `navigationPath`
+    - `Binding<NavigationPath>?`
+
+    A binding to the `NavigationPath` of a parent `NavigationStack`. When provided, `UserProfileView` doesn't create its own `NavigationStack` and pushes its screens onto the parent's path instead. Defaults to `nil`.
   </Properties>
+
+  ## Modifiers
+
+  Apply the following modifiers to a `UserProfileView` to add your own rows and configure connected accounts.
+
+  <Include src="_partials/views/user-profile-modifiers" />
 </If>
 
 <If sdk="android">
@@ -124,6 +137,94 @@ The `UserProfileView` renders a comprehensive user profile interface that displa
     }
   }
   ```
+
+  ### Embed in your own navigation stack
+
+  The following example pushes `UserProfileView` onto your own `NavigationStack`.
+
+  ```swift
+  import SwiftUI
+  import ClerkKit
+  import ClerkKitUI
+
+  enum AppRoute: Hashable {
+    case profile
+  }
+
+  struct ContentView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var path = NavigationPath()
+
+    var body: some View {
+      NavigationStack(path: $path) {
+        VStack {
+          if clerk.user != nil {
+            Button("Show Profile") {
+              path.append(AppRoute.profile)
+            }
+          }
+        }
+        .navigationDestination(for: AppRoute.self) { route in
+          switch route {
+          case .profile:
+            UserProfileView(isDismissible: false, navigationPath: $path)
+          }
+        }
+      }
+    }
+  }
+  ```
+
+  ### Add custom rows
+
+  The following example adds a **Billing** row after the built-in **Security** row and a **Preferences** row before **Sign out**. When the user selects a row, the view pushes what `userProfileDestination(_:)` returns for its route.
+
+  ```swift
+  import SwiftUI
+  import ClerkKit
+  import ClerkKitUI
+
+  enum ProfileRoute: Hashable {
+    case billing
+    case preferences
+  }
+
+  struct ProfileView: View {
+    var body: some View {
+      UserProfileView()
+        .userProfileRows([
+          .init(route: ProfileRoute.billing, title: "Billing", icon: .system(name: "creditcard"), placement: .after(.security)),
+          .init(route: ProfileRoute.preferences, title: "Preferences", icon: .system(name: "gear"), placement: .before(.signOut)),
+        ])
+        .userProfileDestination { (route: ProfileRoute) in
+          switch route {
+          case .billing:
+            // Replace this placeholder with the custom view for your Billing row.
+            BillingView()
+          case .preferences:
+            // Replace this placeholder with the custom view for your Preferences row.
+            Text("Preferences")
+          }
+        }
+    }
+  }
+  ```
+
+  A custom destination can navigate programmatically with `UserProfileNavigator`, which `UserProfileView` adds to the environment when it manages its own `NavigationStack`. Call `push(_:)` to push another route, or `popToRoot()` to return to the root profile screen.
+
+  ```swift
+  struct BillingView: View {
+    @Environment(UserProfileNavigator<ProfileRoute>.self) private var navigator
+
+    var body: some View {
+      Button("Done") {
+        navigator.popToRoot()
+      }
+    }
+  }
+  ```
+
+  The navigator's route type must match your custom rows, such as `UserProfileNavigator<ProfileRoute>`, or reading it crashes. If you pass a `navigationPath`, `UserProfileView` doesn't use `userProfileDestination(_:)`. Register `.navigationDestination(for:)` on your own `NavigationStack` and push routes onto your path instead. Those destinations have no navigator, so don't read one in them.
 </If>
 
 <If sdk="android">

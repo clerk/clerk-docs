@@ -177,6 +177,10 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     documentationUrl: 'https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow',
   },
   'vercel.mdx': { documentationUrl: 'https://vercel.com/docs/sign-in-with-vercel' },
+  'world-id.mdx': {
+    documentationUrl: 'https://auth.world.org/docs/guides/oidc',
+    protocol: 'OpenID Connect (OIDC)',
+  },
   // The title distinguishes v2 from the deprecated v1 guide; the connection label does not.
   'x-twitter.mdx': {
     documentationUrl: 'https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code',

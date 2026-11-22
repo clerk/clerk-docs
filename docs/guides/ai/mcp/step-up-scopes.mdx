@@ -16,21 +16,21 @@ sdk: nextjs, expressjs
 
 When a client connects to your MCP server, the user approves a set of scopes. With step-up authorization, that first grant stays small, and the server asks for more scopes only when the agent calls a tool that needs them:
 
-1. The agent calls a tool, such as `whoami`, with an access token that lacks the tool's scope.
+1. The agent calls a tool, such as `get_primary_email`, with an access token that lacks the tool's scope.
 1. Before the tool runs, your server answers `403 Forbidden` with a challenge: a `WWW-Authenticate: Bearer error="insufficient_scope", scope="..."` header that names the scopes to request.
 1. The MCP client sends the user through Clerk's OAuth consent screen again, this time for the scopes in the challenge.
 1. The client retries the tool call with the new access token.
 
 The MCP TypeScript SDK (`@modelcontextprotocol/server`) sends this challenge for you when you set the `scopeChallenge` option of `registerTool()`. The `requireAdditionalScopes()` helper from [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) builds that option from the scopes a tool needs.
 
-This guide assumes that you've completed [Build an MCP server](/docs/guides/ai/mcp/build-mcp-server). It changes that server so that clients connect with only the `profile` scope, the baseline every request needs. Its `get_clerk_user_data` tool stops returning the email address, and a new `whoami` tool returns the user's ID and primary email. `email` becomes the step-up scope: the server asks clients for it the first time they call `whoami`.
+This guide assumes that you've completed [Build an MCP server](/docs/guides/ai/mcp/build-mcp-server). That server requires only the `profile` scope, the baseline every request needs. Its `whoami` tool works with `profile` alone. This guide adds a `get_primary_email` tool, which returns the user's primary email address. `email` becomes the step-up scope: the server asks clients for it the first time they call `get_primary_email`.
 
-Clients handle the challenge differently, so check your client's documentation. For example, Claude Code reports the missing scopes and asks the user to run `/mcp`, which opens the consent screen for those scopes. Clients without step-up support report a failed request and ask for the same baseline scopes when they reconnect, so their users can't use the tool unless the client requests the step-up scope when it connects.
+Clients handle the challenge differently, so check your client's documentation. For example, Claude Code reports the missing scopes and asks the user to run `/mcp`, which opens the consent screen for those scopes. Clients without step-up support report a failed request and reconnect with the same baseline scopes. Their users can use the tool only if the client requests the step-up scope when it connects. To have clients request it up front, add it to `challengeScopes`, as described in [Keep step-up scopes out of the baseline](#keep-step-up-scopes-out-of-the-baseline).
 
 <Steps>
   ## Install the required versions
 
-  The `scopeChallenge` option requires `@modelcontextprotocol/server` 2.1 or later, and `requireAdditionalScopes()` requires [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) 0.9.0 or later. SDK 1.x (`@modelcontextprotocol/sdk`) and 2.0 don't have the option: TypeScript rejects it, and plain JavaScript ignores it.
+  This guide requires `@modelcontextprotocol/server` 2.3.0 or later and [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) 1.0.0 or later. The SDK added the `scopeChallenge` option in 2.1, but this guide needs 2.3.0 or later for its security fixes. SDK 1.x (`@modelcontextprotocol/sdk`) and 2.0 don't have the option: TypeScript rejects it, and plain JavaScript ignores it.
 
   Install or update the packages.
 
@@ -47,7 +47,9 @@ Clients handle the challenge differently, so check your client's documentation. 
     npm install @clerk/mcp-tools@latest @modelcontextprotocol/server @modelcontextprotocol/node
     ```
 
-    The Express server in the [build guide](/docs/guides/ai/mcp/build-mcp-server) uses `streamableHttpHandler()` from `@clerk/mcp-tools/express`, which runs on SDK 1.x and can't send the challenge. This guide switches the `/mcp` route to `createMcpHandler()` from SDK 2 and adapts it to Express with `toNodeHandler()` from `@modelcontextprotocol/node`, which requires `@modelcontextprotocol/server` 2.4 or later. Keep `@modelcontextprotocol/sdk` installed: the metadata handlers from `@clerk/mcp-tools/express` still import it.
+    The Express server in the [build guide](/docs/guides/ai/mcp/build-mcp-server) uses `streamableHttpHandler()` from `@clerk/mcp-tools/express`, which runs on SDK 1.x and can't send the challenge. This guide switches the `/mcp` route to `createMcpHandler()` from SDK 2 and adapts it to Express with `toNodeHandler()` from `@modelcontextprotocol/node`. `@modelcontextprotocol/node` 2.1.2 requires `@modelcontextprotocol/server` 2.4 or later, so on Express this guide needs 2.4 or later. After the switch, the route no longer uses `@modelcontextprotocol/sdk`. Uninstall it unless other code in your app imports it.
+
+    `@clerk/mcp-tools` 1.0.0 requires Express 5 or later.
   </If>
 
   ## Allow clients to request the step-up scope
@@ -62,152 +64,145 @@ Clients handle the challenge differently, so check your client's documentation. 
 
   These settings don't change the scopes you set on a pre-registered CIMD client. In the Clerk Dashboard, on the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page, select the **Applications** tab, select the client, and edit its scopes to include the step-up scope.
 
-  ## Reduce the required scopes and add the tool's data
+  ## Add the tool's data
 
-  In `lib/mcp-auth.ts`, reduce `REQUIRED_SCOPES` to the baseline. Remove the email address from `getUserProfile()`, because tokens with only `profile` can call it, and add `getWhoami()`.
+  Keep `requiredScopes` in `mcpAuthOptions` set to `['profile']` so clients don't request `email` up front. To learn how clients choose their first scopes, see [Keep step-up scopes out of the baseline](#keep-step-up-scopes-out-of-the-baseline).
 
-  ```ts {{ filename: 'lib/mcp-auth.ts', del: [2, [14, 16]], ins: [3, [20, 28]] }}
-  // ...
-  export const REQUIRED_SCOPES = ['profile', 'email']
-  export const REQUIRED_SCOPES = ['profile']
+  <If sdk="nextjs">
+    In `app/mcp/route.ts`, add `getPrimaryEmail()`, which reads the user's primary email address with `clerkClient()`.
 
-  // ...
+    ```ts {{ filename: 'app/mcp/route.ts', ins: [2, [6, 11]] }}
+    import { isClerkAuthInfo, withClerkMcpAuth } from '@clerk/mcp-tools/next'
+    import { clerkClient } from '@clerk/nextjs/server'
+    import { createMcpHandler } from 'mcp-handler'
+    import { mcpAuthOptions } from '@/lib/mcp'
 
-  export async function getUserProfile(userId: string) {
-    const user = await clerkClient.users.getUser(userId)
-    return {
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      imageUrl: user.imageUrl,
-      email:
-        user.emailAddresses.find((address) => address.id === user.primaryEmailAddressId)
-          ?.emailAddress ?? null,
+    async function getPrimaryEmail(userId: string) {
+      const clerk = await clerkClient()
+      const user = await clerk.users.getUser(userId)
+      const email = user.emailAddresses.find((address) => address.id === user.primaryEmailAddressId)
+      return email?.emailAddress ?? 'No primary email address'
     }
-  }
 
-  export async function getWhoami(userId: string) {
-    const user = await clerkClient.users.getUser(userId)
-    return {
-      id: user.id,
-      email:
-        user.emailAddresses.find((address) => address.id === user.primaryEmailAddressId)
-          ?.emailAddress ?? null,
+    // ...
+    ```
+
+    `withClerkMcpAuth()` sets `resourceMetadataUrl` on the verified token, so the SDK's challenge points clients at your protected resource metadata.
+  </If>
+
+  <If sdk="expressjs">
+    In `index.ts`, add `getPrimaryEmail()`, which reads the user's primary email address with `clerkClient` from `@clerk/express`.
+
+    ```ts {{ filename: 'index.ts', ins: [1, [4, 8]] }}
+    import { clerkClient } from '@clerk/express'
+    // ...
+
+    async function getPrimaryEmail(userId: string) {
+      const user = await clerkClient.users.getUser(userId)
+      const email = user.emailAddresses.find((address) => address.id === user.primaryEmailAddressId)
+      return email?.emailAddress ?? 'No primary email address'
     }
-  }
-  ```
 
-  `verifyMcpToken()` must still return `resourceMetadataUrl`, as in the [build guide](/docs/guides/ai/mcp/build-mcp-server). The SDK puts it in the challenge's `resource_metadata` parameter, which tells the client where to find your authorization server.
+    // ...
+    ```
+
+    `mcpAuth()` sets `resourceMetadataUrl` on the verified token, so the SDK's challenge points clients at your protected resource metadata.
+  </If>
 
   ## Register the tool with a scope challenge
 
   Pass `requireAdditionalScopes()` the scopes the tool needs, as separate arguments, and use the result as the tool's `scopeChallenge` option.
 
   <If sdk="nextjs">
-    In `app/[transport]/route.ts`, add the tool. Keep `requiredScopes` in `withMcpAuth()` set to the baseline `REQUIRED_SCOPES`.
+    In `app/mcp/route.ts`, add the tool. `withClerkMcpAuth()` still requires only the baseline `requiredScopes` from `mcpAuthOptions`.
 
-    ```ts {{ filename: 'app/[transport]/route.ts', del: [14], ins: [1, 5, 15, [21, 34]] }}
-    import { requireAdditionalScopes } from '@clerk/mcp-tools/next'
-    import { createMcpHandler, withMcpAuth } from 'mcp-handler'
-    import {
-      getUserProfile,
-      getWhoami,
-      MCP_RESOURCE_URL,
-      REQUIRED_SCOPES,
-      verifyMcpToken,
-    } from '../../lib/mcp-auth'
+    ```ts {{ filename: 'app/mcp/route.ts', del: [1], ins: [2, [11, 24]] }}
+    import { isClerkAuthInfo, withClerkMcpAuth } from '@clerk/mcp-tools/next'
+    import { isClerkAuthInfo, requireAdditionalScopes, withClerkMcpAuth } from '@clerk/mcp-tools/next'
+    // ...
 
     const handler = createMcpHandler((server) => {
       server.registerTool(
-        'get_clerk_user_data',
-        { description: 'Gets the authorized user’s profile and primary email' },
-        { description: 'Gets the authorized user’s profile' },
-        async (ctx) => {
-          // ...
-        },
+        'whoami',
+        // ...
       )
 
       server.registerTool(
-        'whoami',
+        'get_primary_email',
         {
-          description: 'Gets the authorized user’s ID and primary email. Needs the email scope.',
+          description: 'Gets the authorized user’s primary email address. Needs the email scope.',
           scopeChallenge: requireAdditionalScopes('email'),
         },
         async (ctx) => {
-          const userId = ctx.http?.authInfo?.extra?.userId
-          if (typeof userId !== 'string') throw new Error('Missing authenticated user')
+          const authInfo = ctx.http?.authInfo
+          if (!isClerkAuthInfo(authInfo)) throw new Error('Missing authenticated user')
           return {
-            content: [{ type: 'text', text: JSON.stringify(await getWhoami(userId)) }],
+            content: [{ type: 'text', text: await getPrimaryEmail(authInfo.extra.userId) }],
           }
         },
       )
     })
 
-    const authHandler = withMcpAuth(handler, (request) => verifyMcpToken(request), {
-      required: true,
-      requiredScopes: REQUIRED_SCOPES,
-      // mcp-handler appends resourceMetadataPath to this origin for the WWW-Authenticate challenge
-      resourceUrl: new URL(MCP_RESOURCE_URL).origin,
-      resourceMetadataPath: '/.well-known/oauth-protected-resource/mcp',
-    })
+    const authHandler = withClerkMcpAuth(handler, mcpAuthOptions)
 
-    export { authHandler as GET, authHandler as POST }
+    export { authHandler as GET, authHandler as POST, authHandler as DELETE }
     ```
   </If>
 
   <If sdk="expressjs">
-    Update `index.ts`. On SDK 2, tool callbacks read the token from `ctx.http?.authInfo`, and the route passes the verified token to the SDK as `req.auth`.
+    Update `index.ts`. On SDK 2, tool callbacks read the token from `ctx.http?.authInfo`. `toNodeHandler()` passes the SDK the `req.auth` that `mcpAuth()` sets. It also needs `req.body`, because `express.json()` has already read the request body.
 
-    ```ts {{ filename: 'index.ts', collapsible: true, del: [4, 6, 29, [74, 77], 84], ins: [[7, 9], 14, [30, 32], [39, 52], [55, 56], [70, 71], 78, 85] }}
+    ```ts {{ filename: 'index.ts', collapsible: true, del: [9, 11, 12, [26, 31], 62], ins: [8, 13, 14, [32, 38], [40, 53], 57, 63] }}
+    import { clerkClient } from '@clerk/express'
     import {
-      authServerMetadataHandlerClerk,
-      protectedResourceHandlerClerk,
+      authorizationServerMetadataHandler,
+      isClerkAuthInfo,
+      mcpAuth,
+      type McpAuthOptions,
+      protectedResourceMetadataHandler,
+      requireAdditionalScopes,
       streamableHttpHandler,
     } from '@clerk/mcp-tools/express'
     import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-    import { requireAdditionalScopes } from '@clerk/mcp-tools/server'
+    import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
     import { toNodeHandler } from '@modelcontextprotocol/node'
     import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
     import express from 'express'
     import cors from 'cors'
-    import {
-      getUserProfile,
-      getWhoami,
-      MCP_RESOURCE_URL,
-      REQUIRED_SCOPES,
-      RESOURCE_METADATA_URL,
-      verifyMcpToken,
-    } from './lib/mcp-auth.ts'
 
-    const app = express()
-    app.use(cors({ exposedHeaders: ['WWW-Authenticate'] }))
-    app.use(express.json())
+    // ...
 
     function createServer() {
       const server = new McpServer({ name: 'profile-server', version: '1.0.0' })
+      // `authInfo.token` is the bearer token, so return only the user ID that `mcpAuth()` puts in `extra`
       server.registerTool(
-        'get_clerk_user_data',
-        { description: 'Gets the authorized user’s profile and primary email' },
-        { description: 'Gets the authorized user’s profile' },
-        async (ctx) => {
-          const userId = ctx.http?.authInfo?.extra?.userId
-          if (typeof userId !== 'string') throw new Error('Missing authenticated user')
-          return {
-            content: [{ type: 'text', text: JSON.stringify(await getUserProfile(userId)) }],
+        'whoami',
+        { description: 'Gets the ID of the Clerk user who authorized this request' },
+        async ({ authInfo }) => {
+          if (!isClerkAuthInfo(authInfo)) {
+            return { content: [{ type: 'text', text: 'Not signed in with Clerk.' }], isError: true }
           }
+          return { content: [{ type: 'text', text: authInfo.extra.userId }] }
+        },
+        async (ctx) => {
+          const authInfo = ctx.http?.authInfo
+          if (!isClerkAuthInfo(authInfo)) {
+            return { content: [{ type: 'text', text: 'Not signed in with Clerk.' }], isError: true }
+          }
+          return { content: [{ type: 'text', text: authInfo.extra.userId }] }
         },
       )
       server.registerTool(
-        'whoami',
+        'get_primary_email',
         {
-          description: 'Gets the authorized user’s ID and primary email. Needs the email scope.',
+          description: 'Gets the authorized user’s primary email address. Needs the email scope.',
           scopeChallenge: requireAdditionalScopes('email'),
         },
         async (ctx) => {
-          const userId = ctx.http?.authInfo?.extra?.userId
-          if (typeof userId !== 'string') throw new Error('Missing authenticated user')
+          const authInfo = ctx.http?.authInfo
+          if (!isClerkAuthInfo(authInfo)) throw new Error('Missing authenticated user')
           return {
-            content: [{ type: 'text', text: JSON.stringify(await getWhoami(userId)) }],
+            content: [{ type: 'text', text: await getPrimaryEmail(authInfo.extra.userId) }],
           }
         },
       )
@@ -216,53 +211,26 @@ Clients handle the challenge differently, so check your client's documentation. 
 
     const mcpHandler = toNodeHandler(createMcpHandler(createServer))
 
-    app.post('/mcp', async (req, res) => {
-      const authInfo = await verifyMcpToken(
-        new Request(MCP_RESOURCE_URL, {
-          headers: { authorization: req.get('authorization') ?? '' },
-        }),
-      )
-      const challenge = `Bearer resource_metadata="${RESOURCE_METADATA_URL}"`
-      if (!authInfo) {
-        res.status(401).set('WWW-Authenticate', challenge).json({ error: 'invalid_token' })
-        return
-      }
-      if (!REQUIRED_SCOPES.every((scope) => authInfo.scopes.includes(scope))) {
-        // Keep the granted scopes, so the new token doesn't lose them
-        const scopes = [...new Set([...authInfo.scopes, ...REQUIRED_SCOPES])].join(' ')
-        res
-          .status(403)
-          .set(
-            'WWW-Authenticate',
-            `${challenge}, error="insufficient_scope", scope="${REQUIRED_SCOPES.join(' ')}"`,
-          )
-          .set('WWW-Authenticate', `${challenge}, error="insufficient_scope", scope="${scopes}"`)
-          .json({ error: 'insufficient_scope' })
-        return
-      }
-
-      Object.assign(req, { auth: authInfo })
-      await streamableHttpHandler(createServer)(req, res)
-      await mcpHandler(req, res, req.body)
-    })
-    app.all('/mcp', (_, res) => {
-      res.status(405).set('Allow', 'POST, OPTIONS').json({ error: 'method_not_allowed' })
-    })
-    app.get(
-      '/.well-known/oauth-protected-resource/mcp',
-      protectedResourceHandlerClerk({
-        resource: MCP_RESOURCE_URL,
-        scopes_supported: REQUIRED_SCOPES,
-      }),
+    app.all(
+      '/mcp',
+      mcpAuth(mcpAuthOptions),
+      streamableHttpHandler(createServer, StreamableHTTPServerTransport),
+      (req, res) => mcpHandler(req, res, req.body),
     )
-    app.get('/.well-known/oauth-authorization-server', authServerMetadataHandlerClerk)
-    app.listen(3000)
+
+    // The rest of your code...
     ```
   </If>
 
   ## Test step-up
 
-  Restart your server, clear your MCP client's stored token for this server, and then reconnect so it gets a new token. A token left over from the build guide already has `email`, so `whoami` would run without step-up. If your client requests the baseline scopes, the consent screen lists your basic profile information, but not your email address. Ask the agent "Who am I?" so it calls `whoami`. If your client supports step-up, the consent screen opens again for `email`, and the call succeeds. In Claude Code, run `/mcp`, re-authenticate the server, and then ask again.
+  Restart your server, and then:
+
+  1. Clear your MCP client's stored token for this server, and reconnect to get a new token. An older token may already include `email`, which lets `get_primary_email` run without step-up. If your client requests the baseline scopes, the consent screen lists your basic profile information but not your email address.
+  1. Ask the agent "What's my email address?" so it calls `get_primary_email`.
+  1. If your client supports step-up, the consent screen opens again for `email`, and the call succeeds.
+
+  Claude Code doesn't open the consent screen on its own. Run `/mcp`, re-authenticate the server, and then ask again.
 
   If the consent screen doesn't open again, check the `403` response's `WWW-Authenticate` header. Confirm that its `scope` lists the token's granted scopes followed by `email`, such as `profile offline_access email`, and that its `resource_metadata` is your protected resource metadata URL. If Clerk then answers the authorization request with `invalid_scope`, [allow clients to request the step-up scope](#allow-clients-to-request-the-step-up-scope).
 </Steps>
@@ -279,10 +247,11 @@ The `scope` in the challenge is the complete set the client should request, incl
 
 ### Keep step-up scopes out of the baseline
 
-Add the step-up scope only to the tool's `scopeChallenge`. Anywhere else, step-up doesn't work as intended:
+Add the step-up scope only to the tool's `scopeChallenge`, unless you want clients to request it up front. Keep it out of route checks. The `401` challenge and your metadata also shape what clients ask for at first consent:
 
-- **Route checks**, such as the `requiredScopes` of `withMcpAuth()` or the check in the Express route, run on every request, including `initialize` and `tools/list`. A step-up scope there rejects every token without it.
-- **`scopes_supported`** in your protected resource metadata guides what MCP clients request when they first connect, unless the `401` challenge names scopes of its own. Keep it to the baseline, as in the [build guide](/docs/guides/ai/mcp/build-mcp-server). It doesn't limit what a token can get, so a client can still request step-up scopes up front.
+- **Route checks**, such as the `requiredScopes` in `mcpAuthOptions`, run on every request, including `initialize` and `tools/list`. A step-up scope there rejects every token without it.
+- **The `401` challenge** names the scopes clients should request when they first connect, according to [MCP 2025-11-25's scope selection strategy](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#scope-selection-strategy). The authentication on `/mcp` lists the `requiredScopes` there, followed by the `challengeScopes`. A token doesn't need the `challengeScopes`. Add a step-up scope to `challengeScopes` only if you want clients to request it up front, for example to let clients without step-up support use the tool.
+- **`scopes_supported`** in your protected resource metadata guides what MCP clients request when they first connect if the `401` challenge names no scopes. `protectedResourceMetadataHandler()` lists only the `requiredScopes` and `challengeScopes` from the options you pass it. If you set `scopes_supported` yourself in its `properties`, include every required and challenge scope. Otherwise, the handler throws at startup. `scopes_supported` doesn't limit what a token can get, so a client can still request step-up scopes up front.
 
 ## Limitations
 
@@ -292,7 +261,7 @@ Add the step-up scope only to the tool's `scopeChallenge`. Anywhere else, step-u
 
 The SDK sends the challenge only when:
 
-- The server runs `@modelcontextprotocol/server` 2.1 or later. Tools behind the `streamableHttpHandler()` adapters in `@clerk/mcp-tools/express` and `@clerk/mcp-tools/hono` run SDK 1.x and must check their scopes themselves.
+- The server runs `@modelcontextprotocol/server` 2.1 or later. This guide requires 2.3.0 or later for its security fixes. On MCP SDK 1.x (`@modelcontextprotocol/sdk`), tools must check their scopes themselves.
 - The request comes over HTTP, through `createMcpHandler()` or the Streamable HTTP transport. Over stdio (local servers), the tool runs without the challenge.
 - The request carries auth info. `requireAdditionalScopes()` and `requireScopes()` leave unauthenticated requests to your authentication check.
 

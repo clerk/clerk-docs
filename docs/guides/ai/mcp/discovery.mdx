@@ -1,0 +1,203 @@
+---
+title: Publish a Server Card and an AI Catalog for your MCP server
+description: Let MCP clients discover your MCP server before they connect, with a Server Card and an AI Catalog from serverCardHandler() and aiCatalogHandler().
+sdk: nextjs, expressjs
+tag: beta
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Build an MCP server",
+      link: "/docs/guides/ai/mcp/build-mcp-server",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+> [!BETA]
+
+A client can read two public JSON documents to learn about your MCP server before it connects or signs in:
+
+- A [Server Card](https://github.com/modelcontextprotocol/ext-server-card) describes one MCP server: its name, version, description, and the URL to connect to. The recommended path is your MCP endpoint's URL followed by `/server-card`, such as `/mcp/server-card`.
+- An [AI Catalog](https://github.com/Agent-Card/ai-catalog) lists the Server Cards on your domain, at `/.well-known/ard.json` and `/.well-known/ai-catalog.json`.
+
+[`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) serves both with `serverCardHandler()` and `aiCatalogHandler()`. Both specifications are drafts, and so are these APIs. They follow the Server Card extension as of commit `526201b` and the AI Catalog v0.9 release candidate as of commit `19208af`. They may change in a later release. Publishing these documents doesn't guarantee that every MCP host will find or use them.
+
+This guide adds both documents to the MCP server from [Build an MCP server](/docs/guides/ai/mcp/build-mcp-server).
+
+<Steps>
+  ## Install the required version
+
+  `serverCardHandler()` and `aiCatalogHandler()` require [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) 1.0.0 or later. They don't need Clerk keys or the MCP SDK.
+
+  ```npm
+  npm install @clerk/mcp-tools@latest
+  ```
+
+  ## Serve a Server Card
+
+  A Server Card needs:
+
+  - `name`: the server's name in reverse-DNS form with one slash, such as `com.example/profile`. It identifies the server and isn't a URL.
+  - `version`: one version, such as `1.0.0`, not a range.
+  - `description`: 1 to 100 characters.
+  - `resourceUrl`: the URL clients connect to. Pass the `resourceUrl` from `mcpAuthOptions`, so the card and the token audience check use the same URL.
+
+  You can also set `title`, `websiteUrl`, `icons`, `repository`, and `_meta`. The handler adds `$schema` and a streamable HTTP `remotes` entry for `resourceUrl`. When you create the handler, it validates the options and builds the card once. It throws a `Clerk error:` for anything the card can't contain.
+
+  The card is public and cached, so never put credentials, tokens, or user data in it.
+
+  <If sdk="nextjs">
+    Create `app/mcp/server-card/route.ts`. Next.js only calls the methods a route exports, so export the handler for every method. The handler answers its own CORS preflight, so export it as `OPTIONS` too, instead of `metadataCorsHandler()`.
+
+    ```ts {{ filename: 'app/mcp/server-card/route.ts' }}
+    import { serverCardHandler } from '@clerk/mcp-tools/next'
+    import { mcpAuthOptions } from '@/lib/mcp'
+
+    const handler = serverCardHandler({
+      name: 'com.example/profile',
+      version: '1.0.0',
+      description: 'Returns the ID of the signed-in Clerk user.',
+      resourceUrl: mcpAuthOptions.resourceUrl,
+    })
+
+    export {
+      handler as GET,
+      handler as HEAD,
+      handler as OPTIONS,
+      handler as POST,
+      handler as PUT,
+      handler as PATCH,
+      handler as DELETE,
+    }
+    ```
+  </If>
+
+  <If sdk="expressjs">
+    In `index.ts`, mount `serverCardHandler()` with `app.all()`, so `OPTIONS` and other methods reach it. Mount it outside `mcpAuth()`.
+
+    ```ts {{ filename: 'index.ts', ins: [[3, 11]] }}
+    // ...
+
+    app.all(
+      '/mcp/server-card',
+      serverCardHandler({
+        name: 'com.example/profile',
+        version: '1.0.0',
+        description: 'Returns the ID of the signed-in Clerk user.',
+        resourceUrl: mcpAuthOptions.resourceUrl,
+      }),
+    )
+    app.listen(3000)
+    ```
+
+    Add `serverCardHandler` to the imports from `@clerk/mcp-tools/express`.
+  </If>
+
+  ## Serve an AI Catalog
+
+  An AI Catalog lists one entry for each Server Card:
+
+  - `identifier`: a name for the server that stays the same wherever its card is hosted, such as `urn:air:example.com:profile`. It isn't a URL, and each identifier can appear only once.
+  - `displayName`: the server's human-readable name. Clients show it instead of the card's `title`, so keep the two the same.
+  - `url`: the exact URL of the Server Card, which can be on another host. It must use `https`, except on `localhost`, `127.0.0.1`, or `[::1]` for local development. The handler never fetches it.
+
+  [Agentic Resource Discovery](https://agenticresourcediscovery.org/spec/) defines `/.well-known/ard.json` as the path clients fetch. Some clients still read the earlier path, `/.well-known/ai-catalog.json`. Serve the same handler at both.
+
+  <If sdk="nextjs">
+    Create `app/.well-known/ard.json/route.ts` and export the handler for each method, as for the Server Card. Then create `app/.well-known/ai-catalog.json/route.ts` and re-export the first route.
+
+    <CodeBlockTabs options={["ard.json", "ai-catalog.json"]}>
+      ```ts {{ filename: 'app/.well-known/ard.json/route.ts' }}
+      import { aiCatalogHandler } from '@clerk/mcp-tools/next'
+
+      const handler = aiCatalogHandler({
+        entries: [
+          {
+            identifier: 'urn:air:example.com:profile',
+            displayName: 'Profile',
+            url: 'http://localhost:3000/mcp/server-card',
+          },
+        ],
+      })
+
+      export {
+        handler as GET,
+        handler as HEAD,
+        handler as OPTIONS,
+        handler as POST,
+        handler as PUT,
+        handler as PATCH,
+        handler as DELETE,
+      }
+      ```
+
+      ```ts {{ filename: 'app/.well-known/ai-catalog.json/route.ts' }}
+      export { GET, HEAD, OPTIONS, POST, PUT, PATCH, DELETE } from '../ard.json/route'
+      ```
+    </CodeBlockTabs>
+  </If>
+
+  <If sdk="expressjs">
+    In `index.ts`, mount `aiCatalogHandler()` at both paths with `app.all()`, outside `mcpAuth()`.
+
+    ```ts {{ filename: 'index.ts', ins: [[3, 14]] }}
+    // ...
+
+    app.all(
+      ['/.well-known/ard.json', '/.well-known/ai-catalog.json'],
+      aiCatalogHandler({
+        entries: [
+          {
+            identifier: 'urn:air:example.com:profile',
+            displayName: 'Profile',
+            url: 'http://localhost:3000/mcp/server-card',
+          },
+        ],
+      }),
+    )
+    app.listen(3000)
+    ```
+
+    Add `aiCatalogHandler` to the imports from `@clerk/mcp-tools/express`.
+  </If>
+
+  When you deploy, replace the localhost URLs with your server's HTTPS URLs.
+
+  ## Keep the discovery routes public
+
+  Clients read these documents before they sign in, so a request without a token must reach them.
+
+  <If sdk="nextjs">
+    If your app uses `clerkMiddleware()`, leave `/mcp/server-card`, `/.well-known/ard.json`, and `/.well-known/ai-catalog.json` out of `auth.protect()`, as you did for the OAuth metadata routes.
+  </If>
+
+  <If sdk="expressjs">
+    Don't mount `mcpAuth()` or other authentication in front of `/mcp/server-card`, `/.well-known/ard.json`, or `/.well-known/ai-catalog.json`.
+  </If>
+
+  ## Test the documents
+
+  Start your server, then request the card and the catalog:
+
+  ```sh {{ filename: 'terminal' }}
+  curl -i http://localhost:3000/mcp/server-card
+  curl -i http://localhost:3000/.well-known/ard.json
+  ```
+
+  The card's `Content-Type` is `application/mcp-server-card+json`, and the catalog's is `application/ai-catalog+json`.
+</Steps>
+
+## How the handlers answer
+
+- `GET` and `HEAD` get the document with a weak `ETag` and `Cache-Control: public, max-age=3600`. To change the cache lifetime, set `maxAge` to a number of seconds. `0` sends `public, no-cache`, so caches revalidate the document before each use.
+- A request whose `If-None-Match` matches the `ETag` gets a `304` without a body.
+- Any origin can read the documents. The handlers send `Access-Control-Allow-Origin: *` and answer the `OPTIONS` preflight. Other methods get a JSON `405`.
+- Errors are sent with `Cache-Control: no-store`, so no cache keeps them.
+- If `mcpAuthOptions.resourceUrl` is a list of URLs, one for each origin, `serverCardHandler()` serves the card for the URL that matches the request's origin. Any other origin gets a `421`. The AI Catalog returns the same document for every request. To link a different card from each origin, create one `aiCatalogHandler()` per origin.
+
+## Limitations
+
+- The handlers support a subset of each specification. A Server Card can't list SSE remotes, URL templates, or header inputs. An AI Catalog entry can only link a Server Card, and the catalog can't carry inline documents, signatures, or extensions.
+- An AI Catalog entry can carry an optional `trustManifest` that names who stands behind the server. List only claims you can back. See the [`@clerk/mcp-tools` README](https://github.com/clerk/mcp-tools#discovery-ai-catalogs-beta) for its fields.

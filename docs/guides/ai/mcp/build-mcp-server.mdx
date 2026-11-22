@@ -82,250 +82,275 @@ Build an MCP server that lets clients access your application's data with Clerk 
 
   When you add your first MCP server, Clerk turns on audience claims (`aud`). The Dashboard turns on [Client ID Metadata Documents (CIMD)](/docs/guides/configure/auth-strategies/oauth/client-id-metadata-documents) support if you select **Allow public clients to connect**; `configure_mcp_server` turns it on for the first server. Existing client restrictions and the instance-wide Proof Key for Code Exchange (PKCE) setting stay unchanged.
 
-  This example requires `profile` and `email`. [Set default scopes](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#configure-default-scopes) if your client doesn't request scopes.
+  If your instance already has MCP servers, in the Clerk Dashboard, navigate to the [**OAuth applications**](https://dashboard.clerk.com/~/oauth-applications) page and select the **Settings** tab. Turn on **Include Audience** if it's off. If a client's token has no `aud` claim or a different audience, reauthorize the client with the full MCP server URL as its `resource` to get a token for this server.
+
+  This example requires only `profile`. [Set default scopes](/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth#configure-default-scopes) if your client doesn't request scopes.
 
   ## Install dependencies
 
   <If sdk="nextjs">
     ```npm
-    npm install @clerk/backend @clerk/mcp-tools mcp-handler @modelcontextprotocol/server
+    npm install @clerk/mcp-tools @clerk/nextjs mcp-handler @modelcontextprotocol/server zod
     ```
+
+    The quickstart already added `@clerk/nextjs`. Install it again to update it to 7.9.5 or later. The token verification below needs that version, because earlier versions let opaque access tokens, and JWT access tokens without an `aud` claim, pass the audience check. This guide requires `@clerk/mcp-tools` 1.0.0 or later and `@modelcontextprotocol/server` 2.3.0 or later.
   </If>
 
   <If sdk="expressjs">
     ```npm
-    npm install @clerk/backend @clerk/mcp-tools @modelcontextprotocol/sdk cors
+    npm install @clerk/mcp-tools @clerk/express express@5 @modelcontextprotocol/sdk cors
     ```
+
+    The quickstart already added `@clerk/express`. Install it again to update it to 2.1.70 or later. The token verification below needs that version, because earlier versions let opaque access tokens, and JWT access tokens without an `aud` claim, pass the audience check. This guide requires `@clerk/mcp-tools` 1.0.0 or later, Express 5 or later, and `@modelcontextprotocol/sdk` 1.32.0 or later.
   </If>
 
-  ## Verify OAuth tokens and limit returned data
+  For Hono, `@clerk/mcp-tools/hono` has the same `mcpAuth()` and `protectedResourceMetadataHandler()`. See the [`@clerk/mcp-tools/hono` README](https://github.com/clerk/mcp-tools/tree/main/hono).
 
-  Create `lib/mcp-auth.ts`. Set `MCP_RESOURCE_URL` to the exact endpoint your clients use. Keep the localhost value during local development and replace it with your HTTPS URL when you deploy. The verifier reads the secret and publishable keys the quickstart added to your environment.
-
-  <If sdk="nextjs">
-    In a Next.js App Router project with a `src/` directory, create `src/lib/mcp-auth.ts` alongside `src/app/` instead, and put the route files below in `src/app/`. The relative imports are the same.
-  </If>
-
-  `authenticateRequest()` accepts only [OAuth access tokens](!oauth-access-token) issued by your instance. It checks the signature, expiry, and that the token's `aud` claim includes `MCP_RESOURCE_URL`, and rejects tokens without an audience. Always pass `audience`; without it, the audience isn't checked.
-
-  ```ts {{ filename: 'lib/mcp-auth.ts', collapsible: true }}
-  import { createClerkClient } from '@clerk/backend'
-  import { verifyClerkToken } from '@clerk/mcp-tools/server'
-
-  export const MCP_RESOURCE_URL = 'http://localhost:3000/mcp'
-  export const REQUIRED_SCOPES = ['profile', 'email']
-  export const RESOURCE_METADATA_URL = new URL(
-    '/.well-known/oauth-protected-resource/mcp',
-    MCP_RESOURCE_URL,
-  ).href
-
-  const clerkClient = createClerkClient({
-    secretKey: process.env.CLERK_SECRET_KEY,
-    publishableKey:
-      process.env.CLERK_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-    apiUrl: process.env.CLERK_API_URL,
-  })
-
-  export async function verifyMcpToken(request: Request) {
-    try {
-      const requestState = await clerkClient.authenticateRequest(request, {
-        acceptsToken: 'oauth_token',
-        audience: MCP_RESOURCE_URL,
-      })
-      if (!requestState.isAuthenticated) return undefined
-
-      const authInfo = verifyClerkToken(requestState.toAuth(), requestState.token)
-      // MCP SDK 2 sends this as resource_metadata in its WWW-Authenticate scope challenges
-      return authInfo && { ...authInfo, resourceMetadataUrl: RESOURCE_METADATA_URL }
-    } catch (error) {
-      console.error('MCP access token verification failed', error)
-      return undefined
-    }
-  }
-
-  export async function getUserProfile(userId: string) {
-    const user = await clerkClient.users.getUser(userId)
-    return {
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      imageUrl: user.imageUrl,
-      email:
-        user.emailAddresses.find((address) => address.id === user.primaryEmailAddressId)
-          ?.emailAddress ?? null,
-    }
-  }
-  ```
-
-  `verifyClerkToken()` returns the token's `clientId`, `scopes`, and the user ID in `extra.userId`. It also marks the result as verified by Clerk, which the [`create_browser_session` tool](/docs/guides/ai/mcp/browser-sessions) requires.
-
-  Return only the fields the granted scopes allow. Add your application's permission checks before accessing other protected data. To ask for more scopes only when a tool needs them, see [Request more scopes with step-up authorization](/docs/guides/ai/mcp/step-up-scopes).
+  If you're upgrading an existing server from `@clerk/mcp-tools` 0.9, see [Upgrade to `@clerk/mcp-tools` 1.0](/docs/guides/development/upgrading/upgrade-guides/mcp-tools-v1).
 
   ## Create your MCP server
 
   <If sdk="nextjs">
-    Create `app/[transport]/route.ts`. The wrapper requires a verified [OAuth token](!oauth-access-token) and both scopes.
+    The MCP route and its metadata route share options, so create `lib/mcp.ts` to hold them. Set `resourceUrl` to the exact endpoint your clients use. It's read from the `MCP_RESOURCE_URL` environment variable, so each environment can set its own URL. In a project with a `src/` directory, put this file in `src/lib/` and the route files below in `src/app/` instead.
 
-    ```ts {{ filename: 'app/[transport]/route.ts' }}
-    import { createMcpHandler, withMcpAuth } from 'mcp-handler'
-    import {
-      getUserProfile,
-      MCP_RESOURCE_URL,
-      REQUIRED_SCOPES,
-      verifyMcpToken,
-    } from '../../lib/mcp-auth'
+    ```ts {{ filename: 'lib/mcp.ts' }}
+    import type { McpAuthOptions } from '@clerk/mcp-tools/next'
+
+    const resourceUrl = process.env.MCP_RESOURCE_URL
+    if (!resourceUrl) throw new Error('MCP_RESOURCE_URL is not set')
+
+    export const mcpAuthOptions = {
+      resourceUrl,
+      requiredScopes: ['profile'],
+    } satisfies McpAuthOptions
+    ```
+
+    Add the variable to your `.env` file with the localhost value for local development:
+
+    ```env {{ filename: '.env' }}
+    MCP_RESOURCE_URL=http://localhost:3000/mcp
+    ```
+
+    When you deploy, set `MCP_RESOURCE_URL` to your HTTPS endpoint, such as `https://mcp.example.com/mcp`. `lib/mcp.ts` throws if it's unset instead of falling back to localhost.
+
+    Then create `app/mcp/route.ts`. Import `withClerkMcpAuth()` from `@clerk/mcp-tools/next`, not `mcp-handler`. It takes options instead of a verifier function.
+
+    `withClerkMcpAuth()` accepts only [OAuth access tokens](!oauth-access-token) issued by your instance. It checks the token's signature and expiry, and that its `aud` claim includes `resourceUrl`. It rejects tokens without an audience or without every scope in `requiredScopes`. A rejected request gets a `WWW-Authenticate` challenge that points clients to the protected resource metadata route below. On a `401`, the challenge also names `requiredScopes` as the scopes to request. `withClerkMcpAuth()` verifies tokens with `clerkClient` from `@clerk/nextjs/server`, which reads the `CLERK_SECRET_KEY` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` the quickstart added to your environment.
+
+    Tools read the verified token from `ctx.http?.authInfo`. It holds the token's `clientId`, `scopes`, and the user ID in `extra.userId`. `isClerkAuthInfo()` narrows its type, so `extra.userId` is typed as a string. `withClerkMcpAuth()` also marks the result as verified by Clerk, which the [`create_browser_session` tool](/docs/guides/ai/mcp/browser-sessions) requires.
+
+    ```ts {{ filename: 'app/mcp/route.ts' }}
+    import { isClerkAuthInfo, withClerkMcpAuth } from '@clerk/mcp-tools/next'
+    import { createMcpHandler } from 'mcp-handler'
+    import { mcpAuthOptions } from '@/lib/mcp'
 
     const handler = createMcpHandler((server) => {
       server.registerTool(
-        'get_clerk_user_data',
-        { description: 'Gets the authorized user’s profile and primary email' },
+        'whoami',
+        { description: 'Gets the ID of the Clerk user who authorized this request' },
         async (ctx) => {
-          const userId = ctx.http?.authInfo?.extra?.userId
-          if (typeof userId !== 'string') throw new Error('Missing authenticated user')
-          return {
-            content: [{ type: 'text', text: JSON.stringify(await getUserProfile(userId)) }],
+          const authInfo = ctx.http?.authInfo
+          if (!isClerkAuthInfo(authInfo)) {
+            return { content: [{ type: 'text', text: 'Not signed in with Clerk.' }], isError: true }
           }
+          // `authInfo.token` is the bearer token, so return only the user ID that `withClerkMcpAuth()` puts in `extra`
+          return { content: [{ type: 'text', text: authInfo.extra.userId }] }
         },
       )
     })
 
-    const authHandler = withMcpAuth(handler, (request) => verifyMcpToken(request), {
-      required: true,
-      requiredScopes: REQUIRED_SCOPES,
-      // mcp-handler appends resourceMetadataPath to this origin for the WWW-Authenticate challenge
-      resourceUrl: new URL(MCP_RESOURCE_URL).origin,
-      resourceMetadataPath: '/.well-known/oauth-protected-resource/mcp',
-    })
+    const authHandler = withClerkMcpAuth(handler, mcpAuthOptions)
 
-    export { authHandler as GET, authHandler as POST }
+    export { authHandler as GET, authHandler as POST, authHandler as DELETE }
     ```
+
+    Return only the fields the granted scopes allow. Add your application's permission checks before accessing other protected data. To ask for more scopes only when a tool needs them, see [Request more scopes with step-up authorization](/docs/guides/ai/mcp/step-up-scopes).
+
+    Your server is discoverable by default. A client without a token can connect and list `whoami`, with its name, description, and input schema, but a call to it gets the `401` challenge that starts sign-in. To require a token for every request, add `discoverable: false` to `mcpAuthOptions`. To let clients call some tools before they sign in, see [Allow public access to your MCP server before sign-in](/docs/guides/ai/mcp/public-access).
 
     ## Expose public OAuth metadata
 
-    Create these two route files. The protected-resource metadata advertises the same full URL and scopes used by the token verifier.
+    Create the protected resource metadata route with the same `mcpAuthOptions`. Its `resource` then matches the `resourceUrl` that `withClerkMcpAuth()` checks, and its `scopes_supported` lists the `requiredScopes`.
 
-    <CodeBlockTabs options={["Protected resource", "Authorization server"]}>
-      ```ts {{ filename: 'app/.well-known/oauth-protected-resource/mcp/route.ts' }}
-      import {
-        metadataCorsOptionsRequestHandler,
-        protectedResourceHandlerClerk,
-      } from '@clerk/mcp-tools/next'
-      import { MCP_RESOURCE_URL, REQUIRED_SCOPES } from '../../../../lib/mcp-auth'
+    ```ts {{ filename: 'app/.well-known/oauth-protected-resource/mcp/route.ts' }}
+    import { metadataCorsHandler, protectedResourceMetadataHandler } from '@clerk/mcp-tools/next'
+    import { mcpAuthOptions } from '@/lib/mcp'
 
-      const handler = protectedResourceHandlerClerk({
-        resource: MCP_RESOURCE_URL,
-        scopes_supported: REQUIRED_SCOPES,
-      })
-      const corsHandler = metadataCorsOptionsRequestHandler()
+    const handler = protectedResourceMetadataHandler(mcpAuthOptions)
+    const corsHandler = metadataCorsHandler()
 
-      export { handler as GET, corsHandler as OPTIONS }
-      ```
+    export { handler as GET, corsHandler as OPTIONS }
+    ```
 
-      ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
-      import {
-        authServerMetadataHandlerClerk,
-        metadataCorsOptionsRequestHandler,
-      } from '@clerk/mcp-tools/next'
+    Clients that follow [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) find Clerk's authorization server from the `authorization_servers` in this metadata. To also support older clients that look for `/.well-known/oauth-authorization-server` on your server's origin, add a route that relays Clerk's authorization server metadata:
 
-      const handler = authServerMetadataHandlerClerk()
-      const corsHandler = metadataCorsOptionsRequestHandler()
+    ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
+    import { authorizationServerMetadataHandler, metadataCorsHandler } from '@clerk/mcp-tools/next'
 
-      export { handler as GET, corsHandler as OPTIONS }
-      ```
-    </CodeBlockTabs>
+    const handler = authorizationServerMetadataHandler()
+    const corsHandler = metadataCorsHandler()
 
-    Keep the `.well-known` routes public and use the OAuth verifier above for `/mcp`. Start your app with `npm run dev`; for a production build, run `npm run build` followed by `npm run start`.
+    export { handler as GET, corsHandler as OPTIONS }
+    ```
+
+    Keep the `.well-known` routes public and `withClerkMcpAuth()` on `/mcp`. The MCP route doesn't need `clerkMiddleware()` or `<ClerkProvider>`, because `withClerkMcpAuth()` verifies the bearer token itself. If your app uses `clerkMiddleware()` for its other pages, leave these routes out of `auth.protect()`: `/mcp`, `/.well-known/oauth-protected-resource/mcp`, and `/.well-known/oauth-authorization-server` if you added it. MCP clients then get the challenge and metadata from these handlers instead of a sign-in redirect. Start your app with `npm run dev`; for a production build, run `npm run build` followed by `npm run start`.
+
+    Neither `withClerkMcpAuth()` nor `mcp-handler` sets CORS headers on `/mcp`. Browser-based MCP clients, such as MCP Inspector, can't read the `401` challenge without them. To support those clients, add the CORS headers and preflight handler from the [`@clerk/mcp-tools/next` README](https://github.com/clerk/mcp-tools/tree/main/next#4-cors-for-browser-based-mcp-clients) to `app/mcp/route.ts`. The recipe allows the [2026-07-28 transport headers](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#standard-request-headers), including `Mcp-Method` and `Mcp-Name`.
   </If>
 
   <If sdk="expressjs">
-    Create `index.ts`. Each request gets its own MCP server. The authentication challenge uses the metadata URL configured above.
+    Create `index.ts`. Set `resourceUrl` in `mcpAuthOptions` to the exact endpoint your clients use. It's read from the `MCP_RESOURCE_URL` environment variable, so each environment can set its own URL. Pass the same `mcpAuthOptions` to `mcpAuth()` and `protectedResourceMetadataHandler()`. The metadata's `resource` then matches the `resourceUrl` that `mcpAuth()` checks, and its `scopes_supported` lists the `requiredScopes`.
+
+    `mcpAuth()` accepts only [OAuth access tokens](!oauth-access-token) issued by your instance. It checks the token's signature and expiry, and that its `aud` claim includes `resourceUrl`. It rejects tokens without an audience or without every scope in `requiredScopes`. A rejected request gets a `WWW-Authenticate` challenge that points clients to the protected resource metadata route below. On a `401`, the challenge also names `requiredScopes` as the scopes to request. `mcpAuth()` verifies tokens with `clerkClient` from `@clerk/express`, which reads the [Secret Key](!secret-key) and [Publishable Key](!publishable-key) the quickstart added to your environment.
+
+    The MCP route doesn't need `clerkMiddleware()`. `mcpAuth()` verifies the token itself, so `clerkMiddleware()` in front of it only verifies each token twice.
+
+    Tool callbacks receive the token's `clientId` and `scopes` in `authInfo`, and the user ID in `authInfo.extra.userId`. `isClerkAuthInfo()` narrows its type, so `extra.userId` is typed as a string. `mcpAuth()` also marks the result as verified by Clerk, which the [`create_browser_session` tool](/docs/guides/ai/mcp/browser-sessions) requires.
+
+    `streamableHttpHandler()` takes the SDK's `StreamableHTTPServerTransport` and gives each request its own MCP server on it. The server is stateless, so `streamableHttpHandler()` answers any request that isn't a `POST` with a `405`, `Allow: POST`, and a JSON-RPC `Method not allowed.` error. Mount it with `app.all()` behind `mcpAuth()`, so every request to `/mcp` reaches `mcpAuth()` instead of an Express `404`. Mount `express.json()` before `mcpAuth()`. `mcpAuth()` reads the parsed body to tell a request that lists your tools from one that calls them, and throws a `Clerk error:` for a JSON request without a token when the body isn't parsed.
 
     ```ts {{ filename: 'index.ts', collapsible: true }}
     import {
-      authServerMetadataHandlerClerk,
-      protectedResourceHandlerClerk,
+      isClerkAuthInfo,
+      mcpAuth,
+      type McpAuthOptions,
+      protectedResourceMetadataHandler,
       streamableHttpHandler,
     } from '@clerk/mcp-tools/express'
     import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+    import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
     import express from 'express'
     import cors from 'cors'
-    import {
-      getUserProfile,
-      MCP_RESOURCE_URL,
-      REQUIRED_SCOPES,
-      RESOURCE_METADATA_URL,
-      verifyMcpToken,
-    } from './lib/mcp-auth.ts'
+
+    const resourceUrl = process.env.MCP_RESOURCE_URL
+    if (!resourceUrl) throw new Error('MCP_RESOURCE_URL is not set')
+
+    const mcpAuthOptions = {
+      resourceUrl,
+      requiredScopes: ['profile'],
+    } satisfies McpAuthOptions
 
     const app = express()
-    app.use(cors({ exposedHeaders: ['WWW-Authenticate'] }))
+    // cors reflects requested preflight headers, including Mcp-Method and Mcp-Name
+    app.use(cors({ exposedHeaders: ['WWW-Authenticate', 'Mcp-Session-Id'] }))
     app.use(express.json())
 
     function createServer() {
       const server = new McpServer({ name: 'profile-server', version: '1.0.0' })
+      // `authInfo.token` is the bearer token, so return only the user ID that `mcpAuth()` puts in `extra`
       server.registerTool(
-        'get_clerk_user_data',
-        { description: 'Gets the authorized user’s profile and primary email' },
+        'whoami',
+        { description: 'Gets the ID of the Clerk user who authorized this request' },
         async ({ authInfo }) => {
-          const userId = authInfo?.extra?.userId
-          if (typeof userId !== 'string') throw new Error('Missing authenticated user')
-          return {
-            content: [{ type: 'text', text: JSON.stringify(await getUserProfile(userId)) }],
+          if (!isClerkAuthInfo(authInfo)) {
+            return { content: [{ type: 'text', text: 'Not signed in with Clerk.' }], isError: true }
           }
+          return { content: [{ type: 'text', text: authInfo.extra.userId }] }
         },
       )
       return server
     }
 
-    app.post('/mcp', async (req, res) => {
-      const authInfo = await verifyMcpToken(
-        new Request(MCP_RESOURCE_URL, {
-          headers: { authorization: req.get('authorization') ?? '' },
-        }),
-      )
-      const challenge = `Bearer resource_metadata="${RESOURCE_METADATA_URL}"`
-      if (!authInfo) {
-        res.status(401).set('WWW-Authenticate', challenge).json({ error: 'invalid_token' })
-        return
-      }
-      if (!REQUIRED_SCOPES.every((scope) => authInfo.scopes.includes(scope))) {
-        res
-          .status(403)
-          .set(
-            'WWW-Authenticate',
-            `${challenge}, error="insufficient_scope", scope="${REQUIRED_SCOPES.join(' ')}"`,
-          )
-          .json({ error: 'insufficient_scope' })
-        return
-      }
-
-      Object.assign(req, { auth: authInfo })
-      await streamableHttpHandler(createServer)(req, res)
-    })
-    app.all('/mcp', (_, res) => {
-      res.status(405).set('Allow', 'POST, OPTIONS').json({ error: 'method_not_allowed' })
-    })
-    app.get(
-      '/.well-known/oauth-protected-resource/mcp',
-      protectedResourceHandlerClerk({
-        resource: MCP_RESOURCE_URL,
-        scopes_supported: REQUIRED_SCOPES,
-      }),
+    app.all(
+      '/mcp',
+      mcpAuth(mcpAuthOptions),
+      streamableHttpHandler(createServer, StreamableHTTPServerTransport),
     )
-    app.get('/.well-known/oauth-authorization-server', authServerMetadataHandlerClerk)
+    app.all(
+      '/.well-known/oauth-protected-resource/mcp',
+      protectedResourceMetadataHandler(mcpAuthOptions),
+    )
     app.listen(3000)
     ```
 
-    Keep these metadata routes public and use the OAuth verifier above for `/mcp`. Start the app with `node --env-file=.env index.ts` so the quickstart's Clerk keys are available before imports.
+    Return only the fields the granted scopes allow. Add your application's permission checks before accessing other protected data. To ask for more scopes only when a tool needs them, see [Request more scopes with step-up authorization](/docs/guides/ai/mcp/step-up-scopes).
 
-    To type-check this example, install the compiler and declarations with `npm install -D typescript @types/node @types/express @types/cors`, and enable `allowImportingTsExtensions` with `noEmit`.
+    Your server is discoverable by default. A client without a token can connect and list `whoami`, with its name, description, and input schema, but a call to it gets the `401` challenge that starts sign-in. To require a token for every request, add `discoverable: false` to `mcpAuthOptions`. To let clients call some tools before they sign in, see [Allow public access to your MCP server before sign-in](/docs/guides/ai/mcp/public-access).
+
+    Clients that follow [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) find Clerk's authorization server from the `authorization_servers` in the protected resource metadata. To also support older clients that look for `/.well-known/oauth-authorization-server` on your server's origin, import `authorizationServerMetadataHandler()` from `@clerk/mcp-tools/express` and mount it before `app.listen()`:
+
+    ```ts {{ filename: 'index.ts' }}
+    app.all('/.well-known/oauth-authorization-server', authorizationServerMetadataHandler())
+    ```
+
+    Keep the metadata routes public and `mcpAuth()` on `/mcp`. `index.ts` uses ES module imports, so in `package.json`, set `"type"` to `"module"`. If your app already uses CommonJS, leave `"type"` as it is and name the file `index.mts` instead. Add the MCP endpoint to your `.env` file with the localhost value for local development:
+
+    ```env {{ filename: '.env' }}
+    MCP_RESOURCE_URL=http://localhost:3000/mcp
+    ```
+
+    When you deploy, set `MCP_RESOURCE_URL` to your HTTPS endpoint, such as `https://mcp.example.com/mcp`. `index.ts` throws if it's unset instead of falling back to localhost. Start the app with `node --env-file=.env index.ts` (or `index.mts`) so `MCP_RESOURCE_URL` and the quickstart's Clerk keys are available before imports.
+
+    To type-check this example, install the compiler and declarations with `npm install -D typescript @types/node @types/express @types/cors`, and enable `noEmit`.
   </If>
 
   ## Verify authentication and authorization
 
-  Start your server, then [connect an MCP client](/docs/guides/ai/mcp/connect-mcp-client). Sign in, approve access, and call `get_clerk_user_data`.
+  Start your server, then [connect an MCP client](/docs/guides/ai/mcp/connect-mcp-client). Sign in, approve access, and call `whoami`, which returns your Clerk user ID.
 
   For a hosted server, the Clerk Dashboard runs checks automatically and tells you if your MCP server isn't configured correctly. Fix any reported issues, then select **Re-test connection**.
 
   For localhost, use a client on the same machine. Dashboard checks and cloud connectors require a hosted HTTPS endpoint.
 </Steps>
+
+## How verification fails
+
+A token Clerk rejects gets the `401` or `403` challenge described above, but not every failure is a rejection.
+
+<If sdk="nextjs">
+  If Clerk can't verify an opaque access token at all, such as during an outage, when Clerk rate-limits your server, or with an invalid [Secret Key](!secret-key), `withClerkMcpAuth()` answers with a JSON `{"error":"server_error"}` and no challenge, so clients keep their tokens. The status is the `429` or `5xx` that Clerk reported, or `500`. It logs the `McpAuthError` with `console.error` instead of throwing it, so Next.js's `onRequestError` doesn't see it.
+
+  A JWT access token gets the same server error when Clerk can't load its signing keys. With current `@clerk/backend` releases, 3.31.3 and earlier, that happens only when Clerk answers the signing keys request with an error status and a JSON body. Those releases treat any other signing key failure as an invalid signature, so the client gets the `401` challenge instead. Other failures include an invalid Secret Key, a network error, or an error page that isn't JSON.
+</If>
+
+<If sdk="expressjs">
+  If Clerk can't verify an opaque access token at all, such as during an outage, when Clerk rate-limits your server, or with an invalid [Secret Key](!secret-key), `mcpAuth()` answers with a JSON `{"error":"server_error"}` and no challenge, so clients keep their tokens. The status is the `429` or `5xx` that Clerk reported, or `500`. It logs the `McpAuthError` with `console.error` and doesn't pass it to your error middleware.
+
+  A JWT access token gets the same server error when Clerk can't load its signing keys. With current `@clerk/backend` releases, 3.31.3 and earlier, that happens only when Clerk answers the signing keys request with an error status and a JSON body. Those releases treat any other signing key failure as an invalid signature, so the client gets the `401` challenge instead. Other failures include an invalid Secret Key, a network error, or an error page that isn't JSON.
+
+  To log the `401` and `403` answers, and the `421` a request gets when `resourceUrl` is a list of URLs and none of them has the request's origin, read `res.locals.mcpAuthFailure` in a `res.on('finish')` listener. The server error doesn't set it.
+</If>
+
+## Verify tokens yourself
+
+`withClerkMcpAuth()` and `mcpAuth()` verify tokens for you, and the tools in `@clerk/mcp-tools/tools`, [`create_browser_session`](/docs/guides/ai/mcp/browser-sessions) and [`submit_feedback`](/docs/guides/ai/mcp/agent-feedback#add-the-feedback-tool), trust only the auth info they produce. If you verify tokens in your own code instead, call `authenticateRequest()` with `acceptsToken: 'oauth_token'` and your `resourceUrl` as the `audience`, then convert the request state with `toClerkAuthInfo()`. Without the `audience` check, any OAuth access token your instance issued passes, whichever OAuth application it was issued to. `auth({ acceptsToken: 'oauth_token' })` alone doesn't check the audience.
+
+The following example verifies the bearer token of a request to `/mcp`:
+
+<If sdk="nextjs">
+  ```ts {{ filename: 'lib/verify-token.ts' }}
+  import { toClerkAuthInfo } from '@clerk/mcp-tools/next'
+  import { clerkClient } from '@clerk/nextjs/server'
+  import { mcpAuthOptions } from '@/lib/mcp'
+
+  export async function verifyToken(req: Request) {
+    const clerk = await clerkClient()
+    const requestState = await clerk.authenticateRequest(req, {
+      acceptsToken: 'oauth_token',
+      audience: mcpAuthOptions.resourceUrl,
+    })
+    if (!requestState.isAuthenticated) return undefined
+    return toClerkAuthInfo(requestState.toAuth(), requestState.token)
+  }
+  ```
+</If>
+
+<If sdk="expressjs">
+  ```ts {{ filename: 'verify-token.ts' }}
+  import { clerkClient } from '@clerk/express'
+  import { toClerkAuthInfo } from '@clerk/mcp-tools/express'
+
+  export async function verifyToken(token: string) {
+    const resourceUrl = process.env.MCP_RESOURCE_URL
+    if (!resourceUrl) throw new Error('MCP_RESOURCE_URL is not set')
+    const requestState = await clerkClient.authenticateRequest(
+      new Request(resourceUrl, { headers: { authorization: `Bearer ${token}` } }),
+      { acceptsToken: 'oauth_token', audience: resourceUrl },
+    )
+    if (!requestState.isAuthenticated) return undefined
+    return toClerkAuthInfo(requestState.toAuth(), requestState.token)
+  }
+  ```
+</If>
+
+The MCP SDK's step-up challenge reads `resourceMetadataUrl` from the auth info. Add it to the object that `toClerkAuthInfo()` returned with `Object.assign(authInfo, { resourceMetadataUrl })`. Set `resourceMetadataUrl` to the full URL of your protected resource metadata route, such as `http://localhost:3000/.well-known/oauth-protected-resource/mcp`. Don't copy the object, such as with `{ ...authInfo, resourceMetadataUrl }`. A copy fails `isClerkAuthInfo()`, so `create_browser_session` refuses every call with the `not_authenticated` error code, and `submit_feedback` stops attaching the user and client IDs to reports.

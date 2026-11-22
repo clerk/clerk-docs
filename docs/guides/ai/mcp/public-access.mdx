@@ -1,0 +1,232 @@
+---
+title: Allow public access to your MCP server before sign-in
+description: Your MCP server is discoverable by default. Use the publicAccess option to also open chosen MCP tools, resources, and prompts to clients without an access token, so users sign in only when they reach something protected.
+sdk: nextjs, expressjs
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Build an MCP server",
+      link: "/docs/guides/ai/mcp/build-mcp-server",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+Servers built with [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) are discoverable by default. A client without an access token can connect and list your tools, resources, resource templates, and prompts, and see the name, description, and schema of every tool, the protected ones included. Calling a tool, reading a resource, or getting a prompt still needs sign-in, except for the ones you name in the `publicAccess` option. Protected resource metadata and the [Server Card](/docs/guides/ai/mcp/discovery) are public either way.
+
+With `publicAccess`, a client works like this:
+
+1. The client connects and lists your tools without signing in.
+1. It calls the tools you opened, such as a search or a status tool, without signing in.
+1. The first time it calls anything else, your server answers with the usual `401` challenge, and the client sends the user through Clerk's sign-in and consent screen.
+1. The client retries the call with the new access token.
+
+This guide assumes that you've completed [Build an MCP server](/docs/guides/ai/mcp/build-mcp-server). It adds a public `get_server_info` tool to that server and keeps `whoami` protected.
+
+<Steps>
+  ## Install the required version
+
+  `discoverable` and `publicAccess` require [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) 1.0.0 or later.
+
+  ```npm
+  npm install @clerk/mcp-tools@latest
+  ```
+
+  ## Add `publicAccess` to your options
+
+  [What `discoverable` and `publicAccess` open](#what-discoverable-and-publicaccess-open) explains each option.
+
+  <If sdk="nextjs">
+    Add `publicAccess` to `mcpAuthOptions` in `lib/mcp.ts`. `withClerkMcpAuth()` reads it, and `protectedResourceMetadataHandler()` ignores it, so the same object still configures both routes.
+
+    ```ts {{ filename: 'lib/mcp.ts', ins: [[5, 8]] }}
+    // ...
+
+    export const mcpAuthOptions = {
+      // ...
+      publicAccess: {
+        tools: ['get_server_info'],
+      },
+    } satisfies McpAuthOptions
+    ```
+  </If>
+
+  <If sdk="expressjs">
+    Add `publicAccess` to `mcpAuthOptions` in `index.ts`. `mcpAuth()` reads it, and `protectedResourceMetadataHandler()` ignores it, so the same object still configures both routes.
+
+    ```ts {{ filename: 'index.ts', ins: [[5, 8]] }}
+    // ...
+
+    const mcpAuthOptions = {
+      // ...
+      publicAccess: {
+        tools: ['get_server_info'],
+      },
+    } satisfies McpAuthOptions
+    ```
+
+    `mcpAuth()` reads the body that `express.json()` parsed to see whether a request lists your tools or calls one. Keep `express.json()` mounted before `mcpAuth()`. Without it, `mcpAuth()` throws a `Clerk error:` for a JSON request without a token.
+  </If>
+
+  ## Add a public tool
+
+  A request without a token has no auth info, so a public tool can't assume there's a signed-in user. Return only data that anyone may see.
+
+  <If sdk="nextjs">
+    In `app/mcp/route.ts`, register `get_server_info` next to `whoami`. For a request without a token, `ctx.http?.authInfo` is `undefined`.
+
+    ```ts {{ filename: 'app/mcp/route.ts', ins: [[6, 18]] }}
+    import { isClerkAuthInfo, withClerkMcpAuth } from '@clerk/mcp-tools/next'
+    import { createMcpHandler } from 'mcp-handler'
+    import { mcpAuthOptions } from '@/lib/mcp'
+
+    const handler = createMcpHandler((server) => {
+      // Listed in `publicAccess.tools`, so clients can call it without signing in
+      server.registerTool(
+        'get_server_info',
+        { description: 'Describes what this server offers. Works without signing in.' },
+        async () => ({
+          content: [
+            {
+              type: 'text',
+              text: 'This server offers whoami, which returns your Clerk user ID after you sign in.',
+            },
+          ],
+        }),
+      )
+      server.registerTool(
+        'whoami',
+        // ...
+      )
+    })
+
+    // ...
+    ```
+  </If>
+
+  <If sdk="expressjs">
+    In `createServer()`, register `get_server_info` next to `whoami`. For a request without a token, `authInfo` is `undefined`, and so is `req.auth`.
+
+    ```ts {{ filename: 'index.ts', ins: [[5, 17]] }}
+    // ...
+
+    function createServer() {
+      const server = new McpServer({ name: 'profile-server', version: '1.0.0' })
+      // Listed in `publicAccess.tools`, so clients can call it without signing in
+      server.registerTool(
+        'get_server_info',
+        { description: 'Describes what this server offers. Works without signing in.' },
+        async () => ({
+          content: [
+            {
+              type: 'text',
+              text: 'This server offers whoami, which returns your Clerk user ID after you sign in.',
+            },
+          ],
+        }),
+      )
+      server.registerTool(
+        'whoami',
+        // ...
+      )
+      return server
+    }
+    ```
+  </If>
+
+  `whoami` isn't in `publicAccess.tools`, so it stays protected. A call to it without a token gets the `401` before your tool runs. Keep its `isClerkAuthInfo()` check anyway. If you open the tool by mistake, the check makes it return an error instead of reading a missing user ID.
+
+  ## Test public access
+
+  Start your server. Without a token, a call to `get_server_info` now succeeds with a `200` and the tool's result:
+
+  ```sh {{ filename: 'terminal' }}
+  curl -i http://localhost:3000/mcp \
+    -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_server_info","arguments":{}}}'
+  ```
+
+  A call to `whoami` without a token still gets the `401`, with a `WWW-Authenticate` challenge that names your protected resource metadata and the scopes to request:
+
+  ```sh {{ filename: 'terminal' }}
+  curl -i http://localhost:3000/mcp \
+    -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"whoami","arguments":{}}}'
+  ```
+
+  Then [connect an MCP client](/docs/guides/ai/mcp/connect-mcp-client) that supports connecting before sign-in. It lists both tools and calls `get_server_info` without asking you to sign in. When you call `whoami`, it opens Clerk's sign-in and consent screen. Some clients sign in as soon as they connect, so check your client's documentation.
+</Steps>
+
+## What `discoverable` and `publicAccess` open
+
+`discoverable` decides whether a client without a token can see your server. `publicAccess` names the calls it can make.
+
+- `discoverable`: `true`, the default, lets a client without a token connect and list your tools, resources, resource templates, and prompts. It never opens a call. `false` requires a token for every request, as `@clerk/mcp-tools` 0.9 did. `discoverable` is only about your MCP endpoint. It has nothing to do with OAuth token introspection.
+- `publicAccess.tools`: the names of the tools a client may call without a token. List each tool by name; there's no value that opens every tool.
+- `publicAccess.resources`: the resources a client may read without a token. `true` opens every resource, and a list opens only the URIs it names. The check compares URIs exactly as the client sends them. It doesn't match URI templates or wildcards, so list each URI you want to open.
+- `publicAccess.prompts`: the prompts a client may get without a token. `true` opens every prompt, and a list opens only the prompts it names.
+
+For example, if your server defines a resource at `docs://getting-started` and a prompt named `summarize_docs`, this opens one tool, that resource, and that prompt. The server stays discoverable, so clients can still list everything else:
+
+```ts
+const mcpAuthOptions = {
+  // ...
+  publicAccess: {
+    tools: ['get_server_info'],
+    resources: ['docs://getting-started'],
+    prompts: ['summarize_docs'],
+  },
+}
+```
+
+To keep your server private, set `discoverable: false` and leave out `publicAccess`. Every request without a token then gets the `401`:
+
+```ts
+const mcpAuthOptions = {
+  // ...
+  discoverable: false,
+}
+```
+
+`publicAccess.tools`, `resources`, and `prompts` need `discoverable`. With `discoverable: false`, no client without a token can connect to reach them, so naming any of them is a TypeScript error and throws a `Clerk error:` at startup.
+
+The middleware checks a `POST` without a token against these options only when its body is `application/json`. Any other `POST` without a token gets the `401`. A mistake in `discoverable` or `publicAccess`, such as a `discoverable` that isn't `true` or `false`, throws a `Clerk error:` at startup.
+
+## Best practices
+
+A protected call still gets the same `401` challenge as before. Its `scope` lists `requiredScopes`, then `challengeScopes`, and clients request those scopes when the user signs in. The middleware still verifies any request that carries a token, even when the request asks only for something public. A token without every `requiredScopes` entry gets a `403` on every request, including calls to public tools.
+
+To ask for scopes at the first sign-in without requiring them on every request, move them from `requiredScopes` to `challengeScopes`. Keep `requiredScopes` for the scopes that every signed-in request must have. A protected tool that needs a scope beyond those still declares it with [`requireAdditionalScopes()`](/docs/guides/ai/mcp/step-up-scopes), so a token without it gets the step-up challenge.
+
+## Limitations
+
+The `401` has to come from the auth middleware. A tool can't ask the client to sign in: the MCP SDK turns an error thrown by a tool into a successful response with an error result, and clients don't treat that as a reason to sign in.
+
+MCP clients send other requests to your endpoint besides `POST`, and each one must reach the auth middleware:
+
+- While your server is discoverable, a `GET` without a token gets a `405` with `Allow: POST` instead of the `401`. Clients open a `GET` stream after they connect. A `401` there would start sign-in before the user reaches anything protected.
+- A `DELETE` without a token gets the `401`. Clients send it only to end a session, and these stateless handlers never start one.
+
+<If sdk="nextjs">
+  The build guide already exports the wrapped handler as `GET`, `POST`, and `DELETE`. Keep all three.
+</If>
+
+<If sdk="expressjs">
+  The build guide already mounts `/mcp` with `app.all()`. Keep it, and don't switch to `app.post()`.
+</If>
+
+## Security considerations
+
+- **A discoverable server shows its whole list.** Don't put anything secret in the names, descriptions, or schemas of your tools, resources, and prompts. If the list itself is a secret, set `discoverable: false`.
+- **A batch is public only if every message in it is.** A batch without a token that contains one protected message gets the `401`.
+- **Tasks always need a token.** Reading a task's status or result, or canceling it, gets the `401` without a token, even for a task that a public tool started, because a task ID alone doesn't show who may read or cancel the task.
+- **Session notifications always need a token.** Cancellation, progress, and roots-changed notifications get the `401` without a token, whatever `discoverable` and `publicAccess` open. They aren't checked against the caller, so on a stateful server an open notification would let a client without a token cancel or report progress on another user's request. A client that cancels a public call without a token may get a sign-in challenge.
+- **Anyone can call a public tool.** Rate-limit or otherwise protect anything expensive that you open. Keep [`submit_feedback`](/docs/guides/ai/mcp/agent-feedback) protected. If it's open, anyone can file misleading reports and use up your instance's 100 reports per hour. [`create_browser_session`](/docs/guides/ai/mcp/browser-sessions) signs a browser in as the user, so it always needs a token.
+
+<If sdk="expressjs">
+  * **`express.json()` bounds the bodies of requests without a token.** It reads the whole body before `mcpAuth()` sees it, so its `limit` caps how much a client without a token can make your server buffer. Set `express.json({ limit })` to the size you accept from clients without a token. The default is `100kb`. `mcpAuth()` treats a body over 1 MiB as not public, but that check isn't an exact byte limit.
+</If>

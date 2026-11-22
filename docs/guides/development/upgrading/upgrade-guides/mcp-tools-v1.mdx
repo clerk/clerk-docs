@@ -1,0 +1,304 @@
+---
+title: Upgrade to `@clerk/mcp-tools` 1.0
+description: Learn how to upgrade your MCP server or client from @clerk/mcp-tools 0.9 to 1.0.
+---
+
+`@clerk/mcp-tools` 1.0.0 is a breaking release. Every entry point now shares one API, modeled on the Clerk SDKs. Functions drop the `Clerk` suffix. `mcpAuth()`, `withClerkMcpAuth()`, and the metadata handlers share one options object. Each adapter re-exports `@clerk/mcp-tools/server`. The old names are removed, with no deprecated aliases.
+
+> [!IMPORTANT]
+> In 1.0, your MCP server is discoverable by default. A client without an access token can connect and list your tools, resources, resource templates, and prompts, with their names, descriptions, and schemas, the protected ones included. Calling them still needs sign-in. In 0.9, every request without a token got a `401`. To keep that behavior, set `discoverable: false`. See [Choose who can list your server](#choose-who-can-list-your-server).
+
+This guide covers each change you need to move from 0.9 to 1.0. To build a new MCP server on 1.0, see [Build and authenticate an MCP server with Clerk](/docs/guides/ai/mcp/build-mcp-server) instead.
+
+## Choose who can list your server
+
+A 1.0 server is discoverable unless you set `discoverable: false`. Clients, directories, and scanners can see what your server offers before anyone signs in, and a call to a tool, resource, or prompt still gets the `401` challenge that starts sign-in. Protected resource metadata and the [Server Card](/docs/guides/ai/mcp/discovery) are public either way.
+
+If your list of tools is a secret, or your tool descriptions or schemas contain anything a client without an account shouldn't read, add `discoverable: false` to the options you pass to `mcpAuth()` or `withClerkMcpAuth()`. Every request then needs a token, as in 0.9:
+
+```ts
+const mcpAuthOptions = {
+  resourceUrl,
+  requiredScopes: ['profile', 'email'],
+  discoverable: false,
+} satisfies McpAuthOptions
+```
+
+In Express, a discoverable server needs `express.json()` mounted before `mcpAuth()`. `mcpAuth()` reads the parsed body to tell a request that lists your tools from one that calls them, and throws a `Clerk error:` for a JSON request without a token when the body isn't parsed. If you can't parse the body first, set `discoverable: false`.
+
+To let clients call some tools, read some resources, or get some prompts without signing in, see [Allow public access to your MCP server before sign-in](/docs/guides/ai/mcp/public-access).
+
+## Issue tokens with an audience
+
+In 1.0, Clerk-verified tokens must have your server's `resourceUrl` as their audience (`aud`), or they get a `401`. Before you upgrade:
+
+1. Ensure your instance issues the `aud` claim. Clerk turns it on when you add the first MCP server to your application in the Clerk Dashboard. If your instance already has MCP servers, follow the steps in [OAuth settings](/docs/guides/ai/mcp/build-mcp-server#oauth-settings) to turn on **Include Audience**. Then reauthorize clients whose tokens have no `aud` claim.
+1. Set `resourceUrl` to the full public URL of your MCP endpoint, such as `https://mcp.example.com/mcp`. The examples below read it from the `MCP_RESOURCE_URL` environment variable, so each environment can set its own URL.
+1. Have clients send `resource` matching `resourceUrl` when they request a token.
+
+Each auth middleware instance logs a `Clerk warning:` on its first audience rejection. The warning lists these prerequisites and the backend minimum. It doesn't include the token or its claims.
+
+## Update dependencies
+
+1.0 raises the minimum versions of the Clerk SDKs it uses to verify tokens. It also makes the MCP SDK and `zod` optional peers:
+
+- `@clerk/express` 2.1.70, `@clerk/nextjs` 7.9.5, and `@clerk/backend` 3.19.0 are the new minimums. Earlier versions let opaque access tokens, and JWT access tokens without an `aud` claim, pass the audience check.
+- `@modelcontextprotocol/sdk` and `zod` are optional peers. List them in your own dependencies if you import the SDK or use `@clerk/mcp-tools/tools`.
+- `@modelcontextprotocol/sdk` 1.32.0 and `@modelcontextprotocol/server` 2.3.0 are the new minimums, for upstream security fixes ([GHSA-jm63-cq47-j5jp](https://github.com/advisories/GHSA-jm63-cq47-j5jp), [GHSA-46jr-4wx8-v453](https://github.com/advisories/GHSA-46jr-4wx8-v453), and [GHSA-rvq5-wwqv-78pq](https://github.com/advisories/GHSA-rvq5-wwqv-78pq) affect `@modelcontextprotocol/server` 2.0.0 up to 2.3.0).
+
+Run the command for your framework:
+
+<Tabs items={["Express", "Hono", "Next.js"]}>
+  <Tab>
+    ```npm
+    npm install @clerk/mcp-tools@^1.0.0 @clerk/express@^2.1.70 @modelcontextprotocol/sdk@^1.32.0
+    ```
+  </Tab>
+
+  <Tab>
+    The Hono adapter no longer reads the auth that `clerkMiddleware()` from `@clerk/hono` sets. Instead, it builds its own client with `createClerkClient()` from `@clerk/backend` and verifies tokens with it. `@clerk/hono` is no longer a peer dependency.
+
+    ```npm
+    npm install @clerk/mcp-tools@^1.0.0 @clerk/backend@^3.19.0 @modelcontextprotocol/sdk@^1.32.0
+    ```
+  </Tab>
+
+  <Tab>
+    The Next.js adapter now runs on `mcp-handler` 2.x and `@modelcontextprotocol/server` 2.x, instead of `@vercel/mcp-adapter`.
+
+    ```npm
+    npm install @clerk/mcp-tools@^1.0.0 @clerk/nextjs@^7.9.5 mcp-handler@^2.0.0 @modelcontextprotocol/server@^2.3.0 zod
+    ```
+  </Tab>
+</Tabs>
+
+If you use the prebuilt tools in `@clerk/mcp-tools/tools`, also install `zod` 3.25 or later.
+
+## Update your server
+
+`mcpAuth()` in Express and Hono, `withClerkMcpAuth()` in Next.js, and `protectedResourceMetadataHandler()` in all three take the same options object. Define the options once and pass them to both. That way, the metadata's `resource` is the `resourceUrl` that the auth middleware checks, and its `scopes_supported` lists your `requiredScopes`. A token missing any scope in `requiredScopes` gets a `403` `insufficient_scope` challenge.
+
+<Tabs items={["Express", "Hono", "Next.js"]}>
+  <Tab>
+    The following example shows the changes to an Express server. `mcpAuthClerk` becomes `mcpAuth(mcpAuthOptions)`. The metadata handlers are renamed. `streamableHttpHandler()` takes the SDK's `StreamableHTTPServerTransport`. `mcpAuth()` verifies the token itself, so remove `clerkMiddleware()` from the MCP route. In front of `mcpAuth()`, it only verifies each token a second time.
+
+    ```diff {{ filename: 'index.ts' }}
+      import express from 'express'
+    - import { clerkMiddleware } from '@clerk/express'
+      import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+    + import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+      import {
+    -   mcpAuthClerk,
+    -   protectedResourceHandlerClerk,
+    -   authServerMetadataHandlerClerk,
+    +   type McpAuthOptions,
+    +   mcpAuth,
+    +   protectedResourceMetadataHandler,
+    +   authorizationServerMetadataHandler,
+        streamableHttpHandler,
+      } from '@clerk/mcp-tools/express'
+
+    + const resourceUrl = process.env.MCP_RESOURCE_URL
+    + if (!resourceUrl) throw new Error('MCP_RESOURCE_URL is not set')
+    +
+    + const mcpAuthOptions = {
+    +   resourceUrl,
+    +   requiredScopes: ['profile', 'email'],
+    + } satisfies McpAuthOptions
+    +
+      const app = express()
+    - app.use(clerkMiddleware())
+      app.use(express.json())
+
+      // ...
+
+    - app.get(
+    -   '/.well-known/oauth-protected-resource/mcp',
+    -   protectedResourceHandlerClerk({ scopes_supported: ['profile', 'email'] }),
+    - )
+    - app.get('/.well-known/oauth-authorization-server', authServerMetadataHandlerClerk)
+    - app.post('/mcp', mcpAuthClerk, streamableHttpHandler(createServer))
+    + app.all('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadataHandler(mcpAuthOptions))
+    + app.all('/.well-known/oauth-authorization-server', authorizationServerMetadataHandler())
+    + app.all('/mcp', mcpAuth(mcpAuthOptions), streamableHttpHandler(createServer, StreamableHTTPServerTransport))
+    ```
+
+    Mount the handlers with `app.all()`. Then every request to `/mcp` reaches `mcpAuth()` instead of an Express `404`, and the metadata handlers answer CORS preflight requests from browser-based clients. Keep `express.json()` before `mcpAuth()`, as in [Choose who can list your server](#choose-who-can-list-your-server).
+
+    When a request has an absolute-form target, Express now takes the scheme and authority from that target. It uses them for resource selection, authentication challenges, and protected resource metadata, and ignores a conflicting `Host` header or forwarded headers. Origin-form requests keep Express's `trust proxy` behavior. A single configured `resourceUrl` still takes precedence.
+  </Tab>
+
+  <Tab>
+    The following example shows the changes to a Hono server. `mcpAuthClerk` becomes `mcpAuth(mcpAuthOptions)`. The metadata handlers are renamed. `streamableHttpHandler()` takes the SDK's `WebStandardStreamableHTTPServerTransport`. `mcpAuth()` builds its Clerk client from the `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` environment variables, which it reads through Hono's `env(c)`. Remove `clerkMiddleware()` from the MCP route. It also verifies the token, so each token would be verified twice.
+
+    ```diff {{ filename: 'index.ts' }}
+      import { Hono } from 'hono'
+    - import { clerkMiddleware } from '@clerk/hono'
+      import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+    + import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+      import {
+    -   mcpAuthClerk,
+    -   protectedResourceHandlerClerk,
+    -   authServerMetadataHandlerClerk,
+    +   type McpAuthOptions,
+    +   mcpAuth,
+    +   protectedResourceMetadataHandler,
+    +   authorizationServerMetadataHandler,
+        streamableHttpHandler,
+      } from '@clerk/mcp-tools/hono'
+
+    + const resourceUrl = process.env.MCP_RESOURCE_URL
+    + if (!resourceUrl) throw new Error('MCP_RESOURCE_URL is not set')
+    +
+    + const mcpAuthOptions = {
+    +   resourceUrl,
+    +   requiredScopes: ['profile', 'email'],
+    + } satisfies McpAuthOptions
+    +
+      const app = new Hono()
+    - app.use('*', clerkMiddleware())
+
+      // ...
+
+    - app.get('/.well-known/oauth-protected-resource', protectedResourceHandlerClerk())
+    - app.get('/.well-known/oauth-authorization-server', authServerMetadataHandlerClerk)
+    - app.post('/mcp', mcpAuthClerk, streamableHttpHandler(createServer))
+    + app.all('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadataHandler(mcpAuthOptions))
+    + app.all('/.well-known/oauth-authorization-server', authorizationServerMetadataHandler())
+    + app.all('/mcp', mcpAuth(mcpAuthOptions), streamableHttpHandler(createServer, WebStandardStreamableHTTPServerTransport))
+    ```
+
+    Mount the metadata handlers with `app.all()` so they answer CORS preflight requests from browser-based clients. A `cors()` middleware in front of them also answers the preflight, so with one, `app.get()` works too.
+
+    To pass a client you created yourself, set the `clerkClient` option. It must come from `@clerk/backend` 3.19.0 or later. For the full adapter reference, see the [`@clerk/mcp-tools/hono` README](https://github.com/clerk/mcp-tools/tree/main/hono).
+  </Tab>
+
+  <Tab>
+    The following example shows the changes to a Next.js MCP route. `withClerkMcpAuth()` from `@clerk/mcp-tools/next` replaces `experimental_withMcpAuth` from `@vercel/mcp-adapter` and `verifyClerkToken`. It takes the route handler and an options object instead of a verifier function. It verifies tokens with `clerkClient` from `@clerk/nextjs/server`. Move the options to a shared module, such as `lib/mcp.ts`, so the metadata route can import them too.
+
+    ```diff {{ filename: 'app/mcp/route.ts' }}
+    - import { verifyClerkToken } from '@clerk/mcp-tools/next'
+    - import { auth } from '@clerk/nextjs/server'
+    - import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
+    + import { withClerkMcpAuth } from '@clerk/mcp-tools/next'
+    + import { createMcpHandler } from 'mcp-handler'
+    + import { mcpAuthOptions } from '@/lib/mcp'
+
+      const handler = createMcpHandler((server) => {
+        // ...
+      })
+
+    - const authHandler = withMcpAuth(
+    -   handler,
+    -   async (_, token) => {
+    -     const clerkAuth = await auth({ acceptsToken: 'oauth_token' })
+    -     return verifyClerkToken(clerkAuth, token)
+    -   },
+    -   { required: true, resourceMetadataPath: '/.well-known/oauth-protected-resource/mcp' },
+    - )
+    + const authHandler = withClerkMcpAuth(handler, mcpAuthOptions)
+    ```
+
+    Tools read the verified auth info from `ctx.http?.authInfo`, which is where `@modelcontextprotocol/server` 2.x passes it.
+
+    Then replace `protectedResourceHandlerClerk()` with `protectedResourceMetadataHandler(mcpAuthOptions)`, and `metadataCorsOptionsRequestHandler` with `metadataCorsHandler()`. The metadata's `resource` is now `<origin>/mcp`, taken from the route path, instead of the bare origin. Clients with tokens issued for the origin get challenged again. For the complete routes, see [Expose public OAuth metadata](/docs/nextjs/guides/ai/mcp/build-mcp-server#expose-public-oauth-metadata).
+  </Tab>
+</Tabs>
+
+### Metadata for a non-Clerk authorization server
+
+`protectedResourceHandler({ authServerUrl })` is removed. The adapters' `protectedResourceMetadataHandler()` derives the authorization server from your Clerk Publishable Key. For a non-Clerk authorization server, return `generateProtectedResourceMetadata({ authServerUrl, resourceUrl, properties })` from your own route, with `metadataCorsHeaders`.
+
+By default, `generateProtectedResourceMetadata()` now returns only `resource`, `authorization_servers`, and `bearer_methods_supported: ['header']`. Add other fields through `properties`. Setting `properties.resource` throws.
+
+## Update auth options
+
+`mcpAuth()` and `withClerkMcpAuth()` now check their options at setup, and throw a `Clerk error:` instead of falling through at request time:
+
+- Unknown option keys are rejected, including typos such as `requiredScope` instead of `requiredScopes`.
+- A defined `verifyToken` that isn't a function is rejected.
+- A `discoverable` that isn't `true` or `false` is rejected. So are `publicAccess.tools`, `resources`, or `prompts` with `discoverable: false`, because no client without a token could connect to reach them.
+- Only the Next.js auth and metadata handlers accept `onAuthFailure`. Only the metadata handlers accept `properties`.
+- Passing both `clerkClient` and `verifyToken` throws, instead of using the custom verifier and skipping Clerk's audience check. Pass either `clerkClient` with `resourceUrl`, or `verifyToken`.
+
+## Update custom token verifiers
+
+If you pass `verifyToken`, it must follow these rules. Otherwise, the token gets a `401` `invalid_token` challenge:
+
+- Return a finite `expiresAt` and a non-empty `clientId`. A missing, `NaN`, or infinite `expiresAt` gets the cause code `token-claims-missing`, not `token-expired`.
+- If you configure `resourceUrl` and your verifier reports a `resource`, the two must match. 0.9 didn't check this. The comparison normalizes letter case in the scheme and host, default ports, and the root path's trailing slash. A trailing slash on any other path must match exactly. A reported `resource` with a fragment is always rejected. For example, the bare origin doesn't match a `resourceUrl` that ends in `/mcp`, and `/mcp/` doesn't match `/mcp`.
+- When your JWT library rejects a token, such as with `JWTExpired` from `jose`, catch the error. Then return `undefined` or throw an `McpTokenVerificationError`. Any other error your verifier throws gets a `server_error` response, and the client keeps the token.
+
+`isClerkAuthInfo()` now checks that the library itself created the object. A custom verifier can no longer claim Clerk identity by setting `extra.verifiedBy: 'clerk'`. Hand-built objects, and copies made outside the library, fail the check. To verify Clerk tokens in your own code, replace `verifyClerkToken` with `toClerkAuthInfo(requestState.toAuth(), token)`. Call it only after `authenticateRequest(req, { acceptsToken: 'oauth_token', audience: resourceUrl })`. Never call it on the result of `auth({ acceptsToken: 'oauth_token' })` alone. See [Verify tokens yourself](/docs/guides/ai/mcp/build-mcp-server#verify-tokens-yourself). Otherwise, use `mcpAuth({ clerkClient, resourceUrl })` or `withClerkMcpAuth(handler, { clerkClient, resourceUrl })`.
+
+## Update your MCP client
+
+If you use `@clerk/mcp-tools/client`:
+
+- Reconnect each stored session once with `createKnownCredentialsMcpClient()` or `createDynamicallyRegisteredMcpClient()`. 1.0 binds each session's client credentials to one authorization server. It sends the session's authorization code, client secret, and refresh token only to that server. Sessions stored by an earlier version aren't bound, and neither are sessions with a sign-in in progress during the upgrade. An unbound session keeps its access token until the token is rejected. Its refresh token and client secret aren't sent to any authorization server, and `completeOAuth()` throws for it.
+- If your deployment redirects across origins, or redirects in a browser, configure the final MCP endpoint URL. HTTP clients now use the MCP SDK's safer redirect policy.
+- If you implement your own `McpClientStore`, consider adding the new optional `compareAndSet(key, expected, value)` method. Without it, the client reads each session and then writes it. That leaves a race when two processes save the same session at once. The Redis, Postgres, and SQLite stores implement it. The file system store, meant for development, doesn't.
+
+## Update renamed and moved exports
+
+The following tables list every renamed, moved, or removed export.
+
+### Server adapters
+
+| 0.9 | 1.0 | Entry point |
+| - | - | - |
+| `mcpAuthClerk` (Express) | `mcpAuth({ resourceUrl })` | `/express` |
+| `mcpAuthClerk` (Hono) | `mcpAuth({ resourceUrl })`, with `@clerk/backend` 3.19.0 or later installed, or a compatible `clerkClient` | `/hono` |
+| `await mcpAuth(verifyToken)` | `mcpAuth({ verifyToken })` | `/express` |
+| `mcpAuth(verifyToken)` | `mcpAuth({ verifyToken })` | `/hono` |
+| `experimental_withMcpAuth` from `@vercel/mcp-adapter`, with `verifyClerkToken` | `withClerkMcpAuth(handler, { resourceUrl })` | `/next` |
+| `protectedResourceHandlerClerk(properties)` | `protectedResourceMetadataHandler({ resourceUrl, properties })` | `/express`, `/hono`, `/next` |
+| `protectedResourceHandler({ authServerUrl })` | Removed. See [Metadata for a non-Clerk authorization server](#metadata-for-a-non-clerk-authorization-server) | `/express`, `/hono`, `/next` |
+| `authServerMetadataHandlerClerk` | `authorizationServerMetadataHandler()` | `/express`, `/hono`, `/next` |
+| `metadataCorsOptionsRequestHandler` | `metadataCorsHandler` | `/next` |
+| `streamableHttpHandler(server)` or `streamableHttpHandler(createServer)` | `streamableHttpHandler(createServer, StreamableHTTPServerTransport)` | `/express` |
+| `streamableHttpHandler(createServer)` | `streamableHttpHandler(createServer, WebStandardStreamableHTTPServerTransport)` | `/hono` |
+| `completeOAuthHandler` from `/next` | `completeOAuthHandler` from `/next/client` | `/next/client` |
+
+### Server utilities
+
+| 0.9 | 1.0 | Entry point |
+| - | - | - |
+| `corsHeaders` | `metadataCorsHeaders` | `/server` |
+| `generateClerkProtectedResourceMetadata` | `generateProtectedResourceMetadata` | `/server` |
+| `fetchClerkAuthorizationServerMetadata` | `fetchAuthorizationServerMetadata` | `/server` |
+| `verifyClerkToken` | `toClerkAuthInfo(requestState.toAuth(), token)`, only after an audience-checked `authenticateRequest()`. See [Update custom token verifiers](#update-custom-token-verifiers) | `/server`, `/next` |
+
+### Client
+
+| 0.9 | 1.0 | Entry point |
+| - | - | - |
+| `getClientBySessionId` | `getMcpClientBySessionId` | `/client` |
+| `completeAuthWithCode` | `completeOAuth` | `/client` |
+| `CreateDynamicallyRegisteredMcpClientParams` | `CreateDynamicallyRegisteredMcpClientOptions` | `/client` |
+| `CreateKnownCredentialsMcpClientParams` | `CreateKnownCredentialsMcpClientOptions` | `/client` |
+| `McpClientReturnType` | `McpClientConnection` | `/client` |
+| `ClientData` | `McpClientData` | `/client` |
+
+### Tools
+
+`@clerk/mcp-tools/tools` replaces `@clerk/mcp-tools/feedback` and `@clerk/mcp-tools/create-browser-session`.
+
+| 0.9 | 1.0 |
+| - | - |
+| `FEEDBACK_KINDS`, `FEEDBACK_IMPACTS` from `/feedback` | The same constants, from `/tools` |
+| `SUBMIT_FEEDBACK_DESCRIPTION` from `/feedback` | `submitFeedbackTool(options)[1].description` |
+| `submitFeedbackInputSchema` from `/feedback` | `submitFeedbackTool(options)[1].inputSchema` |
+| `FeedbackToolExtra` from `/feedback` | Not exported. Derive the callback argument type with `Parameters<SubmitFeedbackTool[2]>[1]` |
+| `browserSessionInputSchema` from `/create-browser-session` | `createBrowserSessionTool(options)[1].inputSchema` |
+| `browserSessionToolText(destinationUrl)` from `/create-browser-session` | `createBrowserSessionTool(options)[1].title` and `.description`, with `options.destinationUrl` |
+| `validateBrowserSessionOptions(options)` from `/create-browser-session` | Removed. `createBrowserSessionTool(options)` validates options at setup, and `createBrowserSession(request, options)` validates them before making the request |
+| `browserSessionErrorMessage(error)` from `/create-browser-session` | Removed. The tool formats its error result's `content`. For programmatic handling, read `_meta[ERROR_CODE_META_KEY]`, or catch `BrowserSessionError` from `createBrowserSession()` and read its `code` |
+
+### Stores and package entry
+
+| 0.9 | 1.0 |
+| - | - |
+| Default export of `/stores/fs` | `createFsStore()` from `/stores/fs` |
+| `/stores` | `/stores/fs`, `/stores/redis`, `/stores/postgres`, or `/stores/sqlite` |
+| `import ... from '@clerk/mcp-tools'` | The package root no longer resolves. Import from an exported subpath, such as `@clerk/mcp-tools/server` or `@clerk/mcp-tools/tools` |

@@ -1,7 +1,9 @@
 
 # Set up Clerk
 
-Use the [Clerk CLI](https://clerk.com/docs/cli) to add authentication. In agent environments, supported frameworks default to accountless setup: `npx -y clerk@latest init` provisions a claimable application and writes temporary development keys without requiring a Clerk account.
+Check for the Clerk plugin first. It bundles skills and the [Clerk MCP server](https://clerk.com/docs/guides/ai/mcp/clerk-mcp-server) for account work.
+
+The MCP server can't write files in this project and never returns secret keys, so the [Clerk CLI](https://clerk.com/docs/cli) still sets up the project. On supported frameworks, `npx -y clerk@latest init` needs no Clerk account: it provisions a claimable application and writes temporary development keys.
 
 The commands below use `npx -y clerk@latest`. In a project that uses pnpm, Bun, or Yarn 2+, run them with `pnpm dlx clerk@latest`, `bunx clerk@latest`, or `yarn dlx clerk@latest` instead. Do not install the CLI globally.
 
@@ -12,12 +14,31 @@ Show the user this checklist and wait for a yes:
 ```
 Here's what I'll do to get you set up with Clerk.
 
-1. Set up Clerk in this project, or scaffold a new app if this directory is empty.
-2. Install Clerk's agent skills for the coding agents on this machine, if they aren't installed yet.
+1. Add Clerk's agent skills and MCP server for the coding agents on this machine, through the Clerk plugin where possible, if they aren't installed yet.
+2. Set up Clerk in this project, or scaffold a new app if this directory is empty.
 3. Start your app with Clerk installed.
 
 Shall I proceed?
 ```
+
+## Install the Clerk plugin
+
+Check this agent's installed plugins, or ask the user to check. Loading this skill from the plugin proves installation; a URL or generated copy does not. MCP tools are not proof: a separate server may provide them, and sign-out can hide plugin tools. If the Clerk plugin is installed in this agent, skip installation. If the MCP server needs sign-in, guide authentication in the agent's MCP settings (Claude Code: `/mcp` → **Authenticate**) and continue with the CLI.
+
+Only if the plugin is absent and the user agreed to install it, show Clerk's native plugin or connector card when this agent has a suggestion tool. Pass Clerk's ID directly; a name search can miss it:
+
+- **ChatGPT and Codex:** `plugin_asdk_app_6ae4e34683b08191933207035aa0d3ac`
+- **Claude:** connector `48a3eb31-a881-4d52-b179-1af31624356a` (MCP server only; no plugin or skills)
+
+Wait for the user to finish the card and verify what it installed. The Claude connector adds only the MCP server, so do not treat it as a full plugin; let `npx -y clerk@latest init` install skills. If you have no card tool, or it rejects the ID, run the fallback after the user agrees to the checklist:
+
+```bash
+npx -y plugins add clerk/skills --yes
+```
+
+The command installs the Clerk plugin, with its skills and the [Clerk MCP server](https://mcp.clerk.com/mcp), into every detected coding agent. The agent may need a reload or restart to load the MCP server. Sign-in may follow in a browser or the agent's MCP settings. Continue with the CLI until the MCP tools are available.
+
+For an agent the command doesn't support, the user can add the [Clerk MCP server](https://mcp.clerk.com/mcp) as a remote MCP server.
 
 ## Existing authentication
 
@@ -48,19 +69,21 @@ Inspect its Clerk package versions before changing anything and use the version 
 
 ## Use an existing Clerk application (optional)
 
-Follow this branch when the user asks to use an existing Clerk application or an existing Clerk project needs its keys restored. Have them authenticate from their host terminal before targeting account-level resources:
+Follow this branch when the user asks to use an existing Clerk application or an existing Clerk project needs its keys restored. If they supplied an application ID, keep it for `init` or `link` as appropriate. Otherwise, if the Clerk MCP server is connected, list the applications with its `list_applications` tool.
+
+Signing in to the MCP server doesn't sign in the CLI, which still writes the keys. Have the user authenticate the CLI from their host terminal:
 
 ```bash
 npx -y clerk@latest auth login
 ```
 
-If they supplied an application ID, keep it for `init` or `link` as appropriate. Otherwise, list the applications:
+Without the MCP server, list the applications with the CLI:
 
 ```bash
 npx -y clerk@latest apps list --json
 ```
 
-Show the names and IDs and ask which application to use. Never choose an application for them. For a new Clerk integration, pass the selected ID as `--app <application_id>` to `init`. For a project already using Clerk, do not run `init`. If it is not already linked to the selected application, link it:
+Show the names and IDs and ask which application to use. Never choose an application for them. If `init` or `link` can't find an application you listed through the MCP server, the CLI is signed in to a different workspace, so list the applications with the CLI and ask again. For a new Clerk integration, pass the selected ID as `--app <application_id>` to `init`. For a project already using Clerk, do not run `init`. If it is not already linked to the selected application, link it:
 
 ```bash
 npx -y clerk@latest link --app <application_id>
@@ -86,7 +109,7 @@ For a project that does not already use Clerk, run from the project root:
 npx -y clerk@latest init
 ```
 
-`init` detects the framework and package manager, installs the SDK, and configures the provider, middleware, auth routes, and environment. It also installs Clerk's agent skills globally. If the user declined them, or they're already available to you, such as when you loaded this as the `clerk-setup` skill, add `--no-skills` to skip that step. Don't pass `--framework` or `--pm` unless asked. Add `--app <application_id>` only when the user selected an application in the optional branch above.
+`init` detects the framework and package manager, installs the SDK, and configures the app. It can also install skills. Add `--no-skills` only if the full plugin is installed, Clerk skills were already installed in this agent (including by an earlier `init`), or the user declined agent skills. A URL-served prompt or Claude's MCP-only connector alone does not count. Don't pass `--framework` or `--pm` unless asked; add `--app <application_id>` only when the user selected an application above.
 
 ## Step 1b: Empty directory
 
@@ -100,13 +123,13 @@ Ask which framework to use, defaulting to Next.js. If a lockfile remains in the 
 npx -y clerk@latest init --framework <framework> --pm <package-manager>
 ```
 
-`init` creates the app in a new subdirectory, such as `my-clerk-next-app`, not in the current directory. Run the remaining steps from that subdirectory. As in Step 1a, add `--no-skills` if Clerk's skills are already available to you or the user declined them.
+`init` creates the app in a new subdirectory, such as `my-clerk-next-app`, not in the current directory. Run the remaining steps from that subdirectory. Add `--no-skills` as in Step 1a.
 
 `init` can create Next.js, React Router, Astro, Nuxt, TanStack Start, React, Vue, JavaScript/Vite, and Expo apps. For Express or Fastify, create the project with that platform's own tooling first, then follow Step 1a.
 
 ## Step 1c: Accountless development keys
 
-For a signed-out user on a framework with accountless support (Next.js, React Router, Astro, Nuxt, or TanStack Start), `init` provisions a claimable application and writes temporary keys to the detected environment file. Relay the filename and claim instruction printed by the CLI. The app stays unclaimed until the user runs `npx -y clerk@latest auth login`; don't run it unless asked. Use `--accountless` only to force this flow while signed in.
+For a signed-out user on a framework with accountless support (Next.js, React Router, Astro, Nuxt, or TanStack Start), `init` provisions a claimable application and writes temporary keys to the detected environment file. Relay the filename and claim instruction printed by the CLI. The app stays unclaimed until the user runs `npx -y clerk@latest auth login`; don't run it unless asked. Use `--accountless` only to force this flow while signed in. The Clerk MCP server can't reach an unclaimed app, so use the CLI for it until the user claims it.
 
 Frameworks without accountless support need real API keys. There, `init` applies what setup it can and prints the remaining steps.
 
@@ -214,23 +237,15 @@ If both claim files exist, stop before `auth login`, `open`, or `link`: `open` p
 - **`init` claim:** If this is the chosen app, have the user run `npx -y clerk@latest auth login`. On older CLIs, signing in from this folder claims the `init` app and replaces the project's keys; a signed-out `npx -y clerk@latest link` can start that sign-in. If the user chose another app, have them sign in from another folder first.
 - **SDK claim:** Have the user run `npx -y clerk@latest open` in their own terminal to open the claim page, then `npx -y clerk@latest link`. Signing in cannot claim an SDK-created app.
 
-Once the app is claimed, review settings with `npx -y clerk@latest config pull` and change them with `npx -y clerk@latest config patch` (supports `--dry-run`), or use the Clerk Dashboard. See [sign-up and sign-in options](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options.md).
+Once the app is claimed, use the Clerk MCP server for it when the server is connected and its `list_applications` includes `linked.appId` from `npx -y clerk@latest whoami --json`. Read settings with `get_instance_config` and `instance: "development"`, and preview each `patch_instance_config` change with `dry_run` before applying it. Otherwise, review settings with `npx -y clerk@latest config pull` and change them with `npx -y clerk@latest config patch` (supports `--dry-run`), or use the Clerk Dashboard. See [sign-up and sign-in options](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options.md).
 
-When the user is ready for production:
-
-1. Have them claim the app as described above, because unclaimed apps and temporary keys aren't production-ready. If `deploy` says the project isn't linked, follow its instructions.
-2. Ask which domain they own for production, one whose DNS they can change (not a hosting provider's URL such as `*.vercel.app`), and run `npx -y clerk@latest deploy --mode agent --domain <domain>`. It creates the production instance and prints a JSON report.
-3. Follow the report's `nextAction` at each step. If a command from the report or `nextAction` calls plain clerk, as all of them do on Windows (inside the `hostSetup` command too), and clerk isn't installed, replace that call with `npx -y clerk@latest` and keep the rest of the command, including in commands the user runs. `nextAction`'s OAuth steps need bash or zsh. In any other shell, have the user enter the OAuth credentials by running `npx -y clerk@latest deploy` in their own terminal, from the project directory. Pass on each `oauth.setup` entry's `note` to the user, such as Google's reminder to set the OAuth consent screen to "In production".
-4. Check progress with `npx -y clerk@latest deploy status --mode agent`, which exits 0 only when production is complete.
-5. On Vercel, if `vercel` isn't installed or you can't run bash or zsh, follow step 6. Otherwise, run `vercel whoami` yourself, which doesn't start a login just because you're logged out. If it prints "Logged out.", have the user run `vercel login` in their own terminal. Then, if the user confirms this directory is linked to the Vercel project that serves this app in production, copy the production keys by running the `command` of the report's `hostSetup` entry as given. If either command doesn't exit, Vercel is waiting for a browser login: stop it, have the user run the command that hung in their own terminal, from the project directory, and finish the login it opens, then rerun.
-6. On any other host, or if the user doesn't confirm the Vercel project, have the user run the `env pull --print` command from `nextAction` in a separate terminal in the project directory, not through your session, and add the printed lines to the host. Never write your own pipe into a host's CLI.
-7. Have the user add the other Clerk variables from their env file to the host too.
+When the user is ready for production, have them claim and link the app, ask for a domain they own and can configure, then run `npx -y clerk@latest deploy --mode agent --domain <domain>`. Follow every `nextAction` and verify with `npx -y clerk@latest deploy status --mode agent`. Copy production keys only to a host the user confirms serves this app; otherwise have the user run the report's `env pull --print` command in their own terminal. Follow the [production deployment details](https://clerk.com/.well-known/skills/clerk-setup/references/production-deploy.md) for shell and host handoff.
 
 Then offer Organizations — multi-tenancy, team invitations, roles and permissions, and enterprise SSO.
 
 If yes:
 
-1. Run `npx -y clerk@latest enable orgs`.
+1. Run `npx -y clerk@latest whoami --json` to get `linked.appId` and `linked.instances.production`. Use the MCP server only if it is connected and `list_applications` includes `linked.appId`. Pass that ID as `application_id` to `patch_instance_config` with `{"organization_settings": {"enabled": true}}` on the development instance, previewing with `dry_run` before applying; repeat for production only if `linked.instances.production` exists. Otherwise, preview `npx -y clerk@latest enable orgs --app <linked.appId> --dry-run`, then apply it with `--yes` (also with `--instance prod` if production exists). For an unclaimed app, omit `--app`; if the app ID is missing for any other app, ask the user to link or select it before changing settings.
 2. Add `<OrganizationSwitcher />` next to the existing `<UserButton />`, or the framework equivalent.
 3. Have them create an organization from the switcher and invite a teammate.
 

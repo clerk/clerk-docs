@@ -43,14 +43,20 @@ npx clerk@latest init
 The CLI adds the Apple entitlement, registers your native app, and enables Native API and Apple sign-in on the linked development instance. Existing hosted Apple credentials are preserved. To add Apple sign-in after an earlier setup, run `npx clerk@latest init --sign-in-with-apple`.
 
 > [!NOTE]
-> If Xcode signs your app with a Personal Team (the free team that comes with an Apple Account), the CLI skips the Sign in with Apple option, and `--sign-in-with-apple` fails. To enable Sign in with Apple, choose the team from your Apple Developer Program membership in Xcode's **Signing & Capabilities** tab. The CLI reuses the App ID Prefix of an existing registration for your Bundle ID. If an earlier run registered it with the Personal Team's ID, first change the registration's **App ID Prefix** on the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page to the one shown for your app's identifier in the Apple Developer portal, then run the CLI again.
+> If Xcode signs your app with a Personal Team (the free team that comes with an Apple Account), the CLI skips the Sign in with Apple option, and `--sign-in-with-apple` fails. Choose your Apple Developer Program team in Xcode's **Signing & Capabilities** tab before trying again.
+>
+> The CLI reuses the **App ID Prefix** of an existing registration for your Bundle ID. If an earlier run saved the Personal Team's ID, update the registration on [**Native applications**](https://dashboard.clerk.com/~/native-applications) to match the App ID Prefix shown for your app's identifier in the Apple Developer portal before rerunning the CLI.
 
 The CLI reads your Bundle ID and uses the App ID Prefix from a matching Clerk registration or, otherwise, your project's signing team, which is usually the same. If it asks for a prefix, copy **App ID Prefix** from your app's identifier in the Apple Developer portal; it's usually your Apple Team ID.
+
+Clerk needs a registration for every Bundle ID your apps sign in with, including when a target builds with a different Bundle ID on each platform. `clerk init` registers the Bundle ID of the target you choose and saves it on the Apple social connection. It stops if you rerun `clerk init --sign-in-with-apple` for another Bundle ID. For each additional Bundle ID, [add the app](#add-your-native-application) on the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page of the same Clerk application and development instance. Then [add the Sign in with Apple capability](#add-the-sign-in-with-apple-capability-to-your-app) to every target that signs in.
 
 For a customized app, finish any remaining Swift integration with the [iOS Quickstart](/docs/ios/getting-started/quickstart), then build and test sign-in.
 
 <If is="llm">
-  **For AI agents:** Follow the [dedicated iOS setup prompt](/docs/ios/getting-started/quickstart). Pass `--sign-in-with-apple` when the user requests native Apple setup; otherwise ask before enabling it.
+  **For AI agents:** For first-time setup, follow the [dedicated iOS setup prompt](/docs/ios/getting-started/quickstart). Pass `--sign-in-with-apple` when the user requests native Apple setup; otherwise ask before enabling it.
+
+  For a second app whose Bundle ID differs from the one saved on the Apple social connection, don't run `clerk init` or the setup prompt. Have the user add its Bundle ID as described in [Add your native application](#add-your-native-application). If that target doesn't use Clerk yet, add `ClerkKit` and configure it with the same instance's Publishable Key.
 </If>
 
 ## Configure manually
@@ -59,6 +65,8 @@ For a customized app, finish any remaining Swift integration with the [iOS Quick
   ### Add your native application
 
   On the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page in the Clerk Dashboard, enable the Native API, then add your iOS application. You will need your iOS app's **App ID Prefix** and **Bundle ID**.
+
+  To add an app for another Apple platform, such as macOS, select the **iOS** tab and select **Add iOS app**. If your apps have different Bundle IDs, add each one. If they share a Bundle ID, add it once. After you complete the remaining steps, Sign in with Apple works in each app.
 
   ### Enable Apple as a social connection
 
@@ -86,13 +94,15 @@ For a customized app, finish any remaining Swift integration with the [iOS Quick
   ```swift
   try await clerk.auth.signInWithApple()
   ```
+
+  `signInWithApple()` creates the request to Apple and sets its nonce, a random single-use value that Apple copies into the ID token. If you create your own `ASAuthorizationAppleIDRequest` and pass its ID token to [`signInWithIdToken(_:provider:)`](/docs/ios/reference/native-mobile/auth#sign-in-with-id-token), set the request's `nonce` to a random value first. Without a nonce, Clerk can reject the token with an `authorization_invalid` error.
 </Steps>
 
 ## Configure your production instance
 
-`clerk init` configures only the linked development instance. For production, add the exact **App ID Prefix** and **Bundle ID** registration to the production instance, enable the Native API, enable Apple for that Bundle ID, configure the Release build with the production [Publishable Key](!publishable-key), and add the production associated domain to its entitlements path. A native-only Apple flow still doesn't need hosted Apple credentials.
+`clerk init` configures only the linked development instance. For production, add each app's exact **App ID Prefix** and **Bundle ID** registration to the production instance, enable the Native API, enable Apple as a social connection, configure the Release build with the production [Publishable Key](!publishable-key), and add the production associated domain to its entitlements path. A native-only Apple flow still doesn't need hosted Apple credentials.
 
-`clerk deploy` and `clerk deploy status` check the Clerk side of this setup. They count native Sign in with Apple as configured once the production instance has the Bundle ID registration, Native API is enabled, and Apple is enabled. Until then, they explain what's missing and link to the production instance's **Native applications** page.
+`clerk deploy` and `clerk deploy status` check the Clerk side of this setup. For a native-only Apple flow, they count native Sign in with Apple as configured once the production instance has a registration for the Bundle ID saved on the Apple social connection, Native API is enabled, and Apple is enabled. Until then, they explain what's missing and link to the production instance's **Native applications** page. They don't check your other apps, so confirm that each one is registered on the production instance too. If the Apple social connection also has hosted Apple credentials, they don't check the native setup, so confirm on the production instance's [**Native applications**](https://dashboard.clerk.com/~/native-applications) page that Native API is enabled and each app is registered.
 
 Run `clerk doctor` to check your Release configuration's native registration (Bundle ID and App ID Prefix), associated domain, and, when it can be read, Publishable Key against production. It also checks that Native API is enabled on the production instance. Pass `--xcode-configuration <name>` to check another non-Debug configuration.
 
@@ -108,4 +118,9 @@ If you expected a name and didn’t receive one, check the following:
 - **Requested scopes:** Make sure your Sign in with Apple request includes the `fullName` scope (and `email`, if you need it). If `fullName` wasn’t requested, Apple won’t prompt the user to share it.
 - **User denied name sharing:** If the user chooses not to share their name, Apple won’t provide it. Make sure your UI can collect a name as a fallback.
 
-To test the first-time flow again, delete the user from Clerk, revoke the app’s authorization in iOS (Settings → Apple ID → **Sign in with Apple** → your app → **Delete**), and sign in again.
+To test the first-time flow again, delete the user from Clerk, revoke the app's authorization using the steps for your platform below, then sign in again:
+
+- **iOS:** Go to **Settings** → your name → **Sign in with Apple** → your app or developer → **Delete**.
+- **macOS:** Go to **System Settings** → your name → **Sign in with Apple** and stop using Sign in with Apple for your app or developer.
+
+Revoking authorization resets your app and any apps grouped with it under one primary App ID for Sign in with Apple. Revoke other apps separately.

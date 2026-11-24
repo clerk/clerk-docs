@@ -1,0 +1,142 @@
+---
+title: '`useAuthenticatedWebView()`'
+description: Clerk's useAuthenticatedWebView() hook shows a page of your web app in a WebView with the native app's user already signed in.
+sdk: expo
+---
+
+The `useAuthenticatedWebView()` hook shows a page of your web app in a [`react-native-webview`](https://github.com/react-native-webview/react-native-webview) `<WebView>` with the native app's user already signed in. It creates a one-time sign-in link for the page when it mounts, and returns props to spread onto `<WebView>`. Call it in the screen that shows the WebView.
+
+For setup steps, see [Open your web app signed in from a native app](/docs/guides/development/native-to-web).
+
+## Installation
+
+This hook requires `react-native-webview`:
+
+```bash {{ filename: 'terminal' }}
+npx expo install react-native-webview
+```
+
+Then, import the hook from the `@clerk/expo/native-to-web` subpath:
+
+```tsx
+import { useAuthenticatedWebView } from '@clerk/expo/native-to-web'
+```
+
+## Parameters
+
+`useAuthenticatedWebView()` accepts the following parameters (`UseAuthenticatedWebViewParams`):
+
+<Properties>
+  - `destination`
+  - `string`
+
+  The page to open, as an absolute URL. Outside development instances, it must use HTTPS. In production, it must share a root domain with one of your Clerk instance's domains. Changing it creates a new link.
+
+  ---
+
+  - `onError?`
+  - `WebViewProps['onError']`
+
+  Called when a page fails to load.
+
+  ---
+
+  - `onHttpError?`
+  - `WebViewProps['onHttpError']`
+
+  Called when a page responds with an HTTP error status.
+
+  ---
+
+  - `onLoadEnd?`
+  - `WebViewProps['onLoadEnd']`
+
+  Called when the WebView finishes loading a page, whether it succeeded or failed.
+
+  ---
+
+  - `onLoadStart?`
+  - `WebViewProps['onLoadStart']`
+
+  Called when the WebView starts loading a page.
+
+  ---
+
+  - `onShouldStartLoadWithRequest?`
+  - `WebViewProps['onShouldStartLoadWithRequest']`
+
+  Called before the WebView navigates. Return `false` to block the navigation. Clerk's sign-in page always loads.
+</Properties>
+
+The WebView callbacks use the types from `react-native-webview`. They receive events for every page except Clerk's sign-in page, which carries the one-time link.
+
+> [!WARNING]
+> Pass your WebView callbacks to the hook, not to `<WebView>`. Setting `onLoadStart`, `onLoadEnd`, `onHttpError`, `onError`, or `onShouldStartLoadWithRequest` on `<WebView>` after the spread replaces Clerk's handlers, and the hook can't tell when the user is signed in.
+
+## Returns
+
+`useAuthenticatedWebView()` returns an object with the following properties (`AuthenticatedWebView`):
+
+<Properties>
+  - `error`
+  - <code>[SessionTransferError](/docs/reference/expo/is-session-transfer-error#sessiontransfererror) | null</code>
+
+  The reason for the failure, set while `status` is `'error'`.
+
+  ---
+
+  - `retry()`
+  - `() => void`
+
+  Creates a new sign-in link. Call it from your error view.
+
+  ---
+
+  - `status`
+  - `'preparing' | 'loading' | 'ready' | 'signed-out' | 'error'`
+
+  The state of the WebView.
+
+  - `'preparing'`: Clerk is creating the sign-in link. There's nothing to render yet.
+  - `'loading'`: `webViewProps` is set and the WebView is on Clerk's sign-in page. Render the WebView under a loading overlay, because the page must load to finish signing in.
+  - `'ready'`: The WebView left Clerk's sign-in page and loaded the next page. It stays `'ready'` after later navigations, so it doesn't tell you whether the web page is still signed in.
+  - `'signed-out'`: The app has no active session.
+  - `'error'`: Creating or loading the link failed, or the sign-in on the web failed. Show your own error view in place of the WebView, because the page isn't signed in as the app's user.
+
+  ---
+
+  - `webViewProps`
+  - `AuthenticatedWebViewProps | null`
+
+  The props to spread onto `<WebView>`, set while `status` is `'loading'` or `'ready'`. They include the WebView's `source` and its load callbacks. The `source` carries the one-time link, so never log or store these props.
+</Properties>
+
+## Examples
+
+### Show a web page signed in
+
+The following example shows the account page of a web app. It renders the WebView as soon as `webViewProps` is set, and covers it with a spinner until `status` is `'ready'`.
+
+<Include src="_partials/expo/native-to-web/account-screen-example" />
+
+### Open links to other sites in the browser
+
+The following example keeps pages of the web app in the WebView, and opens links to other sites in the browser.
+
+```tsx
+import { useAuthenticatedWebView } from '@clerk/expo/native-to-web'
+import { Linking } from 'react-native'
+
+const web = useAuthenticatedWebView({
+  destination: 'https://app.example.com/account',
+  onShouldStartLoadWithRequest: ({ isTopFrame, url }) => {
+    if (isTopFrame === false || new URL(url).origin === 'https://app.example.com') return true
+    void Linking.openURL(url)
+    return false
+  },
+})
+```
+
+## Clear the WebView's cookies when the user changes
+
+<Include src="_partials/expo/native-to-web/clear-webview-cookies" />

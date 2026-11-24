@@ -1,0 +1,91 @@
+---
+title: '`prepareSessionTransfer()`'
+description: Clerk's prepareSessionTransfer() function creates a one-time link that signs the native app's user in on a page of your web app.
+sdk: expo
+---
+
+The `prepareSessionTransfer()` function creates a one-time link that signs the native app's user in on a page of your web app. Each call creates a new link.
+
+Use it only when you open the link yourself. For a WebView, use [`useAuthenticatedWebView()`](/docs/reference/expo/native-hooks/use-authenticated-web-view) instead. For the default browser, use [`openInBrowser()`](/docs/reference/expo/open-in-browser).
+
+> [!WARNING]
+> The link signs in anyone who opens it. Open it once, within 60 seconds, and never log or store it.
+
+For setup steps, see [Open your web app signed in from a native app](/docs/guides/development/native-to-web).
+
+Import the function from the `@clerk/expo/native-to-web` subpath:
+
+```tsx
+import { prepareSessionTransfer } from '@clerk/expo/native-to-web'
+```
+
+## Usage
+
+`prepareSessionTransfer()` has the following function signature:
+
+```ts
+function prepareSessionTransfer(params: PrepareSessionTransferParams): Promise<SessionTransfer>
+```
+
+### Parameters
+
+`prepareSessionTransfer()` accepts the following parameters (`PrepareSessionTransferParams`):
+
+<Properties>
+  - `destination`
+  - `string`
+
+  The page to open, as an absolute URL. Outside development instances, it must use HTTPS. In production, it must share a root domain with one of your Clerk instance's domains.
+
+  ---
+
+  - `presentation`
+  - `'webview' | 'browser'`
+
+  Where you'll open the link. Use `'webview'` for a WebView that your app renders, and `'browser'` for the system browser or an in-app browser tab.
+</Properties>
+
+### Returns
+
+`prepareSessionTransfer()` returns a `Promise` that resolves to an object with the following properties (`SessionTransfer`):
+
+<Properties>
+  - `expiresAt`
+  - `Date`
+
+  When the link stops working.
+
+  ---
+
+  - `url`
+  - `string`
+
+  The one-time sign-in link. It isn't enumerable, so `JSON.stringify` and object spread leave it out. Debuggers can still show it, so don't log the object.
+</Properties>
+
+The `Promise` rejects with a [`SessionTransferError`](/docs/reference/expo/is-session-transfer-error#sessiontransfererror) when Clerk can't create the link.
+
+## Open the link on Android
+
+On Android, Clerk only accepts the link when the intent that opens it names your app as the referrer. Set `android.intent.extra.REFERRER_NAME` to `android-app://<your-package-name>` on that intent. Otherwise the sign-in fails with the `cross_site_request` error code.
+
+[`expo-web-browser`](https://docs.expo.dev/versions/latest/sdk/webbrowser/) Custom Tabs can't set the referrer, so they can't open the link. Use [`openInBrowser()`](/docs/reference/expo/open-in-browser), which sets it for you.
+
+<Include src="_partials/expo/native-to-web/android-app-link-warning" />
+
+## Example
+
+The following example opens the reports page of a web app in an in-app browser on iOS.
+
+```ts
+import { prepareSessionTransfer } from '@clerk/expo/native-to-web'
+import * as WebBrowser from 'expo-web-browser'
+
+const transfer = await prepareSessionTransfer({
+  destination: 'https://app.example.com/reports',
+  presentation: 'browser',
+})
+await WebBrowser.openBrowserAsync(transfer.url)
+```
+
+The in-app browser keeps its cookies separate from Safari, so the user is signed in only inside the in-app browser.

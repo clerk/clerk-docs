@@ -1,0 +1,93 @@
+---
+title: Open your web app signed in from a native app
+description: Show a page of your web app in a WebView or the browser with the native app's user already signed in.
+sdk: expo
+---
+
+When a signed-in user of your native app opens a page of your web app, the page normally loads signed out, and the user has to sign in again. Native to Web SSO signs them in for you. Clerk creates a one-time sign-in link for the page, and the WebView or browser opens it. The page then loads with the same user signed in.
+
+## Choose how to open the page
+
+The Expo SDK exports three functions for this from `@clerk/expo/native-to-web`:
+
+- [`useAuthenticatedWebView()`](/docs/reference/expo/native-hooks/use-authenticated-web-view) shows the page in a `react-native-webview` `<WebView>` inside your app. Use it for web pages that are part of your app's screens, such as an account page.
+- [`openInBrowser()`](/docs/reference/expo/open-in-browser) opens the page in the device's default browser. Use it to send users to your full web app.
+- [`prepareSessionTransfer()`](/docs/reference/expo/prepare-session-transfer) creates the link and leaves opening it to you. Use it only when neither of the other two fits.
+
+## Before you start
+
+> [!IMPORTANT]
+> Native to Web SSO is free in development instances. In production, it requires the Pro or Business plan. See [pricing](/pricing).
+
+1. In the Clerk Dashboard, navigate to the [**Native applications**](https://dashboard.clerk.com/~/native-applications) page.
+1. Enable the Native API, if it isn't already.
+1. Turn on **Native to Web SSO**. Until you do, Clerk can't create sign-in links and returns the `feature_not_enabled` error code.
+
+Then check the following requirements:
+
+- Your native app uses `@clerk/expo` 4.17.0 or later.
+- Your web app uses Clerk with the same instance as your native app.
+- The `destination` you open is an absolute URL. Outside development instances, it must use HTTPS. In production, it must share a root domain with one of your Clerk instance's domains.
+- The user is signed in to your native app. Sessions with pending [session tasks](/docs/guides/configure/session-tasks) can't be transferred.
+
+## Show a web page in a WebView
+
+Install `react-native-webview`:
+
+```sh {{ filename: 'terminal' }}
+npx expo install react-native-webview
+```
+
+Call `useAuthenticatedWebView()` in the screen that shows the page, and spread its `webViewProps` onto `<WebView>`. Render the WebView as soon as `webViewProps` is set. It loads Clerk's sign-in page before `destination`, so cover it with a loading overlay until `status` is `'ready'`.
+
+<Include src="_partials/expo/native-to-web/account-screen-example" />
+
+Pass your own WebView callbacks, such as `onShouldStartLoadWithRequest`, to the hook rather than to `<WebView>`. Setting them on `<WebView>` replaces Clerk's handlers.
+
+### Clear the WebView's cookies when the user changes
+
+<Include src="_partials/expo/native-to-web/clear-webview-cookies" />
+
+## Open a web page in the browser
+
+On Android, install `expo-intent-launcher` and `expo-application`. iOS doesn't need any extra packages.
+
+```sh {{ filename: 'terminal' }}
+npx expo install expo-intent-launcher expo-application
+```
+
+<Include src="_partials/expo/native-to-web/android-app-link-warning" />
+
+Call `openInBrowser()` with the page to open:
+
+<Include src="_partials/expo/native-to-web/open-on-web-button-example" />
+
+### Handle a failed sign-in on the web
+
+`openInBrowser()` resolves after it starts opening the link. It doesn't wait for the web page to sign the user in, and if the sign-in fails, your app isn't notified. The browser lands on `destination`, or on the Home URL set in the Clerk Dashboard if the link isn't valid. The page usually loads signed out. For `other_user_signed_in` and `impersonation_in_progress`, Clerk leaves the browser's sessions as they were, so the page stays signed in as the other user or in the impersonation session. Either page gets the following query parameters:
+
+- `__clerk_status` is `session_transfer_failed`.
+- `__clerk_error_code` is the reason, such as `expired` or `other_user_signed_in`. See [the error codes](/docs/reference/expo/is-session-transfer-error#error-codes).
+
+Check for these parameters on your web page to show the user a message or a sign-in prompt. `useAuthenticatedWebView()` checks them for you and sets `status` to `'error'`.
+
+## Sign-out
+
+When the app's session ends, Clerk also ends the web sessions that its links created. This happens when the user signs out of your app or when you revoke the app's session.
+
+Some web sessions stay signed in:
+
+- If the browser was already signed in as the same user, the link may keep that existing session. Ending the app's session doesn't end it.
+- When a new sign-in replaces the app's session, such as in single-session mode or with [hosted authentication](/docs/reference/expo/native-hooks/use-hosted-auth), Clerk doesn't end the web sessions. They still expire when the app's session would have.
+
+## Keep the link secret
+
+The sign-in link signs in anyone who opens it. It works once, within 60 seconds.
+
+- `openInBrowser()` never exposes the link.
+- `useAuthenticatedWebView()` passes the link to the WebView in `webViewProps`, so don't log or store those props.
+- If you use `prepareSessionTransfer()`, open the link once and don't log or store it.
+
+## Handle errors
+
+Every function reports failures as a `SessionTransferError`. Use [`isSessionTransferError()`](/docs/reference/expo/is-session-transfer-error) to detect it, and branch on its `code`. For example, `signed_out` means the app has no active session, so send the user to sign in.

@@ -1,0 +1,93 @@
+---
+title: '`isSessionTransferError()`'
+description: Clerk's isSessionTransferError() function checks whether an error came from one of the Expo SDK's native-to-web APIs.
+sdk: expo
+---
+
+The `isSessionTransferError()` function returns `true` when an error is a [`SessionTransferError`](#sessiontransfererror). Use it to branch on the error's `code` when [`openInBrowser()`](/docs/reference/expo/open-in-browser) or [`prepareSessionTransfer()`](/docs/reference/expo/prepare-session-transfer) rejects. [`useAuthenticatedWebView()`](/docs/reference/expo/native-hooks/use-authenticated-web-view) returns its `SessionTransferError` in `error` instead of throwing it.
+
+Import the function from the `@clerk/expo/native-to-web` subpath:
+
+```tsx
+import { isSessionTransferError } from '@clerk/expo/native-to-web'
+```
+
+## Usage
+
+`isSessionTransferError()` has the following function signature:
+
+```ts
+function isSessionTransferError(error: unknown): error is SessionTransferError
+```
+
+## Example
+
+The following example sends a signed-out user to the sign-in screen when the web app can't open.
+
+```ts
+import { isSessionTransferError, openInBrowser } from '@clerk/expo/native-to-web'
+import { router } from 'expo-router'
+
+try {
+  await openInBrowser({ destination: 'https://app.example.com/settings' })
+} catch (error) {
+  if (isSessionTransferError(error) && error.code === 'signed_out') {
+    router.replace('/sign-in')
+  }
+}
+```
+
+## `SessionTransferError`
+
+Every native-to-web function reports failures as a `SessionTransferError`. It's an `Error` with the following additional properties:
+
+<Properties>
+  - `cause?`
+  - `unknown`
+
+  The original error. When the Clerk API refuses to create the link, it's the original `ClerkAPIResponseError`, so you can read its `status` and `retryAfter`.
+
+  ---
+
+  - `code`
+  - `SessionTransferErrorCode`
+
+  Why the session transfer failed. See [the error codes](#error-codes).
+
+  ---
+
+  - `name`
+  - `'SessionTransferError'`
+
+  The name of the error.
+</Properties>
+
+### Error codes
+
+The SDK sets the following codes while creating or opening the link:
+
+| Code | Description |
+| - | - |
+| `unsupported_platform` | The app is running on the web. Session transfer only works in native apps. |
+| `clerk_not_loaded` | Clerk hasn't finished loading. |
+| `signed_out` | The app has no active session. A session with pending [session tasks](/docs/guides/configure/session-tasks) also counts as signed out. |
+| `invalid_destination` | `destination` isn't an absolute HTTP or HTTPS URL. |
+| `missing_dependency` | A package that the function needs on Android isn't installed. The error message names the package. |
+| `browser_unavailable` | The operating system couldn't open the link. |
+| `load_failed` | The WebView couldn't load Clerk's sign-in page or the page it redirected to. |
+| `network_error` | Clerk couldn't be reached, or didn't respond within 20 seconds. |
+| `unexpected_response` | Clerk returned a response that the SDK didn't expect. |
+
+When the Clerk API refuses to create the link, `code` is the first error code that the API returned. For example, `feature_not_enabled` means **Native to Web SSO** is turned off on the Clerk Dashboard's [**Native applications**](https://dashboard.clerk.com/~/native-applications) page.
+
+When the sign-in on the web fails, `code` is the `__clerk_error_code` that Clerk redirected with. Only `useAuthenticatedWebView()` can report these codes. They include the following:
+
+| Code | Description |
+| - | - |
+| `invalid_token` | The link isn't valid. |
+| `expired` | The link expired before it was opened. Links work for 60 seconds. |
+| `already_used` | The link was already opened. Each link works once. |
+| `source_session_invalid` | The app's session ended, or the user can no longer sign in, such as when they're banned or locked. |
+| `impersonation_in_progress` | The browser is signed in to an [impersonation](/docs/guides/users/impersonation) session. It stays in that session. |
+| `other_user_signed_in` | The browser is signed in only as a different user. It stays signed in as that user. |
+| `cross_site_request` | The browser didn't treat the link as a direct navigation. On Android, this happens when the intent that opens the link doesn't name your app as the referrer. |

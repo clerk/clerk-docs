@@ -1,0 +1,232 @@
+---
+title: Open your web app signed in from a native app
+description: Show a page of your web app in a WebView or the browser with the native app's user already signed in.
+sdk: android
+---
+
+When a signed-in user of your native application opens a page of your web app, the page normally loads signed out, and the user has to sign in again. Native to Web SSO signs them in for you. Clerk creates a one-time sign-in link for the page, and the WebView or browser opens it. The page then loads with the same user signed in.
+
+## Choose how to open the page
+
+The Clerk Android SDK has three methods for this on `Clerk.auth`. Each is a `suspend` function that returns a `ClerkResult`.
+
+- `loadInWebView(webView, destination)` loads the page in your `WebView`. Use it for web pages that are part of your app's screens, such as an account page.
+- `openInBrowser(destination)` opens the page in the user's default browser. Use it to send users to your full web app.
+- `prepareSessionTransfer(destination, presentation)` creates the link and leaves opening it to you. Use it only when neither of the other two fits.
+
+## Before you start
+
+<Include src="_partials/native-to-web/dashboard-setup" />
+
+Then check the following requirements:
+
+- Your app uses Clerk Android SDK `1.5.0` or later. For more information, see [Install the SDK](/docs/reference/native-mobile/installation).
+- Your web app uses Clerk with the same instance as your native app.
+- The `destination` you open is an absolute URL. Outside development instances, it must use HTTPS. In production, it must share a root domain with one of your Clerk instance's domains.
+- The user is signed in to your native app. Sessions with pending [session tasks](/docs/guides/configure/session-tasks) can't be transferred.
+
+## Show a web page in a WebView
+
+Call `loadInWebView()` with your `WebView` and the page to open. The WebView first loads a Clerk page that signs the user in, and then redirects to `destination`. The method succeeds once that load starts, before the web page signs the user in.
+
+The method doesn't change your WebView, so set it up first:
+
+- Set `settings.javaScriptEnabled` to `true`. Clerk's sign-in page runs a script.
+- Set a `WebViewClient`. Without one, the WebView hands the redirect to `destination` to the system browser, and the page opens outside your app.
+
+To detect a failed sign-in, check each URL in `WebViewClient.shouldOverrideUrlLoading()` for the `__clerk_status` query parameter. `onPageFinished()` misses it when `destination` redirects again, such as to its own sign-in page.
+
+```kotlin {{ filename: 'AccountWebView.kt' }}
+import android.annotation.SuppressLint
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.viewinterop.AndroidView
+import com.clerk.api.Clerk
+import com.clerk.api.network.serialization.errorMessage
+import com.clerk.api.network.serialization.onFailure
+import kotlinx.coroutines.launch
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun AccountWebView() {
+  val scope = rememberCoroutineScope()
+  var errorMessage by remember { mutableStateOf<String?>(null) }
+
+  val message = errorMessage
+  if (message != null) {
+    Text(message)
+    return
+  }
+
+  AndroidView(
+    factory = { context ->
+      WebView(context).apply {
+        settings.javaScriptEnabled = true
+        webViewClient = object : WebViewClient() {
+          override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+            val url = request.url
+            if (url.isHierarchical && url.getQueryParameter("__clerk_status") == "session_transfer_failed") {
+              errorMessage = "Sign-in failed: ${url.getQueryParameter("__clerk_error_code")}"
+            }
+            return false
+          }
+        }
+        scope.launch {
+          Clerk.auth.loadInWebView(this@apply, "https://app.example.com/account")
+            .onFailure { errorMessage = it.errorMessage }
+        }
+      }
+    },
+  )
+}
+```
+
+### Clear the WebView's cookies when the user changes
+
+The WebView keeps its cookies after the user signs out of your app. Clerk usually ends the web session along with the app's session, except in the cases listed under [Sign-out](#sign-out). When the WebView still holds the previous user's web session, the sign-in fails with the `other_user_signed_in` error code.
+
+To start each user with a clean WebView, clear the cookies when the user signs out or a different user signs in. Android WebViews share one cookie store, so this signs out every WebView in your app. Wait for the callback before you load the WebView for the next user.
+
+```kotlin
+CookieManager.getInstance().removeAllCookies {
+  CookieManager.getInstance().flush()
+}
+```
+
+## Open a web page in the browser
+
+Call `openInBrowser()` with the page to open:
+
+```kotlin {{ filename: 'OpenOnWebButton.kt' }}
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.clerk.api.Clerk
+import com.clerk.api.network.serialization.errorMessage
+import com.clerk.api.network.serialization.onFailure
+import kotlinx.coroutines.launch
+
+@Composable
+fun OpenOnWebButton() {
+  val scope = rememberCoroutineScope()
+  var errorMessage by remember { mutableStateOf<String?>(null) }
+
+  Column {
+    Button(
+      onClick = {
+        scope.launch {
+          Clerk.auth.openInBrowser("https://app.example.com/settings")
+            .onFailure { errorMessage = it.errorMessage }
+        }
+      },
+    ) {
+      Text("Open on web")
+    }
+    errorMessage?.let { Text(it) }
+  }
+}
+```
+
+The SDK's intent matches only browsers, so the link opens in a browser even when your app has a verified App Link for your Frontend API host.
+
+### Handle a failed sign-in on the web
+
+`openInBrowser()` succeeds once it asks the browser to open the link, before the web page signs the user in. If the sign-in fails, your app isn't notified.
+
+<Include src="_partials/native-to-web/failed-sign-in" />
+
+Check for these parameters on your web page to show the user a message or a sign-in prompt. For the possible codes, see [the web sign-in error codes](#web-sign-in-error-codes).
+
+## Open the link yourself
+
+`prepareSessionTransfer()` returns a `SessionTransfer` with the link in `url` and its expiration in `expiresAt`, in milliseconds since the Unix epoch. Set `presentation` to `SessionTransferPresentation.WEB_VIEW` for a `WebView` that your app renders, or `SessionTransferPresentation.BROWSER` for a browser. Each call creates a new link.
+
+To load the link in your `WebView`:
+
+```kotlin
+scope.launch {
+  Clerk.auth.prepareSessionTransfer("https://app.example.com/reports", SessionTransferPresentation.WEB_VIEW)
+    .onSuccess { transfer -> webView.loadUrl(transfer.url.toString()) }
+    .onFailure { errorMessage = it.errorMessage }
+}
+```
+
+To open the link in a browser, set `Intent.EXTRA_REFERRER` to your app's `android-app://` URI. Otherwise the sign-in fails with the `cross_site_request` error code. Also set a selector that only browsers match, as `openInBrowser()` does, so that an App Link can't open the link in your app:
+
+```kotlin
+scope.launch {
+  Clerk.auth.prepareSessionTransfer("https://app.example.com/reports", SessionTransferPresentation.BROWSER)
+    .onSuccess { transfer ->
+      val intent = Intent(Intent.ACTION_VIEW, transfer.url).apply {
+        addCategory(Intent.CATEGORY_BROWSABLE)
+        putExtra(Intent.EXTRA_REFERRER, Uri.parse("android-app://${context.packageName}"))
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        selector = Intent(Intent.ACTION_VIEW, Uri.parse("https://")).addCategory(Intent.CATEGORY_BROWSABLE)
+      }
+      try {
+        context.startActivity(intent)
+      } catch (e: ActivityNotFoundException) {
+        errorMessage = "No browser could open the link."
+      }
+    }
+    .onFailure { errorMessage = it.errorMessage }
+}
+```
+
+## Sign-out
+
+<Include src="_partials/native-to-web/sign-out" />
+
+## Keep the link secret
+
+The sign-in link signs in anyone who opens it. It works once, within 60 seconds.
+
+- `openInBrowser()` never exposes the link.
+- `loadInWebView()` loads the link in your `WebView`, so your `WebViewClient` callbacks receive it, such as the `url` in `onPageStarted()`. Don't log or store the URLs they receive.
+- If you use `prepareSessionTransfer()`, open `url` once and don't log or store it. `SessionTransfer.toString()` leaves the link out, so printing the transfer doesn't reveal it.
+
+## Handle errors
+
+When a method fails, read the error code from the failure:
+
+```kotlin
+.onFailure { failure ->
+  when (failure.error?.errors?.firstOrNull()?.code) {
+    "signed_out" -> navigateToSignIn()
+    else -> showError(failure.errorMessage)
+  }
+}
+```
+
+The SDK sets the following codes before or while opening the link:
+
+| Code | Description |
+| - | - |
+| `invalid_arguments` | `destination` isn't an absolute HTTP or HTTPS URL. |
+| `signed_out` | The app has no active session. A session with pending [session tasks](/docs/guides/configure/session-tasks) also counts as signed out. |
+| `session_changed` | The active session changed before the link opened. |
+| `browser_unavailable` | No browser could open the link. |
+
+When Clerk refuses to create the link, the code is the first one that Clerk returned. For example, `feature_not_enabled` means **Native to Web SSO** is turned off on the Clerk Dashboard's [**Native applications**](https://dashboard.clerk.com/~/native-applications) page. Network failures, unexpected responses, and calls to `openInBrowser()` before Clerk is initialized have no code.
+
+For more information, see [Error handling](/docs/guides/development/custom-flows/error-handling).
+
+### Web sign-in error codes
+
+When the sign-in on the web fails, `__clerk_error_code` is one of the following codes:
+
+<Include src="_partials/native-to-web/redeem-error-codes" />

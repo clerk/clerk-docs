@@ -1,0 +1,185 @@
+---
+title: Open your web app signed in from a native app
+description: Show a page of your web app in a web view or the browser with the native app's user already signed in.
+sdk: ios
+---
+
+When a signed-in user of your native app opens a page of your web app, the page normally loads signed out, and the user has to sign in again. Native to Web SSO signs them in for you. Clerk creates a one-time sign-in link for the page, and the web view or browser opens it. The page then loads with the same user signed in.
+
+## Choose how to open the page
+
+The Clerk iOS SDK has three methods for this on `clerk.auth`:
+
+- `loadInWebView()` loads the page in your `WKWebView`. Use it for web pages that are part of your app's screens, such as an account page.
+- `openInBrowser()` opens the page in the user's default browser. Use it to send users to your full web app. On macOS, it requires Clerk iOS SDK `1.7.4` or later.
+- `prepareSessionTransfer()` creates the link and leaves opening it to you. Use it only when neither of the other two fits.
+
+## Before you start
+
+<Include src="_partials/native-to-web/dashboard-setup" />
+
+Then check the following requirements:
+
+- Your app uses Clerk iOS SDK `1.7.3` or later. The methods are in `ClerkKit` and aren't available on tvOS or watchOS. For more information, see [Install the SDK](/docs/reference/native-mobile/installation).
+- Your web app uses Clerk with the same instance as your native app.
+- The `destination` you open is an absolute URL. Outside development instances, it must use HTTPS. In production, it must share a root domain with one of your Clerk instance's domains.
+- The user is signed in to your native app. Sessions with pending [session tasks](/docs/guides/configure/session-tasks) can't be transferred.
+
+## Show a web page in a web view
+
+Call `loadInWebView()` with your `WKWebView` and the page to open. The web view first loads a Clerk page that signs the user in, and then redirects to `destination`. The method returns once that load starts, before the web page signs the user in.
+
+The method doesn't change your web view's delegates. To detect a failed sign-in, check each navigation in your `WKNavigationDelegate` for the `__clerk_status` query parameter.
+
+```swift {{ filename: 'AccountViewController.swift' }}
+import ClerkKit
+import UIKit
+import WebKit
+
+final class AccountViewController: UIViewController, WKNavigationDelegate {
+  private let webView = WKWebView()
+
+  override func loadView() {
+    webView.navigationDelegate = self
+    view = webView
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    Task {
+      do {
+        try await Clerk.shared.auth.loadInWebView(
+          webView,
+          destination: URL(string: "https://app.example.com/account")!
+        )
+      } catch {
+        showError(error)
+      }
+    }
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    decidePolicyFor navigationAction: WKNavigationAction
+  ) async -> WKNavigationActionPolicy {
+    let queryItems = navigationAction.request.url
+      .flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?
+      .queryItems ?? []
+
+    if queryItems.contains(where: { $0.name == "__clerk_status" && $0.value == "session_transfer_failed" }) {
+      showSignInFailed(code: queryItems.first { $0.name == "__clerk_error_code" }?.value)
+    }
+    return .allow
+  }
+
+  private func showError(_ error: Error) {
+    // Show your own error view in place of the web view.
+  }
+
+  private func showSignInFailed(code: String?) {
+    // The page isn't signed in as the app's user. Show your own error view.
+  }
+}
+```
+
+### Clear the web view's data when the user changes
+
+The web view keeps its web session in its `WKWebsiteDataStore` after the user signs out of your app. Clerk usually ends the web session along with the app's session, but [not in every case](#sign-out). When the web view still holds the previous user's web session, the sign-in fails with the `other_user_signed_in` error code.
+
+To start each user with a clean web view, clear its data store when the user signs out or a different user signs in:
+
+```swift
+await WKWebsiteDataStore.default().removeData(
+  ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+  modifiedSince: .distantPast
+)
+```
+
+Every web view that doesn't set its own data store shares the default one, so clearing it can sign users out of your app's other web views.
+
+Or give the web view a `WKWebsiteDataStore.nonPersistent()` data store, which keeps its data in memory only and discards it with the web view.
+
+## Open a web page in the browser
+
+Call `openInBrowser()` with the page to open:
+
+```swift {{ filename: 'OpenOnWebButton.swift' }}
+import ClerkKit
+import SwiftUI
+
+struct OpenOnWebButton: View {
+  @Environment(Clerk.self) private var clerk
+  @State private var errorMessage: String?
+
+  var body: some View {
+    VStack {
+      Button("Open on web") {
+        Task { await openOnWeb() }
+      }
+      if let errorMessage {
+        Text(errorMessage)
+      }
+    }
+  }
+
+  private func openOnWeb() async {
+    do {
+      try await clerk.auth.openInBrowser(
+        destination: URL(string: "https://app.example.com/settings")!
+      )
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+}
+```
+
+### Handle a failed sign-in on the web
+
+`openInBrowser()` returns once the system hands the link to the browser, before the web page signs the user in. If the sign-in fails, your app isn't notified.
+
+<Include src="_partials/native-to-web/failed-sign-in" />
+
+Check for these parameters on your web page to show the user a message or a sign-in prompt. For the possible codes, see [the error codes](#error-codes).
+
+## Open the link yourself
+
+`prepareSessionTransfer()` returns a `SessionTransfer` with the link in `url` and its expiration in `expiresAt`. Set `presentation` to `.webView` for a web view that your app renders, or `.browser` for a browser. Each call creates a new link.
+
+```swift
+let transfer = try await clerk.auth.prepareSessionTransfer(
+  destination: URL(string: "https://app.example.com/reports")!,
+  presentation: .webView
+)
+webView.load(URLRequest(url: transfer.url))
+```
+
+Use `openInBrowser()` rather than `SFSafariViewController` to open the link in a browser. `SFSafariViewController` keeps its cookies separate from the user's browser, so the user is signed in only inside it.
+
+## Sign-out
+
+<Include src="_partials/native-to-web/sign-out" />
+
+## Keep the link secret
+
+The sign-in link signs in anyone who opens it. It works once, within 60 seconds.
+
+- `openInBrowser()` never exposes the link.
+- `loadInWebView()` loads the link in your web view, so your `WKNavigationDelegate` sees it. Don't log or store the URLs that it receives.
+- If you use `prepareSessionTransfer()`, open `url` once and don't log or store it. `SessionTransfer` leaves the link out of its descriptions, so printing the transfer doesn't reveal it.
+
+## Handle errors
+
+The methods throw the following errors:
+
+- A `ClerkClientError` before any network request, when the user isn't signed in or `destination` isn't an absolute HTTP or HTTPS URL.
+- A `ClerkAPIError` when Clerk refuses to create the link. Its `code` is the first error code that Clerk returned. For example, `feature_not_enabled` means **Native to Web SSO** is turned off on the Clerk Dashboard's [**Native applications**](https://dashboard.clerk.com/~/native-applications) page.
+- A `ClerkClientError` when the active session changes while Clerk creates the link, when Clerk's response isn't valid, or when no browser can open the link.
+
+For more information, see [Error handling](/docs/guides/development/custom-flows/error-handling).
+
+### Error codes
+
+When the sign-in on the web fails, `__clerk_error_code` is one of the following codes:
+
+<Include src="_partials/native-to-web/redeem-error-codes" />

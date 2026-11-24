@@ -12,17 +12,30 @@ SMS events appear in Application Logs and follow the same retention rules. The [
 
 ## The delivery lifecycle
 
-A message can generate several events as its delivery status changes. Not every intermediate state is recorded, so the first event may already show the final delivery status.
+A message can generate several events as its delivery status changes. Not every intermediate state is recorded, so the first event may already show a delivery result.
 
 | Event type | Meaning |
 | - | - |
 | `sms.accepted` | The delivery provider accepted the message for delivery. This is not yet proof it reached the phone. |
 | `sms.delivered` | The carrier confirmed delivery to the recipient's handset. |
 | `sms.failed` | The send stopped before handoff, or the provider rejected it outright. Carries a `reason`. |
-| `sms.undeliverable` | The carrier could not deliver the message after the provider accepted it. Carries a `reason`. |
-| `sms.unconfirmed` | The provider reported an unknown delivery outcome — no delivery evidence either way. |
+| `sms.undeliverable` | One delivery attempt failed after the provider accepted the message. Another attempt for the same message may still deliver it. Carries a `reason`. |
+| `sms.unconfirmed` | The provider reported an unknown delivery outcome — no delivery evidence either way. Another event for the message may report a result. |
 
-The typical path is `sms.accepted` → `sms.delivered`. An `sms.failed` event means delivery could not proceed. An `sms.undeliverable` event means the message was accepted but could not be delivered. An `sms.unconfirmed` event means the final outcome is unknown.
+The typical path is `sms.accepted` → `sms.delivered`. An `sms.failed` event means delivery could not proceed. An `sms.unconfirmed` event alone does not establish the message's outcome; another event may confirm delivery, regardless of order.
+
+### Messages with more than one delivery attempt
+
+The delivery provider can try a message over more than one channel, for example WhatsApp and then SMS. The same message can therefore have more than one result event: an `sms.undeliverable` event for a failed WhatsApp attempt and an `sms.delivered` event for a successful SMS attempt.
+
+An `sms.undeliverable` event describes one attempt, not the message's final outcome. If any event for the message says `sms.delivered`, the message arrived. Events are recorded as the provider reports them, and the provider doesn't guarantee their order. The `sms.undeliverable` event can therefore appear after `sms.delivered`.
+
+To tell the attempts of a message apart, use these fields of the event's payload:
+
+- `provider_attempt_id`: Identifies the attempt that the event reports on.
+- `provider_channel`: The channel the provider used for that attempt, such as `sms`, `whatsapp`, or `rcs`. It can differ from `channel`, which is the channel Clerk requested.
+
+Both fields are optional. An event has them only when the provider's status report identified the attempt.
 
 ## Understanding failures
 
@@ -49,15 +62,16 @@ For privacy, these events never include the message body, the verification code,
 
 ## Debugging a missing SMS
 
-When a user reports they never received a code, open the [SMS logs view](https://dashboard.clerk.com/~/sms-logs) in the Clerk Dashboard — it lists only `sms.*` events — and filter by the recipient's phone number, then check the most recent event for that message:
+When a user reports they never received a code, open the [SMS logs view](https://dashboard.clerk.com/~/sms-logs) in the Clerk Dashboard — it lists only `sms.*` events — and filter by the recipient's phone number.
+
+All events for a message share a trace ID, so filter by it to view the message's full timeline. Then look at all of the message's events, not only the most recent one:
 
 1. **No `sms.*` event** — First, confirm that the event would still be within your plan's [Application Logs retention window](/docs/guides/dashboard/logs/overview#plans-and-retention): 1 day on Hobby, 7 days on Pro, or 30 days on Business. Within that window, no event usually means the send was not attempted. Older events may no longer be available.
+1. **Any `sms.delivered`** — the message arrived, even if the same message also has an `sms.undeliverable` event, and whichever of the two appears last. If the user still can't find the code, check `provider_channel` when the event has it: the message may have arrived on another channel than the user expects, such as WhatsApp instead of SMS.
 1. **`sms.failed`** — if `rejected_before_send` is true, Clerk stopped the send before contacting a provider. Otherwise, inspect `reason` and `raw_error` for more detail.
 1. **`sms.accepted` with no `sms.delivered`** — the message left Clerk but the carrier never confirmed. Delivery receipts can lag; a lasting gap points to a carrier or handset issue for that number.
-1. **`sms.undeliverable`** — the carrier bounced it. `destination_unreachable` and `invalid_phone_number` point at the number itself.
-1. **`sms.unconfirmed`** — no delivery signal exists; if the user did not receive the code, have them retry.
-
-All events for a message share a trace ID. Filter by it to view the message's full timeline.
+1. **`sms.undeliverable` with no `sms.delivered`** — one or more attempts failed. Inspect the `reason` on each `sms.undeliverable` event: `destination_unreachable` and `invalid_phone_number` point at the number itself. If the events are recent, check again later, because another attempt can still deliver the message.
+1. **`sms.unconfirmed` with no `sms.delivered`** — no delivery signal exists, though a result can still arrive later. If the user did not receive the code, have them retry.
 
 ## Supported events
 

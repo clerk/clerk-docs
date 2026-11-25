@@ -1,0 +1,134 @@
+---
+title: '`searchUsers()`'
+description: Use the searchUsers() method to page through users with a cursor and filter them by metadata.
+---
+
+> [!IMPORTANT]
+> `searchUsers()` requires `@clerk/backend` 3.32.0 or later.
+
+<Typedoc src="backend/user-api/methods/search-users" />
+
+## Usage
+
+<Include src="_partials/backend/usage" />
+
+### Basic
+
+```tsx
+const { data, cursor } = await clerkClient.users.searchUsers()
+```
+
+### Page through users
+
+Cursor pagination works with every `orderBy` value and filter. Request the first page without a cursor. For later pages, pass either `cursor.startingAfter` as `startingAfter` or `cursor.endingBefore` as `endingBefore`, not both. `cursor.hasNextPage` tells you whether more users follow the current page.
+
+The following example gets the users who signed in most recently, then the next page, then the page before it:
+
+```tsx
+const firstPage = await clerkClient.users.searchUsers({
+  limit: 100,
+  orderBy: '-last_sign_in_at',
+})
+
+if (firstPage.cursor.startingAfter) {
+  const nextPage = await clerkClient.users.searchUsers({
+    limit: 100,
+    orderBy: '-last_sign_in_at',
+    startingAfter: firstPage.cursor.startingAfter,
+  })
+
+  if (nextPage.cursor.endingBefore) {
+    const previousPage = await clerkClient.users.searchUsers({
+      limit: 100,
+      orderBy: '-last_sign_in_at',
+      endingBefore: nextPage.cursor.endingBefore,
+    })
+  }
+}
+```
+
+When you page through users:
+
+- Keep `limit`, `orderBy`, and every filter the same across requests. A cursor belongs to the order it was issued for, and the request fails if you pass it with a different `orderBy`.
+- A page you read backward with `endingBefore` can hold fewer users than `limit`, even when more users exist before it.
+
+### Retrieve every user
+
+To export, sync, or read all of your users, page forward until `cursor.startingAfter` is `null`. Set `limit` to an integer from 1 to 500.
+
+The following example gets users one at a time without holding the entire list in memory:
+
+```tsx
+async function* listAllUsers() {
+  let startingAfter: string | undefined
+
+  while (true) {
+    const { data, cursor } = await clerkClient.users.searchUsers({
+      limit: 500,
+      orderBy: '+created_at',
+      startingAfter,
+    })
+    yield* data
+
+    if (!cursor.startingAfter) return
+    startingAfter = cursor.startingAfter
+  }
+}
+
+for await (const user of listAllUsers()) {
+  // Replace this with your export or sync logic.
+  console.log(user.id)
+}
+```
+
+The export can miss users who sign up or change while it runs.
+
+### Count the remaining users
+
+Pass `remainingCount` to count the users from the start of the current page onward, including the page itself. On the first page, that's every user the request matches. Set it to `100`, `1000`, or `10000` to count up to that many, or to `'exact'` to count them all.
+
+If you pass a number, the `cursor` has `remainingCountExact` when fewer users than that number remain. Otherwise, it has `remainingCountAtLeast`, set to that number. If you pass `'exact'`, the `cursor` has `remainingCountExact`.
+
+The following example shows the number of users who match, up to 1,000:
+
+```tsx
+const { data, cursor } = await clerkClient.users.searchUsers({
+  limit: 20,
+  remainingCount: 1000,
+})
+
+if (cursor.remainingCountExact !== undefined) {
+  console.log(`${cursor.remainingCountExact} users match.`)
+} else {
+  console.log(`At least ${cursor.remainingCountAtLeast} users match.`)
+}
+```
+
+Clerk computes the count separately from the page, so it can differ slightly from the number of users you get by paging through the results.
+
+A larger number makes the request slower, and an exact count takes longer the more users match. If an exact count doesn't finish in time, the request fails with a `422` error and the code `users_exact_count_timed_out`. Retry with a number, or without `remainingCount`.
+
+### Filter by metadata
+
+Use `metadata` to get the users whose [public, private, or unsafe metadata](/docs/guides/users/extending) matches the filters you pass. Pass up to 10 filters. A user must match all of them. See the [`UserSearchMetadataFilter` object](/docs/reference/backend/types/backend-user-search-metadata-filter) for the filter properties.
+
+If a key holds an array, `equals` matches any item in it. A negated `equals` filter matches only users who have the key with a different value. Pass boolean and numeric values as strings, such as `'true'` and `'5'`.
+
+The following example gets the users on the `pro` plan who have a Stripe customer ID in their private metadata and don't have an `onboardingComplete` key in their public metadata:
+
+```tsx
+const { data, cursor } = await clerkClient.users.searchUsers({
+  limit: 50,
+  metadata: [
+    { scope: 'public', key: 'plan', match: 'equals', value: 'pro' },
+    { scope: 'private', key: 'stripeCustomerId', match: 'exists' },
+    { scope: 'public', key: 'onboardingComplete', match: 'exists', negate: true },
+  ],
+})
+```
+
+To get the next page, pass the same `metadata` with `startingAfter`, as described in [Page through users](#page-through-users).
+
+## Backend API (BAPI) endpoint
+
+This method in the SDK is a wrapper around the BAPI endpoint `GET/users` with `pagination=cursor`. See the [BAPI reference](/docs/reference/backend-api/tag/users/GET/users){{ target: '_blank' }} for more information.

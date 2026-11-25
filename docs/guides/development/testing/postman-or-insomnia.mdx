@@ -1,31 +1,62 @@
 ---
 title: Testing with Postman or Insomnia
-description: Learn about generating and using a long-lived JWT Token with Postman or Insomnia.
+description: Learn how to generate a long-lived session token and use it with Postman or Insomnia.
 ---
 
 Postman and Insomnia are powerful tools used to test API's, validate their behavior, and automate testing tasks. Basic testing with these tools is similar, and this guide will help you get started with either option.
 
-## Generate long-lived JWT template
+## Generate a long-lived session token
 
-The standard token issued by Clerk expires after 60 seconds. Clerk SDKs handle refreshing the token regularly so that the authentication state is kept up to date. Because this token expires quickly, it isn't very useful when trying to test with Postman or Insomnia.
+> [!NOTE]
+> This flow is intended for testing. Use it with your development instance, not your production instance.
 
-You will want to create a long-lived [JWT Template](/docs/guides/sessions/jwt-templates) to be used in Postman or Insomnia. To do so, navigate to the [**JWT templates**](https://dashboard.clerk.com/~/jwt-templates) page in the Clerk Dashboard. Select **New template** then choose the **Blank** template.
+The standard [session token](!session-token) issued by Clerk expires after 60 seconds. Clerk SDKs handle refreshing the token regularly so that the authentication state is kept up to date. Because this token expires quickly, it isn't very useful when trying to test with Postman or Insomnia.
 
-![The JWT templates page in the Clerk Dashboard. The 'New template' button was clicked, in the modal that opened, the 'Blank' template is hovered over](/docs/images/testing/blank-jwt-template.webp)
+Instead, use the Backend API to create a session token with a longer lifetime. This token is a regular session token, so it includes any custom claims you added to your session token and the session's [Active Organization](!active-organization), and it's accepted wherever your backend expects one.
 
-Give your template a unique name, such as _'testing-template'_. Set the **Token Lifetime** to a value that suits your needs, or use the maximum of 315360000 seconds (10 years). If you added custom claims to the normal [session token](!session-token), then you should add the same claims to your JWT template.
+> [!WARNING]
+> Earlier versions of this guide used a token from a [JWT template](/docs/guides/sessions/jwt-templates). Starting in `@clerk/backend` 3.16.9, `authenticateRequest()` rejects JWT template tokens where a session token is expected, with the reason `token-type-mismatch`. If your requests started failing with this reason, replace your JWT template token with a session token from this guide.
 
-![Creating a JWT template in the Clerk Dashboard](/docs/images/testing/testing-template.webp)
+### Get a session ID
 
-## Fetch long-lived token
-
-Visit your frontend that is using the same Clerk Application and instance that you want to test. Sign in as a user. The user that you sign in as will be the user you test with in Postman or Insomnia. You can create several tokens for several different users. Once you have signed in, open your Dev Tools and go to the **Console** tab. Enter the following command:
+Visit your frontend that is using the development instance of the Clerk application you want to test. Sign in as a user. The user that you sign in as will be the user you test with in Postman or Insomnia. Once you have signed in, open your Dev Tools and go to the **Console** tab. Enter the following command to get the ID of the current session:
 
 ```js
-await window.Clerk.session.getToken({ template: '<the template name you chose above>' })
+window.Clerk.session.id
 ```
 
-![The Dev Tools Console with the command 'await window.Clerk.session.getToken()' entered. The token is logged to the console](/docs/images/testing/get-token-from-console.webp)
+Don't sign out of this session. The Backend API can only create tokens for an active session.
+
+### Create the token
+
+Call the [Create a session token endpoint](/docs/reference/backend-api/tag/sessions/POST/sessions/\{session_id}/tokens){{ target: '_blank' }} with the session ID. Set `expires_in_seconds` to how long the token should stay valid (minimum `30`). Prefer hours or days over months or years, because the token can't be revoked before it expires.
+
+<SignedIn>
+  - Your [Secret Key](!secret-key) is already injected into the code snippet.
+  - Replace `sess_123` with the session ID you copied from the console.
+</SignedIn>
+
+<SignedOut>
+  - Replace `YOUR_SECRET_KEY` with your Clerk [Secret Key](!secret-key).
+  - Replace `sess_123` with the session ID you copied from the console.
+</SignedOut>
+
+```bash
+curl 'https://api.clerk.com/v1/sessions/sess_123/tokens' \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer {{secret}}' \
+  --data '{
+  "expires_in_seconds": 86400
+}'
+```
+
+The token is returned in the `jwt` field of the response. Copy it to use in Postman or Insomnia. The token keeps the claims it had when it was created. If you switch the Active Organization or change your custom claims, create a new token and replace it in Postman or Insomnia.
+
+You can also create the token from your backend with the JS Backend SDK's [`getToken()`](/docs/reference/backend/sessions/get-token) method by passing `undefined` as the template and the lifetime in seconds, for example `clerkClient.sessions.getToken('sess_123', undefined, 86400)`.
+
+> [!WARNING]
+> The token stays valid until it expires, even if the user signs out or the session is revoked. Keep the lifetime as short as your testing allows, and don't share the token.
 
 ## Using Postman or Insomnia
 
@@ -39,7 +70,7 @@ await window.Clerk.session.getToken({ template: '<the template name you chose ab
 
     ![The Postman app with a red box around the method and URL field](/docs/images/testing/postman-configure-request.webp)
 
-    Navigate to the **Authorization** tab and for token type, select **Bearer Token**. Paste the token you copied from the console as the Bearer Token. Your request will now authenticate as the user you created the token with.
+    Navigate to the **Authorization** tab and for token type, select **Bearer Token**. Paste the `jwt` value from the Backend API response as the Bearer Token. Your request will now authenticate as the user you created the token with.
 
     ![The Postman app with the first red arrow pointing at the Authorization tab, the second red arrow pointing at the token type with 'Bearer token' chosen, and a third red arrow pointing at the token field with the token pasted in](/docs/images/testing/postman-bearer-token.webp)
   </Tab>
@@ -53,7 +84,7 @@ await window.Clerk.session.getToken({ template: '<the template name you chose ab
 
     ![The Insomnia app with a red box around the method and URL field](/docs/images/testing/insomnia-configure-request.webp)
 
-    Navigate to the **Auth** tab and select **Auth** again to show a menu of auth types. Choose the **Bearer token** option. Paste the token you copied from the console. Your request will now authenticate as the user you created the token with.
+    Navigate to the **Auth** tab and select **Auth** again to show a menu of auth types. Choose the **Bearer token** option. Paste the `jwt` value from the Backend API response. Your request will now authenticate as the user you created the token with.
 
     ![The Insomnia app with the first red arrow pointing at the Auth tab which has been switched to the 'Bearer token' option. The second red arrow points at the token field with the token pasted in](/docs/images/testing/insomnia-bearer-token.webp)
   </Tab>

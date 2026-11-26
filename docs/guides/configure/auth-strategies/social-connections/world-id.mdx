@@ -1,0 +1,79 @@
+---
+title: Add World ID as a social connection
+description: Learn how to allow users to sign up and sign in to your Clerk application with their World ID account using OpenID Connect (OIDC).
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "A Clerk application is required.",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "A World ID developer portal account is required.",
+      link: "https://auth.world.org/portal",
+      icon: "user-circle",
+    }
+  ]}
+/>
+
+Enabling OpenID Connect (OIDC) with [World ID](https://auth.world.org/docs/guides/oidc) allows your users to sign up and sign in to your Clerk app with their World ID account.
+
+> [!WARNING]
+> This guide accompanies a proposed built-in World ID connection. The built-in connection isn't available yet. Until it's enabled for your instance, follow the [custom provider guide](/docs/guides/configure/auth-strategies/social-connections/custom-provider) with World ID's [discovery endpoint](https://auth.world.org/.well-known/openid-configuration), the `openid` scope, your own client credentials, and **Use PKCE** enabled.
+
+## Configure for your development instance
+
+For _development instances_, use your own World ID client credentials. Follow the production configuration steps below with a separate World ID application for development.
+
+## Configure for your production instance
+
+For _production instances_, you must provide custom credentials.
+
+Keep two browser tabs open during setup: one for the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections) and one for the [World ID developer portal](https://auth.world.org/portal).
+
+<Steps>
+  ### Enable World ID as a social connection in Clerk
+
+  1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+  1. Select **Add connection** and select **For all users**.
+  1. Once the built-in connection is available for your instance, select **World ID** from the provider list.
+  1. Enable **Enable for sign-up and sign-in** and **Use custom credentials**.
+  1. Copy the connection's redirect URI. Keep this page open.
+
+  ### Register a World ID application
+
+  1. Sign in to the [World ID developer portal](https://auth.world.org/portal) with Google. Portal sign-in manages your developer account; your application's users authenticate separately with World ID.
+  1. Follow [World ID's client setup instructions](https://auth.world.org/docs/guides/app-registration) to register an OpenID Connect client. Your account must be eligible to register clients in that environment.
+  1. Register the exact redirect URI copied from Clerk. Wildcards aren't supported.
+  1. Select `client_secret_basic` for client authentication.
+  1. Choose which World ID accounts your application accepts. This policy applies when the authentication request doesn't specify an authentication class.
+  1. Save the client ID and the client secret shown by the portal. Use separate client registrations for separate applications unless you deliberately configure identity sharing.
+
+  ### Set the Client ID and Client Secret in the Clerk Dashboard
+
+  <Include src="_partials/authentication/social-connections/set-client-id-secret" />
+
+  ### Configure scopes and account attributes
+
+  1. Use the `openid` scope for sign-in. World ID also accepts `email`, but an email claim isn't guaranteed for every account. Don't request `profile` or `offline_access` for this sign-in flow.
+  1. When you use a custom connection, enable **Use PKCE**. World ID requires S256 Proof Key for Code Exchange (PKCE), including when the client authenticates with a secret.
+  1. If your Clerk application requires an email address or another attribute that World ID doesn't return, collect the missing attribute separately during sign-up.
+  1. Save your connection settings and enable the connection.
+
+  > [!NOTE]
+  > World ID identifies accounts with an opaque subject scoped to the application's identity sector. Keep the issuer and subject together as the external identity. Don't derive an identity from an email address or automatically merge it with another provider's account. Follow World ID's [account-linking guidance](https://auth.world.org/docs/guides/id-token#store-and-match-sub).
+
+  ### Test your connection
+
+  <Include src="_partials/authentication/social-connections/test-your-connection" />
+
+  Test returning users, new users with and without email, canceled sign-in, and explicit linking to an existing Clerk account.
+</Steps>
+
+## Authentication assurance
+
+An enabled World ID connection isn't a policy check for a particular verification level or a fresh face check. Applications that require stronger assurance must validate `acr`, `amr`, and `auth_time` from a trusted World ID authentication result. Don't infer those values from the provider name or user-editable metadata.
+
+For sensitive actions, follow World ID's [step-up authentication guide](https://auth.world.org/docs/guides/step-up). Confirm how your connector preserves authentication context before enforcing that policy through Clerk.
